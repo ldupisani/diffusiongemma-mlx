@@ -1,0 +1,19 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+
+# Logs / scratch
+*.log
+
+# macOS
+.DS_Store
+
+# Session scratch (harness-local)
+.remember/
+
+# Claude plan files live outside the repo; ignore any local copies
+.claude/

@@ -1,0 +1,4 @@
+# DiffusionGemma local toolkit (Apple Silicon / MLX). Python 3.12.
+# Install into a venv:  uv venv && uv pip install -r requirements.txt
+mlx-vlm>=0.6.3
+mcp>=1.12.0

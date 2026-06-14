@@ -1,0 +1,19 @@
+{
+  "name": "difg-chat-stream",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "description": "TypeScript REPL for DiffusionGemma (talks to the Python MLX inference sidecar).",
+  "scripts": {
+    "start": "tsx src/chat_stream.ts",
+    "dev": "bash ../run.sh"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
