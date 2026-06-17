@@ -163,6 +163,75 @@ different sidecar with `npm start -- --server http://host:port`. Layout: `ts/src
 (DSL parser + presets, port of `tools_util.py`), `ts/src/infer.ts` (sidecar client),
 `ts/src/chat_stream.ts` (REPL + agent loop).
 
+## Reasoning compiler (`reasoning/`)
+Replace the model's open-ended **thinking mode** with **coded reasoning patterns**: a request is
+decomposed into sub-tasks the model handles in **one shot with thinking OFF** ("patterns of
+thinking, run by code"). Longer term it's a *compiler* — use the reasoning model as a teacher
+once per query type, distill its trace into a coded orchestrator, store it, and route future
+matching queries to the orchestrator instead of thinking. Mental model: trace-based JIT for
+cognition (teacher = slow path, orchestrator = compiled fast path, registry = cache, router =
+cache-key lookup, miss = compile trigger).
+
+The model-driven paths require the sidecar running (`python infer_server.py`); the coded paths
+below do not (see "Replacing model calls with code"). Then:
+```bash
+python -m reasoning.cli run "What is 17 percent of 240?"        # → numeric_consensus (vote)
+python -m reasoning.cli run "Compare a Civic and a Corolla..."  # → decompose-solve-combine
+python -m reasoning.cli run "Write me a poem"                   # no match → teacher fallback
+python -m reasoning.cli capture "<query>"   # record a teacher (thinking-on) trace
+python -m reasoning.cli derive <sample-id>  # scaffold an orchestrator from it (then edit)
+python -m reasoning.cli eval <orch-id>      # score the orchestrator's fidelity vs the teacher
+python -m reasoning.cli list                # stored orchestrators
+```
+
+Modules: `engine.py` (one-shot / one-shot-N thinking-off calls via the sidecar; N varies the
+**seed** for diverse candidates), `patterns.py` (decompose-solve-combine, map-reduce,
+generate-rank-select, self-consistency, extract-validate-repair), `registry.py` (orchestrators as
+git-versioned Python modules under `store/` — the graph), `router.py` (pluggable recognition:
+`LexicalMatcher` default, `EmbeddingMatcher` stub for scale, `ClassifyMatcher` one-shot), and
+`capture`/`derive`/`eval` (the teacher→orchestrator compile loop). Selecting among a handful of
+patterns needs no embeddings — a keyword/lexical or one-shot classify router suffices; embeddings
+are the scale-out path once the orchestrator library grows large.
+
+**Teacher backend (`teachers.py`).** The teacher (the slow reasoning we distill from) is pluggable:
+`--teacher diffusion` (the local model with thinking ON — self-distillation) or `--teacher claude`
+(the `claude` CLI, a stronger teacher). With Claude, fidelity becomes a **capability-gap** metric:
+can a coded pipeline of weak one-shot calls reproduce a frontier model's answer? `CLAUDE_TEACHER_SYSTEM`
+asks Claude to decompose into *atomic single-operation steps a small model could each do in one shot*,
+so the trace is compilable onto the student.
+
+### Replacing model calls with code (`skills/`, `compiled.py`, `bind.py`)
+One level deeper: replace the *one-shot calls themselves* with deterministic Python where a step is
+mechanical (arithmetic, dates, string/collection ops). A fully-coded orchestrator issues **zero model
+calls — so the ~19 GB sidecar never loads** and the answer is computed in megabytes. The model is kept
+only for fuzzy steps (open generation, judgement, recall) and ambiguous NL parsing.
+
+- **`skills/`** — a growing library of small, pure, **typed, example-tested** functions (`arith.*`,
+  `date.*`, `text.*`), indexed in a `SKILLS` registry. Skills never import the engine (a test enforces
+  it). Money rounds through one `arith.round_money` chokepoint (`Decimal`+`ROUND_HALF_UP`).
+- **`compiled.py`** — a `Plan` is a typed step list; each step is a `CodeStep` (invoke a skill, no model)
+  or a `ModelStep` (one `shot` call). `run_plan` records per step whether it ran via **code or model** and
+  emits a summary tally — so "did this answer use the model?" is *observable per run*, not assumed. A
+  model-free orchestrator runs with `shot=engine._no_model`, turning "0 model calls" into an invariant
+  (an accidental `ModelStep` raises instead of silently waking the sidecar).
+- **`bind.py`** — natural language → typed args. A **coded parser** (regex) runs first; only on failure
+  does it fall back to the model (`extract_validate_repair`). The bind reports whether it used the model,
+  and that cost is folded into the tally — a model-based bind followed by coded steps still reports its
+  calls, never zero. The parser is deliberately conservative: it bails to the model rather than guess.
+
+Try it (the coded orchestrators run with the **sidecar stopped**):
+```bash
+python -m reasoning.cli run "What is 17% off \$240 then 8% tax?"     # → $215.14, 0 model calls
+python -m reasoning.cli run "How many days are between 2024-03-03 and 2024-07-15?"  # → 134, 0 calls
+python -m reasoning.cli run "How many times does 'a' appear in 'banana'?"           # → 3, 0 calls
+```
+`derive` now grows the library: it maps each atomic line of a teacher trace onto a skill where one
+matches (`--mode steps`), leaving unmatched lines as model steps and reporting coverage
+(`matched 3/4 atomic steps to skills`). Each remaining model step is a candidate for the next skill —
+add it to `skills/`, re-derive, and coded coverage climbs. `eval` reports fidelity *and* the model-call
+count, with an exact numeric backstop that catches rounding regressions the fuzzy judge would miss.
+Skill tests: `python -m unittest discover -s reasoning -p "test_*.py" -t .` (no sidecar, no network).
+
 ## Model variants (mlx-community)
 `-4bit` (default, ~13 GB) · `-5bit` · `-6bit` · `-8bit` (~26 GB) · `-bf16`.
 On 36 GB, 4-bit is the safe default; 6-bit fits with headroom; 8-bit is tight.

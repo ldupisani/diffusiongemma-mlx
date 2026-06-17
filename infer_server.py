@@ -28,6 +28,7 @@ import json
 import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
+import mlx.core as mx
 from mlx_vlm import load, stream_generate
 from mlx_vlm.prompt_utils import apply_chat_template
 
@@ -87,6 +88,13 @@ class Handler(BaseHTTPRequestHandler):
             temperature=req.get("temperature", 0.4),
             enable_thinking=req.get("enable_thinking", False),
         )
+
+        # Seeding the global PRNG makes the random initial canvas + sampling
+        # reproducible. It is NOT a stream_generate kwarg — set it here, before
+        # generating. Varying the seed is what gives one_shot_n diverse candidates.
+        seed = req.get("seed")
+        if seed is not None:
+            mx.random.seed(int(seed))
 
         self.send_response(200)
         self.send_header("Content-Type", "application/x-ndjson")
