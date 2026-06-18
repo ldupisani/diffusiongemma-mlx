@@ -44,7 +44,10 @@ def cmd_derive(args):
 
 
 def cmd_run(args):
-    matcher = router.ClassifyMatcher() if args.matcher == "classify" else router.LexicalMatcher()
+    matcher = {
+        "classify": router.ClassifyMatcher,
+        "embedding": router.EmbeddingMatcher,
+    }.get(args.matcher, router.LexicalMatcher)()
     m = router.recognize(args.query, matcher=matcher)
     if m:
         print(f"[recognized: {m.orchestrator.query_type} via {m.via} "
@@ -108,7 +111,7 @@ def main():
     d.add_argument("--query-type", dest="query_type"); d.add_argument("--force", action="store_true")
     d.set_defaults(fn=cmd_derive)
     r = sub.add_parser("run"); r.add_argument("query")
-    r.add_argument("--matcher", choices=["lexical", "classify"], default="lexical")
+    r.add_argument("--matcher", choices=["lexical", "classify", "embedding"], default="lexical")
     r.add_argument("--teacher", **teacher_kw)
     r.add_argument("--trace", action="store_true"); r.set_defaults(fn=cmd_run)
     e = sub.add_parser("eval"); e.add_argument("orchestrator_id"); e.add_argument("query", nargs="?")

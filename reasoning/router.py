@@ -13,9 +13,11 @@ select. None means "no known type" → the caller falls back to the teacher.
 
 from __future__ import annotations
 
+import math
 import re
+import zlib
 from dataclasses import dataclass
-from typing import Optional, Protocol
+from typing import Callable, Optional, Protocol
 
 from .registry import Orchestrator, load_orchestrators
 
@@ -80,14 +82,72 @@ class LexicalMatcher:
         return best if best and best.score >= self.threshold else None
 
 
+# --- embedding backend -----------------------------------------------------------------
+def _features(text: str) -> list[str]:
+    """Word tokens + character 3/4/5-grams. Char n-grams give morphology robustness for
+    free (kilometres≈kilometers, plurals) without a stoplist."""
+    t = text.lower()
+    feats = re.findall(r"[a-z0-9]+", t)
+    s = f" {t} "
+    for n in (3, 4, 5):
+        feats.extend(s[i:i + n] for i in range(len(s) - n + 1))
+    return feats
+
+
+def hashing_embed(texts: list[str], dim: int = 1024) -> list[list[float]]:
+    """Dependency-free embedding via the feature-hashing trick: hash each feature into a
+    fixed-width vector with a random sign, then L2-normalize. Deterministic (crc32, not the
+    salted built-in hash), local, instant — no model, no sidecar. The default backend.
+
+    Not semantic (it can't know two unrelated words mean the same thing), but it is a true
+    cosine vector space over n-gram content, which is strictly stronger than exact-token
+    overlap. Swap in a neural `embed` (sentence-transformers / MLX) for real semantics.
+    """
+    out = []
+    for text in texts:
+        vec = [0.0] * dim
+        for f in _features(text):
+            b = f.encode()
+            vec[zlib.crc32(b) % dim] += 1.0 if (zlib.crc32(b + b"#") & 1) else -1.0
+        norm = math.sqrt(sum(v * v for v in vec)) or 1.0
+        out.append([v / norm for v in vec])
+    return out
+
+
+def _cosine(a: list[float], b: list[float]) -> float:
+    return sum(x * y for x, y in zip(a, b))  # inputs are L2-normalized → dot == cosine
+
+
 class EmbeddingMatcher:
-    """Scale-out path (not built in v0)."""
+    """Rank orchestrators by cosine similarity of the query to their example_queries.
+
+    The scale-out recognition path: as the library grows, keyword matching collides on
+    shared surface words ("product", "mean", "year") — vector similarity over the whole
+    example sentence disambiguates by context instead. `embed` is pluggable: the default
+    `hashing_embed` is dependency-free and local; pass a neural embedder for true semantics.
+    Per-text vectors are cached, so repeated routing is cheap.
+    """
+
+    def __init__(self, embed: Callable[[list[str]], list[list[float]]] = hashing_embed,
+                 threshold: float = 0.30):
+        self.embed = embed
+        self.threshold = threshold
+        self._cache: dict[str, list[float]] = {}
+
+    def _vec(self, text: str) -> list[float]:
+        if text not in self._cache:
+            self._cache[text] = self.embed([text])[0]
+        return self._cache[text]
 
     def select(self, query, orchestrators):
-        raise NotImplementedError(
-            "EmbeddingMatcher is a stub. v0 uses LexicalMatcher; the scale-out path is to "
-            "embed each orchestrator's example_queries and rank by cosine similarity."
-        )
+        qv = self.embed([query])[0]
+        best: Optional[Match] = None
+        for o in orchestrators:
+            refs = [*o.example_queries, o.description]
+            score = max((_cosine(qv, self._vec(r)) for r in refs if r), default=0.0)
+            if best is None or score > best.score:
+                best = Match(o, score, via="embedding")
+        return best if best and best.score >= self.threshold else None
 
 
 class ClassifyMatcher:

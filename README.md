@@ -188,10 +188,16 @@ Modules: `engine.py` (one-shot / one-shot-N thinking-off calls via the sidecar; 
 **seed** for diverse candidates), `patterns.py` (decompose-solve-combine, map-reduce,
 generate-rank-select, self-consistency, extract-validate-repair), `registry.py` (orchestrators as
 git-versioned Python modules under `store/` — the graph), `router.py` (pluggable recognition:
-`LexicalMatcher` default, `EmbeddingMatcher` stub for scale, `ClassifyMatcher` one-shot), and
+`LexicalMatcher` default, `EmbeddingMatcher` for scale — cosine over example-query vectors,
+`ClassifyMatcher` one-shot), and
 `capture`/`derive`/`eval` (the teacher→orchestrator compile loop). Selecting among a handful of
-patterns needs no embeddings — a keyword/lexical or one-shot classify router suffices; embeddings
-are the scale-out path once the orchestrator library grows large.
+patterns needs no embeddings — a keyword/lexical or one-shot classify router suffices. As the
+library grows, keyword routing starts colliding on shared surface words ("product", "mean",
+"year"), and a collision is a *confident wrong answer*, not a miss — so `EmbeddingMatcher`
+(`--matcher embedding`) routes by cosine similarity of the query to each orchestrator's
+example_queries instead. Its `embed` backend is pluggable: the default `hashing_embed` is
+dependency-free, local, and never touches the sidecar (so coded paths stay model-free); pass a
+neural embedder (sentence-transformers / MLX) for true semantic recognition at scale.
 
 **Teacher backend (`teachers.py`).** The teacher (the slow reasoning we distill from) is pluggable:
 `--teacher diffusion` (the local model with thinking ON — self-distillation) or `--teacher claude`
