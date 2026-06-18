@@ -16,8 +16,14 @@ from .registry import SAMPLE_DIR
 from .teachers import get_teacher
 
 
+# drop filler words so the slug keeps the *distinguishing* content (otherwise queries like
+# "What is the area of a circle/rectangle/triangle" all collide on "what-is-the-area-of-a").
+_SLUG_STOP = {"the", "is", "a", "an", "of", "with", "what", "are", "in", "to", "and",
+              "for", "be", "that", "this", "many", "how", "does"}
+
+
 def _slug(text: str) -> str:
-    words = re.findall(r"[a-z0-9]+", text.lower())[:6]
+    words = [w for w in re.findall(r"[a-z0-9]+", text.lower()) if w not in _SLUG_STOP][:6]
     return "-".join(words) or "sample"
 
 
