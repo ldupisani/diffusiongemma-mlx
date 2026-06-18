@@ -31,11 +31,12 @@ def parse(s: str, default_year: int = 2024) -> date:
     raise ValueError(f"unrecognized date: {s!r}")
 
 
-@register("date.days_between", "number of days between two dates (d2 - d1)",
+@register("date.days_between", "number of days between two dates (order-independent)",
           [((date(2024, 3, 3), date(2024, 7, 15)), 134),
+           ((date(2024, 7, 15), date(2024, 3, 3)), 134),   # reversed → same magnitude
            ((date(2024, 2, 28), date(2024, 3, 1)), 2)])  # 2024 is a leap year
 def days_between(d1: date, d2: date) -> int:
-    return (d2 - d1).days
+    return abs((d2 - d1).days)
 
 
 @register("date.add_days", "the date n days after a date",
@@ -57,22 +58,26 @@ def add_weeks(d: date, n: int) -> date:
     return d + timedelta(weeks=n)
 
 
-@register("date.weeks_between", "number of weeks between two dates (may be fractional)",
+@register("date.weeks_between", "number of weeks between two dates, order-independent (fractional)",
           [((date(2024, 1, 1), date(2024, 12, 31)), 52.142857142857146)])
 def weeks_between(d1: date, d2: date) -> float:
-    return (d2 - d1).days / 7
+    return abs((d2 - d1).days) / 7
 
 
-@register("date.months_between", "whole calendar months between two dates",
-          [((date(2023, 2, 15), date(2024, 8, 15)), 18), ((date(2024, 1, 31), date(2024, 3, 1)), 1)])
+@register("date.months_between", "whole calendar months between two dates (order-independent)",
+          [((date(2023, 2, 15), date(2024, 8, 15)), 18),
+           ((date(2040, 2, 15), date(2029, 8, 15)), 126),  # reversed → magnitude
+           ((date(2024, 1, 31), date(2024, 3, 1)), 1)])
 def months_between(d1: date, d2: date) -> int:
-    return (d2.year - d1.year) * 12 + (d2.month - d1.month) - (1 if d2.day < d1.day else 0)
+    lo, hi = sorted((d1, d2))
+    return (hi.year - lo.year) * 12 + (hi.month - lo.month) - (1 if hi.day < lo.day else 0)
 
 
-@register("date.years_between", "whole years between two dates",
+@register("date.years_between", "whole years between two dates (order-independent)",
           [((date(2000, 5, 20), date(2024, 5, 20)), 24), ((date(2000, 5, 20), date(2024, 5, 19)), 23)])
 def years_between(d1: date, d2: date) -> int:
-    return d2.year - d1.year - ((d2.month, d2.day) < (d1.month, d1.day))
+    lo, hi = sorted((d1, d2))
+    return hi.year - lo.year - ((hi.month, hi.day) < (lo.month, lo.day))
 
 
 @register("date.is_leap_year", "whether a year is a leap year",
