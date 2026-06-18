@@ -1,0 +1,9 @@
+{
+  "id": "how-many-years-are-between-2000",
+  "query": "How many years are between 2000-05-20 and 2024-05-20?",
+  "reasoning": "1. Subtract 2000 from 2024 (the years from the two dates 2024-05-20 and 2000-05-20, which share the same month and day 05-20): 2024 \u2212 2000 = ?",
+  "answer": "24",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781794078
+}

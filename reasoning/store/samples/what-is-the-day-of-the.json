@@ -1,0 +1,9 @@
+{
+  "id": "what-is-the-day-of-the",
+  "query": "What is the day of the year for 2024-03-01?",
+  "reasoning": "1. Recall the number of days in January: 31.\n2. Determine the number of days in February 2024 (2024 is a leap year): 29.\n3. Add the days in January and February: 31 + 29 = 60.\n4. Add the result to the day-of-month for March 1: 60 + 1 = 61.",
+  "answer": "61",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781794072
+}

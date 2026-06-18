@@ -1,0 +1,9 @@
+{
+  "id": "what-is-the-90th-percentile-of",
+  "query": "What is the 90th percentile of 1, 2, 3, 4, 5, 6, 7, 8, 9, and 10?",
+  "reasoning": "1. Subtract: with N = 10 data points, compute N \u2212 1 = 10 \u2212 1 = 9.\n2. Multiply 9 (from step 1) by 0.90 (the 90th percentile as a fraction) = 8.1.\n3. Add 8.1 (from step 2) + 1 = 9.1. This is the fractional rank position in the sorted list.\n4. Recall: in the sorted list 1,2,3,4,5,6,7,8,9,10, the 9th value is 9 and the 10th value is 10. Subtract to get the gap: 10 \u2212 9 = 1.\n5. Multiply the fractional part 0.1 (from the 9.1 in step 3) by the gap 1 (from step 4) = 0.1.\n6. Add the 9th value 9 + 0.1 (from step 5) = 9.1.",
+  "answer": "9.1",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781793976
+}

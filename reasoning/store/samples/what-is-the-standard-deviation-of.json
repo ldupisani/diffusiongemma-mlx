@@ -1,0 +1,9 @@
+{
+  "id": "what-is-the-standard-deviation-of",
+  "query": "What is the standard deviation of 2, 4, 4, 4, 5, 5, 7, and 9?",
+  "reasoning": "1. Add the eight numbers: 2 + 4 + 4 + 4 + 5 + 5 + 7 + 9 = 40.\n2. Divide 40 (from step 1) by 8 to get the mean: 40 \u00f7 8 = 5.\n3. Using mean 5, find each squared deviation (x \u2212 5)\u00b2: for 2\u21929, 4\u21921, 4\u21921, 4\u21921, 5\u21920, 5\u21920, 7\u21924, 9\u219216.\n4. Add those squared deviations from step 3: 9 + 1 + 1 + 1 + 0 + 0 + 4 + 16 = 32.\n5. Divide 32 (from step 4) by 8 (population variance): 32 \u00f7 8 = 4.\n6. Take the square root of 4 (from step 5): \u221a4 = 2.",
+  "answer": "2",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781793931
+}

@@ -1,0 +1,9 @@
+{
+  "id": "how-many-weeks-are-between-2024",
+  "query": "How many weeks are between 2024-01-01 and 2024-12-31?",
+  "reasoning": "1. Recall the number of days from 2024-01-01 to 2024-12-31: 2024 is a leap year (366 days total), and the gap from Jan 1 to Dec 31 of the same year is 365 days.\n2. Divide 365 (from step 1) by 7.",
+  "answer": "52.14 weeks (365 days \u00f7 7)",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781794030
+}

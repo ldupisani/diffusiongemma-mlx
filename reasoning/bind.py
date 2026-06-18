@@ -121,6 +121,58 @@ def bind_days_between(query: str) -> tuple[bool, dict | None, str, int]:
     return False, None, "code", 0
 
 
+# difference unit → (skill, whether to round, unit label)
+_DIFF_UNITS = [
+    ("week", "date.weeks_between", True, "weeks"),
+    ("month", "date.months_between", False, "months"),
+    ("year", "date.years_between", False, "years"),
+    ("day", "date.days_between", False, "days"),
+]
+
+
+def bind_date_difference(query: str) -> tuple[bool, dict | None, str, int]:
+    """Two ISO dates + the unit asked for (days/weeks/months/years)."""
+    dates = _ISO_DATE.findall(query)
+    if len(dates) != 2:
+        return False, None, "code", 0
+    q = query.lower()
+    skill, rounded, label = next(((s, r, lbl) for w, s, r, lbl in _DIFF_UNITS if w in q),
+                                 ("date.days_between", False, "days"))
+    return True, {"d1": dates[0], "d2": dates[1], "skill": skill,
+                  "rounded": rounded, "label": label}, "code", 0
+
+
+_AFTER = re.compile(r"(\d+)\s*(day|week)s?\s+after", re.IGNORECASE)
+
+
+def bind_date_add(query: str) -> tuple[bool, dict | None, str, int]:
+    """'<n> days/weeks after <ISO date>' → {date, n, skill}."""
+    m, dates = _AFTER.search(query), _ISO_DATE.findall(query)
+    if m and dates:
+        skill = "date.add_weeks" if m.group(2).lower() == "week" else "date.add_days"
+        return True, {"date": dates[0], "n": int(m.group(1)), "skill": skill}, "code", 0
+    return False, None, "code", 0
+
+
+def bind_single_date(query: str) -> tuple[bool, dict | None, str, int]:
+    """A single ISO date → {date}. For weekday / day-of-year queries."""
+    dates = _ISO_DATE.findall(query)
+    if len(dates) == 1:
+        return True, {"date": dates[0]}, "code", 0
+    return False, None, "code", 0
+
+
+_YEAR = re.compile(r"\b(\d{4})\b")
+
+
+def bind_year(query: str) -> tuple[bool, dict | None, str, int]:
+    """A 4-digit year → {year}. For leap-year queries."""
+    m = _YEAR.search(query)
+    if m:
+        return True, {"year": int(m.group(1))}, "code", 0
+    return False, None, "code", 0
+
+
 # --- count-occurrences family (two quoted strings) ------------------------------------
 _QUOTED = re.compile(r"'([^']*)'|\"([^\"]*)\"")
 
@@ -135,8 +187,14 @@ def bind_count_occurrences(query: str) -> tuple[bool, dict | None, str, int]:
 
 # --- list-statistic family (a list of numbers + which summary) ------------------------
 _NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
-# keyword → stats skill. First match wins, so order from most to least specific.
+# keyword → single-list stats skill. First match wins, so order most → least specific
+# (e.g. "geometric mean" must beat "mean", "standard deviation" must beat plain words).
 _STAT_OPS = [
+    (("geometric",), "stats.geometric_mean"),
+    (("standard deviation", "std dev", "stdev"), "stats.stdev"),
+    (("variance",), "stats.variance"),
+    (("mode",), "stats.mode"),
+    (("product",), "stats.product"),
     (("median",), "stats.median"),
     (("average", "mean"), "stats.mean"),
     (("sum", "total", "altogether"), "stats.total"),
@@ -148,19 +206,65 @@ _STAT_OPS = [
 
 def detect_stat_op(query: str) -> str | None:
     q = query.lower()
+    if "weighted" in q or "percentile" in q:
+        return None  # these need extra inputs → dedicated orchestrators handle them
     for cues, skill in _STAT_OPS:
         if any(c in q for c in cues):
             return skill
     return None
 
 
+def _nums(text: str) -> list:
+    return [float(n) if "." in n else int(n) for n in _NUMBER.findall(text)]
+
+
 def bind_list_statistic(query: str) -> tuple[bool, dict | None, str, int]:
     """Coded-only bind: a stat keyword + ≥2 numbers → {nums, skill}."""
     skill = detect_stat_op(query)
-    nums = [float(n) if "." in n else int(n) for n in _NUMBER.findall(query)]
+    nums = _nums(query)
     if skill and len(nums) >= 2:
         return True, {"nums": nums, "skill": skill}, "code", 0
     return False, None, "code", 0
+
+
+_PERCENTILE = re.compile(r"(\d+(?:\.\d+)?)\s*(?:st|nd|rd|th)?\s*percentile", re.IGNORECASE)
+
+
+def bind_percentile(query: str) -> tuple[bool, dict | None, str, int]:
+    """Percentile: the 'Nth percentile' value, and the list of numbers after 'of'."""
+    m = _PERCENTILE.search(query)
+    after = query.split(" of ", 1)[1] if " of " in query else query
+    nums = _nums(after)
+    if m and len(nums) >= 2:
+        return True, {"nums": nums, "p": float(m.group(1))}, "code", 0
+    return False, None, "code", 0
+
+
+def validate_percentile(data: dict) -> tuple[bool, str]:
+    if not (0 <= data["p"] <= 100):
+        return False, "the percentile must be between 0 and 100"
+    return True, ""
+
+
+def bind_weighted_average(query: str) -> tuple[bool, dict | None, str, int]:
+    """Weighted average: values (before 'weights'), weights (after). Splits on the plural
+    'weights' so it never trips on 'weighted'."""
+    parts = re.split(r"\bweights\b", query, maxsplit=1, flags=re.IGNORECASE)
+    if len(parts) != 2:
+        return False, None, "code", 0
+    left = parts[0].split(" of ", 1)[1] if " of " in parts[0] else parts[0]
+    values, weights = _nums(left), _nums(parts[1])
+    if values and weights:
+        return True, {"values": values, "weights": weights}, "code", 0
+    return False, None, "code", 0
+
+
+def validate_weighted_average(data: dict) -> tuple[bool, str]:
+    if len(data["values"]) != len(data["weights"]):
+        return False, "the number of values and weights must match"
+    if sum(data["weights"]) == 0:
+        return False, "the weights must not sum to zero"
+    return True, ""
 
 
 # --- percentage-change family ("from X to Y") -----------------------------------------

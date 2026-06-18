@@ -1,0 +1,9 @@
+{
+  "id": "how-many-months-are-between-2023",
+  "query": "How many months are between 2023-02-15 and 2024-08-15?",
+  "reasoning": "1. Subtract the start year from the end year: 2024 \u2212 2023 = 1.\n2. Multiply the year difference 1 (from step 1) by 12 to convert to months: 1 \u00d7 12 = 12.\n3. Subtract the start month number from the end month number: 8 \u2212 2 = 6.\n4. Add 12 (from step 2) and 6 (from step 3): 12 + 6 = 18.",
+  "answer": "18",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781794036
+}

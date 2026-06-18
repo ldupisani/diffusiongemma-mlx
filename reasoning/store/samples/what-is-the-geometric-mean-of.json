@@ -1,0 +1,9 @@
+{
+  "id": "what-is-the-geometric-mean-of",
+  "query": "What is the geometric mean of 2, 8, and 32?",
+  "reasoning": "1. Multiply 2 by 8. (Result: 16)\n2. Multiply 16 (from step 1) by 32. (Result: 512)\n3. State the count of numbers given: 2, 8, 32. (Result: 3)\n4. Compute the cube root of 512 (the 3rd root, from steps 2 and 3). (Result: 8)",
+  "answer": "8",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781793961
+}

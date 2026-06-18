@@ -1,0 +1,9 @@
+{
+  "id": "what-date-is-90-days-after",
+  "query": "What date is 90 days after 2024-01-01?",
+  "reasoning": "1. Recall how many days are in January 2024: 31.\n2. Recall how many days are in February 2024 (a leap year): 29.\n3. Add 31 (from step 1) and 29 (from step 2): 60. (This is the number of days from 2024-01-01 to 2024-03-01.)\n4. Subtract 60 (from step 3) from 90: 30. (Days remaining past 2024-03-01.)\n5. The date is 30 days (from step 4) after 2024-03-01; since March has 31 days, 2024-03-01 plus 30 days is 2024-03-31.",
+  "answer": "2024-03-31",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781794022
+}

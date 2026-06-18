@@ -1,0 +1,9 @@
+{
+  "id": "what-date-is-12-weeks-after",
+  "query": "What date is 12 weeks after 2024-06-01?",
+  "reasoning": "`\u2605 Insight \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`\nAdding whole *weeks* is friendlier than arbitrary days: 12 \u00d7 7 = 84 days, and because 84 is a multiple of 7, the weekday is preserved (2024-06-01 is a Saturday, so the answer is too). The hard part for a weak student is calendar rollover across month boundaries \u2014 so I decompose it into single subtractions, \"consuming\" one month's remaining days at a time.\n`\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`\n\nREASONING:\n1. Multiply 12 by 7 to convert weeks to days: 12 \u00d7 7 = 84.\n2. Find days from June 1 to the end of June (June has 30 days): 30 \u2212 1 = 29.\n3. Subtract those 29 days from the 84 total: 84 \u2212 29 = 55 days remaining past June 30.\n4. Subtract July's 31 days from the 55 remaining: 55 \u2212 31 = 24 days remaining past July 31.\n5. State the date 24 days into August in year 2024: 2024-08-24.",
+  "answer": "2024-08-24",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781794060
+}

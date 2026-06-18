@@ -14,7 +14,7 @@ from reasoning.compiled import model_calls
 CASES = [
     # query, expected answer, expected orchestrator id
     ("What is 17% off $240 then 8% tax?", "$215.14", "percent_discount_tax"),
-    ("How many days are between 2024-03-03 and 2024-07-15?", "134", "days_between_dates"),
+    ("How many days are between 2024-03-03 and 2024-07-15?", "134 days", "days_between_dates"),
     ("How many times does 'ss' appear in 'mississippi'?", "2", "count_occurrences"),
     ("What is the average of 4, 8, 15, 16, and 42?", "17", "list_statistic"),
     ("What is the median of 3, 9, 2, 7, and 5?", "5", "list_statistic"),
@@ -45,6 +45,24 @@ CASES = [
      "500 units", "break_even"),
     ("A dinner bill is $120. Add an 18% tip and split it among 4 people. How much does each person pay?",
      "$35.40", "tip_split"),
+    # stats series (captured)
+    ("What is the mode of 4, 7, 4, 9, 4, and 7?", "4", "list_statistic"),
+    ("What is the standard deviation of 2, 4, 4, 4, 5, 5, 7, and 9?", "2", "list_statistic"),
+    ("What is the variance of 2, 4, 4, 4, 5, 5, 7, and 9?", "4", "list_statistic"),
+    ("What is the product of 2, 3, 4, and 5?", "120", "list_statistic"),
+    ("What is the geometric mean of 2, 8, and 32?", "8", "list_statistic"),
+    ("What is the 90th percentile of 1, 2, 3, 4, 5, 6, 7, 8, 9, and 10?", "9.1", "percentile"),
+    ("What is the weighted average of 80, 90, and 100 with weights 1, 2, and 3?", "93.33",
+     "weighted_average"),
+    # date-math series (captured)
+    ("What day of the week is 2024-07-15?", "Monday", "weekday_of_date"),
+    ("What date is 90 days after 2024-01-01?", "2024-03-31", "date_add"),
+    ("What date is 12 weeks after 2024-06-01?", "2024-08-24", "date_add"),
+    ("How many weeks are between 2024-01-01 and 2024-12-31?", "52.14 weeks", "days_between_dates"),
+    ("How many months are between 2023-02-15 and 2024-08-15?", "18 months", "days_between_dates"),
+    ("How many years are between 2000-05-20 and 2024-05-20?", "24 years", "days_between_dates"),
+    ("Is 2024 a leap year?", "Yes, 2024 is a leap year.", "leap_year"),
+    ("What is the day of the year for 2024-03-01?", "61", "day_of_year"),
 ]
 
 

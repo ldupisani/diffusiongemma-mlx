@@ -49,3 +49,39 @@ def add_days(d: date, n: int) -> date:
 def weekday_name(d: date) -> str:
     return ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
             "Saturday", "Sunday"][d.weekday()]
+
+
+@register("date.add_weeks", "the date n weeks after a date",
+          [((date(2024, 6, 1), 12), date(2024, 8, 24))])
+def add_weeks(d: date, n: int) -> date:
+    return d + timedelta(weeks=n)
+
+
+@register("date.weeks_between", "number of weeks between two dates (may be fractional)",
+          [((date(2024, 1, 1), date(2024, 12, 31)), 52.142857142857146)])
+def weeks_between(d1: date, d2: date) -> float:
+    return (d2 - d1).days / 7
+
+
+@register("date.months_between", "whole calendar months between two dates",
+          [((date(2023, 2, 15), date(2024, 8, 15)), 18), ((date(2024, 1, 31), date(2024, 3, 1)), 1)])
+def months_between(d1: date, d2: date) -> int:
+    return (d2.year - d1.year) * 12 + (d2.month - d1.month) - (1 if d2.day < d1.day else 0)
+
+
+@register("date.years_between", "whole years between two dates",
+          [((date(2000, 5, 20), date(2024, 5, 20)), 24), ((date(2000, 5, 20), date(2024, 5, 19)), 23)])
+def years_between(d1: date, d2: date) -> int:
+    return d2.year - d1.year - ((d2.month, d2.day) < (d1.month, d1.day))
+
+
+@register("date.is_leap_year", "whether a year is a leap year",
+          [((2024,), True), ((1900,), False), ((2000,), True)])
+def is_leap_year(year: int) -> bool:
+    return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
+
+
+@register("date.day_of_year", "the ordinal day of the year for a date (Jan 1 = 1)",
+          [((date(2024, 3, 1),), 61), ((date(2024, 1, 1),), 1)])
+def day_of_year(d: date) -> int:
+    return d.timetuple().tm_yday

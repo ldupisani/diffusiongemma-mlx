@@ -1,0 +1,9 @@
+{
+  "id": "what-day-of-the-week-is",
+  "query": "What day of the week is 2024-07-15?",
+  "reasoning": "1. Recall: January 1, 2024 falls on a Monday.\n2. From this fact \u2014 \"July 15, 2024 is the 197th day of the year\" \u2014 extract the day-of-year number: 197.\n3. Subtract: compute 197 \u2212 1 = 196 (days after Jan 1).\n4. Compute the remainder: 196 % 7 = 0.\n5. Given Jan 1 is Monday and the offset from step 4 is 0, choose the weekday that is 0 days after Monday from this list: [0=Monday, 1=Tuesday, 2=Wednesday, 3=Thursday, 4=Friday, 5=Saturday, 6=Sunday] \u2192 Monday.",
+  "answer": "Monday",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781794012
+}

@@ -1,0 +1,9 @@
+{
+  "id": "what-is-the-variance-of-2",
+  "query": "What is the variance of 2, 4, 4, 4, 5, 5, 7, and 9?",
+  "reasoning": "1. Add the eight numbers: 2 + 4 + 4 + 4 + 5 + 5 + 7 + 9. The sum is 40.\n2. Divide the sum 40 (from step 1) by the count 8 to get the mean: 40 \u00f7 8 = 5.\n3. Using mean 5, compute each squared deviation: (2\u22125)\u00b2=9, (4\u22125)\u00b2=1, (4\u22125)\u00b2=1, (4\u22125)\u00b2=1, (5\u22125)\u00b2=0, (5\u22125)\u00b2=0, (7\u22125)\u00b2=4, (9\u22125)\u00b2=16. The list is 9, 1, 1, 1, 0, 0, 4, 16.\n4. Add the squared deviations from step 3: 9 + 1 + 1 + 1 + 0 + 0 + 4 + 16. The sum is 32.\n5. Divide the sum 32 (from step 4) by the count 8 to get the variance: 32 \u00f7 8 = 4.",
+  "answer": "4",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781793946
+}
