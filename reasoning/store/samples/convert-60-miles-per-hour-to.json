@@ -1,0 +1,9 @@
+{
+  "id": "convert-60-miles-per-hour-to",
+  "query": "Convert 60 miles per hour to kilometers per hour",
+  "reasoning": "1. Recall the conversion factor: 1 mile = 1.60934 kilometers.\n2. Multiply 60 by 1.60934 (from step 1) to get 96.5604.",
+  "answer": "96.56 km/h",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781815921
+}

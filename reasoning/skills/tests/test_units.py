@@ -21,6 +21,21 @@ class TestUnits(unittest.TestCase):
         self.assertAlmostEqual(u.km_to_mi(u.mi_to_km(26.2)), 26.2, places=6)
         self.assertAlmostEqual(u.kg_to_lb(u.lb_to_kg(150)), 150, places=6)
 
+    def test_convert_spans_dimensions(self):
+        self.assertAlmostEqual(u.convert(5, "km", "m"), 5000)
+        self.assertAlmostEqual(u.convert(2, "gallons", "liters"), 7.570823568)
+        self.assertAlmostEqual(u.convert(5, "minutes", "seconds"), 300)
+        self.assertAlmostEqual(u.convert(300, "kelvin", "celsius"), 26.85)
+
+    def test_convert_normalizes_aliases_and_is_inverse(self):
+        self.assertAlmostEqual(u.convert(u.convert(10, "meters", "feet"), "ft", "m"), 10, places=6)
+
+    def test_convert_rejects_cross_dimension(self):
+        with self.assertRaises(ValueError):
+            u.convert(5, "km", "kg")           # length vs mass
+        with self.assertRaises(ValueError):
+            u.convert(5, "celsius", "meters")  # temperature vs length
+
 
 if __name__ == "__main__":
     unittest.main()

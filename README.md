@@ -213,12 +213,14 @@ calls — so the ~19 GB sidecar never loads** and the answer is computed in mega
 only for fuzzy steps (open generation, judgement, recall) and ambiguous NL parsing.
 
 - **`skills/`** — a growing library of small, pure, **typed, example-tested** functions (`arith.*`,
-  `date.*`, `text.*`, `stats.*`, `units.*`, `finance.*` — 54 and counting), indexed in a `SKILLS`
+  `date.*`, `text.*`, `stats.*`, `units.*`, `finance.*` — 55 and counting), indexed in a `SKILLS`
   registry. Skills never import the engine (a test enforces it). Rounding goes through one
   `arith.round_to`/`round_money` chokepoint (`Decimal`+`ROUND_HALF_UP`). Concept-level skills
   (`stats.mean` over any-length list, `finance.loan_payment`, `units.f_to_c`) capture an operation as
   one named step, so a single orchestrator generalizes — vs. the teacher's brittle fixed chain of
-  primitive add/multiply steps. The `finance.*` family (compound/simple interest, present value, CAGR,
+  primitive add/multiply steps. The strongest case: `units.convert` is one skill over a canonical
+  base-unit factor table that spans length/mass/volume/time/speed/temperature — replacing the
+  N×(N−1)-per-dimension explosion of pairwise converters; a new unit is one table row. The `finance.*` family (compound/simple interest, present value, CAGR,
   annuity FV, loan payment, margin, depreciation, break-even) was grown by capturing a *variety* of
   Claude traces, then choosing the concept-level abstractions from the evidence: ROI and markup turned
   out to be `arith.percent_change`, tip-and-split composes `apply_tax`+`divide` (no new skill), and the

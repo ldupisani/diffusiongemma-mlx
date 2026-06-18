@@ -66,6 +66,19 @@ CASES = [
     # named-month dates (day-first and month-first; both unambiguous)
     ("What is the day of the year for 10 Feb 2020", "41", "day_of_year"),
     ("How many days are between 1 Jan 2024 and 10 Feb 2024?", "40 days", "days_between_dates"),
+    # unit-conversion series (captured) — one factor table spans every dimension
+    ("Convert 5 kilometers to meters", "5000 m", "unit_conversion"),
+    ("How many feet are in 10 meters?", "32.81 ft", "unit_conversion"),
+    ("Convert 100 centimeters to inches", "39.37 in", "unit_conversion"),
+    ("Convert 2 gallons to liters", "7.57 L", "unit_conversion"),
+    ("How many ounces are in 2 pounds?", "32 oz", "unit_conversion"),
+    ("Convert 300 Kelvin to Celsius", "26.85°C", "unit_conversion"),
+    ("Convert 1.5 hours to minutes", "90 min", "unit_conversion"),
+    ("How many seconds are in 5 minutes?", "300 s", "unit_conversion"),
+    ("Convert 500 grams to kilograms", "0.5 kg", "unit_conversion"),
+    ("How many milliliters are in 2 liters?", "2000 mL", "unit_conversion"),
+    ("Convert 60 miles per hour to kilometers per hour", "96.56 km/h", "unit_conversion"),
+    ("How many inches are in 3 feet?", "36 in", "unit_conversion"),
 ]
 
 

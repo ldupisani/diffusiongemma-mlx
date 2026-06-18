@@ -1,0 +1,9 @@
+{
+  "id": "how-many-ounces-are-in-2",
+  "query": "How many ounces are in 2 pounds?",
+  "reasoning": "1. Recall how many ounces are in one pound. (",
+  "answer": "16)\n2. Multiply 2 by 16 (from step 1).\nANSWER:\n32",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781815887
+}

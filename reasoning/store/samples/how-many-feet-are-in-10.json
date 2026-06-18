@@ -1,0 +1,9 @@
+{
+  "id": "how-many-feet-are-in-10",
+  "query": "How many feet are in 10 meters?",
+  "reasoning": "1. Recall the conversion factor: 1 meter = 3.28084 feet.\n2. Multiply 10 by 3.28084 (from step 1) to get 32.8084.",
+  "answer": "32.8084 feet",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781815872
+}

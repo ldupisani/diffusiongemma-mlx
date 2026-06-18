@@ -1,0 +1,9 @@
+{
+  "id": "how-many-milliliters-are-in-2",
+  "query": "How many milliliters are in 2 liters?",
+  "reasoning": "`\u2605 Insight \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`\nThis is exactly the kind of query your difg unit-conversion flywheel is capturing (see the `convert-*.json` samples). A robust decomposition separates the *recalled conversion factor* from the *arithmetic*, so the student never chains recall + math in one shot.\n`\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`\n\nREASONING:\n1. Recall the conversion factor: how many milliliters are in 1 liter? (",
+  "answer": "1000)\n2. Multiply 2 by 1000 (from step 1).\nANSWER:\n2000",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781815914
+}

@@ -1,0 +1,9 @@
+{
+  "id": "convert-1-5-hours-to-minutes",
+  "query": "Convert 1.5 hours to minutes",
+  "reasoning": "1. Multiply 1.5 by 60.",
+  "answer": "90",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781815897
+}

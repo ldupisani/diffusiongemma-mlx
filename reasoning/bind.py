@@ -299,35 +299,29 @@ def bind_percent_change(query: str) -> tuple[bool, dict | None, str, int]:
     return False, None, "code", 0
 
 
-# --- unit-conversion family ("<n> <unit> to <unit>") ----------------------------------
-# normalize many spellings to a canonical unit token
-_UNIT_ALIASES = {
-    "fahrenheit": "f", "f": "f", "celsius": "c", "centigrade": "c", "c": "c",
-    "miles": "mi", "mile": "mi", "mi": "mi",
-    "km": "km", "kilometers": "km", "kilometres": "km", "kilometer": "km", "kilometre": "km",
-    "pounds": "lb", "pound": "lb", "lbs": "lb", "lb": "lb",
-    "kg": "kg", "kilograms": "kg", "kilogram": "kg", "kilos": "kg", "kilo": "kg",
-}
-_CONVERSIONS = {
-    ("f", "c"): ("units.f_to_c", "°C"), ("c", "f"): ("units.c_to_f", "°F"),
-    ("mi", "km"): ("units.mi_to_km", " km"), ("km", "mi"): ("units.km_to_mi", " mi"),
-    ("lb", "kg"): ("units.lb_to_kg", " kg"), ("kg", "lb"): ("units.kg_to_lb", " lb"),
-}
-_UNIT_WORD = re.compile(r"[a-z]+", re.IGNORECASE)
-
+# --- unit-conversion family -----------------------------------------------------------
+# Unit knowledge lives in skills.units (the canonical factor table); the bind only locates
+# the value and the source/target unit phrases and normalizes them to canonical tokens.
+from .skills import units as _units  # pure skill module, safe to import here
 
 _HOW_MANY = re.compile(
-    r"how many\s+([a-z]+).*?(-?\d+(?:\.\d+)?)\s*([a-z]+)", re.IGNORECASE | re.DOTALL)
+    r"how many\s+([a-z/ ]+?)\s+(?:are|is|in|=).*?(-?\d+(?:\.\d+)?)\s*([a-z/ ]+?)\b",
+    re.IGNORECASE | re.DOTALL)
 
 
-def _units_in(text: str) -> list[str]:
-    return [_UNIT_ALIASES[w] for w in _UNIT_WORD.findall(text.lower()) if w in _UNIT_ALIASES]
+def _find_unit(text: str):
+    """The canonical unit for the longest alias phrase present (whole-token), else None."""
+    low = text.lower()
+    for phrase in _units.UNIT_PHRASES:
+        if re.search(rf"(?<![a-z]){re.escape(phrase)}(?![a-z])", low):
+            return _units.canonical(phrase)
+    return None
 
 
 def bind_unit_convert(query: str) -> tuple[bool, dict | None, str, int]:
-    """Coded-only bind → {value, skill, symbol}. Two supported phrasings:
-      - "<number> <source> to|into|in <target>"   (source before target)
-      - "how many <target> ... <number> <source>"  (target before source)
+    """Coded-only bind → {value, from, to, to_sym}. Two phrasings:
+      - "<number> <source> to|into <target>"        (source before target)
+      - "how many <target> ... <number> <source>"   (target before source)
     Conservative: needs a number and a KNOWN unit on each side, else it bails.
     """
     num = _NUMBER.search(query)
@@ -335,25 +329,26 @@ def bind_unit_convert(query: str) -> tuple[bool, dict | None, str, int]:
         return False, None, "code", 0
     value, source, target = float(num.group()), None, None
 
-    # phrasing 1: explicit "<source> to <target>"
-    split = re.split(r"\b(?:to|into|in)\b", query.lower(), maxsplit=1)
-    if len(split) == 2:
-        left, right = _units_in(split[0]), _units_in(split[1])
-        if left and right:
-            source, target = left[-1], right[0]
+    # phrasing 2 first: "how many <target> ... <n> <source>" (so 'in'/inches is a unit,
+    # not mistaken for a separator).
+    m = _HOW_MANY.match(query.strip())
+    if m:
+        tgt, src = _find_unit(m.group(1)), _find_unit(m.group(3))
+        if tgt and src:
+            value, target, source = float(m.group(2)), tgt, src
 
-    # phrasing 2: "how many <target> is <number> <source>"
+    # phrasing 1: "<source> to|into <target>"
     if source is None:
-        m = _HOW_MANY.match(query.strip())
-        if m and m.group(1).lower() in _UNIT_ALIASES and m.group(3).lower() in _UNIT_ALIASES:
-            value = float(m.group(2))
-            target, source = _UNIT_ALIASES[m.group(1).lower()], _UNIT_ALIASES[m.group(3).lower()]
+        parts = re.split(r"\bto\b|\binto\b", query.lower(), maxsplit=1)
+        if len(parts) == 2:
+            s, t = _find_unit(parts[0]), _find_unit(parts[1])
+            if s and t:
+                source, target = s, t
 
-    pair = (source, target)
-    if pair not in _CONVERSIONS:
-        return False, None, "code", 0
-    skill, symbol = _CONVERSIONS[pair]
-    return True, {"value": value, "skill": skill, "symbol": symbol}, "code", 0
+    if source and target:
+        return True, {"value": value, "from": source, "to": target,
+                      "to_sym": _units.SUFFIX.get(target, f" {target}")}, "code", 0
+    return False, None, "code", 0
 
 
 # --- compound-interest family ---------------------------------------------------------

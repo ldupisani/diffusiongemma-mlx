@@ -1,0 +1,9 @@
+{
+  "id": "convert-5-kilometers-to-meters",
+  "query": "Convert 5 kilometers to meters",
+  "reasoning": "1. Multiply 5 by 1000 (since 1 kilometer = 1000 meters).",
+  "answer": "5000 meters",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781815867
+}
