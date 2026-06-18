@@ -1,0 +1,9 @@
+{
+  "id": "gravitational-potential-energy-5-kg-object",
+  "query": "What is the gravitational potential energy of a 5 kg object at a height of 10 meters?",
+  "reasoning": "1. Recall the formula for gravitational potential energy: PE = m \u00d7 g \u00d7 h, where g = 9.8 m/s\u00b2.\n2. Multiply 5 (mass in kg) by 9.8 (gravitational acceleration) to get 49.\n3. Multiply 49 (from step 2) by 10 (height in meters) to get 490.",
+  "answer": "490 joules",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781817966
+}

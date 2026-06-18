@@ -1,0 +1,9 @@
+{
+  "id": "momentum-4-kg-object-moving-at",
+  "query": "What is the momentum of a 4 kg object moving at 8 m/s?",
+  "reasoning": "1. Multiply 4 (mass in kg) by 8 (velocity in m/s) to get momentum: 4 \u00d7 8 = 32.",
+  "answer": "32 kg\u00b7m/s",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781817996
+}

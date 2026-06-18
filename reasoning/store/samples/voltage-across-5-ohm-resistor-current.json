@@ -1,0 +1,9 @@
+{
+  "id": "voltage-across-5-ohm-resistor-current",
+  "query": "What is the voltage across a 5 ohm resistor with a current of 2 amps?",
+  "reasoning": "`\u2605 Insight \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`\nThis fits your project's physics-formula family (like the F=ma trace in memory at 21:25). Ohm's law V=I\u00d7R is a single-multiplication skill \u2014 ideal for the student model since it's one atomic arithmetic op after one factual recall.\n`\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`\n\nREASONING:\n1. Recall the formula relating voltage, current, and resistance: V = I \u00d7 R (voltage = current \u00d7 resistance).\n2. Multiply the current 2 (amps) by the resistance 5 (ohms): 2 \u00d7 5 = 10.",
+  "answer": "10 volts",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781817991
+}

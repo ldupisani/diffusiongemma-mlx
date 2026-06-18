@@ -1,0 +1,9 @@
+{
+  "id": "power-if-100-joules-work-done",
+  "query": "What is the power if 100 joules of work is done in 5 seconds?",
+  "reasoning": "1. Divide 100 (joules of work) by 5 (seconds) to get power in watts.",
+  "answer": "20 watts",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781817977
+}

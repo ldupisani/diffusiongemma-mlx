@@ -1,0 +1,9 @@
+{
+  "id": "kinetic-energy-2-kg-object-moving",
+  "query": "What is the kinetic energy of a 2 kg object moving at 10 m/s?",
+  "reasoning": "1. Square the speed: multiply 10 by 10 to get 100.\n2. Multiply the mass 2 by 100 (from step 1) to get 200.\n3. Multiply 200 (from step 2) by 0.5 to get 100.",
+  "answer": "100 joules",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781817959
+}

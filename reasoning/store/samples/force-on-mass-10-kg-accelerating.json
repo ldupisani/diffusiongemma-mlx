@@ -1,0 +1,9 @@
+{
+  "id": "force-on-mass-10-kg-accelerating",
+  "query": "What is the force on a mass of 10 kg accelerating at 3 m/s^2?",
+  "reasoning": "1. Recall the formula for force in terms of mass and acceleration: force = mass \u00d7 acceleration.\n2. Multiply mass 10 by acceleration 3 to get the force: 10 \u00d7 3 = 30.",
+  "answer": "30 N",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781817950
+}

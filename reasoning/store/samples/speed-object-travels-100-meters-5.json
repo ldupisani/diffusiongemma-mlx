@@ -1,0 +1,9 @@
+{
+  "id": "speed-object-travels-100-meters-5",
+  "query": "What is the speed of an object that travels 100 meters in 5 seconds?",
+  "reasoning": "1. Divide 100 (meters) by 5 (seconds).",
+  "answer": "20 meters per second (20 m/s)",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781817943
+}

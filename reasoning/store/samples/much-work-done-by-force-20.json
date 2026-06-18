@@ -1,0 +1,9 @@
+{
+  "id": "much-work-done-by-force-20",
+  "query": "How much work is done by a force of 20 N over a distance of 4 meters?",
+  "reasoning": "1. Recall the formula for work: work = force \u00d7 distance.\n2. Multiply the force, 20 N, by the distance, 4 meters: 20 \u00d7 4 = 80.",
+  "answer": "80 joules",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781817972
+}

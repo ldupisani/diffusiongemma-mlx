@@ -106,6 +106,21 @@ CASES = [
     ("What is the hypotenuse of a right triangle with legs 3 and 4?", "5", "geometry"),
     ("What is the surface area of a sphere with radius 6?", "452.39", "geometry"),
     ("What is the diagonal of a rectangle with length 3 and width 4?", "5", "geometry"),
+    # physics-formula series (captured)
+    ("What is the speed of an object that travels 100 meters in 5 seconds?", "20 m/s", "physics"),
+    ("What is the force on a mass of 10 kg accelerating at 3 m/s^2?", "30 N", "physics"),
+    ("What is the kinetic energy of a 2 kg object moving at 10 m/s?", "100 J", "physics"),
+    ("What is the gravitational potential energy of a 5 kg object at a height of 10 meters?",
+     "490 J", "physics"),
+    ("How much work is done by a force of 20 N over a distance of 4 meters?", "80 J", "physics"),
+    ("What is the power if 100 joules of work is done in 5 seconds?", "20 W", "physics"),
+    ("What is the density of an object with mass 300 g and volume 100 cm^3?", "3 g/cm³", "physics"),
+    ("What is the voltage across a 5 ohm resistor with a current of 2 amps?", "10 V", "physics"),
+    ("What is the momentum of a 4 kg object moving at 8 m/s?", "32 kg·m/s", "physics"),
+    ("What is the pressure of a 50 N force over an area of 10 square meters?", "5 Pa", "physics"),
+    ("What is the acceleration of an object that goes from 0 to 20 m/s in 4 seconds?",
+     "5 m/s²", "physics"),
+    ("What is the weight of a 10 kg object on Earth?", "98 N", "physics"),
 ]
 
 

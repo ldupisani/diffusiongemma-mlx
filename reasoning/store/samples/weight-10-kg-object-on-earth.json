@@ -1,0 +1,9 @@
+{
+  "id": "weight-10-kg-object-on-earth",
+  "query": "What is the weight of a 10 kg object on Earth?",
+  "reasoning": "`\u2605 Insight \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`\nWeight is a force (W = m \u00d7 g), not the same as mass. The student only needs one recalled constant (g \u2248 9.8 m/s\u00b2) and one multiplication \u2014 so this decomposes into a recall step plus a single arithmetic step.\n`\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`\n\nREASONING:\n1. Recall the acceleration due to gravity on Earth, g, in m/s\u00b2 (it is 9.8).\n2. Multiply 10 (the mass in kg) by 9.8 (g from step 1) to get the weight in newtons.",
+  "answer": "98 N",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781818024
+}

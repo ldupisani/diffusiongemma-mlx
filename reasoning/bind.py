@@ -309,6 +309,72 @@ def validate_geometry(data: dict) -> tuple[bool, str]:
     return True, ""
 
 
+# --- physics-formula family -----------------------------------------------------------
+# Quantities are cued by their UNIT, so each input is "the number before unit X". Patterns
+# are case-sensitive (kg/N/m/s have meaningful case) and ordered so m/s^2 isn't read as m/s.
+_PHYSICS_UNITS = {
+    "KG": r"kg", "G": r"g(?:rams)?\b", "VEL": r"m/s(?![\^²2])", "ACCEL": r"m/s(?:\^?2|²)",
+    "METERS": r"meters|metres", "SECONDS": r"seconds?", "N": r"N\b|newtons?",
+    "JOULES": r"joules?|J\b", "AMPS": r"amps?|amperes?", "OHM": r"ohms?",
+    "AREA": r"square meters|m\^?2|m²", "CM3": r"cm\^?3|cm³|cubic centimeters?",
+}
+# (asked-quantity keywords, skill, [(arg, unit-key)], answer suffix). Order: compound and
+# specific terms first (power before work; pressure/work before the generic "force").
+_PHYSICS = [
+    (("kinetic energy",), "physics.kinetic_energy", [("mass", "KG"), ("velocity", "VEL")], " J"),
+    (("potential energy", "gravitational"), "physics.potential_energy",
+     [("mass", "KG"), ("height", "METERS")], " J"),
+    (("momentum",), "physics.momentum", [("mass", "KG"), ("velocity", "VEL")], " kg·m/s"),
+    (("density",), "physics.density", [("mass", "G"), ("volume", "CM3")], " g/cm³"),
+    (("voltage", "ohm"), "physics.ohms_law_voltage",
+     [("current", "AMPS"), ("resistance", "OHM")], " V"),
+    (("pressure",), "physics.pressure", [("force", "N"), ("area", "AREA")], " Pa"),
+    (("power",), "physics.power", [("work", "JOULES"), ("time", "SECONDS")], " W"),
+    (("work",), "physics.work", [("force", "N"), ("distance", "METERS")], " J"),
+    (("weight",), "physics.weight", [("mass", "KG")], " N"),
+    (("force",), "physics.force", [("mass", "KG"), ("acceleration", "ACCEL")], " N"),
+    (("speed", "how fast"), "physics.speed", [("distance", "METERS"), ("time", "SECONDS")], " m/s"),
+]
+_FROM_TO_VEL = re.compile(r"from\s+(-?\d+(?:\.\d+)?)\s+to\s+(-?\d+(?:\.\d+)?)", re.IGNORECASE)
+
+
+def _num_before(query: str, unit_re: str):
+    """The number immediately before a unit token (case-sensitive — kg/N/m/s differ)."""
+    m = re.search(rf"(-?\d+(?:\.\d+)?)\s*(?:{unit_re})", query)
+    return float(m[1]) if m else None
+
+
+def detect_physics(query: str):
+    q = query.lower()
+    for kws, skill, dims, suffix in _PHYSICS:
+        if any(k in q for k in kws):
+            return skill, dims, suffix
+    if "acceleration" in q:  # checked last so "accelerating" in a force query doesn't claim it
+        return "physics.acceleration", "ACCEL", " m/s²"
+    return None
+
+
+def bind_physics(query: str) -> tuple[bool, dict | None, str, int]:
+    det = detect_physics(query)
+    if not det:
+        return False, None, "code", 0
+    skill, dims, suffix = det
+    if dims == "ACCEL":  # a = (v_final - v_initial) / time, from "X to Y in T seconds"
+        m, t = _FROM_TO_VEL.search(query), _num_before(query, _PHYSICS_UNITS["SECONDS"])
+        if not m or t is None:
+            return False, None, "code", 0
+        return True, {"v_initial": float(m[1]), "v_final": float(m[2]), "time": t,
+                      "skill": skill, "dims": ["v_initial", "v_final", "time"],
+                      "suffix": suffix}, "code", 0
+    data = {"skill": skill, "dims": [d for d, _ in dims], "suffix": suffix}
+    for name, ukey in dims:
+        v = _num_before(query, _PHYSICS_UNITS[ukey])
+        if v is None:
+            return False, None, "code", 0
+        data[name] = v
+    return True, data, "code", 0
+
+
 # --- list-statistic family (a list of numbers + which summary) ------------------------
 _NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
 # keyword → single-list stats skill. First match wins, so order most → least specific

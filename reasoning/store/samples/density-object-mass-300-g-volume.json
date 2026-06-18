@@ -1,0 +1,9 @@
+{
+  "id": "density-object-mass-300-g-volume",
+  "query": "What is the density of an object with mass 300 g and volume 100 cm^3?",
+  "reasoning": "1. Recall the formula for density: density = mass \u00f7 volume.\n2. Divide 300 (mass in grams) by 100 (volume in cm^3) to get 3.\n3. Attach the unit: mass in grams \u00f7 volume in cm^3 gives g/cm^3, so the result is 3 g/cm^3.",
+  "answer": "3 g/cm\u00b3",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781817984
+}
