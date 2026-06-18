@@ -40,6 +40,17 @@ class TestDomainGuards(unittest.TestCase):
         self.assertIn("no result", r.answer)
         self.assertEqual(model_calls(r), 0)
 
+    def test_invalid_date_does_not_crash(self):
+        # 2024-33-01 is ISO-shaped but month 33 is invalid — must explain, not raise
+        oid, r = self._run("What is the day of the year for 2024-33-01?")
+        self.assertEqual(oid, "day_of_year")
+        self.assertIn("no result", r.answer)
+        self.assertEqual(model_calls(r), 0)
+
+    def test_valid_date_still_works(self):
+        oid, r = self._run("What is the day of the year for 2024-03-01?")
+        self.assertEqual(r.answer, "61")
+
 
 if __name__ == "__main__":
     unittest.main()
