@@ -214,7 +214,7 @@ calls — so the ~19 GB sidecar never loads** and the answer is computed in mega
 only for fuzzy steps (open generation, judgement, recall) and ambiguous NL parsing.
 
 - **`skills/`** — a growing library of small, pure, **typed, example-tested** functions (`arith.*`,
-  `date.*`, `text.*`, `stats.*`, `units.*`, `finance.*` — 66 and counting), indexed in a `SKILLS`
+  `date.*`, `text.*`, `stats.*`, `units.*`, `finance.*`, `geometry.*` — 78 and counting), indexed in a `SKILLS`
   registry. Skills never import the engine (a test enforces it). Rounding goes through one
   `arith.round_to`/`round_money` chokepoint (`Decimal`+`ROUND_HALF_UP`). Concept-level skills
   (`stats.mean` over any-length list, `finance.loan_payment`, `units.f_to_c`) capture an operation as

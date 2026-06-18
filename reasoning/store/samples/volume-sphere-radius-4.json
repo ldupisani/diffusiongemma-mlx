@@ -1,0 +1,9 @@
+{
+  "id": "volume-sphere-radius-4",
+  "query": "What is the volume of a sphere with radius 4?",
+  "reasoning": "1. Recall the formula for the volume of a sphere: V = (4/3) \u00d7 \u03c0 \u00d7 r\u00b3, where r is the radius.\n2. Multiply 4 by 4 to begin cubing the radius: 4 \u00d7 4 = 16.\n3. Multiply 16 (from step 2) by 4 to finish cubing the radius: 16 \u00d7 4 = 64.\n4. Multiply 64 (from step 3) by \u03c0 (use 3.14159): 64 \u00d7 3.14159 = 201.06.\n5. Multiply 201.06 (from step 4) by 4: 201.06 \u00d7 4 = 804.25.\n6. Divide 804.25 (from step 5) by 3: 804.25 \u00f7 3 = 268.08.",
+  "answer": "\u2248 268.08 cubic units",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781817571
+}

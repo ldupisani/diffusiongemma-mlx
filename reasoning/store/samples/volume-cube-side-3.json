@@ -1,0 +1,9 @@
+{
+  "id": "volume-cube-side-3",
+  "query": "What is the volume of a cube with side 3?",
+  "reasoning": "1. Recall the formula for the volume of a cube: V = side \u00d7 side \u00d7 side.\n2. Multiply 3 \u00d7 3 = 9.\n3. Multiply 9 (from step 2) by 3 = 27.",
+  "answer": "27 cubic units",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781817561
+}

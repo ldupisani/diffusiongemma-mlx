@@ -251,6 +251,64 @@ def bind_replace(query: str) -> tuple[bool, dict | None, str, int]:
     return False, None, "code", 0
 
 
+# --- geometry / measurement family ----------------------------------------------------
+# (measurement keyword, shape keyword or None, skill, ordered dimension labels). Checked in
+# order, so "surface area" beats "area" and shape-free formulas (circumference/hypotenuse)
+# come first. dims=None marks the hypotenuse's special "legs A and B" extraction.
+_GEOMETRY = [
+    ("circumference", None, "geometry.circle_circumference", ["radius"]),
+    ("hypotenuse", None, "geometry.hypotenuse", None),
+    ("surface area", "sphere", "geometry.sphere_surface_area", ["radius"]),
+    ("diagonal", "rectangle", "geometry.rectangle_diagonal", ["length", "width"]),
+    ("volume", "cube", "geometry.cube_volume", ["side"]),
+    ("volume", "sphere", "geometry.sphere_volume", ["radius"]),
+    ("volume", "cylinder", "geometry.cylinder_volume", ["radius", "height"]),
+    ("perimeter", "rectangle", "geometry.rectangle_perimeter", ["length", "width"]),
+    ("area", "circle", "geometry.circle_area", ["radius"]),
+    ("area", "rectangle", "geometry.rectangle_area", ["length", "width"]),
+    ("area", "triangle", "geometry.triangle_area", ["base", "height"]),
+    ("area", "square", "geometry.square_area", ["side"]),
+]
+_LEGS = re.compile(r"legs?\s+(-?\d+(?:\.\d+)?)\s+and\s+(-?\d+(?:\.\d+)?)", re.IGNORECASE)
+
+
+def detect_geometry(query: str):
+    """(skill, dim_labels) for the matching shape+measurement, else None."""
+    q = query.lower()
+    for measure, shape, skill, dims in _GEOMETRY:
+        if measure in q and (shape is None or shape in q):
+            return skill, dims
+    return None
+
+
+def bind_geometry(query: str) -> tuple[bool, dict | None, str, int]:
+    """Detect the formula, then extract each labeled dimension ('radius 5', 'length 4')."""
+    det = detect_geometry(query)
+    if not det:
+        return False, None, "code", 0
+    skill, dims = det
+    if dims is None:  # hypotenuse: "legs A and B"
+        m = _LEGS.search(query)
+        if not m:
+            return False, None, "code", 0
+        return True, {"a": float(m[1]), "b": float(m[2]), "skill": skill,
+                      "dims": ["a", "b"]}, "code", 0
+    data = {"skill": skill, "dims": dims}
+    for label in dims:
+        m = re.search(rf"{label}\s+(?:of\s+)?(-?\d+(?:\.\d+)?)", query, re.IGNORECASE)
+        if not m:
+            return False, None, "code", 0
+        data[label] = float(m[1])
+    return True, data, "code", 0
+
+
+def validate_geometry(data: dict) -> tuple[bool, str]:
+    for label in data["dims"]:
+        if data[label] <= 0:
+            return False, f"the {label} must be positive"
+    return True, ""
+
+
 # --- list-statistic family (a list of numbers + which summary) ------------------------
 _NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
 # keyword → single-list stats skill. First match wins, so order most → least specific

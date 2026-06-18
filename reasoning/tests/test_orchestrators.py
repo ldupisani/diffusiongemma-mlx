@@ -93,6 +93,19 @@ CASES = [
     ("Is 'racecar' a palindrome?", "Yes, 'racecar' is a palindrome.", "palindrome"),
     ("Replace 'cat' with 'dog' in 'the cat sat on the mat'", "the dog sat on the mat",
      "replace_text"),
+    # geometry/measurement series (captured)
+    ("What is the area of a circle with radius 5?", "78.54", "geometry"),
+    ("What is the circumference of a circle with radius 7?", "43.98", "geometry"),
+    ("What is the area of a rectangle with length 4 and width 6?", "24", "geometry"),
+    ("What is the perimeter of a rectangle with length 8 and width 3?", "22", "geometry"),
+    ("What is the area of a triangle with base 10 and height 5?", "25", "geometry"),
+    ("What is the area of a square with side 9?", "81", "geometry"),
+    ("What is the volume of a cube with side 3?", "27", "geometry"),
+    ("What is the volume of a sphere with radius 4?", "268.08", "geometry"),
+    ("What is the volume of a cylinder with radius 3 and height 10?", "282.74", "geometry"),
+    ("What is the hypotenuse of a right triangle with legs 3 and 4?", "5", "geometry"),
+    ("What is the surface area of a sphere with radius 6?", "452.39", "geometry"),
+    ("What is the diagonal of a rectangle with length 3 and width 4?", "5", "geometry"),
 ]
 
 

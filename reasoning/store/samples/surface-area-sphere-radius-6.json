@@ -1,0 +1,9 @@
+{
+  "id": "surface-area-sphere-radius-6",
+  "query": "What is the surface area of a sphere with radius 6?",
+  "reasoning": "1. Recall the formula for the surface area of a sphere: 4 \u00d7 \u03c0 \u00d7 r\u00b2, where r is the radius.\n2. Square the radius: multiply 6 by 6 to get 36.\n3. Multiply 36 (from step 2) by 4 to get 144.\n4. Multiply 144 (from step 3) by \u03c0 (3.14159) to get 452.39.",
+  "answer": "452.39 square units (144\u03c0)",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781817589
+}

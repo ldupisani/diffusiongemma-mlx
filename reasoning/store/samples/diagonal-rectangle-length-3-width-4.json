@@ -1,0 +1,9 @@
+{
+  "id": "diagonal-rectangle-length-3-width-4",
+  "query": "What is the diagonal of a rectangle with length 3 and width 4?",
+  "reasoning": "1. Multiply 3 by 3 to get 3 squared. Result: 9.\n2. Multiply 4 by 4 to get 4 squared. Result: 16.\n3. Add 9 (from step 1) and 16 (from step 2). Result: 25.\n4. Take the square root of 25 (from step 3). Result: 5.",
+  "answer": "5",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781817597
+}
