@@ -181,6 +181,13 @@ def recognize(
     matcher = matcher or LexicalMatcher()
     orchs = orchestrators if orchestrators is not None else load_orchestrators()
     orchs = [o for o in orchs if o.precondition(query)]
-    if not orchs:
-        return None
-    return matcher.select(query, orchs)
+    # Two tiers: a specific orchestrator always wins over a generic fallback (e.g.
+    # numeric_consensus, whose always-true precondition + "many/count" keywords would
+    # otherwise tie every new orchestrator). Fall to fallbacks only when nothing specific
+    # matches above threshold.
+    specific = [o for o in orchs if not o.fallback]
+    match = matcher.select(query, specific) if specific else None
+    if match is not None:
+        return match
+    fallback = [o for o in orchs if o.fallback]
+    return matcher.select(query, fallback) if fallback else None

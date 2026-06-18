@@ -36,6 +36,7 @@ class Orchestrator:
     run: Optional[Callable] = None
     source: str = ""
     model_free: bool = False  # declared intent (runtime trace tally is authoritative)
+    fallback: bool = False    # only matched when no specific orchestrator claims the query
 
 
 def _load_module(path: Path):
@@ -67,6 +68,7 @@ def load_orchestrators() -> list[Orchestrator]:
                 run=getattr(mod, "run", None),
                 source=str(path),
                 model_free=meta.get("model_free", False),
+                fallback=meta.get("fallback", False),
             )
         )
     return out

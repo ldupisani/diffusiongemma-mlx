@@ -189,7 +189,8 @@ Modules: `engine.py` (one-shot / one-shot-N thinking-off calls via the sidecar; 
 generate-rank-select, self-consistency, extract-validate-repair), `registry.py` (orchestrators as
 git-versioned Python modules under `store/` — the graph), `router.py` (pluggable recognition:
 `LexicalMatcher` default, `EmbeddingMatcher` for scale — cosine over example-query vectors,
-`ClassifyMatcher` one-shot), and
+`ClassifyMatcher` one-shot; recognition is two-tier — a specific orchestrator always beats a
+generic `"fallback": True` one like `numeric_consensus`), and
 `capture`/`derive`/`eval` (the teacher→orchestrator compile loop). Selecting among a handful of
 patterns needs no embeddings — a keyword/lexical or one-shot classify router suffices. As the
 library grows, keyword routing starts colliding on shared surface words ("product", "mean",

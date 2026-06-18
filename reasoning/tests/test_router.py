@@ -49,5 +49,25 @@ class TestEmbeddingMatcher(unittest.TestCase):
         self.assertEqual(a, b)
 
 
+class TestFallbackTier(unittest.TestCase):
+    """A specific orchestrator always beats the generic numeric_consensus fallback."""
+
+    def test_specific_beats_fallback_on_paraphrase(self):
+        # not an exact example query — would have TIED numeric_consensus on "many" before
+        m = router.recognize("Count the vowels in the word 'banana'")
+        self.assertIsNotNone(m)
+        self.assertEqual(m.orchestrator.id, "string_operation")
+        self.assertFalse(m.orchestrator.fallback)
+
+    def test_pure_numeric_falls_back(self):
+        for q in ["What is 17 percent of 240?",
+                  "How many times does the digit 7 appear from 1 to 100?"]:
+            with self.subTest(q=q):
+                m = router.recognize(q)
+                self.assertIsNotNone(m)
+                self.assertEqual(m.orchestrator.id, "numeric_consensus")
+                self.assertTrue(m.orchestrator.fallback)
+
+
 if __name__ == "__main__":
     unittest.main()
