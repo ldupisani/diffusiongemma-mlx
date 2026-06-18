@@ -7,7 +7,7 @@ the Pythagorean hypotenuse.
 """
 
 from reasoning import engine
-from reasoning.bind import bind_geometry, detect_geometry, validate_geometry
+from reasoning.bind import bind_geometry, validate_geometry
 from reasoning.compiled import CodeStep, Inp, Lit, Plan, Step, run_guarded
 
 META = {
@@ -36,7 +36,9 @@ META = {
 
 
 def precondition(query):
-    return detect_geometry(query) is not None
+    # bindability, not just keywords: "square meters" in a pressure query must NOT make this
+    # claim the query (it detects square_area but can't find a side → does not bind).
+    return bind_geometry(query)[0]
 
 
 def run(query):

@@ -9,7 +9,6 @@ convert -> round plan and formats with the target's display symbol.
 from reasoning import engine
 from reasoning.bind import bind_unit_convert
 from reasoning.compiled import CodeStep, Inp, Lit, Plan, Step, run_guarded
-from reasoning.skills.units import UNIT_WORDS
 
 META = {
     "id": "unit_conversion",
@@ -33,11 +32,9 @@ META = {
 
 
 def precondition(query):
-    q = query.lower()
-    tokens = set(q.replace("?", " ").replace(".", " ").split())
-    has_unit = bool(tokens & UNIT_WORDS)
-    connector = any(f" {w} " in f" {q} " for w in ("to", "into", "in")) or "how many" in q
-    return has_unit and connector
+    # bindability: only claim queries we can actually resolve two compatible units for, so
+    # "100 meters in 5 seconds" (a physics speed query) doesn't get mistaken for a conversion.
+    return bind_unit_convert(query)[0]
 
 
 def run(query):
