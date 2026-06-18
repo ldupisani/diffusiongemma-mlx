@@ -1,0 +1,9 @@
+{
+  "id": "what-is-the-longest-word-in",
+  "query": "What is the longest word in 'the quick brown fox'?",
+  "reasoning": "1. List the words in 'the quick brown fox' separately: the, quick, brown, fox.\n2. Write the letter count next to each word from step 1: the=3, quick=5, brown=5, fox=3.\n3. From the counts in step 2 (the=3, quick=5, brown=5, fox=3), choose the word with the largest count: quick.",
+  "answer": "quick",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781816670
+}

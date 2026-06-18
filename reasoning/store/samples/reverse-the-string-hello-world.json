@@ -1,0 +1,9 @@
+{
+  "id": "reverse-the-string-hello-world",
+  "query": "Reverse the string 'hello world'",
+  "reasoning": "1. Reverse the string 'hello world' by writing its characters in reverse order.",
+  "answer": "dlrow olleh",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781816617
+}

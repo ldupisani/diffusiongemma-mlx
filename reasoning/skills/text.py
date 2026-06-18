@@ -48,3 +48,73 @@ def length(items: list) -> int:
           [((["a", "b", "c"],), "a, b, c")])
 def join(items: list, sep: str = ", ") -> str:
     return sep.join(str(x) for x in items)
+
+
+# --- single-string operations ---------------------------------------------------------
+@register("text.reverse", "the string reversed",
+          [(("hello world",), "dlrow olleh"), (("abc",), "cba")])
+def reverse(s: str) -> str:
+    return s[::-1]
+
+
+@register("text.upper", "the string in UPPERCASE",
+          [(("hello world",), "HELLO WORLD")])
+def upper(s: str) -> str:
+    return s.upper()
+
+
+@register("text.lower", "the string in lowercase",
+          [(("HELLO",), "hello")])
+def lower(s: str) -> str:
+    return s.lower()
+
+
+@register("text.title_case", "the string with each word capitalized (title case)",
+          [(("the lazy dog",), "The Lazy Dog")])
+def title_case(s: str) -> str:
+    return s.title()
+
+
+@register("text.char_count", "the number of characters in a string (including spaces)",
+          [(("hello world",), 11), (("",), 0)])
+def char_count(s: str) -> int:
+    return len(s)
+
+
+@register("text.count_vowels", "the number of vowels (a, e, i, o, u) in a string",
+          [(("encyclopedia",), 5), (("sky",), 0)])
+def count_vowels(s: str) -> int:
+    return sum(1 for c in s.lower() if c in "aeiou")
+
+
+@register("text.count_consonants", "the number of consonant letters in a string",
+          [(("python",), 5), (("aeiou",), 0)])
+def count_consonants(s: str) -> int:
+    return sum(1 for c in s.lower() if c.isalpha() and c not in "aeiou")
+
+
+@register("text.is_palindrome", "whether a string reads the same forwards and backwards "
+          "(ignoring case and non-alphanumerics)",
+          [(("racecar",), True), (("hello",), False),
+           (("A man a plan a canal Panama",), True)])
+def is_palindrome(s: str) -> bool:
+    cleaned = [c.lower() for c in s if c.isalnum()]
+    return cleaned == cleaned[::-1]
+
+
+@register("text.longest_word", "the longest word in a string (first on ties)",
+          [(("the quick brown fox",), "quick")])
+def longest_word(s: str) -> str:
+    return max(s.split(), key=len)
+
+
+@register("text.acronym", "the acronym formed from the first letter of each word",
+          [(("North Atlantic Treaty Organization",), "NATO"), (("as soon as possible",), "ASAP")])
+def acronym(s: str) -> str:
+    return "".join(w[0].upper() for w in s.split())
+
+
+@register("text.replace", "a string with every occurrence of old replaced by new",
+          [(("the cat sat on the mat", "cat", "dog"), "the dog sat on the mat")])
+def replace(s: str, old: str, new: str) -> str:
+    return s.replace(old, new)

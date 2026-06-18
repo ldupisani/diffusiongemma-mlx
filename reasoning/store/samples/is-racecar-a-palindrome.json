@@ -1,0 +1,9 @@
+{
+  "id": "is-racecar-a-palindrome",
+  "query": "Is 'racecar' a palindrome?",
+  "reasoning": "1. Reverse the string 'racecar' character by character; write the result.\n2. Compare the reversed string from step 1 ('racecar') to the original 'racecar'; if they are identical, the answer is yes, otherwise no.",
+  "answer": "Yes",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781816640
+}

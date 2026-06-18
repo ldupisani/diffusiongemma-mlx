@@ -1,0 +1,9 @@
+{
+  "id": "convert-hello-world-to-uppercase",
+  "query": "Convert 'hello world' to uppercase",
+  "reasoning": "1. Convert the text 'hello world' to uppercase, changing every letter to its capital form.",
+  "answer": "HELLO WORLD",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781816634
+}

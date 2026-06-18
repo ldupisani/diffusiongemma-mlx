@@ -79,6 +79,20 @@ CASES = [
     ("How many milliliters are in 2 liters?", "2000 mL", "unit_conversion"),
     ("Convert 60 miles per hour to kilometers per hour", "96.56 km/h", "unit_conversion"),
     ("How many inches are in 3 feet?", "36 in", "unit_conversion"),
+    # text/string series (captured)
+    ("Reverse the string 'hello world'", "dlrow olleh", "string_operation"),
+    ("How many vowels are in 'encyclopedia'?", "5", "string_operation"),
+    ("How many characters are in 'hello world'?", "11", "string_operation"),
+    ("Convert 'hello world' to uppercase", "HELLO WORLD", "string_operation"),
+    ("How many words are in 'the quick brown fox jumps'?", "5", "string_operation"),
+    ("Capitalize each word in 'the lazy dog'", "The Lazy Dog", "string_operation"),
+    ("How many consonants are in 'python'?", "5", "string_operation"),
+    ("What is the longest word in 'the quick brown fox'?", "quick", "string_operation"),
+    ("Convert 'HELLO' to lowercase", "hello", "string_operation"),
+    ("What is the acronym of 'North Atlantic Treaty Organization'?", "NATO", "string_operation"),
+    ("Is 'racecar' a palindrome?", "Yes, 'racecar' is a palindrome.", "palindrome"),
+    ("Replace 'cat' with 'dog' in 'the cat sat on the mat'", "the dog sat on the mat",
+     "replace_text"),
 ]
 
 
