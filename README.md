@@ -207,8 +207,11 @@ calls — so the ~19 GB sidecar never loads** and the answer is computed in mega
 only for fuzzy steps (open generation, judgement, recall) and ambiguous NL parsing.
 
 - **`skills/`** — a growing library of small, pure, **typed, example-tested** functions (`arith.*`,
-  `date.*`, `text.*`), indexed in a `SKILLS` registry. Skills never import the engine (a test enforces
-  it). Money rounds through one `arith.round_money` chokepoint (`Decimal`+`ROUND_HALF_UP`).
+  `date.*`, `text.*`, `stats.*`, `units.*` — 32 and counting), indexed in a `SKILLS` registry. Skills
+  never import the engine (a test enforces it). Rounding goes through one `arith.round_to`/`round_money`
+  chokepoint (`Decimal`+`ROUND_HALF_UP`). Concept-level skills (`stats.mean` over any-length list,
+  `arith.percent_change`, `units.f_to_c`) capture an operation as one named step, so a single
+  orchestrator generalizes — vs. the teacher's brittle fixed chain of primitive add/multiply steps.
 - **`compiled.py`** — a `Plan` is a typed step list; each step is a `CodeStep` (invoke a skill, no model)
   or a `ModelStep` (one `shot` call). `run_plan` records per step whether it ran via **code or model** and
   emits a summary tally — so "did this answer use the model?" is *observable per run*, not assumed. A
@@ -224,6 +227,9 @@ Try it (the coded orchestrators run with the **sidecar stopped**):
 python -m reasoning.cli run "What is 17% off \$240 then 8% tax?"     # → $215.14, 0 model calls
 python -m reasoning.cli run "How many days are between 2024-03-03 and 2024-07-15?"  # → 134, 0 calls
 python -m reasoning.cli run "How many times does 'a' appear in 'banana'?"           # → 3, 0 calls
+python -m reasoning.cli run "What is the average of 4, 8, 15, 16, and 42?"          # → 17, 0 calls
+python -m reasoning.cli run "What is the percentage increase from 50 to 75?"        # → 50%, 0 calls
+python -m reasoning.cli run "Convert 100 degrees Fahrenheit to Celsius."            # → 37.78°C, 0 calls
 ```
 `derive` now grows the library: it maps each atomic line of a teacher trace onto a skill where one
 matches (`--mode steps`), leaving unmatched lines as model steps and reporting coverage

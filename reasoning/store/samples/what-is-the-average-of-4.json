@@ -1,0 +1,9 @@
+{
+  "id": "what-is-the-average-of-4",
+  "query": "What is the average of 4, 8, 15, 16, and 42?",
+  "reasoning": "1. Add 4 and 8. Result: 12.\n2. Add 12 (from step 1) and 15. Result: 27.\n3. Add 27 (from step 2) and 16. Result: 43.\n4. Add 43 (from step 3) and 42. Result: 85.\n5. Divide 85 (from step 4) by 5. Result: 17.",
+  "answer": "17",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781780109
+}

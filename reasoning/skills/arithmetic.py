@@ -56,8 +56,20 @@ def apply_tax(amount: float, pct: float) -> float:
     return amount * (1 + pct / 100)
 
 
+@register("arith.percent_change", "percentage change from an old value to a new value (increase/decrease)",
+          [((50, 75), 50.0), ((75, 50), -33.333333), ((100, 110), 10.0)])
+def percent_change(old: float, new: float) -> float:
+    return (new - old) / old * 100
+
+
+@register("arith.round_to", "round a number to N decimal places, half up",
+          [((37.777, 2), 37.78), ((2.5, 0), 3.0)])
+def round_to(x: float, places: int = 2) -> float:
+    quant = Decimal(1).scaleb(-places)  # e.g. places=2 -> Decimal("0.01")
+    return float(Decimal(str(x)).quantize(quant, rounding=ROUND_HALF_UP))
+
+
 @register("arith.round_money", "round a monetary amount to N decimal places, half up",
           [((215.136, 2), 215.14), ((2.675, 2), 2.68), ((2.5, 0), 3.0)])
 def round_money(x: float, places: int = 2) -> float:
-    quant = Decimal(1).scaleb(-places)  # e.g. places=2 -> Decimal("0.01")
-    return float(Decimal(str(x)).quantize(quant, rounding=ROUND_HALF_UP))
+    return round_to(x, places)

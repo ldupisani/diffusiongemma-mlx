@@ -131,3 +131,102 @@ def bind_count_occurrences(query: str) -> tuple[bool, dict | None, str, int]:
     if len(quoted) == 2:
         return True, {"needle": quoted[0], "haystack": quoted[1]}, "code", 0
     return False, None, "code", 0
+
+
+# --- list-statistic family (a list of numbers + which summary) ------------------------
+_NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
+# keyword → stats skill. First match wins, so order from most to least specific.
+_STAT_OPS = [
+    (("median",), "stats.median"),
+    (("average", "mean"), "stats.mean"),
+    (("sum", "total", "altogether"), "stats.total"),
+    (("highest", "largest", "maximum", "max", "biggest"), "stats.maximum"),
+    (("lowest", "smallest", "minimum", "min"), "stats.minimum"),
+    (("range",), "stats.range_of"),
+]
+
+
+def detect_stat_op(query: str) -> str | None:
+    q = query.lower()
+    for cues, skill in _STAT_OPS:
+        if any(c in q for c in cues):
+            return skill
+    return None
+
+
+def bind_list_statistic(query: str) -> tuple[bool, dict | None, str, int]:
+    """Coded-only bind: a stat keyword + ≥2 numbers → {nums, skill}."""
+    skill = detect_stat_op(query)
+    nums = [float(n) if "." in n else int(n) for n in _NUMBER.findall(query)]
+    if skill and len(nums) >= 2:
+        return True, {"nums": nums, "skill": skill}, "code", 0
+    return False, None, "code", 0
+
+
+# --- percentage-change family ("from X to Y") -----------------------------------------
+_FROM_TO = re.compile(r"from\s+(-?\d+(?:\.\d+)?)\s+to\s+(-?\d+(?:\.\d+)?)", re.IGNORECASE)
+
+
+def bind_percent_change(query: str) -> tuple[bool, dict | None, str, int]:
+    """Coded-only bind: 'from <old> to <new>' → {old, new}."""
+    m = _FROM_TO.search(query)
+    if m:
+        return True, {"old": float(m.group(1)), "new": float(m.group(2))}, "code", 0
+    return False, None, "code", 0
+
+
+# --- unit-conversion family ("<n> <unit> to <unit>") ----------------------------------
+# normalize many spellings to a canonical unit token
+_UNIT_ALIASES = {
+    "fahrenheit": "f", "f": "f", "celsius": "c", "centigrade": "c", "c": "c",
+    "miles": "mi", "mile": "mi", "mi": "mi",
+    "km": "km", "kilometers": "km", "kilometres": "km", "kilometer": "km", "kilometre": "km",
+    "pounds": "lb", "pound": "lb", "lbs": "lb", "lb": "lb",
+    "kg": "kg", "kilograms": "kg", "kilogram": "kg", "kilos": "kg", "kilo": "kg",
+}
+_CONVERSIONS = {
+    ("f", "c"): ("units.f_to_c", "°C"), ("c", "f"): ("units.c_to_f", "°F"),
+    ("mi", "km"): ("units.mi_to_km", " km"), ("km", "mi"): ("units.km_to_mi", " mi"),
+    ("lb", "kg"): ("units.lb_to_kg", " kg"), ("kg", "lb"): ("units.kg_to_lb", " lb"),
+}
+_UNIT_WORD = re.compile(r"[a-z]+", re.IGNORECASE)
+
+
+_HOW_MANY = re.compile(
+    r"how many\s+([a-z]+).*?(-?\d+(?:\.\d+)?)\s*([a-z]+)", re.IGNORECASE | re.DOTALL)
+
+
+def _units_in(text: str) -> list[str]:
+    return [_UNIT_ALIASES[w] for w in _UNIT_WORD.findall(text.lower()) if w in _UNIT_ALIASES]
+
+
+def bind_unit_convert(query: str) -> tuple[bool, dict | None, str, int]:
+    """Coded-only bind → {value, skill, symbol}. Two supported phrasings:
+      - "<number> <source> to|into|in <target>"   (source before target)
+      - "how many <target> ... <number> <source>"  (target before source)
+    Conservative: needs a number and a KNOWN unit on each side, else it bails.
+    """
+    num = _NUMBER.search(query)
+    if not num:
+        return False, None, "code", 0
+    value, source, target = float(num.group()), None, None
+
+    # phrasing 1: explicit "<source> to <target>"
+    split = re.split(r"\b(?:to|into|in)\b", query.lower(), maxsplit=1)
+    if len(split) == 2:
+        left, right = _units_in(split[0]), _units_in(split[1])
+        if left and right:
+            source, target = left[-1], right[0]
+
+    # phrasing 2: "how many <target> is <number> <source>"
+    if source is None:
+        m = _HOW_MANY.match(query.strip())
+        if m and m.group(1).lower() in _UNIT_ALIASES and m.group(3).lower() in _UNIT_ALIASES:
+            value = float(m.group(2))
+            target, source = _UNIT_ALIASES[m.group(1).lower()], _UNIT_ALIASES[m.group(3).lower()]
+
+    pair = (source, target)
+    if pair not in _CONVERSIONS:
+        return False, None, "code", 0
+    skill, symbol = _CONVERSIONS[pair]
+    return True, {"value": value, "skill": skill, "symbol": symbol}, "code", 0

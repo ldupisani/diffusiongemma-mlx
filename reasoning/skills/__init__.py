@@ -7,6 +7,6 @@ at import time), so `from reasoning import skills; skills.SKILLS` is fully popul
 from .base import SKILLS, Skill, call, get, register
 
 # Import families for their registration side effects (must come after base import).
-from . import arithmetic, dates, text  # noqa: E402,F401
+from . import arithmetic, dates, stats, text, units  # noqa: E402,F401
 
 __all__ = ["SKILLS", "Skill", "call", "get", "register"]
