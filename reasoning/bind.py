@@ -109,13 +109,33 @@ def bind_discount_tax(query: str, *, shot=one_shot) -> tuple[bool, dict | None, 
     return (r.data is not None), r.data, "model", _evr_model_calls(r)
 
 
-# --- days-between family (ISO dates) --------------------------------------------------
-_ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+# --- date families ---------------------------------------------------------------------
+# date discovery: year-first numeric (-, /, .) and named-month (either order, with year).
+# All unambiguous; locale-ambiguous numeric month-first (MM/DD/YYYY) is intentionally absent.
+_MONTH_WORD = r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*"
+_ISO_DATE = re.compile(r"\d{4}[-/.]\d{1,2}[-/.]\d{1,2}")
+_DATE_PATTERNS = [
+    _ISO_DATE,
+    re.compile(rf"\b\d{{1,2}}\s+{_MONTH_WORD}\.?,?\s+\d{{4}}\b", re.IGNORECASE),   # D Month YYYY
+    re.compile(rf"\b{_MONTH_WORD}\.?\s+\d{{1,2}},?\s+\d{{4}}\b", re.IGNORECASE),   # Month D, YYYY
+]
+
+
+def _find_dates(query: str) -> list[str]:
+    """Every date expression in the query, in order, de-overlapped (numeric or named-month)."""
+    spans = sorted((m.start(), m.end(), m.group())
+                   for pat in _DATE_PATTERNS for m in pat.finditer(query))
+    out, last_end = [], -1
+    for start, end, text in spans:
+        if start >= last_end:  # skip overlapping matches from a second pattern
+            out.append(text)
+            last_end = end
+    return out
 
 
 def bind_days_between(query: str) -> tuple[bool, dict | None, str, int]:
-    """Coded-only bind: two ISO dates → {d1, d2}. No model fallback (yet)."""
-    dates = _ISO_DATE.findall(query)
+    """Coded-only bind: two dates → {d1, d2}. No model fallback (yet)."""
+    dates = _find_dates(query)
     if len(dates) == 2:
         return True, {"d1": dates[0], "d2": dates[1]}, "code", 0
     return False, None, "code", 0
@@ -131,8 +151,8 @@ _DIFF_UNITS = [
 
 
 def bind_date_difference(query: str) -> tuple[bool, dict | None, str, int]:
-    """Two ISO dates + the unit asked for (days/weeks/months/years)."""
-    dates = _ISO_DATE.findall(query)
+    """Two dates + the unit asked for (days/weeks/months/years)."""
+    dates = _find_dates(query)
     if len(dates) != 2:
         return False, None, "code", 0
     q = query.lower()
@@ -146,8 +166,8 @@ _AFTER = re.compile(r"(\d+)\s*(day|week)s?\s+after", re.IGNORECASE)
 
 
 def bind_date_add(query: str) -> tuple[bool, dict | None, str, int]:
-    """'<n> days/weeks after <ISO date>' → {date, n, skill}."""
-    m, dates = _AFTER.search(query), _ISO_DATE.findall(query)
+    """'<n> days/weeks after <date>' → {date, n, skill}."""
+    m, dates = _AFTER.search(query), _find_dates(query)
     if m and dates:
         skill = "date.add_weeks" if m.group(2).lower() == "week" else "date.add_days"
         return True, {"date": dates[0], "n": int(m.group(1)), "skill": skill}, "code", 0
@@ -155,8 +175,8 @@ def bind_date_add(query: str) -> tuple[bool, dict | None, str, int]:
 
 
 def bind_single_date(query: str) -> tuple[bool, dict | None, str, int]:
-    """A single ISO date → {date}. For weekday / day-of-year queries."""
-    dates = _ISO_DATE.findall(query)
+    """A single date → {date}. For weekday / day-of-year queries."""
+    dates = _find_dates(query)
     if len(dates) == 1:
         return True, {"date": dates[0]}, "code", 0
     return False, None, "code", 0

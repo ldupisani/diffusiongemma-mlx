@@ -63,6 +63,9 @@ CASES = [
     ("How many years are between 2000-05-20 and 2024-05-20?", "24 years", "days_between_dates"),
     ("Is 2024 a leap year?", "Yes, 2024 is a leap year.", "leap_year"),
     ("What is the day of the year for 2024-03-01?", "61", "day_of_year"),
+    # named-month dates (day-first and month-first; both unambiguous)
+    ("What is the day of the year for 10 Feb 2020", "41", "day_of_year"),
+    ("How many days are between 1 Jan 2024 and 10 Feb 2024?", "40 days", "days_between_dates"),
 ]
 
 

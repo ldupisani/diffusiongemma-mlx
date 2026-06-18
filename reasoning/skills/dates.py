@@ -18,16 +18,32 @@ _MONTHS = {m.lower(): i for i, m in enumerate(
 _MONTHS.update({m[:3].lower(): i for m, i in list(_MONTHS.items())})
 
 
-@register("date.parse", "parse a date string (ISO YYYY-MM-DD or 'Month D [Year]') to a date",
-          [(("2024-07-15",), date(2024, 7, 15)), (("March 3 2024",), date(2024, 3, 3))])
+@register("date.parse",
+          "parse a date: year-first numeric (YYYY-MM-DD, /, .) or named-month "
+          "('Month D [Year]' or 'D Month Year')",
+          [(("2024-07-15",), date(2024, 7, 15)), (("2900/10/10",), date(2900, 10, 10)),
+           (("March 3 2024",), date(2024, 3, 3)), (("10 Feb 2020",), date(2020, 2, 10))])
 def parse(s: str, default_year: int = 2024) -> date:
     s = s.strip()
-    m = re.fullmatch(r"(\d{4})-(\d{1,2})-(\d{1,2})", s)
+
+    def _build(y, mo, da):
+        try:
+            return date(y, mo, da)
+        except ValueError as e:
+            raise ValueError(f"invalid date {s!r}: {e}") from e
+
+    # year-first numeric: separators -, /, . are unambiguous (month/day-first is not)
+    m = re.fullmatch(r"(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})", s)
     if m:
-        return date(int(m[1]), int(m[2]), int(m[3]))
+        return _build(int(m[1]), int(m[2]), int(m[3]))
+    # "Month D[, Year]" — named month first (month word removes MM/DD ambiguity)
     m = re.fullmatch(r"([A-Za-z]+)\.?\s+(\d{1,2})(?:,?\s+(\d{4}))?", s)
     if m and m[1].lower() in _MONTHS:
-        return date(int(m[3]) if m[3] else default_year, _MONTHS[m[1].lower()], int(m[2]))
+        return _build(int(m[3]) if m[3] else default_year, _MONTHS[m[1].lower()], int(m[2]))
+    # "D Month Year" — day first, named month
+    m = re.fullmatch(r"(\d{1,2})\s+([A-Za-z]+)\.?,?\s+(\d{4})", s)
+    if m and m[2].lower() in _MONTHS:
+        return _build(int(m[3]), _MONTHS[m[2].lower()], int(m[1]))
     raise ValueError(f"unrecognized date: {s!r}")
 
 

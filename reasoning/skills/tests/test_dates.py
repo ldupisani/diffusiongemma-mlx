@@ -18,6 +18,15 @@ class TestDates(unittest.TestCase):
         with self.assertRaises(ValueError):
             d.parse("sometime next week")
 
+    def test_parse_accepts_year_first_separators(self):
+        # YYYY/MM/DD and YYYY.MM.DD are unambiguous (year-first) and supported
+        self.assertEqual(d.parse("2900/10/10"), date(2900, 10, 10))
+        self.assertEqual(d.parse("2024.03.01"), date(2024, 3, 1))
+
+    def test_parse_still_rejects_invalid(self):
+        with self.assertRaises(ValueError):
+            d.parse("2024/33/01")
+
     def test_leap_year_february(self):
         # 2024 is a leap year -> Feb has 29 days
         self.assertEqual(d.days_between(date(2024, 2, 28), date(2024, 3, 1)), 2)

@@ -44,4 +44,4 @@ def _plan(data):
 
 def run(query):
     return run_guarded(bind_date_difference(query), _plan,
-                       parse_message="could not find two ISO dates")
+                       parse_message="could not find two dates")

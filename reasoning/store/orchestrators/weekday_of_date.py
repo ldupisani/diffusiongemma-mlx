@@ -32,4 +32,4 @@ def precondition(query):
 
 def run(query):
     return run_guarded(bind_single_date(query), PLAN,
-                       parse_message="could not find a single ISO date")
+                       parse_message="could not find a single date")
