@@ -1,0 +1,9 @@
+{
+  "id": "a-dinner-bill-is-120-add",
+  "query": "A dinner bill is $120. Add an 18% tip and split it among 4 people. How much does each person pay?",
+  "reasoning": "1. Multiply 120 by 0.18 to get the tip amount.\n2. Add 120 to 21.6 (from step 1) to get the total bill.\n3. Divide 141.6 (from step 2) by 4 to get each person's share.",
+  "answer": "$35.40",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781784757
+}

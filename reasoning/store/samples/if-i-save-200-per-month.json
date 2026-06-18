@@ -1,0 +1,9 @@
+{
+  "id": "if-i-save-200-per-month",
+  "query": "If I save $200 per month at 5% annual interest for 10 years, how much will I have?",
+  "reasoning": "1. Divide the annual rate by 12 to get the monthly rate: 0.05 \u00f7 12 = 0.00416667.\n2. Multiply the number of years by 12 to get the number of months: 10 \u00d7 12 = 120.\n3. Add 1 to the monthly rate 0.00416667: 1 + 0.00416667 = 1.00416667.\n4. Raise 1.00416667 (from step 3) to the power 120 (from step 2): 1.00416667 ^ 120 = 1.647010.\n5. Subtract 1 from 1.647010 (from step 4): 1.647010 \u2212 1 = 0.647010.\n6. Divide 0.647010 (from step 5) by the monthly rate 0.00416667 (from step 1): 0.647010 \u00f7 0.00416667 = 155.282.\n7. Multiply 155.282 (from step 6) by the monthly deposit 200: 155.282 \u00d7 200 = 31056.46.",
+  "answer": "$31,056.46",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781784741
+}

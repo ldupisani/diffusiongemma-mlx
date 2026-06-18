@@ -230,3 +230,199 @@ def bind_unit_convert(query: str) -> tuple[bool, dict | None, str, int]:
         return False, None, "code", 0
     skill, symbol = _CONVERSIONS[pair]
     return True, {"value": value, "skill": skill, "symbol": symbol}, "code", 0
+
+
+# --- compound-interest family ---------------------------------------------------------
+_RATE = re.compile(r"(\d+(?:\.\d+)?)\s*(?:%|percent)", re.IGNORECASE)
+_YEARS = re.compile(r"(\d+(?:\.\d+)?)\s*year", re.IGNORECASE)
+_PERIODS = {  # compounding frequency word → periods per year
+    "annually": 1, "annual": 1, "yearly": 1, "semiannually": 2, "semi-annually": 2,
+    "quarterly": 4, "monthly": 12, "weekly": 52, "daily": 365,
+}
+
+
+def bind_compound_interest(query: str) -> tuple[bool, dict | None, str, int]:
+    """Coded-only bind: principal ($), annual rate (%), years, and compounding frequency."""
+    price, rate, years = _PRICE.search(query), _RATE.search(query), _YEARS.search(query)
+    if not (price and rate and years):
+        return False, None, "code", 0
+    q = query.lower()
+    n = next((p for word, p in _PERIODS.items() if word in q), 1)  # default annual
+    data = {
+        "principal": float(price.group(1)),
+        "rate_pct": float(rate.group(1)),
+        "years": float(years.group(1)),
+        "n": n,
+    }
+    return True, data, "code", 0
+
+
+# --- shared finance parsing -----------------------------------------------------------
+def _dollars(query: str) -> list[float]:
+    """All $-prefixed amounts in order — the positional inputs most finance queries use."""
+    return [float(m) for m in _PRICE.findall(query)]
+
+
+# payment/deposit cadence — keyed on explicit phrases so bare "annual" (as in "5% annual
+# interest", which describes the RATE) never sets the frequency. Most specific first.
+_CADENCE = [
+    (("per month", "monthly", "a month", "each month", "every month", "/month"), 12),
+    (("per quarter", "quarterly"), 4),
+    (("per week", "weekly"), 52),
+    (("semi-annually", "semiannually", "twice a year"), 2),
+    (("per year", "annually", "yearly", "per annum"), 1),
+]
+
+
+def _periods_from(query: str, default: int) -> int:
+    q = query.lower()
+    for phrases, p in _CADENCE:
+        if any(ph in q for ph in phrases):
+            return p
+    return default
+
+
+def bind_roi(query: str) -> tuple[bool, dict | None, str, int]:
+    """Return on investment: first $ = cost (old), second $ = sale (new)."""
+    d = _dollars(query)
+    if len(d) >= 2:
+        return True, {"old": d[0], "new": d[1]}, "code", 0
+    return False, None, "code", 0
+
+
+def bind_margin(query: str) -> tuple[bool, dict | None, str, int]:
+    """Profit margin: first $ = cost, second $ = price."""
+    d = _dollars(query)
+    if len(d) >= 2:
+        return True, {"cost": d[0], "price": d[1]}, "code", 0
+    return False, None, "code", 0
+
+
+def bind_cagr(query: str) -> tuple[bool, dict | None, str, int]:
+    """CAGR: first $ = begin, second $ = end, plus a year count."""
+    d, years = _dollars(query), _YEARS.search(query)
+    if len(d) >= 2 and years:
+        return True, {"begin": d[0], "end": d[1], "years": float(years.group(1))}, "code", 0
+    return False, None, "code", 0
+
+
+def bind_present_value(query: str) -> tuple[bool, dict | None, str, int]:
+    """Present value: first $ = future value, plus a rate and a year count."""
+    d, rate, years = _dollars(query), _RATE.search(query), _YEARS.search(query)
+    if d and rate and years:
+        return True, {"fv": d[0], "rate_pct": float(rate.group(1)),
+                      "years": float(years.group(1))}, "code", 0
+    return False, None, "code", 0
+
+
+def bind_annuity(query: str) -> tuple[bool, dict | None, str, int]:
+    """Future value of an annuity: first $ = deposit, plus rate, years, frequency."""
+    d, rate, years = _dollars(query), _RATE.search(query), _YEARS.search(query)
+    if d and rate and years:
+        return True, {"pmt": d[0], "rate_pct": float(rate.group(1)),
+                      "years": float(years.group(1)), "n": _periods_from(query, 12)}, "code", 0
+    return False, None, "code", 0
+
+
+def bind_loan(query: str) -> tuple[bool, dict | None, str, int]:
+    """Loan payment: first $ = principal, plus rate, years; payments default monthly."""
+    d, rate, years = _dollars(query), _RATE.search(query), _YEARS.search(query)
+    if d and rate and years:
+        return True, {"principal": d[0], "rate_pct": float(rate.group(1)),
+                      "years": float(years.group(1)), "n": _periods_from(query, 12)}, "code", 0
+    return False, None, "code", 0
+
+
+def bind_straight_line_dep(query: str) -> tuple[bool, dict | None, str, int]:
+    """Depreciation: first $ = cost, second $ = salvage, plus a year count."""
+    d, years = _dollars(query), _YEARS.search(query)
+    if len(d) >= 2 and years:
+        return True, {"cost": d[0], "salvage": d[1], "years": float(years.group(1))}, "code", 0
+    return False, None, "code", 0
+
+
+def bind_break_even(query: str) -> tuple[bool, dict | None, str, int]:
+    """Break-even: $1 = fixed costs, $2 = price per unit, $3 = cost per unit."""
+    d = _dollars(query)
+    if len(d) >= 3:
+        return True, {"fixed": d[0], "price": d[1], "cost": d[2]}, "code", 0
+    return False, None, "code", 0
+
+
+_PEOPLE = re.compile(r"(?:among|between|by)\s+(\d+)|(\d+)\s+(?:people|persons|friends|ways|guests)",
+                     re.IGNORECASE)
+
+
+def bind_tip_split(query: str) -> tuple[bool, dict | None, str, int]:
+    """Tip and split: first $ = bill, a % tip, and a head count to divide by."""
+    d, tip, ppl = _dollars(query), _RATE.search(query), _PEOPLE.search(query)
+    if d and tip and ppl:
+        people = int(ppl.group(1) or ppl.group(2))
+        return True, {"bill": d[0], "tip_pct": float(tip.group(1)), "people": people}, "code", 0
+    return False, None, "code", 0
+
+
+# --- domain validators: (data) -> (ok, message) ---------------------------------------
+# The value-space analog of the conservative bind: refuse to emit a number when the inputs
+# are degenerate, rather than returning nonsense (e.g. negative break-even) or crashing
+# (e.g. divide-by-zero). Each returns a plain-language reason on failure.
+def _terms_ok(data: dict, amount_key: str, amount_label: str) -> tuple[bool, str]:
+    if data[amount_key] <= 0:
+        return False, f"the {amount_label} must be positive"
+    if data.get("years", 1) <= 0:
+        return False, "the number of years must be positive"
+    if data.get("rate_pct", 0) <= -100:
+        return False, "the interest rate is out of range"
+    return True, ""
+
+
+def validate_break_even(data: dict) -> tuple[bool, str]:
+    if data["price"] <= data["cost"]:
+        return False, (f"each unit sells for ${data['price']:g} but costs ${data['cost']:g} to "
+                       "make — there is no break-even point when the selling price does not "
+                       "exceed the unit cost")
+    return True, ""
+
+
+def validate_cagr(data: dict) -> tuple[bool, str]:
+    if data["begin"] <= 0:
+        return False, "the starting value must be positive"
+    if data["years"] <= 0:
+        return False, "the number of years must be positive"
+    return True, ""
+
+
+def validate_margin(data: dict) -> tuple[bool, str]:
+    if data["price"] <= 0:
+        return False, "the selling price must be positive"
+    return True, ""
+
+
+def validate_depreciation(data: dict) -> tuple[bool, str]:
+    if data["years"] <= 0:
+        return False, "the useful life (years) must be positive"
+    if data["salvage"] > data["cost"]:
+        return False, "salvage value cannot exceed the original cost for straight-line depreciation"
+    return True, ""
+
+
+def validate_compound(data: dict) -> tuple[bool, str]:
+    return _terms_ok(data, "principal", "principal")
+
+
+def validate_present_value(data: dict) -> tuple[bool, str]:
+    return _terms_ok(data, "fv", "future value")
+
+
+def validate_annuity(data: dict) -> tuple[bool, str]:
+    return _terms_ok(data, "pmt", "deposit")
+
+
+def validate_loan(data: dict) -> tuple[bool, str]:
+    return _terms_ok(data, "principal", "loan principal")
+
+
+def validate_tip_split(data: dict) -> tuple[bool, str]:
+    if data["people"] <= 0:
+        return False, "the number of people must be positive"
+    return True, ""

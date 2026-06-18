@@ -1,0 +1,9 @@
+{
+  "id": "how-much-simple-interest-is-earned",
+  "query": "How much simple interest is earned on $2500 at 3% per year for 4 years?",
+  "reasoning": "1. Convert the rate 3% to a decimal by computing 3 \u00f7 100.\n2. Multiply 2500 by 0.03 (the decimal from step 1).\n3. Multiply 75 (the result from step 2) by 4.",
+  "answer": "$300",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781784780
+}

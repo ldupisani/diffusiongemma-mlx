@@ -1,0 +1,9 @@
+{
+  "id": "i-bought-shares-for-4000-and",
+  "query": "I bought shares for $4000 and sold them for $5200. What is my return on investment as a percentage?",
+  "reasoning": "1. Subtract 4000 from 5200. (5200 - 4000)\n2. Divide 1200 (from step 1) by 4000. (1200 \u00f7 4000)\n3. Multiply 0.3 (from step 2) by 100. (0.3 \u00d7 100)",
+  "answer": "30%",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781784706
+}

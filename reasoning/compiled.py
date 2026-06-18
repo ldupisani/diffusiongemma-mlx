@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from . import skills
-from .engine import one_shot
+from .engine import _no_model, one_shot
 from .patterns import PatternResult
 
 
@@ -111,6 +111,40 @@ def run_plan(plan: Plan, bound_inputs: dict, *, shot=one_shot,
     ans = env[plan.answer_ref]
     answer = plan.answer_format.format(ans) if plan.answer_format else str(ans)
     return PatternResult(answer=answer, trace=trace, data=env)
+
+
+def explain(message: str) -> PatternResult:
+    """A model-free NON-answer: the inputs couldn't be parsed or are domain-invalid.
+
+    Standard shape (0 model calls, a validate trace entry) so the CLI/eval treat it as a
+    coded result that declined to produce a number — never a crash, never confident nonsense.
+    """
+    return PatternResult(answer=f"(no result: {message})",
+                         trace=[{"step": "validate", "ok": False, "message": message},
+                                {"step": "summary", "model_calls": 0}])
+
+
+def run_guarded(bind_result, plan, *, validate=None, shot=_no_model,
+                parse_message="could not parse the required inputs from the query"):
+    """The standard coded-orchestrator runner: bind → domain-validate → plan.
+
+    `bind_result` is a bind's (ok, data, via, model_calls) tuple. `plan` is a Plan or a
+    callable(data)->Plan (for plans whose shape depends on the bound data). `validate`
+    is an optional (data)->(ok, message) domain check — the value-space analog of the
+    conservative bind: it refuses to emit a number when the inputs are degenerate
+    (e.g. a break-even with non-positive margin) instead of returning nonsense or crashing.
+    """
+    ok, data, via, calls = bind_result
+    if not ok:
+        return explain(parse_message)
+    if validate is not None:
+        valid, message = validate(data)
+        if not valid:
+            return explain(message)
+    plan = plan(data) if callable(plan) else plan
+    return run_plan(plan, data, shot=shot,
+                    prelude_trace=[{"step": "bind", "via": via, "model_calls": calls}],
+                    prelude_model_calls=calls)
 
 
 def model_calls(result: PatternResult) -> int | None:

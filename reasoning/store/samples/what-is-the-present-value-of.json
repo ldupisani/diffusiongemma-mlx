@@ -1,0 +1,9 @@
+{
+  "id": "what-is-the-present-value-of",
+  "query": "What is the present value of $10000 received in 5 years at a 4% annual discount rate?",
+  "reasoning": "1. Add: compute 1 + 0.04 = 1.04 (the discount factor base).\n2. Multiply 1.04 by 1.04 = 1.0816.\n3. Multiply 1.0816 (from step 2) by 1.04 = 1.124864.\n4. Multiply 1.124864 (from step 3) by 1.04 = 1.16985856.\n5. Multiply 1.16985856 (from step 4) by 1.04 = 1.2166529024.\n6. Divide 10000 by 1.2166529024 (from step 5) = 8219.27.",
+  "answer": "$8,219.27",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781784752
+}
