@@ -60,8 +60,10 @@ class TestFallbackTier(unittest.TestCase):
         self.assertFalse(m.orchestrator.fallback)
 
     def test_pure_numeric_falls_back(self):
-        for q in ["What is 17 percent of 240?",
-                  "How many times does the digit 7 appear from 1 to 100?"]:
+        # ("17 percent of 240" is now handled by the coded `arithmetic` orchestrator; this
+        # query has numeric_consensus keywords but no coded handler — note "times" here is
+        # NOT a multiplication operator, since it isn't between two numbers)
+        for q in ["How many times does the digit 7 appear from 1 to 100?"]:
             with self.subTest(q=q):
                 m = router.recognize(q)
                 self.assertIsNotNone(m)

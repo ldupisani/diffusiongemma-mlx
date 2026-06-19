@@ -1184,3 +1184,50 @@ def bind_logic(query: str) -> tuple[bool, dict | None, str, int]:
             return True, {"skill": "logic.evaluate", "dims": ["expr", "values"], "kind": "evaluate",
                           "expr": e, "values": assign}, "code", 0
     return False, None, "code", 0
+
+
+# --- raw arithmetic family (single binary op / percent-of / power / sqrt) -------------
+# Conservative: collect candidate operations and proceed ONLY if exactly one matches, so a
+# compound expression ("15% of 200 plus 10") bails to the model rather than being mis-parsed.
+# operator must sit BETWEEN two numbers ("7 times 8"), so the word "times" in "how many
+# times …" is not mistaken for multiplication.
+_N = r"(-?\d+(?:\.\d+)?)"
+_ARITH_BINARY = [
+    (re.compile(rf"{_N}\s*(?:\+|plus|added to)\s*{_N}", re.IGNORECASE), "arith.add"),
+    (re.compile(rf"{_N}\s+minus\s+{_N}", re.IGNORECASE), "arith.subtract"),
+    (re.compile(rf"{_N}\s+(?:times|multiplied by)\s+{_N}", re.IGNORECASE), "arith.multiply"),
+    (re.compile(rf"{_N}\s+divided by\s+{_N}", re.IGNORECASE), "arith.divide"),
+]
+_ARITH_PCT = re.compile(r"(-?\d+(?:\.\d+)?)\s*(?:percent|%)\s+of\s+(-?\d+(?:\.\d+)?)", re.IGNORECASE)
+_ARITH_POWER = re.compile(
+    r"(-?\d+(?:\.\d+)?)\s*(?:\^|to the power of|raised to(?: the power of)?)\s*(-?\d+(?:\.\d+)?)",
+    re.IGNORECASE)
+_ARITH_SQRT = re.compile(r"square root of\s+(-?\d+(?:\.\d+)?)", re.IGNORECASE)
+_ARITH_NTH = re.compile(r"(-?\d+(?:\.\d+)?)\s+(squared|cubed)", re.IGNORECASE)
+
+
+def bind_arithmetic(query: str) -> tuple[bool, dict | None, str, int]:
+    cands = []
+    m = _ARITH_SQRT.search(query)
+    if m:
+        cands.append({"skill": "arith.sqrt", "dims": ["x"], "x": float(m[1])})
+    m = _ARITH_NTH.search(query)
+    if m:
+        cands.append({"skill": "arith.power", "dims": ["base", "exp"],
+                      "base": float(m[1]), "exp": 2.0 if m[2].lower() == "squared" else 3.0})
+    m = _ARITH_POWER.search(query)
+    if m:
+        cands.append({"skill": "arith.power", "dims": ["base", "exp"],
+                      "base": float(m[1]), "exp": float(m[2])})
+    m = _ARITH_PCT.search(query)
+    if m:  # "X percent of Y" -> percent_of(value=Y, pct=X)
+        cands.append({"skill": "arith.percent_of", "dims": ["value", "pct"],
+                      "value": float(m[2]), "pct": float(m[1])})
+    for pat, skill in _ARITH_BINARY:
+        m = pat.search(query)
+        if m:
+            cands.append({"skill": skill, "dims": ["a", "b"],
+                          "a": float(m[1]), "b": float(m[2])})
+    if len(cands) != 1:  # zero (not arithmetic) or several (compound) → bail to the model
+        return False, None, "code", 0
+    return True, cands[0], "code", 0

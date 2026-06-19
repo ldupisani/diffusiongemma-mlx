@@ -1,13 +1,13 @@
 # DiffusionGemma on Apple Silicon (MLX)
 
-![reasoning fidelity vs Claude](https://img.shields.io/badge/fidelity_vs_Claude-38%2F38-brightgreen)
-![model-free](https://img.shields.io/badge/model--free-38%2F38-blue)
-![coded skills](https://img.shields.io/badge/skills-151-informational)
+![reasoning fidelity vs Claude](https://img.shields.io/badge/fidelity_vs_Claude-39%2F39-brightgreen)
+![model-free](https://img.shields.io/badge/model--free-39%2F39-blue)
+![coded skills](https://img.shields.io/badge/skills-153-informational)
 
 Running `google/diffusiongemma-26B-A4B-it` — a 26B Mixture-of-Experts **diffusion**
 language model (~3.8B active params) — locally via `mlx-vlm` on an M3 Max (36 GB).
 
-> **Reasoning compiler:** 38/38 coded orchestrators reproduce the Claude teacher's answer
+> **Reasoning compiler:** 39/39 coded orchestrators reproduce the Claude teacher's answer
 > ([`reasoning.cli eval-all`](#reasoning-compiler-reasoning)), each at **0 model calls** (sidecar
 > cold). Static badges — regenerate with `eval-all` after changes.
 
@@ -196,7 +196,7 @@ python -m reasoning.cli list                # stored orchestrators
 `--teacher claude`) and checks agreement with a deterministic comparator (numeric tolerance +
 normalized-string) — **no sidecar needed**: coded orchestrators make 0 model calls and the
 comparator uses no model. It reports per-orchestrator agreement and confirms every coded answer
-used 0 model calls — the capability-gap gate across the whole graph (currently 38/38 agree, 38/38
+used 0 model calls — the capability-gap gate across the whole graph (currently 39/39 agree, 39/39
 model-free vs Claude). The comparator is tolerant (numeric/normalized-string/yes-no verdict); the
 teacher's final answer is taken as its last line when it skips the `ANSWER:` marker.
 
@@ -232,7 +232,7 @@ only for fuzzy steps (open generation, judgement, recall) and ambiguous NL parsi
 - **`skills/`** — a growing library of small, pure, **typed, example-tested** functions (`arith.*`,
   `date.*`, `text.*`, `stats.*`, `units.*`, `finance.*`, `geometry.*`, `physics.*`, `numtheory.*`,
   `chem.*`, `radix.*`, `trig.*`, `coord.*`, `clock.*`, `sets.*`, `prob.*`, `ratio.*`, `health.*`,
-  `logic.*` — 151 and counting), indexed in a `SKILLS`
+  `logic.*` — 153 and counting), indexed in a `SKILLS`
   registry. Skills never import the engine (a test enforces it). Rounding goes through one
   `arith.round_to`/`round_money` chokepoint (`Decimal`+`ROUND_HALF_UP`). Concept-level skills
   (`stats.mean` over any-length list, `finance.loan_payment`, `units.f_to_c`) capture an operation as

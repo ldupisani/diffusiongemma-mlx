@@ -245,6 +245,15 @@ CASES = [
     ("What is the contrapositive of 'if P then Q'?", "If NOT Q then NOT P", "logic"),
     ("What is true XOR true?", "False", "logic"),
     ("If P is true and Q is false, what is P implies Q?", "False", "logic"),
+    # raw arithmetic (closes the model-fallback gap)
+    ("What is 17 percent of 240?", "40.8", "arithmetic"),
+    ("What is 25 plus 17?", "42", "arithmetic"),
+    ("What is 100 minus 30?", "70", "arithmetic"),
+    ("What is 7 times 8?", "56", "arithmetic"),
+    ("What is 100 divided by 4?", "25", "arithmetic"),
+    ("What is 2 to the power of 10?", "1024", "arithmetic"),
+    ("What is the square root of 144?", "12", "arithmetic"),
+    ("What is 15% of 200?", "30", "arithmetic"),
 ]
 
 

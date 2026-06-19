@@ -8,6 +8,7 @@ That single chokepoint is the one place to get money rounding right and to test.
 
 from __future__ import annotations
 
+import math
 from decimal import ROUND_HALF_UP, Decimal
 
 from .base import register
@@ -42,6 +43,18 @@ def divide(a: float, b: float) -> float:
           [((240, 17), 40.8), ((50, 10), 5.0)])
 def percent_of(value: float, pct: float) -> float:
     return value * pct / 100
+
+
+@register("arith.power", "a number raised to a power (base ** exponent)",
+          [((2, 10), 1024), ((5, 2), 25), ((9, 0.5), 3.0)])
+def power(base: float, exp: float) -> float:
+    return base ** exp
+
+
+@register("arith.sqrt", "the square root of a non-negative number",
+          [((144,), 12.0), ((2,), 1.4142135623730951)])
+def sqrt(x: float) -> float:
+    return math.sqrt(x)
 
 
 @register("arith.apply_discount", "reduce a price by a percentage (percent off, discount)",
