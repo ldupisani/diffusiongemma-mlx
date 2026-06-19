@@ -180,9 +180,16 @@ python -m reasoning.cli run "Compare a Civic and a Corolla..."  # → decompose-
 python -m reasoning.cli run "Write me a poem"                   # no match → teacher fallback
 python -m reasoning.cli capture "<query>"   # record a teacher (thinking-on) trace
 python -m reasoning.cli derive <sample-id>  # scaffold an orchestrator from it (then edit)
-python -m reasoning.cli eval <orch-id>      # score the orchestrator's fidelity vs the teacher
+python -m reasoning.cli eval <orch-id>      # score one orchestrator's fidelity vs the teacher
+python -m reasoning.cli eval-all            # fidelity of EVERY coded orchestrator vs the teacher
 python -m reasoning.cli list                # stored orchestrators
 ```
+`eval-all` runs each coded orchestrator's example through both it and the teacher (default
+`--teacher claude`) and checks agreement with a deterministic comparator (numeric tolerance +
+normalized-string) — **no sidecar needed**: coded orchestrators make 0 model calls and the
+comparator uses no model. It reports per-orchestrator agreement and confirms every coded answer
+used 0 model calls — the capability-gap gate across the whole graph (currently 37/37 agree, 37/37
+model-free vs Claude).
 
 Modules: `engine.py` (one-shot / one-shot-N thinking-off calls via the sidecar; N varies the
 **seed** for diverse candidates), `patterns.py` (decompose-solve-combine, map-reduce,

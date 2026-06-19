@@ -11,7 +11,7 @@ import re
 
 from .compiled import model_calls
 from .engine import one_shot
-from .registry import Orchestrator
+from .registry import Orchestrator, load_orchestrators
 from .teachers import get_teacher
 
 _NUM = re.compile(r"-?\d+(?:\.\d+)?")
@@ -21,6 +21,46 @@ def _as_number(text: str):
     """Extract a single number from an answer (strips $/, etc.), else None."""
     m = _NUM.search(text.replace(",", ""))
     return float(m.group()) if m else None
+
+
+def agrees(orch_answer: str, teacher_answer: str) -> bool:
+    """Coded agreement check (no model judge, no sidecar): the coded answer matches the
+    teacher's on the substantive value. Tries normalized-string containment first (the
+    teacher is often verbose: "18.02 g/mol" vs "≈ 18.02 g/mol"), then a tolerant numeric
+    compare (1% relative — coded answers round, teachers vary in precision)."""
+    norm = lambda s: re.sub(r"[^a-z0-9]", "", s.lower())
+    o, t = norm(orch_answer), norm(teacher_answer)
+    if o and (o in t or t in o):
+        return True
+    on, tn = _as_number(orch_answer), _as_number(teacher_answer)
+    if on is not None and tn is not None:
+        return abs(on - tn) <= 1e-6 + 0.01 * abs(tn)
+    return False
+
+
+def batch_fidelity(*, teacher_backend: str = "claude", orchestrators=None) -> list[dict]:
+    """Run every coded (model-free) orchestrator's first example through both it and the
+    teacher, and check agreement with the coded comparator. No sidecar needed: coded
+    orchestrators make 0 model calls and the comparator is deterministic.
+    """
+    orchs = orchestrators if orchestrators is not None else load_orchestrators()
+    teacher = get_teacher(teacher_backend)
+    results = []
+    for o in orchs:
+        if not o.model_free or not o.example_queries:
+            continue
+        query = o.example_queries[0]
+        r = o.run(query)
+        t = teacher.trace(query)
+        results.append({
+            "id": o.id,
+            "query": query,
+            "orchestrator": r.answer,
+            "teacher": t.answer.replace("\n", " ")[:60],
+            "model_calls": model_calls(r),
+            "agrees": agrees(r.answer, t.answer),
+        })
+    return results
 
 
 def fidelity(query: str, orchestrator: Orchestrator, *, teacher_seed: int = 0,

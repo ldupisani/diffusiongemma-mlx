@@ -88,6 +88,23 @@ def cmd_eval(args):
     print(f"--- orchestrator (thinking off) ---\n{res['orchestrator']}")
 
 
+def cmd_eval_all(args):
+    from .eval import batch_fidelity
+
+    results = batch_fidelity(teacher_backend=args.teacher)
+    agree = sum(r["agrees"] for r in results)
+    free = sum(r["model_calls"] == 0 for r in results)
+    print(f"Fidelity vs {args.teacher} teacher — {len(results)} coded orchestrators\n")
+    print(f"{'orchestrator':24} {'mc':>3} {'ok':>3}  {'coded answer':16} teacher")
+    print("-" * 92)
+    for r in sorted(results, key=lambda r: r["agrees"]):  # disagreements first
+        print(f"{r['id']:24} {r['model_calls']:>3} {'✓' if r['agrees'] else '✗':>3}  "
+              f"{r['orchestrator'][:16]:16} {r['teacher']}")
+    print("-" * 92)
+    print(f"agreement: {agree}/{len(results)}   |   model-free: {free}/{len(results)} "
+          f"(every coded answer used 0 model calls)")
+
+
 def cmd_list(args):
     orchs = registry.load_orchestrators()
     if not orchs:
@@ -116,6 +133,10 @@ def main():
     r.add_argument("--trace", action="store_true"); r.set_defaults(fn=cmd_run)
     e = sub.add_parser("eval"); e.add_argument("orchestrator_id"); e.add_argument("query", nargs="?")
     e.add_argument("--teacher", **teacher_kw); e.set_defaults(fn=cmd_eval)
+    ea = sub.add_parser("eval-all", help="fidelity of every coded orchestrator vs the teacher")
+    ea.add_argument("--teacher", choices=["diffusion", "claude"], default="claude",
+                    help="teacher backend (default: claude — no sidecar needed)")
+    ea.set_defaults(fn=cmd_eval_all)
     sub.add_parser("list").set_defaults(fn=cmd_list)
 
     args = p.parse_args()
