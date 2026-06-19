@@ -309,6 +309,47 @@ def validate_geometry(data: dict) -> tuple[bool, str]:
     return True, ""
 
 
+# --- number-theory family -------------------------------------------------------------
+# (keywords, skill, arity, return-kind). Ordered so "prime factorization" beats "prime",
+# "divisor" is checked before "factorial" (which contains "factor"), gcd/lcm before divisor.
+_NUMBER_THEORY = [
+    (("prime factorization", "prime factors"), "numtheory.prime_factorization", 1, "string"),
+    (("perfect square",), "numtheory.is_perfect_square", 1, "bool"),
+    (("gcd", "greatest common"), "numtheory.gcd", 2, "int"),
+    (("lcm", "least common"), "numtheory.lcm", 2, "int"),
+    (("choose", "combination"), "numtheory.combinations", 2, "int"),
+    (("permutation",), "numtheory.permutations", 2, "int"),
+    (("divisor",), "numtheory.divisor_count", 1, "int"),
+    (("factorial",), "numtheory.factorial", 1, "int"),
+    (("arrange",), "numtheory.factorial", 1, "int"),
+    (("prime",), "numtheory.is_prime", 1, "bool"),
+]
+_INT = re.compile(r"-?\d+")  # keep the sign so e.g. factorial(-3) declines, not silently 3!
+
+
+def detect_number_theory(query: str):
+    q = query.lower()
+    for kws, skill, arity, kind in _NUMBER_THEORY:
+        if any(k in q for k in kws):
+            return skill, arity, kind
+    return None
+
+
+def bind_number_theory(query: str) -> tuple[bool, dict | None, str, int]:
+    det = detect_number_theory(query)
+    if not det:
+        return False, None, "code", 0
+    skill, arity, kind = det
+    nums = [int(x) for x in _INT.findall(query)]
+    if len(nums) < arity:
+        return False, None, "code", 0
+    labels = ["n", "k"][:arity]
+    data = {"skill": skill, "dims": labels, "kind": kind}
+    for i, label in enumerate(labels):
+        data[label] = nums[i]
+    return True, data, "code", 0
+
+
 # --- physics-formula family -----------------------------------------------------------
 # Quantities are cued by their UNIT, so each input is "the number before unit X". Patterns
 # are case-sensitive (kg/N/m/s have meaningful case) and ordered so m/s^2 isn't read as m/s.

@@ -121,6 +121,17 @@ CASES = [
     ("What is the acceleration of an object that goes from 0 to 20 m/s in 4 seconds?",
      "5 m/s²", "physics"),
     ("What is the weight of a 10 kg object on Earth?", "98 N", "physics"),
+    # number-theory series (captured)
+    ("What is the GCD of 24 and 36?", "12", "number_theory"),
+    ("What is the LCM of 4 and 6?", "12", "number_theory"),
+    ("What is the factorial of 5?", "120", "number_theory"),
+    ("Is 17 a prime number?", "Yes, 17 is prime.", "number_theory"),
+    ("What is the prime factorization of 60?", "2^2 × 3 × 5", "number_theory"),
+    ("How many divisors does 28 have?", "6", "number_theory"),
+    ("What is 8 choose 3?", "56", "number_theory"),
+    ("In how many ways can 5 distinct items be arranged?", "120", "number_theory"),
+    ("What is 7 factorial?", "5040", "number_theory"),
+    ("Is 100 a perfect square?", "Yes, 100 is a perfect square.", "number_theory"),
 ]
 
 
