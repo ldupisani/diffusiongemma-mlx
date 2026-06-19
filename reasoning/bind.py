@@ -403,6 +403,40 @@ def bind_chemistry(query: str) -> tuple[bool, dict | None, str, int]:
     return False, None, "code", 0
 
 
+# --- number-base (radix) conversion family --------------------------------------------
+_BASES = {"binary": 2, "hexadecimal": 16, "hex": 16, "octal": 8, "decimal": 10}
+_BASE_WORD = re.compile(r"binary|hexadecimal|hex|octal|decimal", re.IGNORECASE)
+_TO_BASE = re.compile(r"\b(?:to|into|in)\s+(binary|hexadecimal|hex|octal|decimal)\b",
+                      re.IGNORECASE)
+# strip base names + structural words so the value token is what remains
+_RADIX_NOISE = re.compile(
+    r"\b(?:binary|hexadecimal|hex|octal|decimal|convert|number|the|what|is|from|to|into|"
+    r"in|a|an|of|value)\b", re.IGNORECASE)
+
+
+def bind_radix(query: str) -> tuple[bool, dict | None, str, int]:
+    """Detect target base (after to/into/in), source base (any other base word, else
+    decimal), and the value token that parses in the source base."""
+    m_to = _TO_BASE.search(query)
+    if not m_to:
+        return False, None, "code", 0
+    to_base = _BASES[m_to.group(1).lower()]
+    from_base = 10
+    for m in _BASE_WORD.finditer(query):  # first base word that isn't the target → source
+        if m.start() != m_to.start(1):
+            from_base = _BASES[m.group().lower()]
+            break
+    cleaned = _RADIX_NOISE.sub(" ", query)
+    for tok in re.findall(r"[0-9A-Fa-f]+", cleaned):
+        try:
+            int(tok, from_base)  # the value must be valid in its source base
+        except ValueError:
+            continue
+        return True, {"skill": "radix.convert", "dims": ["value", "from_base", "to_base"],
+                      "value": tok, "from_base": from_base, "to_base": to_base}, "code", 0
+    return False, None, "code", 0
+
+
 # --- physics-formula family -----------------------------------------------------------
 # Quantities are cued by their UNIT, so each input is "the number before unit X". Patterns
 # are case-sensitive (kg/N/m/s have meaningful case) and ordered so m/s^2 isn't read as m/s.

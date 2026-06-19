@@ -118,8 +118,23 @@ def run_plan(plan: Plan, bound_inputs: dict, *, shot=one_shot,
     trace.append({"step": "summary", "model_calls": model_calls, "code_steps": code_steps})
 
     ans = env[plan.answer_ref]
-    answer = plan.answer_format.format(ans) if plan.answer_format else str(ans)
+    fmt = plan.answer_format
+    if callable(fmt):
+        answer = fmt(ans)
+    elif fmt:
+        answer = fmt.format(ans)
+    else:
+        answer = str(ans)
     return PatternResult(answer=answer, trace=trace, data=env)
+
+
+def format_number(x) -> str:
+    """Clean numeric string: whole values as integers (no scientific notation, unlike
+    "{:g}" which goes exponential past 6 digits — e.g. 1048576, not 1.04858e+06), other
+    values rendered as-is (callers round first)."""
+    if isinstance(x, float) and x.is_integer():
+        return str(int(x))
+    return str(x)
 
 
 def explain(message: str) -> PatternResult:

@@ -8,7 +8,7 @@ convert -> round plan and formats with the target's display symbol.
 
 from reasoning import engine
 from reasoning.bind import bind_unit_convert
-from reasoning.compiled import CodeStep, Inp, Lit, Plan, Step, run_guarded
+from reasoning.compiled import CodeStep, Inp, Lit, Plan, Step, format_number, run_guarded
 
 META = {
     "id": "unit_conversion",
@@ -22,10 +22,14 @@ META = {
         "Convert 2 gallons to liters",
         "How many seconds are in 5 minutes?",
         "Convert 60 miles per hour to kilometers per hour",
+        "How many bytes are in 5 kilobytes?",
+        "How many megabytes are in 1 terabyte?",
+        "Convert 2 gigabytes to megabytes",
     ],
     "keywords": ["convert", "fahrenheit", "celsius", "kelvin", "miles", "km", "kilometers",
                  "meters", "feet", "inches", "centimeters", "pounds", "kg", "grams", "ounces",
-                 "liters", "gallons", "milliliters", "seconds", "minutes", "hours", "into"],
+                 "liters", "gallons", "milliliters", "seconds", "minutes", "hours", "into",
+                 "bytes", "kilobytes", "megabytes", "gigabytes", "terabytes", "terabyte"],
     "sub_orchestrators": [],
     "model_free": True,
 }
@@ -50,6 +54,7 @@ def run(query):
             CodeStep("arith.round_to", [Step("c"), Lit(2)], out="r"),
         ],
         answer_ref="r",
-        answer_format="{:g}" + data["to_sym"],
+        # clean integer rendering (data sizes get large — avoid {:g} scientific notation)
+        answer_format=lambda x, s=data["to_sym"]: format_number(x) + s,
     )
     return run_guarded((ok, data, via, 0), plan, shot=engine._no_model)

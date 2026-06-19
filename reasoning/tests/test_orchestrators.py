@@ -146,6 +146,18 @@ CASES = [
      "chemistry"),
     ("What is the final concentration when 50 mL of 2 M solution is diluted to 200 mL?", "0.5 M",
      "chemistry"),
+    # base / radix conversion (captured)
+    ("Convert 255 to binary.", "11111111", "base_conversion"),
+    ("Convert 1010 from binary to decimal.", "10", "base_conversion"),
+    ("What is 255 in hexadecimal?", "FF", "base_conversion"),
+    ("Convert hexadecimal FF to decimal.", "255", "base_conversion"),
+    ("Convert 64 to octal.", "100", "base_conversion"),
+    ("Convert the decimal number 100 to binary.", "1100100", "base_conversion"),
+    ("Convert binary 11111111 to decimal.", "255", "base_conversion"),
+    # data-size conversion (captured) — reuses the units factor table
+    ("How many bytes are in 5 kilobytes?", "5120 bytes", "unit_conversion"),
+    ("Convert 2 gigabytes to megabytes.", "2048 MB", "unit_conversion"),
+    ("How many megabytes are in 1 terabyte?", "1048576 MB", "unit_conversion"),
 ]
 
 

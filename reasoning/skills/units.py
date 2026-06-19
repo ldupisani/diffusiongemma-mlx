@@ -68,6 +68,9 @@ _FACTORS = {
     "day": ("time", 86400.0), "week": ("time", 604800.0),
     # speed (base: metre/second)
     "mps": ("speed", 1.0), "kph": ("speed", 1000 / 3600), "mph": ("speed", 1609.344 / 3600),
+    # data size (base: byte; 1024-based, the common informal KB/MB/...)
+    "byte": ("data", 1.0), "kb": ("data", 1024.0), "mb": ("data", 1024.0 ** 2),
+    "gb": ("data", 1024.0 ** 3), "tb": ("data", 1024.0 ** 4), "pb": ("data", 1024.0 ** 5),
 }
 _TEMP = {"c", "f", "k"}
 
@@ -97,6 +100,12 @@ _CANON = {
     "meters per second": "mps", "metres per second": "mps", "m/s": "mps", "mps": "mps",
     "celsius": "c", "centigrade": "c", "c": "c", "fahrenheit": "f", "f": "f",
     "kelvin": "k", "k": "k",
+    "bytes": "byte", "byte": "byte",
+    "kilobytes": "kb", "kilobyte": "kb", "kb": "kb",
+    "megabytes": "mb", "megabyte": "mb", "mb": "mb",
+    "gigabytes": "gb", "gigabyte": "gb", "gb": "gb",
+    "terabytes": "tb", "terabyte": "tb", "tb": "tb",
+    "petabytes": "pb", "petabyte": "pb", "pb": "pb",
 }
 
 # longest phrase first so "miles per hour" beats "miles", "centimeters" beats "meters", etc.
@@ -106,7 +115,8 @@ UNIT_WORDS = {a for a in _CANON if " " not in a and "/" not in a}  # cheap membe
 # display suffix (with separator) per canonical unit
 SUFFIX = {u: f" {u}" for u in _FACTORS}
 SUFFIX.update({"l": " L", "ml": " mL", "mps": " m/s", "kph": " km/h", "mph": " mph",
-               "c": "°C", "f": "°F", "k": " K"})
+               "c": "°C", "f": "°F", "k": " K", "byte": " bytes", "kb": " KB", "mb": " MB",
+               "gb": " GB", "tb": " TB", "pb": " PB"})
 
 
 def canonical(token: str):

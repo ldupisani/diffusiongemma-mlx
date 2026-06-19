@@ -30,6 +30,11 @@ class TestUnits(unittest.TestCase):
     def test_convert_normalizes_aliases_and_is_inverse(self):
         self.assertAlmostEqual(u.convert(u.convert(10, "meters", "feet"), "ft", "m"), 10, places=6)
 
+    def test_convert_data_sizes(self):
+        self.assertEqual(u.convert(5, "kilobytes", "bytes"), 5120)
+        self.assertEqual(u.convert(2, "gigabytes", "megabytes"), 2048)
+        self.assertEqual(u.convert(1, "terabyte", "megabytes"), 1048576)
+
     def test_convert_rejects_cross_dimension(self):
         with self.assertRaises(ValueError):
             u.convert(5, "km", "kg")           # length vs mass
