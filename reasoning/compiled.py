@@ -128,6 +128,25 @@ def run_plan(plan: Plan, bound_inputs: dict, *, shot=one_shot,
     return PatternResult(answer=answer, trace=trace, data=env)
 
 
+def dispatch(bind_result, *, shot=_no_model, parse_message="could not parse the inputs"):
+    """Standard dispatch-orchestrator runner for binds that return
+    {skill, dims, [suffix], [round=True], [places=2]}: apply the skill to its labelled
+    inputs, optionally round, and format the result with its unit suffix. Collapses the
+    common detect→extract→apply→format orchestrator to a one-liner.
+    """
+    ok, data, via, calls = bind_result
+    if not ok:
+        return explain(parse_message)
+    steps = [CodeStep(data["skill"], [Inp(d) for d in data["dims"]], out="v")]
+    ref = "v"
+    if data.get("round", True):  # string-returning skills (midpoint, fractions) set round=False
+        steps.append(CodeStep("arith.round_to", [Step("v"), Lit(data.get("places", 2))], out="r"))
+        ref = "r"
+    plan = Plan(steps=steps, answer_ref=ref,
+                answer_format=lambda x, s=data.get("suffix", ""): format_number(x) + s)
+    return run_guarded((True, data, via, calls), plan, shot=shot)
+
+
 def format_number(x) -> str:
     """Clean numeric string: whole values as integers (no scientific notation, unlike
     "{:g}" which goes exponential past 6 digits — e.g. 1048576, not 1.04858e+06), other

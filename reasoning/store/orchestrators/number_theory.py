@@ -24,10 +24,12 @@ META = {
         "How many divisors does 28 have?",
         "What is 8 choose 3?",
         "In how many ways can 5 distinct items be arranged?",
+        "In how many ways can 4 people be seated in a row?",
         "Is 100 a perfect square?",
     ],
     "keywords": ["gcd", "lcm", "factorial", "prime", "factorization", "divisors", "choose",
-                 "combinations", "permutations", "arranged", "perfect", "square"],
+                 "combinations", "permutations", "arranged", "seated", "row", "ways",
+                 "perfect", "square"],
     "sub_orchestrators": [],
     "model_free": True,
 }

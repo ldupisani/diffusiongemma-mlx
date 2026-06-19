@@ -17,6 +17,7 @@ them for backward compatibility.
 from __future__ import annotations
 
 import json as _json
+import math
 import re
 
 from .engine import one_shot
@@ -321,7 +322,7 @@ _NUMBER_THEORY = [
     (("permutation",), "numtheory.permutations", 2, "int"),
     (("divisor",), "numtheory.divisor_count", 1, "int"),
     (("factorial",), "numtheory.factorial", 1, "int"),
-    (("arrange",), "numtheory.factorial", 1, "int"),
+    (("arrange", "seated in a row", "in a row"), "numtheory.factorial", 1, "int"),
     (("prime",), "numtheory.is_prime", 1, "bool"),
 ]
 _INT = re.compile(r"-?\d+")  # keep the sign so e.g. factorial(-3) declines, not silently 3!
@@ -843,3 +844,254 @@ def validate_tip_split(data: dict) -> tuple[bool, str]:
     if data["people"] <= 0:
         return False, "the number of people must be positive"
     return True, ""
+
+
+# --- trigonometry / angle family ------------------------------------------------------
+def _angle_value(query: str):
+    m = re.search(r"-?\d+(?:\.\d+)?", query)
+    if m:
+        return float(m.group())
+    if re.search(r"\bpi\b|π", query, re.IGNORECASE):
+        return math.pi
+    return None
+
+
+def bind_trig(query: str) -> tuple[bool, dict | None, str, int]:
+    q = query.lower()
+    angle = _angle_value(query)
+    if angle is None:
+        return False, None, "code", 0
+    if "cosine" in q or re.search(r"\bcos\b", q):  # check cosine before sine ("cosine" ⊃ "sine")
+        skill, suffix, places = "trig.cos_deg", "", 2
+    elif "sine" in q or re.search(r"\bsin\b", q):
+        skill, suffix, places = "trig.sin_deg", "", 2
+    elif "tangent" in q or re.search(r"\btan\b", q):
+        skill, suffix, places = "trig.tan_deg", "", 2
+    elif re.search(r"(?:to|in)\s+radians", q):
+        skill, suffix, places = "trig.deg_to_rad", " rad", 4
+    elif re.search(r"(?:to|in)\s+degrees", q):
+        skill, suffix, places = "trig.rad_to_deg", "°", 2
+    else:
+        return False, None, "code", 0
+    return True, {"skill": skill, "dims": ["angle"], "angle": angle, "suffix": suffix,
+                  "places": places}, "code", 0
+
+
+# --- coordinate-geometry family -------------------------------------------------------
+_POINT = re.compile(r"\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)")
+
+
+def bind_coord(query: str) -> tuple[bool, dict | None, str, int]:
+    pts = _POINT.findall(query)
+    if len(pts) < 2:
+        return False, None, "code", 0
+    q = query.lower()
+    if "distance" in q:
+        skill, rnd = "coord.distance", True
+    elif "midpoint" in q:
+        skill, rnd = "coord.midpoint", False  # returns a string
+    elif "slope" in q:
+        skill, rnd = "coord.slope", True
+    else:
+        return False, None, "code", 0
+    (x1, y1), (x2, y2) = pts[0], pts[1]
+    return True, {"skill": skill, "dims": ["x1", "y1", "x2", "y2"], "round": rnd, "suffix": "",
+                  "x1": float(x1), "y1": float(y1), "x2": float(x2), "y2": float(y2)}, "code", 0
+
+
+# --- clock / time-of-day family -------------------------------------------------------
+_CLOCK_TIME = re.compile(r"\d{1,2}:\d{2}(?:\s*(?:AM|PM))?", re.IGNORECASE)
+
+
+def bind_clock(query: str) -> tuple[bool, dict | None, str, int]:
+    q = query.lower()
+    times = _CLOCK_TIME.findall(query)
+    if "12-hour" in q or "12 hour" in q:
+        if times:
+            return True, {"skill": "clock.to_12h", "dims": ["time"], "round": False,
+                          "time": times[0]}, "code", 0
+    elif "24-hour" in q or "24 hour" in q:
+        if times:
+            return True, {"skill": "clock.to_24h", "dims": ["time"], "round": False,
+                          "time": times[0]}, "code", 0
+    elif "minutes between" in q or "minutes are between" in q:
+        if len(times) >= 2:
+            return True, {"skill": "clock.minutes_between", "dims": ["t1", "t2"], "round": False,
+                          "suffix": " minutes", "t1": times[0], "t2": times[1]}, "code", 0
+    elif "how long" in q:
+        if len(times) >= 2:
+            return True, {"skill": "clock.duration", "dims": ["t1", "t2"], "round": False,
+                          "t1": times[0], "t2": times[1]}, "code", 0
+    elif "after" in q or "before" in q:
+        if times:
+            mh = re.search(r"(\d+)\s*hours?", q)
+            mm = re.search(r"(\d+)\s*minutes?", q)
+            offset = (int(mh[1]) * 60 if mh else 0) + (int(mm[1]) if mm else 0)
+            if "before" in q:
+                offset = -offset
+            return True, {"skill": "clock.add_minutes", "dims": ["time", "minutes"],
+                          "round": False, "time": times[0], "minutes": offset}, "code", 0
+    return False, None, "code", 0
+
+
+# --- set / inclusion-exclusion family -------------------------------------------------
+def bind_sets(query: str) -> tuple[bool, dict | None, str, int]:
+    q = query.lower()
+    ints = [(m.start(), int(m.group())) for m in re.finditer(r"\d+", q)]
+    if len(ints) < 3:
+        return False, None, "code", 0
+    both = both_pos = None
+    mb = q.find("both")
+    if mb != -1:
+        before = [(pos, v) for pos, v in ints if pos < mb]
+        if before:
+            both_pos, both = before[-1]
+    total = total_pos = None
+    mt = re.search(r"(?:group of|out of|class of)\s+(\d+)|(\d+)\s+(?:people|students|surveyed)", q)
+    if mt:
+        total = int(mt.group(1) or mt.group(2))
+        total_pos = mt.start(1) if mt.group(1) else mt.start(2)
+    rest = [v for pos, v in ints if pos != both_pos and pos != total_pos]
+    if both is None or len(rest) < 2:
+        return False, None, "code", 0
+    a, b = rest[0], rest[1]
+    if "neither" in q:
+        if total is None:
+            return False, None, "code", 0
+        return True, {"skill": "sets.neither", "dims": ["total", "a", "b", "both"],
+                      "total": total, "a": a, "b": b, "both": both}, "code", 0
+    if "only" in q:
+        return True, {"skill": "sets.only_first", "dims": ["a", "both"],
+                      "a": a, "both": both}, "code", 0
+    return True, {"skill": "sets.union_count", "dims": ["a", "b", "both"],
+                  "a": a, "b": b, "both": both}, "code", 0
+
+
+# --- probability family (computable subset) -------------------------------------------
+def bind_probability(query: str) -> tuple[bool, dict | None, str, int]:
+    q = query.lower()
+    if "does not" in q or "not rain" in q or "complement" in q:
+        m = re.search(r"(\d+)\s*percent|(\d+)\s*%", q)
+        if m:
+            return True, {"skill": "prob.complement_percent", "dims": ["pct"], "suffix": "%",
+                          "places": 2, "pct": float(m.group(1) or m.group(2))}, "code", 0
+    elif "sum of" in q and ("dice" in q or "die" in q):
+        m = re.search(r"sum of (\d+)", q)
+        if m:
+            return True, {"skill": "prob.dice_sum", "dims": ["target"], "places": 4,
+                          "target": int(m[1])}, "code", 0
+    elif "expected value" in q and ("die" in q or "dice" in q):
+        return True, {"skill": "prob.expected_die", "dims": ["sides"], "places": 2,
+                      "sides": 6}, "code", 0
+    elif "heads" in q or ("coin" in q and "flip" in q):
+        if "twice" in q:
+            n = 2
+        elif "thrice" in q:
+            n = 3
+        else:
+            m = re.search(r"(\d+)\s*times", q)
+            n = int(m[1]) if m else None
+        if n:
+            return True, {"skill": "prob.coin_all_heads", "dims": ["n"], "places": 4,
+                          "n": n}, "code", 0
+    elif ("roll" in q or "rolling" in q) and ("die" in q or "dice" in q):
+        return True, {"skill": "prob.die_face", "dims": ["sides"], "places": 4,
+                      "sides": 6}, "code", 0
+    return False, None, "code", 0
+
+
+# --- ratio / proportion / fraction family ---------------------------------------------
+_FRAC = re.compile(r"(\d+)\s*/\s*(\d+)")
+_RATIO = re.compile(r"(\d+)\s*:\s*(\d+)")
+_DEC = re.compile(r"\d+\.\d+")
+
+
+def bind_ratio(query: str) -> tuple[bool, dict | None, str, int]:
+    q = query.lower()
+    frac, rat = _FRAC.search(query), _RATIO.search(query)
+    if "proportion" in q:
+        m = re.search(r"(\d+)\s*:\s*(\d+)\s*=\s*x\s*:\s*(\d+)", q)
+        if m:
+            return True, {"skill": "ratio.solve_proportion", "dims": ["a", "b", "d"],
+                          "places": 2, "a": float(m[1]), "b": float(m[2]),
+                          "d": float(m[3])}, "code", 0
+    elif "simplify" in q and rat and ":" in query:
+        return True, {"skill": "ratio.simplify_ratio", "dims": ["a", "b"], "round": False,
+                      "a": int(rat[1]), "b": int(rat[2])}, "code", 0
+    elif "simplify" in q and frac:
+        return True, {"skill": "ratio.simplify_fraction", "dims": ["num", "den"], "round": False,
+                      "num": int(frac[1]), "den": int(frac[2])}, "code", 0
+    elif "as a decimal" in q and frac:
+        return True, {"skill": "ratio.fraction_to_decimal", "dims": ["num", "den"], "places": 4,
+                      "num": float(frac[1]), "den": float(frac[2])}, "code", 0
+    elif "as a fraction" in q:
+        d = _DEC.search(query)
+        if d:
+            return True, {"skill": "ratio.decimal_to_fraction", "dims": ["x"], "round": False,
+                          "x": float(d.group())}, "code", 0
+    elif ("percent" in q or "percentage" in q) and frac:
+        return True, {"skill": "ratio.fraction_to_percent", "dims": ["num", "den"], "suffix": "%",
+                      "places": 2, "num": float(frac[1]), "den": float(frac[2])}, "code", 0
+    elif "unit rate" in q:
+        nums = re.findall(r"\d+(?:\.\d+)?", query)
+        if len(nums) >= 2:
+            return True, {"skill": "ratio.unit_rate", "dims": ["amount", "per"], "places": 2,
+                          "amount": float(nums[0]), "per": float(nums[1])}, "code", 0
+    elif "servings" in q:
+        cups = re.search(r"(\d+(?:\.\d+)?)\s*cups?", q)
+        servs = re.findall(r"(\d+(?:\.\d+)?)\s*servings?", q)
+        if cups and len(servs) >= 2:
+            return True, {"skill": "ratio.scale", "dims": ["base", "from_n", "to_n"],
+                          "places": 2, "suffix": " cups", "base": float(cups[1]),
+                          "from_n": float(servs[0]), "to_n": float(servs[1])}, "code", 0
+    elif "cost" in q and "how much" in q:
+        amt = re.search(r"\$\s*(\d+(?:\.\d+)?)", query)
+        items = re.findall(r"(\d+)\s+[a-z]+", q)  # "3 apples", "12 apples"
+        if amt and len(items) >= 2:
+            return True, {"skill": "ratio.scale", "dims": ["base", "from_n", "to_n"],
+                          "places": 2, "base": float(amt[1]), "from_n": float(items[0]),
+                          "to_n": float(items[1])}, "code", 0
+    return False, None, "code", 0
+
+
+# --- health / body-metrics family -----------------------------------------------------
+def bind_health(query: str) -> tuple[bool, dict | None, str, int]:
+    q = query.lower()
+    age = re.search(r"(\d+)\s*year", q)
+    if "bmi" in q:
+        w = re.search(r"(\d+(?:\.\d+)?)\s*kg", q)
+        h = re.search(r"(\d+(?:\.\d+)?)\s*met(?:er|re)", q)
+        if w and h:
+            return True, {"skill": "health.bmi", "dims": ["weight_kg", "height_m"], "places": 2,
+                          "weight_kg": float(w[1]), "height_m": float(h[1])}, "code", 0
+    elif "target heart rate" in q and age:
+        pct = re.search(r"(\d+)\s*percent|(\d+)\s*%", q)
+        if pct:
+            return True, {"skill": "health.target_heart_rate", "dims": ["age", "intensity_pct"],
+                          "suffix": " bpm", "places": 0, "age": float(age[1]),
+                          "intensity_pct": float(pct.group(1) or pct.group(2))}, "code", 0
+    elif "heart rate" in q and age:
+        return True, {"skill": "health.max_heart_rate", "dims": ["age"], "suffix": " bpm",
+                      "places": 0, "age": float(age[1])}, "code", 0
+    elif "pace" in q:
+        dist = re.search(r"(\d+(?:\.\d+)?)\s*(?:miles?|mi|km|kilometer)", q)
+        mins = re.search(r"(\d+(?:\.\d+)?)\s*min", q)
+        unit = " minutes per kilometer" if ("km" in q or "kilomet" in q) else " minutes per mile"
+        if dist and mins:
+            return True, {"skill": "health.pace", "dims": ["minutes", "distance"],
+                          "suffix": unit, "places": 2, "minutes": float(mins[1]),
+                          "distance": float(dist[1])}, "code", 0
+    elif "bmr" in q and age:
+        w = re.search(r"(\d+(?:\.\d+)?)\s*kg", q)
+        h = re.search(r"(\d+(?:\.\d+)?)\s*cm", q)
+        if w and h:
+            skill = "health.bmr_male" if ("man" in q or "male" in q) else "health.bmr_female"
+            return True, {"skill": skill, "dims": ["weight_kg", "height_cm", "age"],
+                          "suffix": " kcal/day", "places": 2, "weight_kg": float(w[1]),
+                          "height_cm": float(h[1]), "age": float(age[1])}, "code", 0
+    elif "ideal body weight" in q:
+        h = re.search(r"(\d+(?:\.\d+)?)\s*cm", q)
+        if h:
+            return True, {"skill": "health.ideal_body_weight", "dims": ["height_cm"],
+                          "suffix": " kg", "places": 0, "height_cm": float(h[1])}, "code", 0
+    return False, None, "code", 0
