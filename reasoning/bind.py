@@ -1288,3 +1288,50 @@ def bind_expression(query: str) -> tuple[bool, dict | None, str, int]:
         return False, None, "code", 0
     return True, {"skill": "expr.evaluate", "dims": ["expression"],
                   "expression": symbolic}, "code", 0
+
+
+# --- composed: total cost where quantity unit ≠ price unit (delegates a conversion) ----
+_UNIT_WORD = (r"miles?|kilometers?|kilometres?|km|meters?|metres?|ft|feet|"
+              r"pounds?|lbs?|lb|kilograms?|kg|grams?|g")
+_CONVERTED_COST = re.compile(
+    rf"(?i)cost of\s+(\d+(?:\.\d+)?)\s*({_UNIT_WORD})\s+at\s+\$?\s*(\d+(?:\.\d+)?)\s*"
+    rf"(?:per|/|a)\s+({_UNIT_WORD})")
+
+
+def bind_converted_cost(query: str) -> tuple[bool, dict | None, str, int]:
+    """'(total) cost of <qty> <unitA> at $<price> per <unitB>' → {qty, frm, price, to}.
+    The price is per <unitB> but the quantity is in <unitA>, so the total needs a unit
+    conversion first — which the orchestrator delegates to `unit_conversion` via a SubStep."""
+    m = _CONVERTED_COST.search(query)
+    if not m:
+        return False, None, "code", 0
+    return True, {"qty": float(m[1]), "frm": m[2], "price": float(m[3]),
+                  "to": m[4]}, "code", 0
+
+
+# --- clarify probes: query TYPE recognized, but a required field is missing -------------
+# Each returns {field: (question, append_template)} for the missing fields, or None. The
+# append_template formats the user's answer into text the bind above already parses, so the
+# CLI re-runs with `query + appended text` — no new parser (see compiled.clarify).
+def clarify_health(query: str) -> dict | None:
+    q = query.lower()
+    if "bmi" in q:
+        missing = {}
+        if not re.search(r"(\d+(?:\.\d+)?)\s*kg", q):
+            missing["weight_kg"] = ("What is your weight in kilograms?", "{} kg")
+        if not re.search(r"(\d+(?:\.\d+)?)\s*met(?:er|re)", q):
+            missing["height_m"] = ("What is your height in meters?", "{} meters")
+        return missing or None
+    return None
+
+
+def clarify_geometry(query: str) -> dict | None:
+    det = detect_geometry(query)
+    if not det or det[1] is None:  # unknown shape, or hypotenuse (legs phrasing) → no probe
+        return None
+    _, dims = det
+    missing = {}
+    for label in dims:
+        if not re.search(rf"{label}\s+(?:of\s+)?(-?\d+(?:\.\d+)?)", query, re.IGNORECASE):
+            missing[label] = (f"What is the {label}?", f"{label} {{}}")
+    return missing or None

@@ -44,31 +44,52 @@ def cmd_derive(args):
 
 
 def cmd_run(args):
+    from .compiled import model_calls, needs_input
     matcher = {
         "classify": router.ClassifyMatcher,
         "embedding": router.EmbeddingMatcher,
     }.get(args.matcher, router.LexicalMatcher)()
-    m = router.recognize(args.query, matcher=matcher)
-    if m:
-        print(f"[recognized: {m.orchestrator.query_type} via {m.via} "
-              f"score={m.score:.2f}] running orchestrator — thinking OFF\n")
-        r = m.orchestrator.run(args.query)
-        print(r.answer)
-        from .compiled import model_calls
-        n = model_calls(r)
-        if n == 0:
-            print("\n[answer used 0 model calls — sidecar not contacted]")
-        elif n is None:
-            print("\n[pattern orchestrator — model-call count not tracked]")
-        else:
-            print(f"\n[answer used {n} model call(s)]")
-        if args.trace:
-            print("\n--- trace ---")
-            print(json.dumps(r.trace, indent=2, default=str)[:3000])
-    else:
+    query = args.query
+    m = router.recognize(query, matcher=matcher)
+    if not m:
         print(f"[no orchestrator matched — falling back to TEACHER ({args.teacher})]\n")
-        print(get_teacher(args.teacher).trace(args.query).answer)
+        print(get_teacher(args.teacher).trace(query).answer)
         print('\nTo compile this query type: capture "<query>" → derive → eval.')
+        return
+    print(f"[recognized: {m.orchestrator.query_type} via {m.via} "
+          f"score={m.score:.2f}] running orchestrator — thinking OFF\n")
+    r = m.orchestrator.run(query)
+    # interactive clarification: the type is recognized but a field is missing — ask, then
+    # re-run by APPENDING the answer in a form the bind already parses (still 0 model calls).
+    for _ in range(6):
+        missing = needs_input(r)
+        if not missing:
+            break
+        print("I need a bit more information:")
+        try:
+            for _field, (question, template) in missing.items():
+                val = input(f"  {question} ").strip()
+                if not val:
+                    print("\n(cancelled — missing information)")
+                    return
+                query = f"{query} {template.format(val)}"
+        except EOFError:
+            print("\n(no input available to clarify)")
+            return
+        m = router.recognize(query, matcher=matcher) or m
+        r = m.orchestrator.run(query)
+        print()
+    print(r.answer)
+    n = model_calls(r)
+    if n == 0:
+        print("\n[answer used 0 model calls — sidecar not contacted]")
+    elif n is None:
+        print("\n[pattern orchestrator — model-call count not tracked]")
+    else:
+        print(f"\n[answer used {n} model call(s)]")
+    if args.trace:
+        print("\n--- trace ---")
+        print(json.dumps(r.trace, indent=2, default=str)[:3000])
 
 
 def cmd_eval(args):

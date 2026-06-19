@@ -39,6 +39,8 @@ class Orchestrator:
     fallback: bool = False    # only matched when no specific orchestrator claims the query
     bind_gated: bool = False  # precondition IS a conservative parse → dispositive for routing
                               # (route on it even when fuzzy lexical/embedding score is ~0)
+    clarify_probe: Optional[Callable] = None  # (query)->{field:(question,template)}|None: the
+                              # type is recognized but a field is missing → ask the user
 
 
 def _load_module(path: Path):
@@ -72,6 +74,7 @@ def load_orchestrators() -> list[Orchestrator]:
                 model_free=meta.get("model_free", False),
                 fallback=meta.get("fallback", False),
                 bind_gated=meta.get("bind_gated", False),
+                clarify_probe=getattr(mod, "clarify_probe", None),
             )
         )
     return out

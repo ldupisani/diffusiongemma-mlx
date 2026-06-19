@@ -1,7 +1,7 @@
 """Health / body metrics — BMI, heart rate, pace, BMR, ideal weight. Coded, zero model."""
 
-from reasoning.bind import bind_health
-from reasoning.compiled import dispatch
+from reasoning.bind import bind_health, clarify_health
+from reasoning.compiled import clarify, dispatch
 
 META = {
     "id": "health_metrics",
@@ -25,5 +25,13 @@ def precondition(query):
     return bind_health(query)[0]
 
 
+clarify_probe = clarify_health  # routed only when nothing can ANSWER (a lower router tier)
+
+
 def run(query):
+    ok = bind_health(query)[0]
+    if not ok:
+        missing = clarify_health(query)
+        if missing:
+            return clarify(missing)
     return dispatch(bind_health(query), parse_message="could not parse the health inputs")

@@ -179,8 +179,8 @@ def recognize(
     orchestrators: Optional[list[Orchestrator]] = None,
 ) -> Optional[Match]:
     matcher = matcher or LexicalMatcher()
-    orchs = orchestrators if orchestrators is not None else load_orchestrators()
-    orchs = [o for o in orchs if o.precondition(query)]
+    all_orchs = orchestrators if orchestrators is not None else load_orchestrators()
+    orchs = [o for o in all_orchs if o.precondition(query)]
     # Two tiers: a specific orchestrator always wins over a generic fallback (e.g.
     # numeric_consensus, whose always-true precondition + "many/count" keywords would
     # otherwise tie every new orchestrator). Fall to fallbacks only when nothing specific
@@ -198,5 +198,11 @@ def recognize(
     gated = [o for o in specific if o.bind_gated]
     if gated:
         return matcher.select(query, gated) or Match(gated[0], score=1.0, via="bind")
+    # Clarify tier: nothing can ANSWER, but a known query type may just be missing a field —
+    # ask the user rather than declining. Checked across ALL orchestrators (the strict
+    # precondition excludes the under-specified query the probe is meant to catch).
+    for o in all_orchs:
+        if o.clarify_probe and o.clarify_probe(query):
+            return Match(o, score=1.0, via="clarify")
     fallback = [o for o in orchs if o.fallback]
     return matcher.select(query, fallback) if fallback else None

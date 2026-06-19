@@ -68,6 +68,21 @@ class ModelStep:
 
 
 @dataclass
+class SubStep:
+    """Delegate a sub-question to ANOTHER orchestrator (composition).
+
+    The sub-query is a str.format template filled from `args`; it is routed via
+    `router.recognize` (or forced to `orchestrator` by id) and run, binding the sub-result's
+    raw value under `out`. The sub-run's model calls fold into this plan's tally, so a
+    composition stays model-free iff every part is. This is how `sub_orchestrators` is used.
+    """
+    query_template: str
+    out: str
+    args: dict = field(default_factory=dict)   # name -> ArgRef (fills the template)
+    orchestrator: str | None = None            # force a specific orchestrator id; else route
+
+
+@dataclass
 class Plan:
     steps: list
     answer_ref: str                 # which env name holds the final answer
@@ -111,6 +126,23 @@ def run_plan(plan: Plan, bound_inputs: dict, *, shot=one_shot,
             env[st.out] = r.text
             model_calls += 1
             trace.append({"step": st.out, "via": "model", "prompt": prompt, "output": r.text})
+        elif isinstance(st, SubStep):
+            filled = {k: _resolve(v, env) for k, v in st.args.items()}
+            subq = st.query_template.format(**filled)
+            sub = _run_subquery(subq, st.orchestrator)
+            value = (sub.data or {}).get("__value__") if sub else None
+            if value is None:  # sub-orchestrator declined / produced no numeric value
+                trace.append({"step": st.out, "via": "sub", "query": subq, "ok": False})
+                trace.append({"step": "summary", "model_calls": model_calls,
+                              "code_steps": sum(1 for t in trace if t.get("via") == "code")})
+                return PatternResult(
+                    answer=f"(no result: sub-question {subq!r} produced no value)",
+                    trace=trace, data=env)
+            sub_calls = _model_calls(sub) or 0
+            model_calls += sub_calls
+            env[st.out] = value
+            trace.append({"step": st.out, "via": "sub", "query": subq, "output": value,
+                          "model_calls": sub_calls})
         else:
             raise TypeError(f"unknown step type: {type(st).__name__}")
 
@@ -118,6 +150,7 @@ def run_plan(plan: Plan, bound_inputs: dict, *, shot=one_shot,
     trace.append({"step": "summary", "model_calls": model_calls, "code_steps": code_steps})
 
     ans = env[plan.answer_ref]
+    env["__value__"] = ans  # raw (pre-format) answer, so a SubStep can compose on it
     fmt = plan.answer_format
     if callable(fmt):
         answer = fmt(ans)
@@ -126,6 +159,17 @@ def run_plan(plan: Plan, bound_inputs: dict, *, shot=one_shot,
     else:
         answer = str(ans)
     return PatternResult(answer=answer, trace=trace, data=env)
+
+
+def _run_subquery(subq: str, orchestrator: str | None):
+    """Route (or force) a sub-question to an orchestrator and run it. Deferred imports avoid
+    the router/registry ↔ compiled import cycle."""
+    from . import registry, router
+    if orchestrator:
+        orch = registry.get(orchestrator)
+        return orch.run(subq) if orch else None
+    m = router.recognize(subq)
+    return m.orchestrator.run(subq) if m else None
 
 
 def dispatch(bind_result, *, shot=_no_model, parse_message="could not parse the inputs"):
@@ -167,6 +211,28 @@ def explain(message: str) -> PatternResult:
                                 {"step": "summary", "model_calls": 0}])
 
 
+def clarify(missing: dict) -> PatternResult:
+    """A model-free NEEDS-INPUT result: the query TYPE is recognized but required field(s)
+    are missing — ask the user rather than declining.
+
+    `missing` maps each field → (question, append_template). The append_template formats the
+    user's answer into text the EXISTING bind already parses (e.g. "{} kg"), so re-running is
+    just `query + appended text` — no new parser. Programmatic callers read `needs_input()`.
+    """
+    fields = ", ".join(missing)
+    return PatternResult(answer=f"(needs input: {fields})",
+                         trace=[{"step": "needs_input", "missing": missing},
+                                {"step": "summary", "model_calls": 0}])
+
+
+def needs_input(result: PatternResult) -> dict | None:
+    """The {field: (question, append_template)} of a clarify result, else None."""
+    for e in result.trace:
+        if e.get("step") == "needs_input":
+            return e["missing"]
+    return None
+
+
 def run_guarded(bind_result, plan, *, validate=None, shot=_no_model,
                 parse_message="could not parse the required inputs from the query"):
     """The standard coded-orchestrator runner: bind → domain-validate → plan.
@@ -190,13 +256,17 @@ def run_guarded(bind_result, plan, *, validate=None, shot=_no_model,
                     prelude_model_calls=calls)
 
 
+def _model_calls(result: PatternResult) -> int | None:
+    for entry in reversed(result.trace):
+        if entry.get("step") == "summary":
+            return entry.get("model_calls", 0)
+    return None  # unknown: not a compiled plan
+
+
 def model_calls(result: PatternResult) -> int | None:
     """Model-call count from a compiled PatternResult's trace summary.
 
     Returns None for a non-compiled result (a pattern orchestrator with no per-step
     provenance) — we must NOT claim "0 model calls" when we simply can't see them.
     """
-    for entry in reversed(result.trace):
-        if entry.get("step") == "summary":
-            return entry.get("model_calls", 0)
-    return None  # unknown: not a compiled plan
+    return _model_calls(result)

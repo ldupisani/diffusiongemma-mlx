@@ -7,8 +7,8 @@ the Pythagorean hypotenuse.
 """
 
 from reasoning import engine
-from reasoning.bind import bind_geometry, validate_geometry
-from reasoning.compiled import CodeStep, Inp, Lit, Plan, Step, explain, run_guarded
+from reasoning.bind import bind_geometry, clarify_geometry, validate_geometry
+from reasoning.compiled import CodeStep, Inp, Lit, Plan, Step, clarify, explain, run_guarded
 
 META = {
     "id": "geometry",
@@ -41,9 +41,15 @@ def precondition(query):
     return bind_geometry(query)[0]
 
 
+clarify_probe = clarify_geometry  # routed only when nothing can ANSWER (a lower router tier)
+
+
 def run(query):
     ok, data, via, _ = bind_geometry(query)
     if not ok:
+        missing = clarify_geometry(query)
+        if missing:
+            return clarify(missing)
         return explain("could not parse the shape and its dimensions")
     plan = Plan(
         steps=[

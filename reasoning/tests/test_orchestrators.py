@@ -260,6 +260,9 @@ CASES = [
     ("What is 100 divided by 4 plus 7?", "32", "expression"),
     ("What is 3 times 4 plus 5 times 6?", "42", "expression"),
     ("What is 2 to the power of 10 minus 24?", "1000", "expression"),
+    # composed: delegates the unit conversion to unit_conversion via a SubStep (0 model calls)
+    ("What is the total cost of 10 miles at $3 per km?", "$48.27", "converted_cost"),
+    ("What is the cost of 5 miles at $2 per km?", "$16.1", "converted_cost"),
 ]
 
 
