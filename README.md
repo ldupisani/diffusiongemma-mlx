@@ -200,6 +200,23 @@ used 0 model calls — the capability-gap gate across the whole graph (currently
 model-free vs Claude). The comparator is tolerant (numeric/normalized-string/yes-no verdict); the
 teacher's final answer is taken as its last line when it skips the `ANSWER:` marker.
 
+**Multi-step reasoning, minimal LLM.** Beyond single-orchestrator leaves, the graph now composes:
+- **Compound arithmetic** — `expression` evaluates full order-of-operations ("15% of 200 plus 10",
+  "(5+3)*2-4") via a recursive-descent parser (`skills/expr.py`). 0 model calls.
+- **Sub-orchestrator composition** — a `SubStep` lets one plan delegate a sub-question to another
+  orchestrator (finally using `sub_orchestrators`); e.g. `converted_cost` delegates a unit
+  conversion then multiplies. Model-free iff its parts are (the sub-run's call tally folds in).
+- **Ask for missing info** — a recognized type missing a field returns a `clarify` result
+  (`{field: (question, template)}`); `cli run` prompts and re-runs by appending the answer in a
+  form the existing bind already parses. A new router tier, below answering, above fallback.
+- **Cross-domain decomposition** — `decompose.py` splits a compound query and routes each clause to
+  a coded orchestrator: 0 calls (code-first split) or ≤1 (a single model call only SPLITS; coded
+  orchestrators solve the parts — vs the old N+2). The router is a five-tier cascade:
+  compose → domain → bind-gated → clarify → fallback.
+- **Goal-directed plan synthesis** (`synthesize.py`, prototype) — BFS over skills typed by semantic
+  roles finds the shortest operation path from typed knowns to a goal, re-deriving plans the
+  orchestrators hand-write (e.g. discount→tax). Memoized; model-free; side-by-side until generalized.
+
 Modules: `engine.py` (one-shot / one-shot-N thinking-off calls via the sidecar; N varies the
 **seed** for diverse candidates), `patterns.py` (decompose-solve-combine, map-reduce,
 generate-rank-select, self-consistency, extract-validate-repair), `registry.py` (orchestrators as
