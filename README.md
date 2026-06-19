@@ -1,7 +1,15 @@
 # DiffusionGemma on Apple Silicon (MLX)
 
+![reasoning fidelity vs Claude](https://img.shields.io/badge/fidelity_vs_Claude-37%2F37-brightgreen)
+![model-free](https://img.shields.io/badge/model--free-37%2F37-blue)
+![coded skills](https://img.shields.io/badge/skills-141-informational)
+
 Running `google/diffusiongemma-26B-A4B-it` — a 26B Mixture-of-Experts **diffusion**
 language model (~3.8B active params) — locally via `mlx-vlm` on an M3 Max (36 GB).
+
+> **Reasoning compiler:** 37/37 coded orchestrators reproduce the Claude teacher's answer
+> ([`reasoning.cli eval-all`](#reasoning-compiler-reasoning)), each at **0 model calls** (sidecar
+> cold). Static badges — regenerate with `eval-all` after changes.
 
 ## What's different from a normal LLM
 DiffusionGemma is **not autoregressive**. It fills a fixed-size *canvas* of masked
