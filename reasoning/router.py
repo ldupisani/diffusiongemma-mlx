@@ -186,8 +186,17 @@ def recognize(
     # otherwise tie every new orchestrator). Fall to fallbacks only when nothing specific
     # matches above threshold.
     specific = [o for o in orchs if not o.fallback]
-    match = matcher.select(query, specific) if specific else None
+    # Three tiers. (1) Precise DOMAIN orchestrators win first — so a domain query that merely
+    # contains "5 times 2" isn't hijacked by arithmetic. (2) BIND-GATED orchestrators
+    # (arithmetic/expression) whose precondition passed a conservative parse are dispositive
+    # when no domain orchestrator claimed the query — route on the parse, ignoring the score
+    # threshold (a pure-symbolic "(5+3)*2-4" has no words to match). (3) Generic fallbacks.
+    domain = [o for o in specific if not o.bind_gated]
+    match = matcher.select(query, domain) if domain else None
     if match is not None:
         return match
+    gated = [o for o in specific if o.bind_gated]
+    if gated:
+        return matcher.select(query, gated) or Match(gated[0], score=1.0, via="bind")
     fallback = [o for o in orchs if o.fallback]
     return matcher.select(query, fallback) if fallback else None

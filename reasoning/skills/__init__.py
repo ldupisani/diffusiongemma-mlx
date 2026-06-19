@@ -8,8 +8,8 @@ from .base import SKILLS, Skill, call, get, register
 
 # Import families for their registration side effects (must come after base import).
 from . import (  # noqa: E402,F401
-    arithmetic, bases, chemistry, clock, coord, dates, finance, geometry, health, logic,
-    number_theory, physics, probability, ratio, sets, stats, text, trig, units,
+    arithmetic, bases, chemistry, clock, coord, dates, expr, finance, geometry, health,
+    logic, number_theory, physics, probability, ratio, sets, stats, text, trig, units,
 )
 
 __all__ = ["SKILLS", "Skill", "call", "get", "register"]

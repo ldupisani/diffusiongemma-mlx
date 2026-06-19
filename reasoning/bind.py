@@ -1230,4 +1230,61 @@ def bind_arithmetic(query: str) -> tuple[bool, dict | None, str, int]:
                           "a": float(m[1]), "b": float(m[2])})
     if len(cands) != 1:  # zero (not arithmetic) or several (compound) → bail to the model
         return False, None, "code", 0
+    if bind_expression(query)[0]:  # a compound expression (e.g. "(5+3)*2-4") → `expression`
+        return False, None, "code", 0  # owns it; arithmetic only claims a lone operation
     return True, cands[0], "code", 0
+
+
+# --- compound arithmetic expression family --------------------------------------------
+# `arithmetic` handles ONE operation; `expression` handles ≥2 (full order-of-operations) by
+# normalizing NL operators into a symbolic string and evaluating with skills/expr.py.
+from .skills import expr as _expr  # noqa: E402
+
+_EXPR_LEADIN = re.compile(r"(?i)\b(what(?:'s| is)|whats|calculate|evaluate|compute|"
+                          r"the value of|how much is)\b")
+_EXPR_SQRT_NUM = re.compile(r"(?i)square root of\s+(\d+\.?\d*)")
+_EXPR_NL = [
+    (re.compile(r"(?i)\bto the power of\b|\braised to(?: the power of)?\b"), "^"),
+    (re.compile(r"(?i)\bplus\b|\badded to\b"), "+"),
+    (re.compile(r"(?i)\bminus\b"), "-"),
+    (re.compile(r"(?i)\btimes\b|\bmultiplied by\b"), "*"),
+    (re.compile(r"(?i)\bdivided by\b"), "/"),
+]
+_EXPR_PCT = re.compile(r"(?i)(\d+\.?\d*)\s*(?:percent|%)\s+of\s+")
+
+
+def _normalize_expression(query: str) -> tuple[str, bool]:
+    """NL → symbolic. Returns (symbolic, used_nl): used_nl is True if any natural-language
+    operator word was rewritten — an unambiguous signal the query is arithmetic (vs a bare
+    "2024-01-01" that only *looks* like subtraction)."""
+    s = _EXPR_LEADIN.sub(" ", query).strip().rstrip("?. ").replace(",", "")
+    used_nl = False
+    for pat, sym in [(_EXPR_SQRT_NUM, r"sqrt(\1)")] + _EXPR_NL:
+        s2 = pat.sub(sym, s)
+        if s2 != s:
+            used_nl, s = True, s2
+    s2 = _EXPR_PCT.sub(lambda m: f"({float(m[1]) / 100})*", s)  # "15% of " → "(0.15)*"
+    if s2 != s:
+        used_nl, s = True, s2
+    return s, used_nl
+
+
+def bind_expression(query: str) -> tuple[bool, dict | None, str, int]:
+    """Bind a COMPOUND arithmetic expression (≥2 ops). Conservative guard so it never hijacks
+    dates/IDs/ranges that merely look like subtraction."""
+    symbolic, used_nl = _normalize_expression(query)
+    # guard 1: stray words (other than sqrt) ⇒ a different domain ("days between … and …")
+    if re.search(r"[A-Za-z]", re.sub(r"(?i)sqrt", "", symbolic)):
+        return False, None, "code", 0
+    # guard 2: a purely symbolic string with only digits/dots/dashes is a date/version/range,
+    # not an expression — require a strong operator unless an NL operator word was used.
+    if not used_nl and not re.search(r"[+*/^()%]", symbolic):
+        return False, None, "code", 0
+    try:
+        ast = _expr.compile_expr(symbolic)
+    except Exception:
+        return False, None, "code", 0
+    if _expr.op_count(ast) < 2:  # single op → leave it to `arithmetic`
+        return False, None, "code", 0
+    return True, {"skill": "expr.evaluate", "dims": ["expression"],
+                  "expression": symbolic}, "code", 0

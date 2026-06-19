@@ -254,6 +254,12 @@ CASES = [
     ("What is 2 to the power of 10?", "1024", "arithmetic"),
     ("What is the square root of 144?", "12", "arithmetic"),
     ("What is 15% of 200?", "30", "arithmetic"),
+    # compound arithmetic expressions (≥2 ops, order-of-operations) — `expression` orchestrator
+    ("What is (5 + 3) * 2 - 4?", "12", "expression"),
+    ("What is 15% of 200 plus 10?", "40", "expression"),
+    ("What is 100 divided by 4 plus 7?", "32", "expression"),
+    ("What is 3 times 4 plus 5 times 6?", "42", "expression"),
+    ("What is 2 to the power of 10 minus 24?", "1000", "expression"),
 ]
 
 

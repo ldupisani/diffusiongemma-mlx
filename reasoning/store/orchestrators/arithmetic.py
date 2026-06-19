@@ -27,6 +27,7 @@ META = {
                  "square", "root"],
     "sub_orchestrators": [],
     "model_free": True,
+    "bind_gated": True,  # the conservative single-op parse is dispositive for routing
 }
 
 
