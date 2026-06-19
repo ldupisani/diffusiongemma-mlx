@@ -7,7 +7,7 @@ mass, labelled numbers otherwise); run() applies the skill and labels the result
 
 from reasoning import engine
 from reasoning.bind import bind_chemistry
-from reasoning.compiled import CodeStep, Inp, Lit, Plan, Step, run_guarded
+from reasoning.compiled import CodeStep, Inp, Lit, Plan, Step, explain, run_guarded
 
 META = {
     "id": "chemistry",
@@ -37,10 +37,7 @@ def precondition(query):
 def run(query):
     ok, data, via, _ = bind_chemistry(query)
     if not ok:
-        from reasoning.patterns import PatternResult
-        return PatternResult(answer="(no result: could not parse the chemistry inputs)",
-                             trace=[{"step": "bind", "via": via, "ok": False},
-                                    {"step": "summary", "model_calls": 0}])
+        return explain("could not parse the chemistry inputs")
     plan = Plan(
         steps=[
             CodeStep(data["skill"], [Inp(d) for d in data["dims"]], out="v"),

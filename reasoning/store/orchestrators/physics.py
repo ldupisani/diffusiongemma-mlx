@@ -7,7 +7,7 @@ applies the matching skill and labels the answer with the result's unit.
 
 from reasoning import engine
 from reasoning.bind import bind_physics
-from reasoning.compiled import CodeStep, Inp, Lit, Plan, Step, run_guarded
+from reasoning.compiled import CodeStep, Inp, Lit, Plan, Step, explain, run_guarded
 
 META = {
     "id": "physics",
@@ -43,10 +43,7 @@ def precondition(query):
 def run(query):
     ok, data, via, _ = bind_physics(query)
     if not ok:
-        from reasoning.patterns import PatternResult
-        return PatternResult(answer="(no result: could not parse the physics quantities)",
-                             trace=[{"step": "bind", "via": via, "ok": False},
-                                    {"step": "summary", "model_calls": 0}])
+        return explain("could not parse the physics quantities")
     plan = Plan(
         steps=[
             CodeStep(data["skill"], [Inp(d) for d in data["dims"]], out="v"),

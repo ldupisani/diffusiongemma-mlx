@@ -2,7 +2,7 @@
 
 from reasoning import engine
 from reasoning.bind import bind_count_occurrences
-from reasoning.compiled import CodeStep, Inp, Plan, run_plan
+from reasoning.compiled import CodeStep, Inp, Plan, explain, run_plan
 
 META = {
     "id": "count_occurrences",
@@ -33,8 +33,5 @@ def precondition(query):
 def run(query):
     ok, data, via, _bind_calls = bind_count_occurrences(query)
     if not ok:
-        from reasoning.patterns import PatternResult
-        return PatternResult(answer="(could not find two quoted strings in the query)",
-                             trace=[{"step": "bind", "via": via, "ok": False},
-                                    {"step": "summary", "model_calls": 0}])
+        return explain("could not find two quoted strings in the query")
     return run_plan(PLAN, data, shot=engine._no_model)

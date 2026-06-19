@@ -47,8 +47,10 @@ def run(query):
     ok, data, via, bind_calls = bind_discount_tax(query)
     if not ok:
         # bind failed even via the model — nothing to compute deterministically
+        # custom result (not explain()) to preserve bind_calls: a model-bind that failed
+        # may have made model calls, which explain() would report as 0.
         from reasoning.patterns import PatternResult
-        return PatternResult(answer="(could not parse a price/discount/tax from the query)",
+        return PatternResult(answer="(no result: could not parse a price, discount, and tax)",
                              trace=[{"step": "bind", "via": via, "ok": False},
                                     {"step": "summary", "model_calls": bind_calls}])
     # coded bind → forbid model calls (invariant); model bind → allow them downstream

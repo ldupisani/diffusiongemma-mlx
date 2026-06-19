@@ -2,7 +2,7 @@
 
 from reasoning import engine
 from reasoning.bind import bind_percent_change
-from reasoning.compiled import CodeStep, Inp, Lit, Plan, Step, run_plan
+from reasoning.compiled import CodeStep, Inp, Lit, Plan, Step, explain, run_plan
 
 META = {
     "id": "percentage_change",
@@ -37,8 +37,5 @@ def precondition(query):
 def run(query):
     ok, data, via, _bind_calls = bind_percent_change(query)
     if not ok:
-        from reasoning.patterns import PatternResult
-        return PatternResult(answer="(could not parse 'from <old> to <new>' from the query)",
-                             trace=[{"step": "bind", "via": via, "ok": False},
-                                    {"step": "summary", "model_calls": 0}])
+        return explain("could not parse 'from <old> to <new>' from the query")
     return run_plan(PLAN, data, shot=engine._no_model)

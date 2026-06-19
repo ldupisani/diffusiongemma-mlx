@@ -8,7 +8,7 @@ list of any length, with zero model calls.
 
 from reasoning import engine
 from reasoning.bind import bind_list_statistic, detect_stat_op
-from reasoning.compiled import CodeStep, Inp, Plan, run_plan
+from reasoning.compiled import CodeStep, Inp, Plan, explain, run_plan
 
 META = {
     "id": "list_statistic",
@@ -38,10 +38,7 @@ def precondition(query):
 def run(query):
     ok, data, via, _bind_calls = bind_list_statistic(query)
     if not ok:
-        from reasoning.patterns import PatternResult
-        return PatternResult(answer="(could not find a statistic + ≥2 numbers in the query)",
-                             trace=[{"step": "bind", "via": via, "ok": False},
-                                    {"step": "summary", "model_calls": 0}])
+        return explain("could not find a statistic and at least two numbers in the query")
     plan = Plan(steps=[CodeStep(data["skill"], [Inp("nums")], out="r")],
                 answer_ref="r", answer_format="{:g}")
     return run_plan(plan, {"nums": data["nums"]}, shot=engine._no_model)

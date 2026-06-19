@@ -7,7 +7,7 @@ skill. (Boolean palindrome and 3-arg replace are separate — different return t
 
 from reasoning import engine
 from reasoning.bind import bind_string_op, detect_text_op
-from reasoning.compiled import CodeStep, Inp, Plan, run_guarded
+from reasoning.compiled import CodeStep, Inp, Plan, explain, run_guarded
 
 META = {
     "id": "string_operation",
@@ -40,9 +40,6 @@ def precondition(query):
 def run(query):
     ok, data, via, _ = bind_string_op(query)
     if not ok:
-        from reasoning.patterns import PatternResult
-        return PatternResult(answer="(no result: need one quoted string and a known operation)",
-                             trace=[{"step": "bind", "via": via, "ok": False},
-                                    {"step": "summary", "model_calls": 0}])
+        return explain("need one quoted string and a known operation")
     plan = Plan(steps=[CodeStep(data["skill"], [Inp("text")], out="r")], answer_ref="r")
     return run_guarded((ok, data, via, 0), plan, shot=engine._no_model)

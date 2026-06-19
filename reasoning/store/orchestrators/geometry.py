@@ -8,7 +8,7 @@ the Pythagorean hypotenuse.
 
 from reasoning import engine
 from reasoning.bind import bind_geometry, validate_geometry
-from reasoning.compiled import CodeStep, Inp, Lit, Plan, Step, run_guarded
+from reasoning.compiled import CodeStep, Inp, Lit, Plan, Step, explain, run_guarded
 
 META = {
     "id": "geometry",
@@ -44,10 +44,7 @@ def precondition(query):
 def run(query):
     ok, data, via, _ = bind_geometry(query)
     if not ok:
-        from reasoning.patterns import PatternResult
-        return PatternResult(answer="(no result: could not parse the shape and its dimensions)",
-                             trace=[{"step": "bind", "via": via, "ok": False},
-                                    {"step": "summary", "model_calls": 0}])
+        return explain("could not parse the shape and its dimensions")
     plan = Plan(
         steps=[
             CodeStep(data["skill"], [Inp(d) for d in data["dims"]], out="v"),
