@@ -132,6 +132,20 @@ CASES = [
     ("In how many ways can 5 distinct items be arranged?", "120", "number_theory"),
     ("What is 7 factorial?", "5040", "number_theory"),
     ("Is 100 a perfect square?", "Yes, 100 is a perfect square.", "number_theory"),
+    # chemistry / stoichiometry series (captured)
+    ("What is the molar mass of H2O?", "18.02 g/mol", "chemistry"),
+    ("What is the molar mass of CO2?", "44.01 g/mol", "chemistry"),
+    ("What is the molar mass of NaCl?", "58.44 g/mol", "chemistry"),
+    ("What is the molar mass of C6H12O6?", "180.16 g/mol", "chemistry"),
+    ("What is the molar mass of H2SO4?", "98.07 g/mol", "chemistry"),
+    ("How many moles are in 36 grams of water given a molar mass of 18 g/mol?", "2 mol",
+     "chemistry"),
+    ("What is the molarity of 2 moles of solute dissolved in 4 liters of solution?", "0.5 M",
+     "chemistry"),
+    ("What is the pH of a solution with a hydrogen ion concentration of 0.001 M?", "3",
+     "chemistry"),
+    ("What is the final concentration when 50 mL of 2 M solution is diluted to 200 mL?", "0.5 M",
+     "chemistry"),
 ]
 
 

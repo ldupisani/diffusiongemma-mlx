@@ -350,6 +350,59 @@ def bind_number_theory(query: str) -> tuple[bool, dict | None, str, int]:
     return True, data, "code", 0
 
 
+# --- chemistry / stoichiometry family -------------------------------------------------
+_GRAMS = re.compile(r"(\d+(?:\.\d+)?)\s*g(?:rams)?\b")
+_GMOL = re.compile(r"(\d+(?:\.\d+)?)\s*g/mol")
+_MOLES_N = re.compile(r"(\d+(?:\.\d+)?)\s*mol(?:es)?\b")
+_LITERS_N = re.compile(r"(\d+(?:\.\d+)?)\s*(?:liters?|litres?|l\b)")
+_MOLAR_M = re.compile(r"(\d*\.?\d+)\s*M\b")        # molar concentration, e.g. "0.001 M"
+_ML_N = re.compile(r"(\d+(?:\.\d+)?)\s*mL")
+_FORMULA_CAND = re.compile(r"(?:[A-Z][a-z]?\d*|\([^)]*\)\d*)+")
+
+
+def _find_formula(query: str):
+    """The first capitalized token that parses to KNOWN elements (so 'What' → 'Wh' is
+    rejected, 'H2O' is accepted) — the validation IS the disambiguation."""
+    from .skills.chemistry import ATOMIC, parse_formula
+    for tok in _FORMULA_CAND.findall(query):
+        counts = parse_formula(tok)
+        if counts and all(el in ATOMIC for el in counts):
+            return tok
+    return None
+
+
+def bind_chemistry(query: str) -> tuple[bool, dict | None, str, int]:
+    q = query.lower()
+    # order disambiguates shared words: "molarity"/"diluted" before "moles"/"molar mass"
+    if "molarity" in q:
+        mol, vol = _MOLES_N.search(query), _LITERS_N.search(query)
+        if mol and vol:
+            return True, {"skill": "chem.molarity", "dims": ["moles", "volume"], "suffix": " M",
+                          "moles": float(mol[1]), "volume": float(vol[1])}, "code", 0
+    elif "diluted" in q or "dilution" in q:
+        c1, mls = _MOLAR_M.search(query), _ML_N.findall(query)
+        if c1 and len(mls) >= 2:
+            return True, {"skill": "chem.dilution_concentration", "dims": ["c1", "v1", "v2"],
+                          "suffix": " M", "c1": float(c1[1]), "v1": float(mls[0]),
+                          "v2": float(mls[1])}, "code", 0
+    elif "mole" in q:
+        mass, mm = _GRAMS.search(query), _GMOL.search(query)
+        if mass and mm:
+            return True, {"skill": "chem.moles", "dims": ["mass", "molar_mass"], "suffix": " mol",
+                          "mass": float(mass[1]), "molar_mass": float(mm[1])}, "code", 0
+    elif "molar mass" in q:
+        f = _find_formula(query)
+        if f:
+            return True, {"skill": "chem.molar_mass", "dims": ["formula"], "suffix": " g/mol",
+                          "formula": f}, "code", 0
+    elif re.search(r"\bph\b", q):
+        c = _MOLAR_M.search(query)
+        if c:
+            return True, {"skill": "chem.ph", "dims": ["concentration"], "suffix": "",
+                          "concentration": float(c[1])}, "code", 0
+    return False, None, "code", 0
+
+
 # --- physics-formula family -----------------------------------------------------------
 # Quantities are cued by their UNIT, so each input is "the number before unit X". Patterns
 # are case-sensitive (kg/N/m/s have meaningful case) and ordered so m/s^2 isn't read as m/s.
