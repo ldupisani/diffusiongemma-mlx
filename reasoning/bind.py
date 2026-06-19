@@ -409,10 +409,13 @@ _BASES = {"binary": 2, "hexadecimal": 16, "hex": 16, "octal": 8, "decimal": 10}
 _BASE_WORD = re.compile(r"binary|hexadecimal|hex|octal|decimal", re.IGNORECASE)
 _TO_BASE = re.compile(r"\b(?:to|into|in)\s+(binary|hexadecimal|hex|octal|decimal)\b",
                       re.IGNORECASE)
-# strip base names + structural words so the value token is what remains
+# strip base names + structural words so the value token is what remains. NOTE: the
+# articles "a"/"an" are deliberately NOT stripped — "A" is also the hex digit ten; instead
+# value selection (below) prefers a non-article token, treating a lone "a"/"A" as the value
+# only when nothing else qualifies.
 _RADIX_NOISE = re.compile(
     r"\b(?:binary|hexadecimal|hex|octal|decimal|convert|number|the|what|is|from|to|into|"
-    r"in|a|an|of|value)\b", re.IGNORECASE)
+    r"in|of|value)\b", re.IGNORECASE)
 
 
 def bind_radix(query: str) -> tuple[bool, dict | None, str, int]:
@@ -428,14 +431,19 @@ def bind_radix(query: str) -> tuple[bool, dict | None, str, int]:
             from_base = _BASES[m.group().lower()]
             break
     cleaned = _RADIX_NOISE.sub(" ", query)
+    valid = []
     for tok in re.findall(r"[0-9A-Fa-f]+", cleaned):
         try:
             int(tok, from_base)  # the value must be valid in its source base
+            valid.append(tok)
         except ValueError:
             continue
-        return True, {"skill": "radix.convert", "dims": ["value", "from_base", "to_base"],
-                      "value": tok, "from_base": from_base, "to_base": to_base}, "code", 0
-    return False, None, "code", 0
+    # prefer a real value over a stray article; a lone "a"/"A" is the value only if alone
+    value = next((t for t in valid if t.lower() not in ("a", "an")), valid[0] if valid else None)
+    if value is None:
+        return False, None, "code", 0
+    return True, {"skill": "radix.convert", "dims": ["value", "from_base", "to_base"],
+                  "value": value, "from_base": from_base, "to_base": to_base}, "code", 0
 
 
 # --- physics-formula family -----------------------------------------------------------

@@ -154,6 +154,7 @@ CASES = [
     ("Convert 64 to octal.", "100", "base_conversion"),
     ("Convert the decimal number 100 to binary.", "1100100", "base_conversion"),
     ("Convert binary 11111111 to decimal.", "255", "base_conversion"),
+    ("Convert hexadecimal A to decimal.", "10", "base_conversion"),  # hex digit A vs article "a"
     # data-size conversion (captured) — reuses the units factor table
     ("How many bytes are in 5 kilobytes?", "5120 bytes", "unit_conversion"),
     ("Convert 2 gigabytes to megabytes.", "2048 MB", "unit_conversion"),
