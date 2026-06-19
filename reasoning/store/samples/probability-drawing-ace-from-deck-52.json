@@ -1,0 +1,9 @@
+{
+  "id": "probability-drawing-ace-from-deck-52",
+  "query": "What is the probability of drawing an ace from a deck of 52 cards?",
+  "reasoning": "1. Recall how many aces are in a standard deck of cards. (",
+  "answer": "4)\n2. Divide 4 (aces, from step 1) by 52 (total cards). (Answer: 0.0769)\n\nANSWER:\n4/52 = 1/13 \u2248 0.0769 (about 7.7%)",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820226
+}

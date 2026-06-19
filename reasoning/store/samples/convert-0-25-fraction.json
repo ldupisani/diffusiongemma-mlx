@@ -1,0 +1,9 @@
+{
+  "id": "convert-0-25-fraction",
+  "query": "Convert 0.25 to a fraction.",
+  "reasoning": "1. Recall that the digits after the decimal point in 0.25 occupy the hundredths place, so 0.25 equals 25 over 100. Write the fraction 25/100.\n2. Find the greatest common divisor of 25 and 100.",
+  "answer": "25.\n3. Divide the numerator: 25 \u00f7 25 = 1.\n4. Divide the denominator: 100 \u00f7 25 = 4.\n5. Combine the results from steps 3 and 4 into the fraction: 1/4.\nANSWER:\n1/4",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820416
+}

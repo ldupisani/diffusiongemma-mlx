@@ -1,0 +1,9 @@
+{
+  "id": "midpoint-between-4-2-4-2",
+  "query": "What is the midpoint between (-4,2) and (4,-2)?",
+  "reasoning": "1. Add the x-coordinates: -4 + 4.\n2. Divide the result from step 1 (0) by 2.\n3. Add the y-coordinates: 2 + (-2).\n4. Divide the result from step 3 (0) by 2.\n5. Write the midpoint as the pair (result from step 2, result from step 4) = (0, 0).",
+  "answer": "(0, 0)",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820717
+}

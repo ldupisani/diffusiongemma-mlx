@@ -1,0 +1,9 @@
+{
+  "id": "25-people-like-rock-30-like",
+  "query": "25 people like rock and 30 like jazz, with 10 liking both. How many people are there if everyone likes at least one?",
+  "reasoning": "1. Add 25 (rock) and 30 (jazz). Result: 55.\n2. Subtract 10 (liking both) from 55 (from step 1). Result: 45.",
+  "answer": "45",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820845
+}

@@ -1,0 +1,9 @@
+{
+  "id": "bmi-person-who-weighs-70-kg",
+  "query": "What is the BMI of a person who weighs 70 kg and is 1.75 meters tall?",
+  "reasoning": "1. Multiply 1.75 by 1.75 to get the height squared: 1.75 \u00d7 1.75 = 3.0625.\n2. Divide the weight 70 by 3.0625 (from step 1): 70 \u00f7 3.0625 = 22.86.",
+  "answer": "22.86",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820288
+}

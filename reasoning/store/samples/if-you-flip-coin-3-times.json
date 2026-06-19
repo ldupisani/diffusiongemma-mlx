@@ -1,0 +1,9 @@
+{
+  "id": "if-you-flip-coin-3-times",
+  "query": "If you flip a coin 3 times, what is the probability of getting all heads?",
+  "reasoning": "1. Recall the probability of getting heads on a single fair coin flip: 1/2.\n2. Multiply 1/2 (from step 1) by 1/2, giving 1/4 (probability of heads on the first two flips).\n3. Multiply 1/4 (from step 2) by 1/2, giving 1/8 (probability of heads on all three flips).\n4. Divide 1 by 8 to express 1/8 as a decimal: 0.125.",
+  "answer": "1/8 (0.125)",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820281
+}

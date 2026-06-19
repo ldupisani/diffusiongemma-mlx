@@ -1,0 +1,9 @@
+{
+  "id": "ideal-body-weight-man-who-180",
+  "query": "What is the ideal body weight for a man who is 180 cm tall?",
+  "reasoning": "1. Recall the Devine formula for ideal body weight (men): IBW = 50 kg + 2.3 kg \u00d7 (height in inches \u2212 60).\n2. Convert height to inches: divide 180 by 2.54. (Result: 70.87)\n3. Subtract 60 from 70.87 (from step 2). (Result: 10.87)\n4. Multiply 10.87 (from step 3) by 2.3. (Result: 25.0)\n5. Add 50 to 25.0 (from step 4). (Result: 75.0)",
+  "answer": "About 75 kg",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820347
+}

@@ -1,0 +1,9 @@
+{
+  "id": "group-100-70-speak-english-40",
+  "query": "In a group of 100, 70 speak English, 40 speak French, and 25 speak both. How many speak only English?",
+  "reasoning": "1. Subtract 25 (speak both English and French) from 70 (speak English): 70 \u2212 25 = 45.",
+  "answer": "45",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820833
+}

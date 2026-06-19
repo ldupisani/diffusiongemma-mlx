@@ -1,0 +1,9 @@
+{
+  "id": "if-recipe-4-servings-needs-2",
+  "query": "If a recipe for 4 servings needs 2 cups of flour, how much for 6 servings?",
+  "reasoning": "1. Divide 2 cups by 4 servings to get cups per serving: 2 \u00f7 4 = 0.5.\n2. Multiply 0.5 (from step 1) by 6 servings: 0.5 \u00d7 6 = 3.",
+  "answer": "3 cups",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820427
+}

@@ -1,0 +1,9 @@
+{
+  "id": "80-students-50-passed-math-45",
+  "query": "Of 80 students, 50 passed math, 45 passed english, and 30 passed both. How many passed at least one?",
+  "reasoning": "1. Add 50 (passed math) and 45 (passed english). Result: 95.\n2. Subtract 30 (passed both) from 95 (from step 1). Result: 65.",
+  "answer": "65",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820838
+}

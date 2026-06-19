@@ -1,0 +1,9 @@
+{
+  "id": "minutes-between-9-15-am-10",
+  "query": "How many minutes are between 9:15 AM and 10:45 AM?",
+  "reasoning": "1. Subtract the hour 9 from the hour 10 (from 9:15 AM and 10:45 AM): 10 \u2212 9 = 1.\n2. Multiply 1 hour (from step 1) by 60 to get minutes: 1 \u00d7 60 = 60.\n3. Subtract the minute 15 from the minute 45 (from 9:15 and 10:45): 45 \u2212 15 = 30.\n4. Add 60 (from step 2) and 30 (from step 3): 60 + 30 = 90.",
+  "answer": "90 minutes",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820761
+}

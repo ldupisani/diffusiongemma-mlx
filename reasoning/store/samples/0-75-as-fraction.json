@@ -1,0 +1,9 @@
+{
+  "id": "0-75-as-fraction",
+  "query": "What is 0.75 as a fraction?",
+  "reasoning": "1. Write 0.75 as a fraction over 100 by reading its two decimal digits: 75/100.\n2. Find the greatest common divisor of 75 and 100. (Recall: GCD of 75 and 100 is 25.)\n3. Divide the numerator: 75 \u00f7 25 = 3.\n4. Divide the denominator: 100 \u00f7 25 = 4.\n5. Combine 3 (from step 3) over 4 (from step 4) to write the simplified fraction: 3/4.",
+  "answer": "3/4",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820387
+}

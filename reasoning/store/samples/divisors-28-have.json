@@ -1,0 +1,9 @@
+{
+  "id": "divisors-28-have",
+  "query": "How many divisors does 28 have?",
+  "reasoning": "1. Recall the prime factorization of 28. (",
+  "answer": "2 \u00d7 2 \u00d7 7)\n2. Write 2 \u00d7 2 \u00d7 7 (from step 1) using exponents. (Answer: 2\u00b2 \u00d7 7\u00b9)\n3. From 2\u00b2 \u00d7 7\u00b9 (step 2), list the exponents. (Answer: 2 and 1)\n4. Add 1 to the first exponent: 2 + 1.\n5. Add 1 to the second exponent: 1 + 1.\n6. Multiply the result of step 4 (3) by the result of step 5 (2).\nANSWER:\n6",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820172
+}

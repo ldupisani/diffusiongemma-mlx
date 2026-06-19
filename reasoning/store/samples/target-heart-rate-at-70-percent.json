@@ -1,0 +1,9 @@
+{
+  "id": "target-heart-rate-at-70-percent",
+  "query": "What is the target heart rate at 70 percent intensity for a 40 year old?",
+  "reasoning": "1. Subtract 40 from 220 to get the maximum heart rate: 220 \u2212 40 = 180.\n2. Multiply 180 (from step 1) by 0.70 to get the target heart rate: 180 \u00d7 0.70 = 126.",
+  "answer": "126 bpm",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820352
+}

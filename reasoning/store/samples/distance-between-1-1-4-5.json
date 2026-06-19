@@ -1,0 +1,9 @@
+{
+  "id": "distance-between-1-1-4-5",
+  "query": "What is the distance between (1,1) and (4,5)?",
+  "reasoning": "1. Subtract the x-coordinates: 4 \u2212 1 = 3.\n2. Subtract the y-coordinates: 5 \u2212 1 = 4.\n3. Square the result from step 1: 3 \u00d7 3 = 9.\n4. Square the result from step 2: 4 \u00d7 4 = 16.\n5. Add the results from steps 3 and 4: 9 + 16 = 25.\n6. Take the square root of 25 (from step 5): \u221a25 = 5.",
+  "answer": "5",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820687
+}

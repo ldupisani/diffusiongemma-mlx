@@ -1,0 +1,9 @@
+{
+  "id": "3-4-as-decimal",
+  "query": "What is 3/4 as a decimal?",
+  "reasoning": "1. Divide 3 by 4: 3 \u00f7 4 = 0.75.",
+  "answer": "0.75",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820381
+}

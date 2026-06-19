@@ -1,0 +1,9 @@
+{
+  "id": "6-00-pm-24-hour-time",
+  "query": "What is 6:00 PM in 24-hour time?",
+  "reasoning": "1. Recall the 24-hour conversion rule for PM times: for any PM hour except 12 PM, add 12 to the hour. State the hour: 6.\n2. Add 12 to 6 (the PM hour from step 1) to get 18.",
+  "answer": "18:00",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820797
+}

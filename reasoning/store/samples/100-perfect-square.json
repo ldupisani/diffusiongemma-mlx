@@ -1,0 +1,9 @@
+{
+  "id": "100-perfect-square",
+  "query": "Is 100 a perfect square?",
+  "reasoning": "1. Recall the square root of 100.\n2. Check whether the result from step 1 (10) is a whole number: answer yes or no.",
+  "answer": "Yes",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820206
+}

@@ -1,0 +1,9 @@
+{
+  "id": "group-30-people-18-like-coffee",
+  "query": "In a group of 30 people, 18 like coffee and 15 like tea, and 8 like both. How many like coffee or tea?",
+  "reasoning": "1. Add 18 (coffee) and 15 (tea). Result: 33.\n2. Subtract 8 (both, from step 1's total) from 33. Result: 25.",
+  "answer": "25",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820802
+}

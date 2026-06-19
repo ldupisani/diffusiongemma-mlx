@@ -1,0 +1,9 @@
+{
+  "id": "bmr-30-year-old-man-weighing",
+  "query": "What is the BMR of a 30 year old man weighing 80 kg and 180 cm tall?",
+  "reasoning": "1. State the Mifflin-St Jeor BMR formula for men: BMR = (10 \u00d7 weight in kg) + (6.25 \u00d7 height in cm) \u2212 (5 \u00d7 age) + 5.\n2. Multiply 10 \u00d7 80 (weight in kg) = 800.\n3. Multiply 6.25 \u00d7 180 (height in cm) = 1125.\n4. Multiply 5 \u00d7 30 (age) = 150.\n5. Add 800 (from step 2) + 1125 (from step 3) = 1925.\n6. Subtract: 1925 (from step 5) \u2212 150 (from step 4) = 1775.\n7. Add 1775 (from step 6) + 5 = 1780.",
+  "answer": "1780 kcal/day",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820327
+}

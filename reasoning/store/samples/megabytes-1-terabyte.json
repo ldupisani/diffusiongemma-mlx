@@ -1,0 +1,9 @@
+{
+  "id": "megabytes-1-terabyte",
+  "query": "How many megabytes are in 1 terabyte?",
+  "reasoning": "1. Recall: 1 terabyte equals 1024 gigabytes.\n2. Recall: 1 gigabyte equals 1024 megabytes.\n3. Multiply 1024 (gigabytes per terabyte, from step 1) by 1024 (megabytes per gigabyte, from step 2) to get megabytes in 1 terabyte.",
+  "answer": "1,048,576 megabytes",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820492
+}

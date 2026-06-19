@@ -1,0 +1,9 @@
+{
+  "id": "60-people-surveyed-35-like-apples",
+  "query": "60 people surveyed: 35 like apples, 40 like bananas, 20 like both. How many like neither?",
+  "reasoning": "1. Add the number who like apples and the number who like bananas: 35 + 40.\n2. Subtract the number who like both from the result of step 1 (75): 75 \u2212 20.\n3. Subtract the result of step 2 (55, the number who like at least one) from the total surveyed: 60 \u2212 55.",
+  "answer": "5",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820826
+}

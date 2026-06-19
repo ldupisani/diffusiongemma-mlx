@@ -1,0 +1,9 @@
+{
+  "id": "midpoint-0-0-10-10",
+  "query": "What is the midpoint of (0,0) and (10,10)?",
+  "reasoning": "1. Add the x-coordinates: 0 + 10.\n2. Divide the sum from step 1 (10) by 2.\n3. Add the y-coordinates: 0 + 10.\n4. Divide the sum from step 3 (10) by 2.\n5. Write the midpoint as an ordered pair using the result from step 2 (5) and the result from step 4 (5).",
+  "answer": "(5, 5)",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820693
+}

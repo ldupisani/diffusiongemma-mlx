@@ -1,0 +1,9 @@
+{
+  "id": "simplify-ratio-12-18",
+  "query": "Simplify the ratio 12:18.",
+  "reasoning": "1. Recall the greatest common divisor (GCD) of 12 and 18. It is 6.\n2. Divide 12 by 6 (the GCD from step 1). Result: 2.\n3. Divide 18 by 6 (the GCD from step 1). Result: 3.\n4. Write the two results as a ratio: 2 (from step 2) : 3 (from step 3).",
+  "answer": "2:3",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820421
+}

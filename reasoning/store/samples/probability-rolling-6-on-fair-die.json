@@ -1,0 +1,9 @@
+{
+  "id": "probability-rolling-6-on-fair-die",
+  "query": "What is the probability of rolling a 6 on a fair die?",
+  "reasoning": "1. Recall how many sides a standard fair die has: 6.\n2. Recall how many of those sides show a 6: 1.\n3. Divide 1 (favorable outcomes) by 6 (total outcomes) to get the probability.",
+  "answer": "1/6 \u2248 0.1667",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820213
+}

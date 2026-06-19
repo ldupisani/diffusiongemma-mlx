@@ -1,0 +1,9 @@
+{
+  "id": "ph-solution-hydrogen-ion-concentration-0",
+  "query": "What is the pH of a solution with a hydrogen ion concentration of 0.001 M?",
+  "reasoning": "1. Recall the pH formula: pH = -log\u2081\u2080 of the hydrogen ion concentration [H\u207a].\n2. Write 0.001 as a power of 10 (recall: 0.001 = 10\u207b\u00b3).\n3. Find log\u2081\u2080 of 10\u207b\u00b3 (recall: log\u2081\u2080 of 10\u207b\u00b3 = -3).\n4. Negate -3 (compute: -(-3) = 3).",
+  "answer": "3",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820622
+}

@@ -1,0 +1,9 @@
+{
+  "id": "final-concentration-when-50-ml-2",
+  "query": "What is the final concentration when 50 mL of 2 M solution is diluted to 200 mL?",
+  "reasoning": "1. Multiply the initial concentration 2 by the initial volume 50 mL. Compute 2 \u00d7 50 = 100.\n2. Divide 100 (from step 1) by the final volume 200 mL. Compute 100 \u00f7 200 = 0.5.",
+  "answer": "0.5 M",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820646
+}

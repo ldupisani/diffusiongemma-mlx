@@ -1,0 +1,9 @@
+{
+  "id": "bmi-person-who-weighs-60-kg",
+  "query": "What is the BMI of a person who weighs 60 kg and is 1.6 meters tall?",
+  "reasoning": "1. Multiply 1.6 by 1.6 to get the height squared. Result: 2.56\n2. Divide 60 by 2.56 (the height squared from step 1). Result: 23.4375\n3. Round 23.4375 to two decimal places. Result: 23.44",
+  "answer": "23.44",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820359
+}

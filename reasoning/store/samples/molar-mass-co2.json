@@ -1,0 +1,9 @@
+{
+  "id": "molar-mass-co2",
+  "query": "What is the molar mass of CO2?",
+  "reasoning": "1. Recall the atomic mass of carbon (C) in g/mol: 12.01.\n2. Recall the atomic mass of oxygen (O) in g/mol: 16.00.\n3. Multiply 16.00 (oxygen mass, from step 2) by 2 (two oxygen atoms in CO2): 32.00.\n4. Add 12.01 (carbon, from step 1) and 32.00 (two oxygens, from step 3): 44.01.",
+  "answer": "44.01 g/mol",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820604
+}

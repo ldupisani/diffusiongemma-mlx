@@ -1,0 +1,9 @@
+{
+  "id": "molar-mass-c6h12o6",
+  "query": "What is the molar mass of C6H12O6?",
+  "reasoning": "`\u2605 Insight \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`\nThis is a \"decompose for a weak student\" task \u2014 the molar-mass calc factors cleanly into per-element recall\u2192multiply pairs, then one sum. The constraint that the student can't chain operations is why each element gets its own multiply step rather than folding recall+multiply together.\n`\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`\n\nREASONING:\n1. Recall the atomic mass of carbon (C): 12.011 g/mol.\n2. Multiply 6 \u00d7 12.011 (from step 1) = 72.066.\n3. Recall the atomic mass of hydrogen (H): 1.008 g/mol.\n4. Multiply 12 \u00d7 1.008 (from step 3) = 12.096.\n5. Recall the atomic mass of oxygen (O): 16.00 g/mol.\n6. Multiply 6 \u00d7 16.00 (from step 5) = 96.00.\n7. Add 72.066 (step 2) + 12.096 (step 4) + 96.00 (step 6) = 180.16.",
+  "answer": "180.16 g/mol",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820636
+}

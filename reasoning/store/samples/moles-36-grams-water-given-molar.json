@@ -1,0 +1,9 @@
+{
+  "id": "moles-36-grams-water-given-molar",
+  "query": "How many moles are in 36 grams of water given a molar mass of 18 g/mol?",
+  "reasoning": "1. Divide 36 (grams of water) by 18 (molar mass in g/mol).",
+  "answer": "2 moles",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820613
+}

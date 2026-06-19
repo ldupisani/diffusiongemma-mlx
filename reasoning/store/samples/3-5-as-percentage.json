@@ -1,0 +1,9 @@
+{
+  "id": "3-5-as-percentage",
+  "query": "What is 3/5 as a percentage?",
+  "reasoning": "1. Divide 3 by 5. Result: 0.6\n2. Multiply 0.6 (from step 1) by 100. Result: 60",
+  "answer": "60%",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820392
+}

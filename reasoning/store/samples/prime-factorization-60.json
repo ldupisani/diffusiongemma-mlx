@@ -1,0 +1,9 @@
+{
+  "id": "prime-factorization-60",
+  "query": "What is the prime factorization of 60?",
+  "reasoning": "1. Divide 60 by 2. Result: 30.\n2. Divide 30 (from step 1) by 2. Result: 15.\n3. 15 (from step 2) is not divisible by 2; divide 15 by 3. Result: 5.\n4. Recall whether 5 (from step 3) is a prime number.",
+  "answer": "yes.\n5. Collect the divisors used (2 from step 1, 2 from step 2, 3 from step 3) and the final prime (5 from step 4) into one list: 2, 2, 3, 5.\n6. Write the list 2, 2, 3, 5 in exponent form by grouping repeats: 2\u00b2 \u00d7 3 \u00d7 5.\nANSWER:\n2\u00b2 \u00d7 3 \u00d7 5",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820160
+}

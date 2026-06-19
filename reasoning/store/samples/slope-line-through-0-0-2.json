@@ -1,0 +1,9 @@
+{
+  "id": "slope-line-through-0-0-2",
+  "query": "What is the slope of the line through (0,0) and (2,8)?",
+  "reasoning": "1. Subtract the y-coordinates: 8 \u2212 0.\n2. Subtract the x-coordinates: 2 \u2212 0.\n3. Divide the result of step 1 (8) by the result of step 2 (2).",
+  "answer": "4",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820710
+}

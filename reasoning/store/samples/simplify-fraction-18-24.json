@@ -1,0 +1,9 @@
+{
+  "id": "simplify-fraction-18-24",
+  "query": "Simplify the fraction 18/24.",
+  "reasoning": "1. Recall the greatest common divisor (GCD) of 18 and 24. (",
+  "answer": "6)\n2. Divide 18 by 6 (from step 1). (Answer: 3)\n3. Divide 24 by 6 (from step 1). (Answer: 4)\n4. Write the simplified fraction as numerator 3 (from step 2) over denominator 4 (from step 3).\nANSWER:\n3/4",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820376
+}

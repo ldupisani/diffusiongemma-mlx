@@ -1,0 +1,9 @@
+{
+  "id": "probability-flipping-heads-twice-row",
+  "query": "What is the probability of flipping heads twice in a row?",
+  "reasoning": "1. Recall the probability of getting heads on a single fair coin flip: 1/2 = 0.5.\n2. Multiply 0.5 (from step 1) by 0.5 (the probability of heads on the second independent flip) to get 0.25.",
+  "answer": "1/4 (0.25, or 25%)",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820218
+}

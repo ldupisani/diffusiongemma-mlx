@@ -1,0 +1,9 @@
+{
+  "id": "molar-mass-h2so4",
+  "query": "What is the molar mass of H2SO4?",
+  "reasoning": "1. Recall the standard atomic mass of hydrogen (H): 1.008 g/mol.\n2. Recall the standard atomic mass of sulfur (S): 32.06 g/mol.\n3. Recall the standard atomic mass of oxygen (O): 16.00 g/mol.\n4. Multiply 1.008 (H from step 1) by 2 (number of H atoms in H2SO4) to get 2.016.\n5. Multiply 16.00 (O from step 3) by 4 (number of O atoms in H2SO4) to get 64.00.\n6. Add 2.016 (from step 4) and 32.06 (S from step 2) to get 34.076.\n7. Add 34.076 (from step 6) and 64.00 (from step 5) to get 98.076.",
+  "answer": "98.08 g/mol",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820656
+}

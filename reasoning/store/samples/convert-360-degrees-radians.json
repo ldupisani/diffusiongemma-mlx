@@ -1,0 +1,9 @@
+{
+  "id": "convert-360-degrees-radians",
+  "query": "Convert 360 degrees to radians.",
+  "reasoning": "1. Recall the formula to convert degrees to radians: radians = degrees \u00d7 (\u03c0 \u00f7 180).\n2. Divide 360 by 180. Result: 2.\n3. Multiply 2 (from step 2) by \u03c0 (\u2248 3.14159). Result: \u2248 6.28319.",
+  "answer": "2\u03c0 radians \u2248 6.28319 radians",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820575
+}

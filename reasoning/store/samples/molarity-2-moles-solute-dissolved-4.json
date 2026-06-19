@@ -1,0 +1,9 @@
+{
+  "id": "molarity-2-moles-solute-dissolved-4",
+  "query": "What is the molarity of 2 moles of solute dissolved in 4 liters of solution?",
+  "reasoning": "1. Divide 2 moles of solute by 4 liters of solution.",
+  "answer": "0.5 M",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820617
+}

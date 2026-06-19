@@ -1,0 +1,9 @@
+{
+  "id": "convert-3-45-pm-24-hour",
+  "query": "Convert 3:45 PM to 24-hour format.",
+  "reasoning": "1. Recall the rule: for PM times other than 12 PM, the 24-hour clock hour equals the 12-hour clock hour plus 12. State the 12-hour hour: 3.\n2. Add 12 to 3 (from step 1) to get the 24-hour hour: 15.\n3. Combine the hour 15 (from step 2) with the original minutes (45) to form the 24-hour time: 15:45.",
+  "answer": "15:45",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820756
+}

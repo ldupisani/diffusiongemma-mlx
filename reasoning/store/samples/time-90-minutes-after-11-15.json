@@ -1,0 +1,9 @@
+{
+  "id": "time-90-minutes-after-11-15",
+  "query": "What time is 90 minutes after 11:15 AM?",
+  "reasoning": "1. Convert 90 minutes into hours and minutes: 90 \u00f7 60 = 1 hour and 30 minutes remainder.\n2. Add 1 hour (from step 1) to the start time 11:15 AM, giving 12:15 PM.\n3. Add the remaining 30 minutes (from step 1) to 12:15 PM, giving 12:45 PM.",
+  "answer": "12:45 PM",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820744
+}

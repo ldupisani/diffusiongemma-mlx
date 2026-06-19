@@ -1,0 +1,9 @@
+{
+  "id": "molar-mass-h2o",
+  "query": "What is the molar mass of H2O?",
+  "reasoning": "1. Recall the molar mass of a hydrogen atom (H) in g/mol. (",
+  "answer": "1.008)\n2. Recall the molar mass of an oxygen atom (O) in g/mol. (Answer: 16.00)\n3. Multiply 1.008 (from step 1) by 2 to get the mass of two hydrogen atoms. (Answer: 2.016)\n4. Add 2.016 (from step 3) to 16.00 (from step 2). (Answer: 18.016)\nANSWER:\n18.016 g/mol (\u2248 18.02 g/mol)",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820598
+}

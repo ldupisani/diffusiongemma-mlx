@@ -1,0 +1,9 @@
+{
+  "id": "convert-64-octal",
+  "query": "Convert 64 to octal.",
+  "reasoning": "1. Divide 64 by 8. Record the quotient and remainder. (64 \u00f7 8 = quotient 8, remainder 0)\n2. Take the quotient 8 (from step 1). Divide 8 by 8. Record the quotient and remainder. (8 \u00f7 8 = quotient 1, remainder 0)\n3. Take the quotient 1 (from step 2). Divide 1 by 8. Record the quotient and remainder. (1 \u00f7 8 = quotient 0, remainder 1)\n4. Read the remainders from step 3, step 2, step 1 in that order (1, 0, 0) and write them as a single number.",
+  "answer": "100",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820470
+}

@@ -1,0 +1,9 @@
+{
+  "id": "convert-2-gigabytes-megabytes",
+  "query": "Convert 2 gigabytes to megabytes.",
+  "reasoning": "1. Multiply 2 by 1000.",
+  "answer": "2000 megabytes",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820480
+}

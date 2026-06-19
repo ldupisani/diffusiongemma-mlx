@@ -1,0 +1,9 @@
+{
+  "id": "time-it-5-hours-before-1",
+  "query": "What time is it 5 hours before 1:00 AM?",
+  "reasoning": "1. Convert 1:00 AM to a 24-hour clock number: 1.\n2. Subtract 5 (the hours before) from 1 (from step 1): 1 \u2212 5 = \u22124.\n3. Add 24 to \u22124 (from step 2) to wrap into a valid clock hour: \u22124 + 24 = 20.\n4. Convert the 24-hour value 20 (from step 3) to 12-hour format: 8:00 PM.",
+  "answer": "8:00 PM",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820769
+}

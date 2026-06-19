@@ -1,0 +1,9 @@
+{
+  "id": "bmr-25-year-old-woman-weighing",
+  "query": "What is the BMR of a 25 year old woman weighing 60 kg and 165 cm tall?",
+  "reasoning": "1. Recall the Mifflin-St Jeor BMR formula for women: BMR = (10 \u00d7 weight_kg) + (6.25 \u00d7 height_cm) \u2212 (5 \u00d7 age) \u2212 161.\n2. Multiply 10 \u00d7 60 (weight) = 600.\n3. Multiply 6.25 \u00d7 165 (height) = 1031.25.\n4. Multiply 5 \u00d7 25 (age) = 125.\n5. Add 600 (from step 2) + 1031.25 (from step 3) = 1631.25.\n6. Subtract 125 (from step 4) from 1631.25 (from step 5) = 1506.25.\n7. Subtract 161 from 1506.25 (from step 6) = 1345.25.",
+  "answer": "1345.25 kcal/day",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820337
+}

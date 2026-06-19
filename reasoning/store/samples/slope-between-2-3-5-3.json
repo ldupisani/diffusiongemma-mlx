@@ -1,0 +1,9 @@
+{
+  "id": "slope-between-2-3-5-3",
+  "query": "What is the slope between (2,3) and (5,3)?",
+  "reasoning": "1. Subtract the y-values: compute 3 \u2212 3.\n2. Subtract the x-values: compute 5 \u2212 2.\n3. Divide the result of step 1 (0) by the result of step 2 (3): compute 0 \u00f7 3.",
+  "answer": "0",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820699
+}

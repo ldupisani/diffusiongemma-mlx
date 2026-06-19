@@ -1,0 +1,9 @@
+{
+  "id": "distance-between-2-3-1-1",
+  "query": "What is the distance between (-2,-3) and (1,1)?",
+  "reasoning": "1. Subtract the x-coordinates: compute 1 \u2212 (\u22122).\n2. Subtract the y-coordinates: compute 1 \u2212 (\u22123).\n3. Square the result from step 1: compute 3 \u00d7 3.\n4. Square the result from step 2: compute 4 \u00d7 4.\n5. Add the squares: compute 9 (from step 3) + 16 (from step 4).\n6. Take the square root: compute the square root of 25 (from step 5).",
+  "answer": "5",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820705
+}

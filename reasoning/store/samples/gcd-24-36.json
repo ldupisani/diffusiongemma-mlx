@@ -1,0 +1,9 @@
+{
+  "id": "gcd-24-36",
+  "query": "What is the GCD of 24 and 36?",
+  "reasoning": "1. Compute 36 % 24 (remainder of 36 divided by 24). Result: 12.\n2. Compute 24 % 12 (remainder of 24 divided by 12, using 12 from step 1). Result: 0.\n3. The remainder in step 2 is 0, so the last divisor, 12, is the GCD. State 12.",
+  "answer": "12",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820128
+}

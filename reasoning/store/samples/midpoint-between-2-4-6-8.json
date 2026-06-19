@@ -1,0 +1,9 @@
+{
+  "id": "midpoint-between-2-4-6-8",
+  "query": "What is the midpoint between (2,4) and (6,8)?",
+  "reasoning": "1. Add the x-coordinates: 2 + 6.\n2. Divide the result 8 (from step 1) by 2.\n3. Add the y-coordinates: 4 + 8.\n4. Divide the result 12 (from step 3) by 2.\n5. Write the midpoint as an ordered pair using 4 (from step 2) and 6 (from step 4): (4, 6).",
+  "answer": "(4, 6)",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820675
+}

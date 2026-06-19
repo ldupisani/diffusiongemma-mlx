@@ -1,0 +1,9 @@
+{
+  "id": "slope-line-through-1-2-3",
+  "query": "What is the slope of the line through (1,2) and (3,6)?",
+  "reasoning": "1. Compute the difference of the y-values: subtract 2 from 6.\n2. Compute the difference of the x-values: subtract 1 from 3.\n3. Divide 4 (from step 1) by 2 (from step 2).",
+  "answer": "2",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820681
+}

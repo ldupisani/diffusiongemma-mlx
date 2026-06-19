@@ -1,0 +1,9 @@
+{
+  "id": "255-hexadecimal",
+  "query": "What is 255 in hexadecimal?",
+  "reasoning": "1. Divide 255 by 16 and take the whole-number part (quotient). 255 \u00f7 16 = 15.\n2. Compute 255 mod 16 (the remainder). 255 % 16 = 15.\n3. Recall the hexadecimal digit for the value 15 (the quotient from step 1). 15 \u2192 F.\n4. Recall the hexadecimal digit for the value 15 (the remainder from step 2). 15 \u2192 F.\n5. Concatenate the digit from step 3 (\"F\") followed by the digit from step 4 (\"F\").",
+  "answer": "FF",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820453
+}

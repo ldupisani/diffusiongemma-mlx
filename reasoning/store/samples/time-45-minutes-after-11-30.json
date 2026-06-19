@@ -1,0 +1,9 @@
+{
+  "id": "time-45-minutes-after-11-30",
+  "query": "What time is 45 minutes after 11:30 PM?",
+  "reasoning": "1. Add the minutes: 30 (the minutes in 11:30) + 45 = 75.\n2. Since 75 (from step 1) is 60 or more, subtract: 75 \u2212 60 = 15. This 15 is the new minutes, and it carries 1 hour.\n3. Add the carried hour to the hour 11: 11 + 1 = 12.\n4. Recall: when a PM time rolls over to hour 12, the clock passes midnight, so the period becomes AM. The hour is 12 (from step 3) and the minutes are 15 (from step 2), giving 12:15 AM.",
+  "answer": "12:15 AM",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820786
+}

@@ -1,0 +1,9 @@
+{
+  "id": "17-prime-number",
+  "query": "Is 17 a prime number?",
+  "reasoning": "1. Recall whether 17 has any positive divisors other than 1 and 17 (recall: 17 is divisible only by 1 and itself).",
+  "answer": "Yes, 17 is a prime number.",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820151
+}

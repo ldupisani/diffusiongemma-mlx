@@ -1,0 +1,9 @@
+{
+  "id": "convert-decimal-number-100-binary",
+  "query": "Convert the decimal number 100 to binary.",
+  "reasoning": "1. Recall the powers of 2 from largest to smallest that are \u2264 100: 64, 32, 16, 8, 4, 2, 1.\n2. Subtract: 100 \u2212 64 = 36. (64 fits, so its bit is 1.)\n3. Subtract: 36 \u2212 32 = 4. (32 fits into 36, so its bit is 1.)\n4. Check 16 and 8 against the remainder 4: both are larger than 4, so their bits are 0.\n5. Subtract: 4 \u2212 4 = 0. (4 fits exactly, so its bit is 1; bits for 2 and 1 are 0.)\n6. Write the bits in order for positions 64,32,16,8,4,2,1 using results above: 1,1,0,0,1,0,0 \u2192 1100100.",
+  "answer": "1100100",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820505
+}

@@ -1,0 +1,9 @@
+{
+  "id": "unit-rate-if-150-miles-takes",
+  "query": "What is the unit rate if 150 miles takes 3 hours?",
+  "reasoning": "1. Divide 150 (miles) by 3 (hours).",
+  "answer": "50 miles per hour",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820409
+}

@@ -1,0 +1,9 @@
+{
+  "id": "distance-from-0-0-5-12",
+  "query": "What is the distance from (0,0) to (5,12)?",
+  "reasoning": "1. Square the x-coordinate: multiply 5 by 5 to get 25.\n2. Square the y-coordinate: multiply 12 by 12 to get 144.\n3. Add 25 (from step 1) and 144 (from step 2) to get 169.\n4. Take the square root of 169 (from step 3) to get 13.",
+  "answer": "13",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820726
+}

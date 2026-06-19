@@ -1,0 +1,9 @@
+{
+  "id": "if-3-apples-cost-2-much",
+  "query": "If 3 apples cost $2, how much do 12 apples cost?",
+  "reasoning": "1. Divide 12 by 3 to find how many groups of 3 apples are in 12. Result: 4.\n2. Multiply 4 (from step 1) by $2 (the cost of one group of 3 apples). Result: 8.",
+  "answer": "$8",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781820397
+}
