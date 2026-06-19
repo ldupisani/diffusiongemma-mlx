@@ -1095,3 +1095,84 @@ def bind_health(query: str) -> tuple[bool, dict | None, str, int]:
             return True, {"skill": "health.ideal_body_weight", "dims": ["height_cm"],
                           "suffix": " kg", "places": 0, "height_cm": float(h[1])}, "code", 0
     return False, None, "code", 0
+
+
+# --- formal-logic family --------------------------------------------------------------
+_PARENS = re.compile(r"\(([^()]+)\)")
+_ASSIGN = re.compile(r"\b([A-Za-z])\s+is\s+(true|false)\b", re.IGNORECASE)
+_CONDITIONAL = re.compile(r"\bif\s+(.+?)\s+then\s+(.+?)['\"?.\s]*$", re.IGNORECASE)
+
+
+def _after(query: str, pattern: str):
+    m = re.search(pattern, query, re.IGNORECASE)
+    return m.group(1).strip() if m else None
+
+
+def _valid_expr(e) -> bool:
+    if not e:
+        return False
+    from .skills.logic import compile_expr
+    try:
+        compile_expr(e)
+        return True
+    except Exception:
+        return False
+
+
+def bind_logic(query: str) -> tuple[bool, dict | None, str, int]:
+    from .skills.logic import compile_expr, negatable_clause, _vars
+    ql = query.lower()
+    parens = _PARENS.findall(query)
+    e0 = parens[0] if parens else None
+
+    if "equivalent" in ql:
+        if len(parens) >= 2 and _valid_expr(parens[0]) and _valid_expr(parens[1]):
+            return True, {"skill": "logic.equivalent", "dims": ["e1", "e2"], "kind": "equivalent",
+                          "e1": parens[0], "e2": parens[1]}, "code", 0
+        return False, None, "code", 0
+
+    for key, kind, skill in [("tautolog", "tautology", "logic.tautology"),
+                             ("contradiction", "contradiction", "logic.contradiction"),
+                             ("satisfiab", "satisfiable", "logic.satisfiable")]:
+        if key in ql:
+            e = e0 or _after(query, r"is\s+(.+?)\s+a\b")
+            if _valid_expr(e):
+                return True, {"skill": skill, "dims": ["expr"], "kind": kind, "expr": e}, "code", 0
+            return False, None, "code", 0
+
+    if "truth table" in ql:
+        e = e0 or _after(query, r"truth table (?:for|of)\s+(.+?)[.?]*$")
+        if _valid_expr(e):
+            return True, {"skill": "logic.truth_table", "dims": ["expr"], "kind": "transform",
+                          "expr": e}, "code", 0
+        return False, None, "code", 0
+
+    if "negation" in ql or "de morgan" in ql:
+        e = e0 or _after(query, r"negation of\s+(.+?)[.?]*$")
+        if _valid_expr(e):
+            return True, {"skill": "logic.de_morgan", "dims": ["expr"], "kind": "transform",
+                          "expr": e}, "code", 0
+        return False, None, "code", 0
+
+    if "converse" in ql or "inverse" in ql or "contrapositive" in ql:
+        m = _CONDITIONAL.search(query)
+        if not m:
+            return False, None, "code", 0
+        hyp, con = m.group(1).strip(" '\""), m.group(2).strip(" '\".?")
+        if "converse" in ql:  # swap only — always clean
+            return True, {"skill": "logic.converse", "dims": ["hypothesis", "conclusion"],
+                          "kind": "transform", "hypothesis": hyp, "conclusion": con}, "code", 0
+        if negatable_clause(hyp) and negatable_clause(con):  # else bail to the teacher
+            skill = "logic.inverse" if "inverse" in ql else "logic.contrapositive"
+            return True, {"skill": skill, "dims": ["hypothesis", "conclusion"],
+                          "kind": "transform", "hypothesis": hyp, "conclusion": con}, "code", 0
+        return False, None, "code", 0
+
+    # default: evaluate an expression under an assignment (or all-constant)
+    e = e0 or _after(query, r"evaluate\s+(.+?)\s+when") or _after(query, r"what is\s+(.+?)[.?]*$")
+    if _valid_expr(e):
+        assign = {m.group(1): m.group(2).lower() == "true" for m in _ASSIGN.finditer(query)}
+        if set(_vars(compile_expr(e))) <= set(assign):
+            return True, {"skill": "logic.evaluate", "dims": ["expr", "values"], "kind": "evaluate",
+                          "expr": e, "values": assign}, "code", 0
+    return False, None, "code", 0

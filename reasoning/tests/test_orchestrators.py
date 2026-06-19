@@ -232,6 +232,18 @@ CASES = [
     ("What is the BMR of a 30 year old man weighing 80 kg and 180 cm tall?", "1780 kcal/day",
      "health_metrics"),
     ("What is the ideal body weight for a man who is 180 cm tall?", "75 kg", "health_metrics"),
+    # formal logic (captured + symbolic)
+    ("Is (P OR NOT P) a tautology?", "Yes, it is a tautology.", "logic"),
+    ("Is (P AND NOT P) a contradiction?", "Yes, it is a contradiction.", "logic"),
+    ("Is (P AND Q) satisfiable?", "Yes, it is satisfiable.", "logic"),
+    ("Are (P implies Q) and (NOT P OR Q) logically equivalent?",
+     "Yes, they are logically equivalent.", "logic"),
+    ("Evaluate P AND Q when P is true and Q is false.", "False", "logic"),
+    ("What is the negation of (A AND B)?", "(NOT A) OR (NOT B)", "logic"),
+    ("What is the converse of 'if P then Q'?", "If Q then P", "logic"),
+    ("What is the contrapositive of 'if P then Q'?", "If NOT Q then NOT P", "logic"),
+    ("What is true XOR true?", "False", "logic"),
+    ("If P is true and Q is false, what is P implies Q?", "False", "logic"),
 ]
 
 

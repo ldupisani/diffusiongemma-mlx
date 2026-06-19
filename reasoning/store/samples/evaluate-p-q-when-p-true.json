@@ -1,0 +1,9 @@
+{
+  "id": "evaluate-p-q-when-p-true",
+  "query": "Evaluate P AND Q when P is true and Q is false.",
+  "reasoning": "1. Recall the truth rule: \"P AND Q\" is true only when both P and Q are true; otherwise it is false.\n2. Given P is true and Q is false, check the rule from step 1: since Q is false, not both are true.",
+  "answer": "False",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781862697
+}

@@ -1,0 +1,9 @@
+{
+  "id": "contrapositive-if-it-rains-then-ground",
+  "query": "What is the contrapositive of 'if it rains then the ground is wet'?",
+  "reasoning": "1. From \"if it rains then the ground is wet\", extract the hypothesis (the part after \"if\"): \"it rains\".\n2. From \"if it rains then the ground is wet\", extract the conclusion (the part after \"then\"): \"the ground is wet\".\n3. Negate the conclusion \"the ground is wet\": \"the ground is not wet\".\n4. Negate the hypothesis \"it rains\": \"it does not rain\".\n5. Build the contrapositive using the template \"if [negated conclusion] then [negated hypothesis]\" with \"the ground is not wet\" (from step 3) and \"it does not rain\" (from step 4).",
+  "answer": "If the ground is not wet, then it does not rain.",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781862710
+}

@@ -1,0 +1,9 @@
+{
+  "id": "p-or-not-p-tautology",
+  "query": "Is (P OR NOT P) a tautology?",
+  "reasoning": "1. Recall the truth values P can take in classical logic: P is either true or false (only two cases).\n2. Evaluate (P OR NOT P) for case P = true: NOT true = false, so (true OR false) = true.\n3. Evaluate (P OR NOT P) for case P = false: NOT false = true, so (false OR true) = true.\n4. Compare the two results (true from step 2, true from step 3): the expression is true in every case, which is the definition of a tautology.",
+  "answer": "Yes, (P OR NOT P) is a tautology (the law of excluded middle).",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781862673
+}

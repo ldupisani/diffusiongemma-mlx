@@ -75,15 +75,20 @@ def _result_obj(data) -> dict:
 
 
 def _split_reasoning_answer(text: str) -> tuple[str, str]:
-    """Split Claude's structured output on the ANSWER: marker (reasoning is everything
-    before it). Falls back to (\"\", whole-text) if the model ignored the format."""
-    m = re.search(r"\bANSWER\s*:\s*(.*)", text, re.DOTALL | re.IGNORECASE)
-    if not m:
+    """Split Claude's structured output into (reasoning, answer). Prefer the LAST ANSWER:
+    marker; if the model ignored the format, fall back to the final non-empty line (the
+    final answer is conventionally last) rather than dumping the whole reasoning into the
+    answer field — which otherwise leaves a mid-reasoning fragment as the 'answer'."""
+    matches = list(re.finditer(r"\bANSWER\s*:\s*", text, re.IGNORECASE))
+    if matches:
+        last = matches[-1]
+        reasoning = re.sub(r"^\s*REASONING\s*:\s*", "", text[: last.start()].strip(),
+                           flags=re.IGNORECASE).strip()
+        return reasoning, text[last.end():].strip()
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    if not lines:
         return "", text.strip()
-    answer = m.group(1).strip()
-    reasoning = re.sub(r"^\s*REASONING\s*:\s*", "", text[: m.start()].strip(),
-                       flags=re.IGNORECASE).strip()
-    return reasoning, answer
+    return "\n".join(lines[:-1]), lines[-1]
 
 
 class DiffusionTeacher:

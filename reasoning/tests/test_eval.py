@@ -16,6 +16,12 @@ class TestAgrees(unittest.TestCase):
         self.assertTrue(agrees("3.1416 rad", "π radians ≈ 3.14159 radians"))
         self.assertTrue(agrees("5", "5.0 units"))
 
+    def test_verdict_agreement(self):
+        # prose differs but both say "yes, tautology"
+        self.assertTrue(agrees("Yes, it is a tautology.",
+                               "Yes, (P OR NOT P) is a tautology (law of excluded middle)."))
+        self.assertFalse(agrees("Yes, it is satisfiable.", "No, it is unsatisfiable."))
+
     def test_disagreement(self):
         self.assertFalse(agrees("5", "13"))
         self.assertFalse(agrees("FF", "binary"))

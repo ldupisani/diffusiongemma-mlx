@@ -1,0 +1,9 @@
+{
+  "id": "if-p-true-q-false-p",
+  "query": "If P is true and Q is false, what is P implies Q?",
+  "reasoning": "1. Recall the rule: \"P implies Q\" is false in exactly one case \u2014 when P is true and Q is false; it is true in all other cases.\n2. Given: P is true and Q is false. Check if this matches the one false case from step 1 (P true, Q false). It matches.\n3. Since the inputs match the only false case, the result is false.",
+  "answer": "False",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781862734
+}

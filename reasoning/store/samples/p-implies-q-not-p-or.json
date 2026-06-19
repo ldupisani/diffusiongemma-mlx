@@ -1,0 +1,9 @@
+{
+  "id": "p-implies-q-not-p-or",
+  "query": "Are (P implies Q) and (NOT P OR Q) logically equivalent?",
+  "reasoning": "1. Recall the definition of the material conditional: \"P implies Q\" is false only when P is true and Q is false; otherwise it is true.\n2. Recall the definition of \"NOT P OR Q\": it is false only when NOT P is false (i.e. P is true) and Q is false; otherwise it is true.\n3. Compare the two conditions from step 1 and step 2: both expressions are false exactly when P is true and Q is false, and true in all other cases. Choose whether they match: yes.",
+  "answer": "Yes, they are logically equivalent.",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781862692
+}

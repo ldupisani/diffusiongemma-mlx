@@ -1,0 +1,9 @@
+{
+  "id": "construct-truth-table-p-q",
+  "query": "Construct the truth table for P AND Q.",
+  "reasoning": "1. Recall the value of (P AND Q) when P=true and Q=true: true.\n2. Recall the value of (P AND Q) when P=true and Q=false: false.\n3. Recall the value of (P AND Q) when P=false and Q=true: false.\n4. Recall the value of (P AND Q) when P=false and Q=false: false.\n5. Assemble the four results (true, false, false, false from steps 1-4) into a table with columns P, Q, P AND Q.",
+  "answer": "| P | Q | P AND Q |\n|-------|-------|---------|\n| true  | true  | true    |\n| true  | false | false   |\n| false | true  | false   |\n| false | false | false   |",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781862742
+}

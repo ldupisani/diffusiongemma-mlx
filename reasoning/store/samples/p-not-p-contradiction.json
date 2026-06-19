@@ -1,0 +1,9 @@
+{
+  "id": "p-not-p-contradiction",
+  "query": "Is (P AND NOT P) a contradiction?",
+  "reasoning": "1. Recall: a statement that is false under every possible truth assignment is called a contradiction.\n2. Recall: for any P, when P is true, NOT P is false; when P is false, NOT P is true \u2014 so P and NOT P always have opposite truth values.\n3. Recall: an AND statement is true only when both parts are true; since P and NOT P (from step 2) can never both be true, (P AND NOT P) is false in every case.\n4. Compare: a statement false in every case (step 3) matches the definition of a contradiction (step 1) \u2192 yes.",
+  "answer": "Yes.",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781862680
+}

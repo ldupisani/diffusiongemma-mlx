@@ -1,0 +1,9 @@
+{
+  "id": "converse-if-p-then-q",
+  "query": "What is the converse of 'if P then Q'?",
+  "reasoning": "1. Recall the definition: the converse of a conditional 'if A then B' swaps the hypothesis and conclusion to give 'if B then A'.\n2. Apply that swap to 'if P then Q', where A = P and B = Q, giving 'if Q then P'.",
+  "answer": "If Q then P",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781862715
+}

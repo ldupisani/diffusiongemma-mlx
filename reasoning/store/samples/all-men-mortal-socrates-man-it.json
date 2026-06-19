@@ -1,0 +1,9 @@
+{
+  "id": "all-men-mortal-socrates-man-it",
+  "query": "All men are mortal. Socrates is a man. Is it valid to conclude that Socrates is mortal?",
+  "reasoning": "1. Recall the logical form of this argument: \"All M are P; S is an M; therefore S is P.\" This is the syllogism form called universal instantiation (modus barbara).\n2. Recall whether the form \"All M are P; S is an M; therefore S is P\" is a valid deductive form: yes, it is valid.\n3. State the conclusion: since the form is valid, concluding \"Socrates is mortal\" is valid.",
+  "answer": "Yes \u2014 it is valid. \"All men are mortal; Socrates is a man; therefore Socrates is mortal\" is a valid syllogism (universal instantiation), so the conclusion necessarily follows.",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781862723
+}

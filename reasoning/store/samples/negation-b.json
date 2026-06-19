@@ -1,0 +1,9 @@
+{
+  "id": "negation-b",
+  "query": "What is the negation of (A AND B)?",
+  "reasoning": "1. Recall De Morgan's law: the negation of a conjunction (X AND Y) equals (NOT X) OR (NOT Y).\n2. Apply that rule to (A AND B) by substituting X=A and Y=B into \"(NOT X) OR (NOT Y)\", giving \"(NOT A) OR (NOT B)\".",
+  "answer": "(NOT A) OR (NOT B)",
+  "teacher": "claude",
+  "seed": 0,
+  "captured_at": 1781862702
+}

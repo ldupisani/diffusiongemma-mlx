@@ -35,7 +35,17 @@ def agrees(orch_answer: str, teacher_answer: str) -> bool:
     on, tn = _as_number(orch_answer), _as_number(teacher_answer)
     if on is not None and tn is not None:
         return abs(on - tn) <= 1e-6 + 0.01 * abs(tn)
+    ov, tv = _verdict(orch_answer), _verdict(teacher_answer)
+    if ov is not None and tv is not None:  # both give a yes/no (or true/false) verdict
+        return ov == tv
     return False
+
+
+def _verdict(text: str):
+    """A leading yes/true or no/false verdict, else None — for boolean answers whose prose
+    differs ('Yes, it is a tautology' vs 'Yes, (P OR NOT P) is a tautology …')."""
+    m = re.match(r"\s*(yes|true|no|false)\b", text.lower())
+    return m.group(1) in ("yes", "true") if m else None
 
 
 def batch_fidelity(*, teacher_backend: str = "claude", orchestrators=None) -> list[dict]:
