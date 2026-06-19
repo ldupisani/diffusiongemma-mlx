@@ -41,6 +41,8 @@ class Orchestrator:
                               # (route on it even when fuzzy lexical/embedding score is ~0)
     clarify_probe: Optional[Callable] = None  # (query)->{field:(question,template)}|None: the
                               # type is recognized but a field is missing → ask the user
+    composer: bool = False    # decomposes a compound query into coded sub-answers (its own
+                              # router tier, below clarify and above the generic fallback)
 
 
 def _load_module(path: Path):
@@ -75,6 +77,7 @@ def load_orchestrators() -> list[Orchestrator]:
                 fallback=meta.get("fallback", False),
                 bind_gated=meta.get("bind_gated", False),
                 clarify_probe=getattr(mod, "clarify_probe", None),
+                composer=meta.get("composer", False),
             )
         )
     return out

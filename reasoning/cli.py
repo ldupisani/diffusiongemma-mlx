@@ -52,6 +52,17 @@ def cmd_run(args):
     query = args.query
     m = router.recognize(query, matcher=matcher)
     if not m:
+        # ≤1-model-call decomposition: split with ONE model call, solve parts with coded
+        # orchestrators. (Code-first compounds already routed via the composer tier above.)
+        from . import engine
+        from .decompose import decompose_with_model
+        composed = decompose_with_model(query, shot=engine.one_shot)
+        if composed is not None:
+            print("[no single match — decomposed into coded sub-answers]\n")
+            print(composed.answer)
+            print(f"\n[decomposition used {model_calls(composed)} model call(s); "
+                  "sub-answers were coded]")
+            return
         print(f"[no orchestrator matched — falling back to TEACHER ({args.teacher})]\n")
         print(get_teacher(args.teacher).trace(query).answer)
         print('\nTo compile this query type: capture "<query>" → derive → eval.')

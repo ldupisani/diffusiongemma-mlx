@@ -185,6 +185,14 @@ def recognize(
     # numeric_consensus, whose always-true precondition + "many/count" keywords would
     # otherwise tie every new orchestrator). Fall to fallbacks only when nothing specific
     # matches above threshold.
+    # Composer tier FIRST: a query that fully decomposes into independently-answerable coded
+    # clauses is best served by compose (it answers every part) over a single domain
+    # orchestrator that would answer only one clause. compose's precondition is strict (every
+    # clause must answer model-free), so a single query like "length 4 and width 6" never
+    # qualifies and is not mis-claimed.
+    composer = [o for o in orchs if o.composer]
+    if composer:
+        return Match(composer[0], score=1.0, via="compose")
     specific = [o for o in orchs if not o.fallback]
     # Three tiers. (1) Precise DOMAIN orchestrators win first — so a domain query that merely
     # contains "5 times 2" isn't hijacked by arithmetic. (2) BIND-GATED orchestrators
@@ -204,5 +212,5 @@ def recognize(
     for o in all_orchs:
         if o.clarify_probe and o.clarify_probe(query):
             return Match(o, score=1.0, via="clarify")
-    fallback = [o for o in orchs if o.fallback]
+    fallback = [o for o in orchs if o.fallback and not o.composer]
     return matcher.select(query, fallback) if fallback else None
