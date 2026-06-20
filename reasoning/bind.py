@@ -589,7 +589,7 @@ def bind_percentile(query: str) -> tuple[bool, dict | None, str, int]:
     """Percentile: the 'Nth percentile' value, and the list of numbers after 'of'."""
     m = _PERCENTILE.search(query)
     after = query.split(" of ", 1)[1] if " of " in query else query
-    nums = _nums(after)
+    nums = _numeric_list(after)  # a contiguous list, not scattered numbers
     if m and len(nums) >= 2:
         return True, {"nums": nums, "p": float(m.group(1))}, "code", 0
     return False, None, "code", 0
@@ -698,8 +698,8 @@ _PERIODS = {  # compounding frequency word → periods per year
 def bind_compound_interest(query: str) -> tuple[bool, dict | None, str, int]:
     """Coded-only bind: principal ($), annual rate (%), years, and compounding frequency."""
     price, rate, years = _PRICE.search(query), _RATE.search(query), _YEARS.search(query)
-    if not (price and rate and years):
-        return False, None, "code", 0
+    if not (price and rate and years) or len(_dollars(query)) != 1:
+        return False, None, "code", 0  # exactly one principal; a stray $ ⇒ ambiguous ⇒ decline
     q = query.lower()
     n = next((p for word, p in _PERIODS.items() if word in q), 1)  # default annual
     data = {
@@ -713,7 +713,11 @@ def bind_compound_interest(query: str) -> tuple[bool, dict | None, str, int]:
 
 # --- shared finance parsing -----------------------------------------------------------
 def _dollars(query: str) -> list[float]:
-    """All $-prefixed amounts in order — the positional inputs most finance queries use."""
+    """All $-prefixed amounts in order — the positional inputs most finance queries use.
+
+    Finance binds assign these BY POSITION, so they require an EXACT count (==2, ==3, …): a
+    stray or leading $ (a fee, a reference) would otherwise shift every operand and yield a
+    confident wrong answer. Extra $ ⇒ ambiguous operands ⇒ decline (the conservative rule)."""
     return [float(m) for m in _PRICE.findall(query)]
 
 
@@ -739,7 +743,7 @@ def _periods_from(query: str, default: int) -> int:
 def bind_roi(query: str) -> tuple[bool, dict | None, str, int]:
     """Return on investment: first $ = cost (old), second $ = sale (new)."""
     d = _dollars(query)
-    if len(d) >= 2:
+    if len(d) == 2:
         return True, {"old": d[0], "new": d[1]}, "code", 0
     return False, None, "code", 0
 
@@ -747,7 +751,7 @@ def bind_roi(query: str) -> tuple[bool, dict | None, str, int]:
 def bind_margin(query: str) -> tuple[bool, dict | None, str, int]:
     """Profit margin: first $ = cost, second $ = price."""
     d = _dollars(query)
-    if len(d) >= 2:
+    if len(d) == 2:
         return True, {"cost": d[0], "price": d[1]}, "code", 0
     return False, None, "code", 0
 
@@ -755,7 +759,7 @@ def bind_margin(query: str) -> tuple[bool, dict | None, str, int]:
 def bind_cagr(query: str) -> tuple[bool, dict | None, str, int]:
     """CAGR: first $ = begin, second $ = end, plus a year count."""
     d, years = _dollars(query), _YEARS.search(query)
-    if len(d) >= 2 and years:
+    if len(d) == 2 and years:
         return True, {"begin": d[0], "end": d[1], "years": float(years.group(1))}, "code", 0
     return False, None, "code", 0
 
@@ -763,7 +767,7 @@ def bind_cagr(query: str) -> tuple[bool, dict | None, str, int]:
 def bind_present_value(query: str) -> tuple[bool, dict | None, str, int]:
     """Present value: first $ = future value, plus a rate and a year count."""
     d, rate, years = _dollars(query), _RATE.search(query), _YEARS.search(query)
-    if d and rate and years:
+    if len(d) == 1 and rate and years:
         return True, {"fv": d[0], "rate_pct": float(rate.group(1)),
                       "years": float(years.group(1))}, "code", 0
     return False, None, "code", 0
@@ -772,7 +776,7 @@ def bind_present_value(query: str) -> tuple[bool, dict | None, str, int]:
 def bind_annuity(query: str) -> tuple[bool, dict | None, str, int]:
     """Future value of an annuity: first $ = deposit, plus rate, years, frequency."""
     d, rate, years = _dollars(query), _RATE.search(query), _YEARS.search(query)
-    if d and rate and years:
+    if len(d) == 1 and rate and years:
         return True, {"pmt": d[0], "rate_pct": float(rate.group(1)),
                       "years": float(years.group(1)), "n": _periods_from(query, 12)}, "code", 0
     return False, None, "code", 0
@@ -781,7 +785,7 @@ def bind_annuity(query: str) -> tuple[bool, dict | None, str, int]:
 def bind_loan(query: str) -> tuple[bool, dict | None, str, int]:
     """Loan payment: first $ = principal, plus rate, years; payments default monthly."""
     d, rate, years = _dollars(query), _RATE.search(query), _YEARS.search(query)
-    if d and rate and years:
+    if len(d) == 1 and rate and years:
         return True, {"principal": d[0], "rate_pct": float(rate.group(1)),
                       "years": float(years.group(1)), "n": _periods_from(query, 12)}, "code", 0
     return False, None, "code", 0
@@ -790,7 +794,7 @@ def bind_loan(query: str) -> tuple[bool, dict | None, str, int]:
 def bind_straight_line_dep(query: str) -> tuple[bool, dict | None, str, int]:
     """Depreciation: first $ = cost, second $ = salvage, plus a year count."""
     d, years = _dollars(query), _YEARS.search(query)
-    if len(d) >= 2 and years:
+    if len(d) == 2 and years:
         return True, {"cost": d[0], "salvage": d[1], "years": float(years.group(1))}, "code", 0
     return False, None, "code", 0
 
@@ -798,7 +802,7 @@ def bind_straight_line_dep(query: str) -> tuple[bool, dict | None, str, int]:
 def bind_break_even(query: str) -> tuple[bool, dict | None, str, int]:
     """Break-even: $1 = fixed costs, $2 = price per unit, $3 = cost per unit."""
     d = _dollars(query)
-    if len(d) >= 3:
+    if len(d) == 3:
         return True, {"fixed": d[0], "price": d[1], "cost": d[2]}, "code", 0
     return False, None, "code", 0
 
@@ -810,7 +814,7 @@ _PEOPLE = re.compile(r"(?:among|between|by)\s+(\d+)|(\d+)\s+(?:people|persons|fr
 def bind_tip_split(query: str) -> tuple[bool, dict | None, str, int]:
     """Tip and split: first $ = bill, a % tip, and a head count to divide by."""
     d, tip, ppl = _dollars(query), _RATE.search(query), _PEOPLE.search(query)
-    if d and tip and ppl:
+    if len(d) == 1 and tip and ppl:
         people = int(ppl.group(1) or ppl.group(2))
         return True, {"bill": d[0], "tip_pct": float(tip.group(1)), "people": people}, "code", 0
     return False, None, "code", 0
@@ -1070,7 +1074,7 @@ def bind_ratio(query: str) -> tuple[bool, dict | None, str, int]:
                       "places": 2, "num": float(frac[1]), "den": float(frac[2])}, "code", 0
     elif "unit rate" in q:
         nums = re.findall(r"\d+(?:\.\d+)?", query)
-        if len(nums) >= 2:
+        if len(nums) == 2:  # exactly amount + per; a 3rd number ⇒ ambiguous ⇒ decline
             return True, {"skill": "ratio.unit_rate", "dims": ["amount", "per"], "places": 2,
                           "amount": float(nums[0]), "per": float(nums[1])}, "code", 0
     elif "servings" in q:

@@ -285,6 +285,21 @@ class TestOrchestrators(unittest.TestCase):
         # a genuine list still binds
         self.assertTrue(bind_list_statistic("What is the average of 4, 8, and 15?")[0])
 
+    def test_financial_binds_require_exact_dollar_count(self):
+        # positional-$ binds must decline when a stray $ makes the operands ambiguous,
+        # rather than shifting positions into a confident wrong answer
+        from reasoning import bind as B
+        for fn, clean, stray in [
+            (B.bind_roi, "bought for $4000 and sold for $5200, ROI?",
+             "a $50 fee, bought for $4000 and sold for $5200, ROI?"),
+            (B.bind_break_even, "fixed $5000, sells for $10, costs $4, break even?",
+             "a $200 license, fixed $5000, sells for $10, costs $4, break even?"),
+            (B.bind_loan, "payment on a $20000 loan at 6% over 5 years?",
+             "a $500 fee, payment on a $20000 loan at 6% over 5 years?"),
+        ]:
+            self.assertTrue(fn(clean)[0])
+            self.assertFalse(fn(stray)[0], "stray $ should make operands ambiguous → decline")
+
 
 if __name__ == "__main__":
     unittest.main()
