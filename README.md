@@ -213,9 +213,13 @@ teacher's final answer is taken as its last line when it skips the `ANSWER:` mar
   a coded orchestrator: 0 calls (code-first split) or ≤1 (a single model call only SPLITS; coded
   orchestrators solve the parts — vs the old N+2). The router is a five-tier cascade:
   compose → domain → bind-gated → clarify → fallback.
-- **Goal-directed plan synthesis** (`synthesize.py`, prototype) — BFS over skills typed by semantic
-  roles finds the shortest operation path from typed knowns to a goal, re-deriving plans the
-  orchestrators hand-write (e.g. discount→tax). Memoized; model-free; side-by-side until generalized.
+- **Goal-directed plan synthesis** (`synthesize.py`) — BFS over a typed-op library finds the
+  shortest operation path from typed knowns to a goal. Generalized across domains in one search
+  pool (`ALL_OPS`): re-derives finance discount→tax, a 3-op physics chain (force→work→power), the
+  distance–speed–time triangle (goal-directed op selection), and simple interest — all model-free.
+  Roles live on ops (not skills), so disjoint role vocabularies keep domains from interfering
+  (a finance goal can't pull a physics op); ambiguous goals (two shortest paths) are detectable.
+  Memoized; still side-by-side (NL → {knowns, goal} recognition is the remaining step to wire it in).
 
 Modules: `engine.py` (one-shot / one-shot-N thinking-off calls via the sidecar; N varies the
 **seed** for diverse candidates), `patterns.py` (decompose-solve-combine, map-reduce,
