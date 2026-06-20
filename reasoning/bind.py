@@ -342,7 +342,10 @@ def bind_number_theory(query: str) -> tuple[bool, dict | None, str, int]:
         return False, None, "code", 0
     skill, arity, kind = det
     nums = [int(x) for x in _INT.findall(query)]
-    if len(nums) < arity:
+    # Require EXACTLY the operation's operands. Extra integers (list markers "1.", numbers
+    # from another clause) mean we can't tell which are the operands → decline rather than
+    # grab the first N and emit a confident wrong answer (e.g. gcd(1,7) for a "1. …" list).
+    if len(nums) != arity:
         return False, None, "code", 0
     labels = ["n", "k"][:arity]
     data = {"skill": skill, "dims": labels, "kind": kind}

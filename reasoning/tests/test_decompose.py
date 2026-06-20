@@ -22,6 +22,21 @@ class TestDecompose(unittest.TestCase):
         self.assertEqual(m.orchestrator.id, "compose")
         self.assertEqual(m.via, "compose")
 
+    def test_numbered_list_decomposes(self):
+        # numbered list joined by a real newline, a literal "\n" paste, or nothing
+        for sep in ["\n", r"\n", " "]:
+            q = f"1. What is 7 times 8?{sep}2. What is the GCD of 24 and 36?"
+            r = decompose_code_first(q)
+            self.assertIsNotNone(r, f"should decompose with sep={sep!r}")
+            self.assertEqual(model_calls(r), 0)
+            self.assertIn("56", r.answer)
+            self.assertIn("12", r.answer)
+
+    def test_number_theory_declines_on_stray_numbers(self):
+        # the bug: gcd grabbed the first two ints ("1." marker + "7") → confident wrong "1"
+        m = router.recognize(r"1. What is 7 times 8?\n2. What is the GCD of 24 and 36?")
+        self.assertEqual(m.orchestrator.id, "compose")  # NOT number_theory with a wrong answer
+
     def test_does_not_missplit_single_query(self):
         # "length 4 and width 6" is ONE geometry query — must NOT be split
         self.assertIsNone(

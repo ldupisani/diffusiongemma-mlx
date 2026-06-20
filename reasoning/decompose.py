@@ -20,8 +20,12 @@ from . import router
 from .compiled import model_calls, needs_input
 from .patterns import PatternResult, _parse_list
 
+# numbered/bulleted list items ("1. … 2. …"), with ANY separator between them (real newline,
+# the literal "\n" people paste from shells, or none). Decimals like "3.5" are safe: the
+# marker requires whitespace AFTER the dot.
+_LIST_ITEM = re.compile(r"(?:\\n|\n|^|\s)\s*\d+[.)]\s+")
 # most-specific separators first ("a, and b" before "a and b")
-_SEPARATORS = ["; ", ", and ", " and then ", " then ", " and "]
+_SEPARATORS = ["\n", "\\n", "; ", ", and ", " and then ", " then ", " and "]
 
 
 def _solve_clause(clause: str):
@@ -42,6 +46,9 @@ def _solve_clause(clause: str):
 
 
 def _split(query: str) -> list[str]:
+    items = [p.strip() for p in _LIST_ITEM.split(query) if p.strip()]
+    if len(items) >= 2:  # a numbered/bulleted list — split regardless of inter-item separator
+        return items
     for sep in _SEPARATORS:
         parts = [p for p in re.split(re.escape(sep), query, flags=re.IGNORECASE) if p.strip()]
         if len(parts) >= 2:
