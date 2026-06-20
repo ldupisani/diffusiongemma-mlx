@@ -548,10 +548,35 @@ def _nums(text: str) -> list:
     return [float(n) if "." in n else int(n) for n in _NUMBER.findall(text)]
 
 
+# a list's numbers are separated ONLY by commas / "and" / "or" / "$" / whitespace — so
+# "4, 8, and 15" is a list, but "100 yards at $3" (words between the numbers) is NOT.
+_LIST_GAP = re.compile(r"^[\s,$]*(?:and|or|&)?[\s,$]*$", re.IGNORECASE)
+
+
+def _numeric_list(text: str) -> list:
+    """The longest run of numbers separated only by list delimiters (else a short run)."""
+    matches = list(_NUMBER.finditer(text))
+    best: list = []
+    run: list = []
+    for m in matches:
+        val = float(m.group()) if "." in m.group() else int(m.group())
+        if run and _LIST_GAP.match(text[run[-1][0]:m.start()]):
+            run.append((m.end(), val))
+        else:
+            if len(run) > len(best):
+                best = run
+            run = [(m.end(), val)]
+    if len(run) > len(best):
+        best = run
+    return [v for _, v in best]
+
+
 def bind_list_statistic(query: str) -> tuple[bool, dict | None, str, int]:
-    """Coded-only bind: a stat keyword + ≥2 numbers → {nums, skill}."""
+    """Coded-only bind: a stat keyword + a list of ≥2 numbers → {nums, skill}. The numbers
+    must form an actual list (delimiters only) — scattered numbers in prose ("total cost of
+    100 yards at $3") would otherwise be summed into a confident wrong answer."""
     skill = detect_stat_op(query)
-    nums = _nums(query)
+    nums = _numeric_list(query)
     if skill and len(nums) >= 2:
         return True, {"nums": nums, "skill": skill}, "code", 0
     return False, None, "code", 0
@@ -1294,7 +1319,7 @@ def bind_expression(query: str) -> tuple[bool, dict | None, str, int]:
 
 
 # --- composed: total cost where quantity unit ≠ price unit (delegates a conversion) ----
-_UNIT_WORD = (r"miles?|kilometers?|kilometres?|km|meters?|metres?|ft|feet|"
+_UNIT_WORD = (r"miles?|kilometers?|kilometres?|km|yards?|yd|meters?|metres?|ft|feet|"
               r"pounds?|lbs?|lb|kilograms?|kg|grams?|g")
 _CONVERTED_COST = re.compile(
     rf"(?i)cost of\s+(\d+(?:\.\d+)?)\s*({_UNIT_WORD})\s+at\s+\$?\s*(\d+(?:\.\d+)?)\s*"

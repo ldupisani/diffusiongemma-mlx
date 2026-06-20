@@ -263,6 +263,7 @@ CASES = [
     # composed: delegates the unit conversion to unit_conversion via a SubStep (0 model calls)
     ("What is the total cost of 10 miles at $3 per km?", "$48.27", "converted_cost"),
     ("What is the cost of 5 miles at $2 per km?", "$16.1", "converted_cost"),
+    ("What is the total cost of 100 yards at $3 per km?", "$0.27", "converted_cost"),
 ]
 
 
@@ -276,6 +277,13 @@ class TestOrchestrators(unittest.TestCase):
                 r = m.orchestrator.run(query)
                 self.assertEqual(r.answer, expected)
                 self.assertEqual(model_calls(r), 0, f"{query!r} used the model")
+
+    def test_list_statistic_declines_on_scattered_numbers(self):
+        # the bug: "total" + two scattered numbers (100, 3) were summed into "103"
+        from reasoning.bind import bind_list_statistic
+        self.assertFalse(bind_list_statistic("What is the total cost of 100 yards at $3?")[0])
+        # a genuine list still binds
+        self.assertTrue(bind_list_statistic("What is the average of 4, 8, and 15?")[0])
 
 
 if __name__ == "__main__":
