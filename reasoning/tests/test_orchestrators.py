@@ -264,6 +264,11 @@ CASES = [
     ("What is the total cost of 10 miles at $3 per km?", "$48.27", "converted_cost"),
     ("What is the cost of 5 miles at $2 per km?", "$16.1", "converted_cost"),
     ("What is the total cost of 100 yards at $3 per km?", "$0.27", "converted_cost"),
+    # synthesis-backed physics: a multi-step derivation (force→work→power) no single formula does
+    ("What is the power if a 2 kg mass accelerates at 3 m/s^2 over 4 meters in 5 seconds?",
+     "4.8 W", "synthesized_physics"),
+    ("How much work is done accelerating a 10 kg mass at 2 m/s^2 over 5 meters?",
+     "100 J", "synthesized_physics"),
 ]
 
 

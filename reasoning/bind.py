@@ -1367,3 +1367,41 @@ def clarify_geometry(query: str) -> dict | None:
         if not re.search(rf"{label}\s+(?:of\s+)?(-?\d+(?:\.\d+)?)", query, re.IGNORECASE):
             missing[label] = (f"What is the {label}?", f"{label} {{}}")
     return missing or None
+
+
+# --- recognition bridge: NL → ({typed knowns}, goal) for the plan synthesizer -----------
+# Extracts unit-cued physics quantities as typed knowns and the asked quantity as the goal,
+# then asks synthesize() for a path. Claims a query ONLY when the derivation needs ≥2 ops —
+# single-formula queries are left to the `physics` orchestrator (mutually exclusive: if the
+# goal's direct inputs are present the path is length 1; if not, physics can't bind anyway).
+_SYNTH_GOALS = [
+    (("power",), "power", " W"),
+    (("kinetic energy",), "kinetic_energy", " J"),
+    (("momentum",), "momentum", " kg·m/s"),
+    (("work",), "work", " J"),
+    (("force",), "force", " N"),
+    (("how fast", "speed"), "speed", " m/s"),
+]
+_SYNTH_ROLE_UNITS = [("mass", "KG"), ("acceleration", "ACCEL"), ("velocity", "VEL"),
+                     ("distance", "METERS"), ("time", "SECONDS"), ("force", "N"),
+                     ("work", "JOULES")]
+
+
+def bind_synthesis_physics(query: str) -> tuple[bool, dict | None, str, int]:
+    q = query.lower()
+    goal_suffix = next(((g, suf) for kws, g, suf in _SYNTH_GOALS if any(k in q for k in kws)),
+                       None)
+    if not goal_suffix:
+        return False, None, "code", 0
+    goal, suffix = goal_suffix
+    knowns = {}
+    for role, ukey in _SYNTH_ROLE_UNITS:
+        v = _num_before(query, _PHYSICS_UNITS[ukey])
+        if v is not None:
+            knowns[role] = v
+    knowns.pop(goal, None)  # we're solving FOR the goal, not reading it as a known
+    from .synthesize import MOTION_OPS, PHYSICS_OPS, synthesize
+    seq = synthesize(set(knowns), goal, PHYSICS_OPS + MOTION_OPS)
+    if seq is None or len(seq) < 2:  # single-formula → the `physics` orchestrator handles it
+        return False, None, "code", 0
+    return True, {"knowns": knowns, "goal": goal, "suffix": suffix}, "code", 0
