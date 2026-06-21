@@ -269,6 +269,9 @@ CASES = [
      "4.8 W", "synthesized_physics"),
     ("How much work is done accelerating a 10 kg mass at 2 m/s^2 over 5 meters?",
      "100 J", "synthesized_physics"),
+    # synthesis-backed finance: discount→tax→split (a chain percent_discount_tax can't do)
+    ("A $240 jacket is 17% off with 8% tax, split between 3 people — how much each?",
+     "$71.71 each", "synthesized_finance"),
 ]
 
 

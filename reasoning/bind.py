@@ -1405,3 +1405,24 @@ def bind_synthesis_physics(query: str) -> tuple[bool, dict | None, str, int]:
     if seq is None or len(seq) < 2:  # single-formula → the `physics` orchestrator handles it
         return False, None, "code", 0
     return True, {"knowns": knowns, "goal": goal, "suffix": suffix}, "code", 0
+
+
+# --- recognition bridge #2: finance "discount → tax → split" chain ----------------------
+# Reuses the discount/tax/people extractors. Claims ONLY the per-person split chain (3 ops)
+# that percent_discount_tax (discount+tax, 2 ops) can't do — additive, not duplicative.
+def bind_synthesis_finance(query: str) -> tuple[bool, dict | None, str, int]:
+    price, disc, tax, ppl = (_dollars(query), _DISCOUNT.search(query),
+                             _TAX.search(query), _PEOPLE.search(query))
+    if not (len(price) == 1 and disc and tax and ppl):
+        return False, None, "code", 0
+    people = int(ppl.group(1) or ppl.group(2))
+    if people <= 0:
+        return False, None, "code", 0
+    knowns = {"price": price[0], "discount_pct": float(disc.group(1)),
+              "tax_pct": float(tax.group(1)), "people": float(people)}
+    from .synthesize import FINANCE_OPS, synthesize
+    seq = synthesize(set(knowns), "per_person", FINANCE_OPS)
+    if seq is None or len(seq) < 2:
+        return False, None, "code", 0
+    return True, {"knowns": knowns, "goal": "per_person",
+                  "prefix": "$", "suffix": " each"}, "code", 0

@@ -1,13 +1,13 @@
 # DiffusionGemma on Apple Silicon (MLX)
 
-![reasoning fidelity vs Claude](https://img.shields.io/badge/fidelity_vs_Claude-42%2F42-brightgreen)
-![model-free](https://img.shields.io/badge/model--free-42%2F42-blue)
+![reasoning fidelity vs Claude](https://img.shields.io/badge/fidelity_vs_Claude-43%2F43-brightgreen)
+![model-free](https://img.shields.io/badge/model--free-43%2F43-blue)
 ![coded skills](https://img.shields.io/badge/skills-154-informational)
 
 Running `google/diffusiongemma-26B-A4B-it` — a 26B Mixture-of-Experts **diffusion**
 language model (~3.8B active params) — locally via `mlx-vlm` on an M3 Max (36 GB).
 
-> **Reasoning compiler:** 42/42 coded orchestrators reproduce the Claude teacher's answer
+> **Reasoning compiler:** 43/43 coded orchestrators reproduce the Claude teacher's answer
 > ([`reasoning.cli eval-all`](#reasoning-compiler-reasoning)), each at **0 model calls** (sidecar
 > cold). Static badges — regenerate with `eval-all` after changes.
 
@@ -196,7 +196,7 @@ python -m reasoning.cli list                # stored orchestrators
 `--teacher claude`) and checks agreement with a deterministic comparator (numeric tolerance +
 normalized-string) — **no sidecar needed**: coded orchestrators make 0 model calls and the
 comparator uses no model. It reports per-orchestrator agreement and confirms every coded answer
-used 0 model calls — the capability-gap gate across the whole graph (currently 42/42 agree, 42/42
+used 0 model calls — the capability-gap gate across the whole graph (currently 43/43 agree, 43/43
 model-free vs Claude). The comparator is tolerant (numeric/normalized-string/yes-no verdict); the
 teacher's final answer is taken as its last line when it skips the `ANSWER:` marker.
 
@@ -219,7 +219,9 @@ teacher's final answer is taken as its last line when it skips the `ANSWER:` mar
   distance–speed–time triangle (goal-directed op selection), and simple interest — all model-free.
   Roles live on ops (not skills), so disjoint role vocabularies keep domains from interfering
   (a finance goal can't pull a physics op); ambiguous goals (two shortest paths) are detectable.
-  Memoized; still side-by-side (NL → {knowns, goal} recognition is the remaining step to wire it in).
+  Memoized, and now LIVE: synthesized_physics (force→work→power) and synthesized_finance
+  (discount→tax→split) answer real queries whose plans are discovered, not hand-written — each via
+  a bind that maps NL → {typed knowns, goal}, 0 model calls.
 
 Modules: `engine.py` (one-shot / one-shot-N thinking-off calls via the sidecar; N varies the
 **seed** for diverse candidates), `patterns.py` (decompose-solve-combine, map-reduce,

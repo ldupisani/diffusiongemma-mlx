@@ -6,7 +6,7 @@ Only if the bind falls back to the model extractor does it touch the sidecar.
 """
 
 from reasoning import engine
-from reasoning.bind import bind_discount_tax
+from reasoning.bind import bind_discount_tax, bind_synthesis_finance
 from reasoning.compiled import CodeStep, Inp, Lit, Plan, Step, run_plan
 
 META = {
@@ -40,7 +40,8 @@ def precondition(query):
     # prefers this over the generic numeric_consensus orchestrator.
     q = query.lower()
     has_pct = "%" in q or "percent" in q
-    return has_pct and ("off" in q or "discount" in q) and ("tax" in q or "vat" in q)
+    return (has_pct and ("off" in q or "discount" in q) and ("tax" in q or "vat" in q)
+            and not bind_synthesis_finance(query)[0])  # defer the +split chain to synthesis
 
 
 def run(query):

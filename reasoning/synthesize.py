@@ -40,6 +40,7 @@ class Op:
 FINANCE_OPS = [
     Op("arith.apply_discount", ("price", "discount_pct"), "discounted_price"),
     Op("arith.apply_tax", ("discounted_price", "tax_pct"), "final_price"),
+    Op("arith.divide", ("final_price", "people"), "per_person"),  # discount→tax→split
     Op("arith.apply_tax", ("price", "tax_pct"), "taxed_price"),
     Op("arith.percent_of", ("price", "discount_pct"), "discount_amount"),
 ]
