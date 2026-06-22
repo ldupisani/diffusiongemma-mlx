@@ -8,6 +8,9 @@ META = {
     "query_type": "percentile",
     "description": "the p-th percentile of a list of numbers",
     "example_queries": [
+        # [0] is method-agnostic (a median: all percentile conventions agree) so eval-all
+        # isn't flagged by the teacher flip-flopping between INC/EXC interpolation methods.
+        "What is the 50th percentile of 10, 20, 30, 40, and 50?",
         "What is the 90th percentile of 1, 2, 3, 4, 5, 6, 7, 8, 9, and 10?",
         "What is the 25th percentile of 5, 10, 15, and 20?",
     ],

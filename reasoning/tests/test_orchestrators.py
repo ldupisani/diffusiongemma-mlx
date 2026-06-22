@@ -275,6 +275,9 @@ CASES = [
     # synthesis-backed geometry → cost: area × unit price (was hijacked by ratio's cost branch)
     ("How much does it cost to tile a 4 meter by 6 meter floor at $8 per square meter?",
      "$192", "synthesized_geometry"),
+    # synthesis-backed chemistry: molar_mass(formula) → moles / mass (formula → derivation)
+    ("How many moles are in 36 grams of H2O?", "2 mol", "synthesized_chemistry"),
+    ("What is the mass of 2 moles of H2O?", "36.03 g", "synthesized_chemistry"),
 ]
 
 

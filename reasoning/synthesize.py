@@ -75,7 +75,15 @@ GEOMETRY_COST_OPS = [
     Op("arith.multiply", ("area", "unit_price"), "total_cost"),
 ]
 
-ALL_OPS = FINANCE_OPS + INTEREST_OPS + MOTION_OPS + PHYSICS_OPS + GEOMETRY_COST_OPS
+# chemistry: compute molar mass from a FORMULA (string role), then moles or mass
+CHEM_OPS = [
+    Op("chem.molar_mass", ("formula",), "molar_mass"),
+    Op("chem.moles", ("mass", "molar_mass"), "moles"),          # moles = grams / molar_mass
+    Op("arith.multiply", ("moles", "molar_mass"), "mass"),       # mass  = moles × molar_mass
+]
+
+ALL_OPS = (FINANCE_OPS + INTEREST_OPS + MOTION_OPS + PHYSICS_OPS + GEOMETRY_COST_OPS
+           + CHEM_OPS)
 
 _MEMO: dict = {}
 _searches = 0  # BFS runs actually executed (cache misses) — for tests/telemetry

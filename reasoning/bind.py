@@ -1456,3 +1456,30 @@ def bind_synthesis_geometry(query: str) -> tuple[bool, dict | None, str, int]:
         return False, None, "code", 0
     return True, {"knowns": knowns, "goal": "total_cost",
                   "prefix": "$", "suffix": ""}, "code", 0
+
+
+# --- recognition bridge #4: chemistry (compute molar mass from a formula, then moles/mass) -
+# The existing chemistry orchestrator needs molar mass GIVEN (g/mol); this computes it from
+# the FORMULA (a string-valued role), then derives moles (from grams) or mass (from moles).
+def bind_synthesis_chemistry(query: str) -> tuple[bool, dict | None, str, int]:
+    q = query.lower()
+    if _GMOL.search(query):  # molar mass given explicitly → the chemistry orchestrator handles it
+        return False, None, "code", 0
+    formula = _find_formula(query)
+    if not formula:
+        return False, None, "code", 0
+    grams, moles_given = _GRAMS.search(query), _MOLES_N.search(query)
+    knowns = {"formula": formula}
+    if "mole" in q and grams:        # moles from grams + formula
+        knowns["mass"] = float(grams[1])
+        goal, suffix = "moles", " mol"
+    elif "mass" in q and moles_given:  # mass of N moles of formula
+        knowns["moles"] = float(moles_given[1])
+        goal, suffix = "mass", " g"
+    else:
+        return False, None, "code", 0
+    from .synthesize import CHEM_OPS, synthesize
+    seq = synthesize(set(knowns), goal, CHEM_OPS)
+    if seq is None or len(seq) < 2:
+        return False, None, "code", 0
+    return True, {"knowns": knowns, "goal": goal, "prefix": "", "suffix": suffix}, "code", 0
