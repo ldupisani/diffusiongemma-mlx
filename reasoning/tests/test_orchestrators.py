@@ -272,6 +272,9 @@ CASES = [
     # synthesis-backed finance: discount→tax→split (a chain percent_discount_tax can't do)
     ("A $240 jacket is 17% off with 8% tax, split between 3 people — how much each?",
      "$71.71 each", "synthesized_finance"),
+    # synthesis-backed geometry → cost: area × unit price (was hijacked by ratio's cost branch)
+    ("How much does it cost to tile a 4 meter by 6 meter floor at $8 per square meter?",
+     "$192", "synthesized_geometry"),
 ]
 
 

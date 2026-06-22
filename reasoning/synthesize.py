@@ -66,7 +66,16 @@ PHYSICS_OPS = [
     Op("physics.momentum", ("mass", "velocity"), "momentum"),
 ]
 
-ALL_OPS = FINANCE_OPS + INTEREST_OPS + MOTION_OPS + PHYSICS_OPS
+# geometry → cost: a surface's area × a unit price (tile / paint / carpet)
+GEOMETRY_COST_OPS = [
+    Op("geometry.rectangle_area", ("length", "width"), "area"),
+    Op("geometry.circle_area", ("radius",), "area"),
+    Op("geometry.square_area", ("side",), "area"),
+    Op("geometry.triangle_area", ("base", "height"), "area"),
+    Op("arith.multiply", ("area", "unit_price"), "total_cost"),
+]
+
+ALL_OPS = FINANCE_OPS + INTEREST_OPS + MOTION_OPS + PHYSICS_OPS + GEOMETRY_COST_OPS
 
 _MEMO: dict = {}
 _searches = 0  # BFS runs actually executed (cache misses) — for tests/telemetry

@@ -1426,3 +1426,33 @@ def bind_synthesis_finance(query: str) -> tuple[bool, dict | None, str, int]:
         return False, None, "code", 0
     return True, {"knowns": knowns, "goal": "per_person",
                   "prefix": "$", "suffix": " each"}, "code", 0
+
+
+# --- recognition bridge #3: geometry → cost (area × unit price) -------------------------
+# Extracts a surface's dimensions and a per-area price; synthesize() finds area → ×price.
+_BY_DIMS = re.compile(
+    r"(\d+(?:\.\d+)?)\s*(?:meters?|metres?|m|feet|ft|cm|inches?|in)?\s*(?:by|x|×)\s*"
+    r"(\d+(?:\.\d+)?)", re.IGNORECASE)
+_PER_AREA = re.compile(
+    r"\$\s*(\d+(?:\.\d+)?)\s*(?:per|/|a)\s*(?:sq(?:uare|\.)?\s*\w+|\w+\s*(?:²|\^2))",
+    re.IGNORECASE)
+
+
+def bind_synthesis_geometry(query: str) -> tuple[bool, dict | None, str, int]:
+    price = _PER_AREA.search(query)
+    if not price:
+        return False, None, "code", 0
+    knowns = {"unit_price": float(price.group(1))}
+    m = _BY_DIMS.search(query)
+    if m:  # "4 meter by 6 meter" → rectangle
+        knowns["length"], knowns["width"] = float(m.group(1)), float(m.group(2))
+    for label in ("radius", "side", "length", "width", "base", "height"):
+        lm = re.search(rf"{label}\s+(?:of\s+)?(-?\d+(?:\.\d+)?)", query, re.IGNORECASE)
+        if lm:
+            knowns[label] = float(lm.group(1))
+    from .synthesize import GEOMETRY_COST_OPS, synthesize
+    seq = synthesize(set(knowns), "total_cost", GEOMETRY_COST_OPS)
+    if seq is None or len(seq) < 2:
+        return False, None, "code", 0
+    return True, {"knowns": knowns, "goal": "total_cost",
+                  "prefix": "$", "suffix": ""}, "code", 0

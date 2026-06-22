@@ -1,6 +1,6 @@
 """Ratios / proportions / fractions — simplify, convert, solve, unit rate, scale. Zero model."""
 
-from reasoning.bind import bind_ratio
+from reasoning.bind import bind_ratio, bind_synthesis_geometry
 from reasoning.compiled import dispatch
 
 META = {
@@ -27,7 +27,9 @@ META = {
 
 
 def precondition(query):
-    return bind_ratio(query)[0]
+    # defer an area×price ("$8 per square meter") query to the geometry-cost synthesis chain,
+    # which its "cost + how much" item-scaling branch would otherwise mis-grab
+    return bind_ratio(query)[0] and not bind_synthesis_geometry(query)[0]
 
 
 def run(query):
