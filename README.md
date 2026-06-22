@@ -219,9 +219,11 @@ teacher's final answer is taken as its last line when it skips the `ANSWER:` mar
   distance–speed–time triangle (goal-directed op selection), and simple interest — all model-free.
   Roles live on ops (not skills), so disjoint role vocabularies keep domains from interfering
   (a finance goal can't pull a physics op); ambiguous goals (two shortest paths) are detectable.
-  Memoized, and now LIVE: synthesized_physics (force→work→power), synthesized_finance
-  (discount→tax→split), synthesized_geometry (area→cost), and synthesized_chemistry (formula→molar mass→moles) answer real queries whose plans are discovered, not hand-written — each via
-  a bind that maps NL → {typed knowns, goal}, 0 model calls.
+  Memoized, and now LIVE across four domains, each spanning several chains: synthesized_physics
+  (force→work→power, Δv→force, force→pressure), synthesized_finance (discount→tax→split,
+  N-items→discount→tax), synthesized_geometry (area/perimeter/volume→cost), and
+  synthesized_chemistry (formula→molar mass→moles/mass/molarity) answer real queries whose plans
+  are discovered, not hand-written — each via a bind that maps NL → {typed knowns, goal}, 0 model calls.
 
 Modules: `engine.py` (one-shot / one-shot-N thinking-off calls via the sidecar; N varies the
 **seed** for diverse candidates), `patterns.py` (decompose-solve-combine, map-reduce,
