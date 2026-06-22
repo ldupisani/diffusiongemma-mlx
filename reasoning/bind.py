@@ -680,10 +680,19 @@ def bind_unit_convert(query: str) -> tuple[bool, dict | None, str, int]:
             if s and t:
                 source, target = s, t
 
-    if source and target:
+    if source and target and _units_compatible(source, target):
         return True, {"value": value, "from": source, "to": target,
                       "to_sym": _units.SUFFIX.get(target, f" {target}")}, "code", 0
     return False, None, "code", 0
+
+
+def _units_compatible(a: str, b: str) -> bool:
+    """Same dimension? A real conversion needs it — so a stray 'X to Y' across dimensions
+    (kg→seconds in a physics query) is NOT claimed as a conversion (it would only decline)."""
+    if a in _units._TEMP or b in _units._TEMP:
+        return a in _units._TEMP and b in _units._TEMP
+    fa, fb = _units._FACTORS.get(a), _units._FACTORS.get(b)
+    return bool(fa and fb and fa[0] == fb[0])
 
 
 # --- compound-interest family ---------------------------------------------------------
@@ -1375,6 +1384,7 @@ def clarify_geometry(query: str) -> dict | None:
 # single-formula queries are left to the `physics` orchestrator (mutually exclusive: if the
 # goal's direct inputs are present the path is length 1; if not, physics can't bind anyway).
 _SYNTH_GOALS = [
+    (("pressure",), "pressure", " Pa"),
     (("power",), "power", " W"),
     (("kinetic energy",), "kinetic_energy", " J"),
     (("momentum",), "momentum", " kg·m/s"),
@@ -1384,7 +1394,7 @@ _SYNTH_GOALS = [
 ]
 _SYNTH_ROLE_UNITS = [("mass", "KG"), ("acceleration", "ACCEL"), ("velocity", "VEL"),
                      ("distance", "METERS"), ("time", "SECONDS"), ("force", "N"),
-                     ("work", "JOULES")]
+                     ("work", "JOULES"), ("area", "AREA")]
 
 
 def bind_synthesis_physics(query: str) -> tuple[bool, dict | None, str, int]:
@@ -1399,6 +1409,9 @@ def bind_synthesis_physics(query: str) -> tuple[bool, dict | None, str, int]:
         v = _num_before(query, _PHYSICS_UNITS[ukey])
         if v is not None:
             knowns[role] = v
+    vm = _FROM_TO_VEL.search(query)  # "from <v0> to <v1> m/s" → accelerate the object
+    if vm and "m/s" in q:
+        knowns["v_initial"], knowns["v_final"] = float(vm[1]), float(vm[2])
     knowns.pop(goal, None)  # we're solving FOR the goal, not reading it as a known
     from .synthesize import MOTION_OPS, PHYSICS_OPS, synthesize
     seq = synthesize(set(knowns), goal, PHYSICS_OPS + MOTION_OPS)
@@ -1407,42 +1420,66 @@ def bind_synthesis_physics(query: str) -> tuple[bool, dict | None, str, int]:
     return True, {"knowns": knowns, "goal": goal, "suffix": suffix}, "code", 0
 
 
-# --- recognition bridge #2: finance "discount → tax → split" chain ----------------------
-# Reuses the discount/tax/people extractors. Claims ONLY the per-person split chain (3 ops)
-# that percent_discount_tax (discount+tax, 2 ops) can't do — additive, not duplicative.
+# --- recognition bridge #2: finance discount → tax chains -------------------------------
+# Reuses the discount/tax/people extractors and adds "N items at $X each". Claims a chain
+# percent_discount_tax (plain discount+tax) can't do: a per-person SPLIT and/or a multi-item
+# QUANTITY. Additive, not duplicative.
+_QTY_AT = re.compile(r"(\d+)\s+\w+\s+at\s+\$\s*(\d+(?:\.\d+)?)\s*(?:each|apiece)", re.IGNORECASE)
+
+
 def bind_synthesis_finance(query: str) -> tuple[bool, dict | None, str, int]:
-    price, disc, tax, ppl = (_dollars(query), _DISCOUNT.search(query),
-                             _TAX.search(query), _PEOPLE.search(query))
-    if not (len(price) == 1 and disc and tax and ppl):
+    disc, tax, ppl, qty = (_DISCOUNT.search(query), _TAX.search(query),
+                           _PEOPLE.search(query), _QTY_AT.search(query))
+    if not (disc and tax) or not (ppl or qty):  # plain discount+tax → percent_discount_tax
         return False, None, "code", 0
-    people = int(ppl.group(1) or ppl.group(2))
-    if people <= 0:
-        return False, None, "code", 0
-    knowns = {"price": price[0], "discount_pct": float(disc.group(1)),
-              "tax_pct": float(tax.group(1)), "people": float(people)}
+    knowns = {"discount_pct": float(disc.group(1)), "tax_pct": float(tax.group(1))}
+    if qty:  # "5 shirts at $20 each" → subtotal from unit price × quantity
+        knowns["quantity"], knowns["unit_price"] = float(qty.group(1)), float(qty.group(2))
+    else:
+        price = _dollars(query)
+        if len(price) != 1:
+            return False, None, "code", 0
+        knowns["price"] = price[0]
+    suffix = ""
+    if ppl:
+        people = int(ppl.group(1) or ppl.group(2))
+        if people <= 0:
+            return False, None, "code", 0
+        knowns["people"] = float(people)
+    goal, suffix = ("per_person", " each") if ppl else ("final_price", "")
     from .synthesize import FINANCE_OPS, synthesize
-    seq = synthesize(set(knowns), "per_person", FINANCE_OPS)
+    seq = synthesize(set(knowns), goal, FINANCE_OPS)
     if seq is None or len(seq) < 2:
         return False, None, "code", 0
-    return True, {"knowns": knowns, "goal": "per_person",
-                  "prefix": "$", "suffix": " each"}, "code", 0
+    return True, {"knowns": knowns, "goal": goal, "prefix": "$", "suffix": suffix}, "code", 0
 
 
-# --- recognition bridge #3: geometry → cost (area × unit price) -------------------------
-# Extracts a surface's dimensions and a per-area price; synthesize() finds area → ×price.
+# --- recognition bridge #3: geometry → cost ---------------------------------------------
+# Per-AREA price → area → total_cost (tile/paint); per-LENGTH → perimeter → fence_cost
+# (fencing); per-VOLUME → volume → fill_cost (concrete/mulch). The price KIND picks the goal.
 _BY_DIMS = re.compile(
     r"(\d+(?:\.\d+)?)\s*(?:meters?|metres?|m|feet|ft|cm|inches?|in)?\s*(?:by|x|×)\s*"
     r"(\d+(?:\.\d+)?)", re.IGNORECASE)
+_PER_VOLUME = re.compile(
+    r"\$\s*(\d+(?:\.\d+)?)\s*(?:per|/|a)\s*(?:cu(?:bic)?\.?\s*\w+|\w+\s*(?:³|\^3))", re.IGNORECASE)
 _PER_AREA = re.compile(
-    r"\$\s*(\d+(?:\.\d+)?)\s*(?:per|/|a)\s*(?:sq(?:uare|\.)?\s*\w+|\w+\s*(?:²|\^2))",
-    re.IGNORECASE)
+    r"\$\s*(\d+(?:\.\d+)?)\s*(?:per|/|a)\s*(?:sq(?:uare|\.)?\s*\w+|\w+\s*(?:²|\^2))", re.IGNORECASE)
+_PER_LENGTH = re.compile(
+    r"\$\s*(\d+(?:\.\d+)?)\s*(?:per|/|a)\s*(?:linear\s+)?"
+    r"(?:meters?|metres?|m|feet|ft|yards?|yd|cm|inch(?:es)?|in)\b", re.IGNORECASE)
 
 
 def bind_synthesis_geometry(query: str) -> tuple[bool, dict | None, str, int]:
-    price = _PER_AREA.search(query)
-    if not price:
+    vol, area, length = (_PER_VOLUME.search(query), _PER_AREA.search(query),
+                         _PER_LENGTH.search(query))
+    if vol:      # most specific first ("per cubic meter" before "per meter")
+        knowns, goal = {"volume_price": float(vol.group(1))}, "fill_cost"
+    elif area:
+        knowns, goal = {"unit_price": float(area.group(1))}, "total_cost"
+    elif length:
+        knowns, goal = {"length_price": float(length.group(1))}, "fence_cost"
+    else:
         return False, None, "code", 0
-    knowns = {"unit_price": float(price.group(1))}
     m = _BY_DIMS.search(query)
     if m:  # "4 meter by 6 meter" → rectangle
         knowns["length"], knowns["width"] = float(m.group(1)), float(m.group(2))
@@ -1451,11 +1488,10 @@ def bind_synthesis_geometry(query: str) -> tuple[bool, dict | None, str, int]:
         if lm:
             knowns[label] = float(lm.group(1))
     from .synthesize import GEOMETRY_COST_OPS, synthesize
-    seq = synthesize(set(knowns), "total_cost", GEOMETRY_COST_OPS)
+    seq = synthesize(set(knowns), goal, GEOMETRY_COST_OPS)
     if seq is None or len(seq) < 2:
         return False, None, "code", 0
-    return True, {"knowns": knowns, "goal": "total_cost",
-                  "prefix": "$", "suffix": ""}, "code", 0
+    return True, {"knowns": knowns, "goal": goal, "prefix": "$", "suffix": ""}, "code", 0
 
 
 # --- recognition bridge #4: chemistry (compute molar mass from a formula, then moles/mass) -
@@ -1469,8 +1505,12 @@ def bind_synthesis_chemistry(query: str) -> tuple[bool, dict | None, str, int]:
     if not formula:
         return False, None, "code", 0
     grams, moles_given = _GRAMS.search(query), _MOLES_N.search(query)
+    volume = _LITERS_N.search(query)
     knowns = {"formula": formula}
-    if "mole" in q and grams:        # moles from grams + formula
+    if "molarity" in q and grams and volume:  # molar_mass → moles → molarity
+        knowns["mass"], knowns["volume"] = float(grams[1]), float(volume[1])
+        goal, suffix = "molarity", " M"
+    elif "mole" in q and grams:        # moles from grams + formula
         knowns["mass"] = float(grams[1])
         goal, suffix = "moles", " mol"
     elif "mass" in q and moles_given:  # mass of N moles of formula

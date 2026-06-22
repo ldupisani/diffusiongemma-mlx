@@ -41,6 +41,7 @@ FINANCE_OPS = [
     Op("arith.apply_discount", ("price", "discount_pct"), "discounted_price"),
     Op("arith.apply_tax", ("discounted_price", "tax_pct"), "final_price"),
     Op("arith.divide", ("final_price", "people"), "per_person"),  # discount→tax→split
+    Op("arith.multiply", ("unit_price", "quantity"), "price"),    # N items at $X each → subtotal
     Op("arith.apply_tax", ("price", "tax_pct"), "taxed_price"),
     Op("arith.percent_of", ("price", "discount_pct"), "discount_amount"),
 ]
@@ -64,15 +65,24 @@ PHYSICS_OPS = [
     Op("physics.power", ("work", "time"), "power"),
     Op("physics.kinetic_energy", ("mass", "velocity"), "kinetic_energy"),
     Op("physics.momentum", ("mass", "velocity"), "momentum"),
+    Op("physics.acceleration", ("v_initial", "v_final", "time"), "acceleration"),  # from Δv
+    Op("physics.pressure", ("force", "area"), "pressure"),                          # force → pressure
 ]
 
-# geometry → cost: a surface's area × a unit price (tile / paint / carpet)
+# geometry → cost. Distinct price roles (unit_price / length_price / volume_price) and goals
+# (total_cost / fence_cost / fill_cost) keep the goal unambiguous even when a rectangle's
+# area AND perimeter are both derivable.
 GEOMETRY_COST_OPS = [
     Op("geometry.rectangle_area", ("length", "width"), "area"),
     Op("geometry.circle_area", ("radius",), "area"),
     Op("geometry.square_area", ("side",), "area"),
     Op("geometry.triangle_area", ("base", "height"), "area"),
-    Op("arith.multiply", ("area", "unit_price"), "total_cost"),
+    Op("arith.multiply", ("area", "unit_price"), "total_cost"),     # tile / paint / carpet
+    Op("geometry.rectangle_perimeter", ("length", "width"), "perimeter"),
+    Op("arith.multiply", ("perimeter", "length_price"), "fence_cost"),  # fencing / edging
+    Op("geometry.cylinder_volume", ("radius", "height"), "volume"),
+    Op("geometry.cube_volume", ("side",), "volume"),
+    Op("arith.multiply", ("volume", "volume_price"), "fill_cost"),  # fill / concrete / mulch
 ]
 
 # chemistry: compute molar mass from a FORMULA (string role), then moles or mass
@@ -80,6 +90,7 @@ CHEM_OPS = [
     Op("chem.molar_mass", ("formula",), "molar_mass"),
     Op("chem.moles", ("mass", "molar_mass"), "moles"),          # moles = grams / molar_mass
     Op("arith.multiply", ("moles", "molar_mass"), "mass"),       # mass  = moles × molar_mass
+    Op("chem.molarity", ("moles", "volume"), "molarity"),        # molarity = moles / liters
 ]
 
 ALL_OPS = (FINANCE_OPS + INTEREST_OPS + MOTION_OPS + PHYSICS_OPS + GEOMETRY_COST_OPS

@@ -278,6 +278,16 @@ CASES = [
     # synthesis-backed chemistry: molar_mass(formula) → moles / mass (formula → derivation)
     ("How many moles are in 36 grams of H2O?", "2 mol", "synthesized_chemistry"),
     ("What is the mass of 2 moles of H2O?", "36.03 g", "synthesized_chemistry"),
+    # extended synthesis chains (one new chain per live domain)
+    ("What is the pressure if a 5 kg mass accelerates at 2 m/s^2 over an area of 4 square meters?",
+     "2.5 Pa", "synthesized_physics"),
+    ("What is the force on a 2 kg object accelerating from 0 to 10 m/s in 5 seconds?",
+     "4 N", "synthesized_physics"),
+    ("What is the total for 5 shirts at $20 each with 10% off and 8% tax?",
+     "$97.2", "synthesized_finance"),
+    ("How much to fence a 4 by 6 yard at $5 per meter?", "$100", "synthesized_geometry"),
+    ("How much to fill a cube with a side of 3 at $2 per cubic meter?", "$54", "synthesized_geometry"),
+    ("What is the molarity of 58.44 grams of NaCl in 2 liters?", "0.5 M", "synthesized_chemistry"),
 ]
 
 

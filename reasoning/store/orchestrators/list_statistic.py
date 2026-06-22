@@ -32,7 +32,9 @@ META = {
 
 
 def precondition(query):
-    return detect_stat_op(query) is not None
+    # bindability, not just the keyword: "total for 5 shirts at $20 each …" has "total" but no
+    # numeric LIST, so it must not claim-and-decline (blocking a more specific orchestrator)
+    return bind_list_statistic(query)[0]
 
 
 def run(query):
