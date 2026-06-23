@@ -225,9 +225,15 @@ _PER_AREA = re.compile(
 _PER_LENGTH = re.compile(
     r"\$\s*(\d+(?:\.\d+)?)\s*(?:per|/|a)\s*(?:linear\s+)?"
     r"(?:meters?|metres?|m|feet|ft|yards?|yd|cm|inch(?:es)?|in)\b", re.IGNORECASE)
+# a GOAL rate ("cost/price/how much PER <unit>") asks for a per-unit cost this orchestrator
+# does not compute (it returns a TOTAL); decline rather than silently answer the total. The
+# price's "per" is preceded by a $amount, so this adjacency only catches the asked rate.
+_RATE_GOAL = re.compile(r"(?:cost|price|charge|much|rate)\s+per\b", re.IGNORECASE)
 
 
 def bind_synthesis_geometry(query: str) -> tuple[bool, dict | None, str, int]:
+    if _RATE_GOAL.search(query):  # asks for cost-per-unit, not a total → not ours
+        return False, None, "code", 0
     vol, area, length = (_PER_VOLUME.search(query), _PER_AREA.search(query),
                          _PER_LENGTH.search(query))
     if vol:      # most specific first ("per cubic meter" before "per meter")

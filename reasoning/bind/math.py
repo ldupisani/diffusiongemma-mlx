@@ -294,7 +294,9 @@ def bind_ratio(query: str) -> tuple[bool, dict | None, str, int]:
             return True, {"skill": "ratio.scale", "dims": ["base", "from_n", "to_n"],
                           "places": 2, "suffix": " cups", "base": float(cups[1]),
                           "from_n": float(servs[0]), "to_n": float(servs[1])}, "code", 0
-    elif "cost" in q and "how much" in q:
+    elif "cost" in q and "how much" in q and "per" not in q:
+        # item-scaling ("3 apples cost $2, how much for 12 apples?") — never has "per". A
+        # "per <unit>" makes it a rate query this branch would mis-scale ⇒ decline.
         amt = re.search(r"\$\s*(\d+(?:\.\d+)?)", query)
         items = re.findall(r"(\d+)\s+[a-z]+", q)  # "3 apples", "12 apples"
         if amt and len(items) >= 2:

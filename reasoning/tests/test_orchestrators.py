@@ -369,6 +369,18 @@ class TestOrchestrators(unittest.TestCase):
             self.assertTrue(fn(clean)[0])
             self.assertFalse(fn(stray)[0], "stray $ should make operands ambiguous → decline")
 
+    def test_geometry_cost_declines_per_unit_rate(self):
+        # "cost PER square inch …" asks for a rate this orchestrator can't compute (it returns
+        # a total) — must decline, not silently answer the total or be mis-scaled by ratio
+        from reasoning.bind import bind_synthesis_geometry
+        rate = "How much does it cost per square inch to tile a 4 by 6 floor at $8 per square meter?"
+        total = "How much does it cost to tile a 4 meter by 6 meter floor at $8 per square meter?"
+        self.assertFalse(bind_synthesis_geometry(rate)[0])
+        self.assertTrue(bind_synthesis_geometry(total)[0])
+        m = router.recognize(rate)
+        self.assertNotIn(m.orchestrator.id if m else None,
+                         ("synthesized_geometry", "ratio_proportion"))
+
     def test_algebra_declines_malformed_solve_variable(self):
         # "for z-1" is not a valid variable — must decline, not silently solve for z
         from reasoning.bind import bind_algebra
