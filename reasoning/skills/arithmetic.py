@@ -14,6 +14,12 @@ from decimal import ROUND_HALF_UP, Decimal
 from .base import register
 
 
+@register("arith.identity", "return the value unchanged (pass-through / role rename)",
+          [((5,), 5), ((3.5,), 3.5)])
+def identity(x):
+    return x
+
+
 @register("arith.add", "add two numbers (sum, plus, total)", [((2, 3), 5), ((0.1, 0.2), 0.3)])
 def add(a: float, b: float) -> float:
     return a + b

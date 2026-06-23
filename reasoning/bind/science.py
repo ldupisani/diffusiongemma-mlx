@@ -182,8 +182,13 @@ def bind_synthesis_chemistry(query: str) -> tuple[bool, dict | None, str, int]:
         return False, None, "code", 0
     grams, moles_given = _GRAMS.search(query), _MOLES_N.search(query)
     volume = _LITERS_N.search(query)
+    price_g = re.search(r"\$\s*(\d+(?:\.\d+)?)\s*(?:per|/|a)\s*g(?:ram)?s?\b", query, re.IGNORECASE)
     knowns = {"formula": formula}
-    if "molarity" in q and grams and volume:  # molar_mass → moles → molarity
+    prefix, unique = "", False
+    if "cost" in q and price_g and moles_given:  # chem → finance: molar_mass → mass → $ per gram
+        knowns["moles"], knowns["price_per_gram"] = float(moles_given[1]), float(price_g[1])
+        goal, suffix, prefix, unique = "reagent_cost", "", "$", True
+    elif "molarity" in q and grams and volume:  # molar_mass → moles → molarity
         knowns["mass"], knowns["volume"] = float(grams[1]), float(volume[1])
         goal, suffix = "molarity", " M"
     elif "mole" in q and grams:        # moles from grams + formula
@@ -194,8 +199,9 @@ def bind_synthesis_chemistry(query: str) -> tuple[bool, dict | None, str, int]:
         goal, suffix = "mass", " g"
     else:
         return False, None, "code", 0
-    from reasoning.synthesize import CHEM_OPS, synthesize
-    seq = synthesize(set(knowns), goal, CHEM_OPS)
+    from reasoning.synthesize import CHEM_OPS, CROSS_OPS, synthesize
+    seq = synthesize(set(knowns), goal, CHEM_OPS + CROSS_OPS, unique=unique)
     if seq is None or len(seq) < 2:
         return False, None, "code", 0
-    return True, {"knowns": knowns, "goal": goal, "prefix": "", "suffix": suffix}, "code", 0
+    return True, {"knowns": knowns, "goal": goal, "prefix": prefix, "suffix": suffix,
+                  "unique": unique}, "code", 0

@@ -252,15 +252,22 @@ def bind_synthesis_geometry(query: str) -> tuple[bool, dict | None, str, int]:
         lm = re.search(rf"{label}\s+(?:of\s+)?(-?\d+(?:\.\d+)?)", query, re.IGNORECASE)
         if lm:
             knowns[label] = float(lm.group(1))
-    # cross-domain tail: a cost that's then SPLIT among N people chains geometry → finance
-    # (total_cost → /people). Only on total_cost (the tile/paint/carpet case), and the unique
-    # path is required so an ambiguous shape (two area derivations) declines rather than guesses.
+    # cross-domain tail: a geometry cost (total/fence/fill) that's then SPLIT among N people,
+    # taxed, or discounted chains geometry → finance through the `cost` funnel. unique=True is
+    # required so an ambiguous shape (two area derivations) declines rather than guesses.
     unique, suffix = False, ""
     q = query.lower()
-    if goal == "total_cost" and any(w in q for w in ("split", "shared", "between", "among")):
-        people = _E.count_of(query, "people", "friends", "ways", "guests", "of them")
+    if goal in ("total_cost", "fence_cost", "fill_cost"):
+        people = (_E.count_of(query, "people", "friends", "ways", "guests", "neighbors", "of them")
+                  if any(w in q for w in ("split", "shared", "between", "among")) else None)
+        tax = re.search(r"(\d+(?:\.\d+)?)\s*(?:%|percent)\s*(?:sales\s*)?(?:tax|vat)", q)
+        disc = re.search(r"(\d+(?:\.\d+)?)\s*(?:%|percent)\s*off", q)
         if people and people > 0:
             knowns["people"], goal, unique, suffix = float(people), "cost_per_person", True, " each"
+        elif tax:
+            knowns["tax_pct"], goal, unique = float(tax.group(1)), "cost_with_tax", True
+        elif disc:
+            knowns["discount_pct"], goal, unique = float(disc.group(1)), "cost_after_discount", True
     from reasoning.synthesize import CROSS_OPS, GEOMETRY_COST_OPS, synthesize
     pool = GEOMETRY_COST_OPS + CROSS_OPS
     seq = synthesize(set(knowns), goal, pool, unique=unique)

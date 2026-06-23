@@ -72,8 +72,10 @@ class TestSynthesize(unittest.TestCase):
         pool = syn.GEOMETRY_COST_OPS + syn.CROSS_OPS
         seq = syn.synthesize({"length", "width", "unit_price", "people"}, "cost_per_person",
                              pool, unique=True)
+        # area → total_cost → (funnel) cost → /people; the identity step is the cost funnel
         self.assertEqual([op.skill for op in seq],
-                         ["geometry.rectangle_area", "arith.multiply", "arith.divide"])
+                         ["geometry.rectangle_area", "arith.multiply", "arith.identity",
+                          "arith.divide"])
         r = syn.synthesize_and_run(
             {"length": 4.0, "width": 6.0, "unit_price": 8.0, "people": 3.0},
             "cost_per_person", pool, unique=True)

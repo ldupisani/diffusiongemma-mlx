@@ -386,6 +386,12 @@ CASES = [
      "area: 24, perimeter: 20", "geometry_multi"),
     # inverse synthesis: solve for the discount (input) given the target final price (output)
     ("What discount on a $80 item results in a final price of $60?", "25%", "inverse_finance"),
+    # expanded cross-domain: geometry cost + tax tail, fence_cost split, chemistry → finance
+    ("How much to tile a 4 by 6 meter floor at $8 per square meter plus 8% tax?",
+     "$207.36", "synthesized_geometry"),
+    ("What does it cost to fence a 10 by 20 meter yard at $15 per meter, split between 4 people?",
+     "$225 each", "synthesized_geometry"),
+    ("What is the cost of 3 moles of NaCl at $0.50 per gram?", "$87.66", "synthesized_chemistry"),
 ]
 
 

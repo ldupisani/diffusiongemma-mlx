@@ -8,7 +8,7 @@ computes it from the formula first — a derivation no single step does. 0 model
 from reasoning.bind import bind_synthesis_chemistry
 from reasoning.compiled import explain
 from reasoning.patterns import PatternResult
-from reasoning.synthesize import CHEM_OPS, synthesize_and_run
+from reasoning.synthesize import CHEM_OPS, CROSS_OPS, synthesize_and_run
 
 META = {
     "id": "synthesized_chemistry",
@@ -19,8 +19,9 @@ META = {
         "How many moles are in 36 grams of H2O?",
         "What is the mass of 2 moles of H2O?",
         "How many moles are in 100 grams of NaCl?",
+        "What is the cost of 3 moles of NaCl at $0.50 per gram?",
     ],
-    "keywords": ["moles", "mass", "grams", "formula"],
+    "keywords": ["moles", "mass", "grams", "formula", "cost"],
     "sub_orchestrators": [],
     "model_free": True,
     "bind_gated": True,
@@ -35,7 +36,8 @@ def run(query):
     ok, data, via, _ = bind_synthesis_chemistry(query)
     if not ok:
         return explain("could not extract a chemical formula and a mass or mole quantity")
-    r = synthesize_and_run(data["knowns"], data["goal"], CHEM_OPS)
+    r = synthesize_and_run(data["knowns"], data["goal"], CHEM_OPS + CROSS_OPS,
+                           unique=data.get("unique", False))
     if r is None:
         return explain("no derivation path to the goal")
     return PatternResult(answer=data["prefix"] + r.answer + data["suffix"],

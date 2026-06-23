@@ -105,16 +105,23 @@ CHEM_OPS = [
     Op("chem.molarity", ("moles", "volume"), "molarity"),        # molarity = moles / liters
 ]
 
-# cross-domain connectors: a cost produced by ANY domain (geometry's total_cost, …) flows
-# into a finance-style terminal op (split, tax, discount). These deliberately PUNCTURE the
-# disjoint-role isolation at a chosen seam, so a geometry derivation can finish with a finance
-# operation — e.g. "tile a floor … then split it 3 ways" = (area→total_cost)→(/people). Because
-# this opens shared seams, the binds that use it MUST pass unique=True (an ambiguous goal — two
-# equal-length derivations — then declines instead of silently picking one).
+# cross-domain connectors. A cost produced by ANY domain funnels into a generic `cost` role,
+# and the universal finance terminals (split / tax / discount) apply to `cost` ONCE. This is a
+# deliberate puncture of the disjoint-role isolation at a chosen seam: a geometry/chemistry
+# derivation can finish with a finance operation — e.g. "tile a floor … then split it 3 ways" =
+# (area→total_cost→cost)→(/people), or "cost of 3 mol of NaCl at $0.5/g" = (formula→molar_mass
+# →mass→reagent_cost→cost). The funnel scales: a new domain's cost is ONE identity row and it
+# inherits split/tax/discount for free. Binds that use this MUST pass unique=True — an ambiguous
+# goal (two equal-length derivations) then declines instead of silently picking one.
 CROSS_OPS = [
-    Op("arith.divide", ("total_cost", "people"), "cost_per_person"),
-    Op("arith.apply_tax", ("total_cost", "tax_pct"), "total_with_tax"),
-    Op("arith.apply_discount", ("total_cost", "discount_pct"), "total_after_discount"),
+    Op("arith.identity", ("total_cost",), "cost"),        # geometry: tile / paint / carpet
+    Op("arith.identity", ("fence_cost",), "cost"),        # geometry: fencing / edging
+    Op("arith.identity", ("fill_cost",), "cost"),         # geometry: concrete / mulch
+    Op("arith.multiply", ("mass", "price_per_gram"), "reagent_cost"),  # chemistry → $ (per gram)
+    Op("arith.identity", ("reagent_cost",), "cost"),
+    Op("arith.divide", ("cost", "people"), "cost_per_person"),         # split
+    Op("arith.apply_tax", ("cost", "tax_pct"), "cost_with_tax"),       # + tax
+    Op("arith.apply_discount", ("cost", "discount_pct"), "cost_after_discount"),  # − discount
 ]
 
 ALL_OPS = (FINANCE_OPS + INTEREST_OPS + MOTION_OPS + PHYSICS_OPS + GEOMETRY_COST_OPS
@@ -227,6 +234,7 @@ def synthesize_and_run(knowns_values: dict, goal: str, ops=None, *, places: int 
 # lookup like chem.molar_mass) can't be inverted, so a chain through it declines. The mirrors
 # must match the skills (verified by a test) — they re-express the same arithmetic in SymPy.
 SYMBOLIC = {
+    "arith.identity": lambda x: x,
     "arith.multiply": lambda a, b: a * b,
     "arith.divide": lambda a, b: a / b,
     "arith.percent_of": lambda v, pct: v * pct / 100,
