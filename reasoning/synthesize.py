@@ -35,6 +35,16 @@ class Op:
     produces: str
 
 
+# Unit-aware roles: a role that carries a physical dimension declares its CANONICAL unit (the
+# unit the skills compute in). A bind converts an extracted quantity to this unit before adding
+# it to the knowns, so "5 km" / "20 minutes" feed the planner as 5000 m / 1200 s — the magnitude
+# is correct regardless of how the query phrased it. Roles absent here are unitless/opaque.
+ROLE_UNIT = {
+    "distance": "m", "height": "m", "time": "s", "mass": "kg",
+    "velocity": "mps", "speed": "mps", "v_initial": "mps", "v_final": "mps",
+}
+
+
 # --- domain op libraries --------------------------------------------------------------
 # percentage finance: discounted_price (produced) chains into the next op's input role.
 FINANCE_OPS = [

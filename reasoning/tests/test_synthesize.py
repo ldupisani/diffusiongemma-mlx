@@ -85,6 +85,24 @@ class TestSynthesize(unittest.TestCase):
             {"length", "width", "side", "unit_price", "people"}, "cost_per_person",
             pool, unique=True))
 
+    # --- unit-aware roles: a non-base unit is canonicalized before synthesis ---
+    def test_unit_aware_canonicalizes_before_synthesis(self):
+        from reasoning.bind import bind_synthesis_physics
+        ok, data, *_ = bind_synthesis_physics(
+            "How much work to push a 2 kg object accelerating at 3 m/s^2 over 5 km?")
+        self.assertTrue(ok)
+        self.assertEqual(data["knowns"]["distance"], 5000.0)  # 5 km → 5000 m
+        r = syn.synthesize_and_run(data["knowns"], data["goal"], None)
+        self.assertEqual(r.answer, "30000")                   # F=2*3=6 N, W=6*5000 J
+        self.assertEqual(model_calls(r), 0)
+
+    def test_parse_quantity_is_collision_safe(self):
+        from reasoning.skills import units as U
+        self.assertEqual(U.parse_quantity("over 5 km", "length"), (5.0, "km"))
+        self.assertIsNone(U.parse_quantity("at 5 m/s", "length"))    # m/s is not a length
+        self.assertIsNone(U.parse_quantity("at 3 m/s2", "speed"))    # m/s² is not a speed
+        self.assertEqual(U.parse_quantity("at 5 m/s", "speed"), (5.0, "mps"))
+
     def test_already_known_goal_is_zero_ops(self):
         self.assertEqual(syn.synthesize({"final_price"}, "final_price"), [])
 

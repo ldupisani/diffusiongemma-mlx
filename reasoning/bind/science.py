@@ -147,9 +147,16 @@ def bind_synthesis_physics(query: str) -> tuple[bool, dict | None, str, int]:
     if not goal_suffix:
         return False, None, "code", 0
     goal, suffix = goal_suffix
+    from reasoning.skills import units as _units
+    from reasoning.synthesize import ROLE_UNIT
     knowns = {}
     for role, ukey in _SYNTH_ROLE_UNITS:
-        v = _num_before(query, _PHYSICS_UNITS[ukey])
+        target = ROLE_UNIT.get(role)
+        if target:  # unit-aware: accept any unit of this role's dimension, convert to canonical
+            pq = _units.parse_quantity(query, _units.DIMENSION[target])
+            v = _units.convert(pq[0], pq[1], target) if pq else None
+        else:        # opaque physical unit (N, J, m/s²) → the precise collision-safe regex
+            v = _num_before(query, _PHYSICS_UNITS[ukey])
         if v is not None:
             knowns[role] = v
     vm = _FROM_TO_VEL.search(query)  # "from <v0> to <v1> m/s" → accelerate the object

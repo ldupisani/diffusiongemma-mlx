@@ -7,6 +7,8 @@ concept units.f_to_c. Conversions come in symmetric pairs; the bind layer maps a
 
 from __future__ import annotations
 
+import re as _re
+
 from .base import register
 
 
@@ -121,6 +123,28 @@ SUFFIX.update({"l": " L", "ml": " mL", "mps": " m/s", "kph": " km/h", "mph": " m
 
 def canonical(token: str):
     return _CANON.get(token.strip().lower())
+
+
+# canonical unit → dimension, and dimension → its unit phrases (longest-first), for the
+# unit-AWARE extraction the bind layer uses to canonicalize a quantity before synthesis.
+DIMENSION = {u: dim for u, (dim, _) in _FACTORS.items()}
+_DIM_PHRASES: dict = {}
+for _ph in UNIT_PHRASES:
+    _dim = DIMENSION.get(_CANON[_ph])
+    if _dim:
+        _DIM_PHRASES.setdefault(_dim, []).append(_ph)  # UNIT_PHRASES is already longest-first
+
+
+def parse_quantity(text: str, dimension: str):
+    """First '<number> <unit>' whose unit belongs to `dimension` → (value, canonical_unit), else
+    None. Collision-safe: a bare 'm' inside 'm/s' or 'm/s²' is rejected by the trailing lookahead,
+    so a length scan never steals a speed/acceleration token."""
+    phrases = _DIM_PHRASES.get(dimension)
+    if not phrases:
+        return None
+    alt = "|".join(_re.escape(p) for p in phrases)
+    m = _re.search(rf"(-?\d+(?:\.\d+)?)\s*({alt})(?![A-Za-z0-9/²³^])", text, _re.IGNORECASE)
+    return (float(m.group(1)), canonical(m.group(2))) if m else None
 
 
 def _to_celsius(v, u):

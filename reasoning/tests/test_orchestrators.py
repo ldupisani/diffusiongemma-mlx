@@ -378,6 +378,9 @@ CASES = [
     # cross-domain synthesis: geometry area → cost → finance-style split
     ("What does it cost to tile a 4 by 6 meter floor at $8 per square meter, split between "
      "3 people?", "$64 each", "synthesized_geometry"),
+    # unit-aware synthesis: 5 km is canonicalized to metres before the force→work chain
+    ("How much work to push a 2 kg object accelerating at 3 m/s^2 over 5 km?",
+     "30000 J", "synthesized_physics"),
 ]
 
 
