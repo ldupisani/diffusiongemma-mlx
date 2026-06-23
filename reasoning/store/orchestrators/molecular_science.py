@@ -24,7 +24,10 @@ META = {
 
 
 def precondition(query):
-    return bind_molecular(query)[0]
+    # defer "molecules in N grams of <formula>" to synthesized_chemistry (mass→moles→molecules);
+    # this orchestrator reads a raw mole/molecule count, not a mass needing molar-mass conversion
+    from reasoning.bind import bind_synthesis_chemistry
+    return bind_molecular(query)[0] and not bind_synthesis_chemistry(query)[0]
 
 
 def run(query):

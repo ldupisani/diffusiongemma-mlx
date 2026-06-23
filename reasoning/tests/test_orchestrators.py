@@ -392,6 +392,13 @@ CASES = [
     ("What does it cost to fence a 10 by 20 meter yard at $15 per meter, split between 4 people?",
      "$225 each", "synthesized_geometry"),
     ("What is the cost of 3 moles of NaCl at $0.50 per gram?", "$87.66", "synthesized_chemistry"),
+    # chemistry → molecular (mass → moles → molecules)
+    ("How many molecules are in 36 grams of H2O?", "1.2034e+24", "synthesized_chemistry"),
+    # physics force + geometry shape → materials stress / Young's modulus
+    ("What is the stress on a 3 by 4 m plate under a 1200 N force?", "100 Pa",
+     "synthesized_materials"),
+    ("What is Young's modulus of a 3 by 4 m plate under 1200 N with strain 0.001?",
+     "100000 Pa", "synthesized_materials"),
 ]
 
 

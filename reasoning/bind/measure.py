@@ -232,6 +232,21 @@ _PER_LENGTH = re.compile(
 _RATE_GOAL = re.compile(r"(?:cost|price|charge|much|rate)\s+per\b", re.IGNORECASE)
 
 
+def shape_dims(query: str) -> dict:
+    """Geometry dimensions in the query → {role: value}: length/width from 'A by B', plus any
+    labeled radius/side/base/height. Shared by the geometry-cost, physics-pressure, and
+    materials-stress binds so a SHAPE can supply a derivable `area`/`volume`."""
+    dims = {}
+    m = _BY_DIMS.search(query)
+    if m:
+        dims["length"], dims["width"] = float(m.group(1)), float(m.group(2))
+    for label in ("radius", "side", "length", "width", "base", "height"):
+        lm = re.search(rf"{label}\s+(?:of\s+)?(-?\d+(?:\.\d+)?)", query, re.IGNORECASE)
+        if lm:
+            dims[label] = float(lm.group(1))
+    return dims
+
+
 def bind_synthesis_geometry(query: str) -> tuple[bool, dict | None, str, int]:
     if _RATE_GOAL.search(query):  # asks for cost-per-unit, not a total → not ours
         return False, None, "code", 0
@@ -245,13 +260,7 @@ def bind_synthesis_geometry(query: str) -> tuple[bool, dict | None, str, int]:
         knowns, goal = {"length_price": float(length.group(1))}, "fence_cost"
     else:
         return False, None, "code", 0
-    m = _BY_DIMS.search(query)
-    if m:  # "4 meter by 6 meter" → rectangle
-        knowns["length"], knowns["width"] = float(m.group(1)), float(m.group(2))
-    for label in ("radius", "side", "length", "width", "base", "height"):
-        lm = re.search(rf"{label}\s+(?:of\s+)?(-?\d+(?:\.\d+)?)", query, re.IGNORECASE)
-        if lm:
-            knowns[label] = float(lm.group(1))
+    knowns.update(shape_dims(query))  # "4 meter by 6 meter" → rectangle; labeled radius/side/…
     # cross-domain tail: a geometry cost (total/fence/fill) that's then SPLIT among N people,
     # taxed, or discounted chains geometry → finance through the `cost` funnel. unique=True is
     # required so an ambiguous shape (two area derivations) declines rather than guesses.

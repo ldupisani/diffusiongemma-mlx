@@ -188,6 +188,9 @@ def bind_synthesis_chemistry(query: str) -> tuple[bool, dict | None, str, int]:
     if "cost" in q and price_g and moles_given:  # chem → finance: molar_mass → mass → $ per gram
         knowns["moles"], knowns["price_per_gram"] = float(moles_given[1]), float(price_g[1])
         goal, suffix, prefix, unique = "reagent_cost", "", "$", True
+    elif "molecule" in q and grams:    # chem → molecular: mass → moles → molecules (Avogadro)
+        knowns["mass"] = float(grams[1])
+        goal, suffix, unique = "molecules", "", True
     elif "molarity" in q and grams and volume:  # molar_mass → moles → molarity
         knowns["mass"], knowns["volume"] = float(grams[1]), float(volume[1])
         goal, suffix = "molarity", " M"
@@ -199,9 +202,35 @@ def bind_synthesis_chemistry(query: str) -> tuple[bool, dict | None, str, int]:
         goal, suffix = "mass", " g"
     else:
         return False, None, "code", 0
-    from reasoning.synthesize import CHEM_OPS, CROSS_OPS, synthesize
-    seq = synthesize(set(knowns), goal, CHEM_OPS + CROSS_OPS, unique=unique)
+    from reasoning.synthesize import CHEM_OPS, CROSS_OPS, MOLECULAR_OPS, synthesize
+    seq = synthesize(set(knowns), goal, CHEM_OPS + MOLECULAR_OPS + CROSS_OPS, unique=unique)
     if seq is None or len(seq) < 2:
         return False, None, "code", 0
     return True, {"knowns": knowns, "goal": goal, "prefix": prefix, "suffix": suffix,
                   "unique": unique}, "code", 0
+
+
+# --- recognition bridge #5: physics force + geometry area → materials stress / Young's modulus
+def bind_synthesis_materials(query: str) -> tuple[bool, dict | None, str, int]:
+    q = query.lower()
+    if "stress" not in q and "modulus" not in q and "young" not in q:
+        return False, None, "code", 0
+    from reasoning.bind.measure import shape_dims
+    from reasoning.synthesize import (GEOMETRY_COST_OPS, MATERIALS_OPS, PHYSICS_OPS, synthesize)
+    knowns = shape_dims(query)                       # a SHAPE supplies the area
+    force = _num_before(query, _PHYSICS_UNITS["N"])
+    if force is not None:
+        knowns["force"] = force
+    area = _num_before(query, _PHYSICS_UNITS["AREA"])  # or an explicit area
+    if area is not None:
+        knowns["area"] = area
+    sm = re.search(r"strain\D{0,10}?(\d+(?:\.\d+)?)", q)
+    if sm:
+        knowns["strain"] = float(sm[1])
+    goal = "youngs" if ("young" in q or "modulus" in q) else "stress"
+    pool = GEOMETRY_COST_OPS + PHYSICS_OPS + MATERIALS_OPS
+    seq = synthesize(set(knowns), goal, pool, unique=True)
+    if seq is None or len(seq) < 2:  # single-formula (explicit area) → the `materials` orchestrator
+        return False, None, "code", 0
+    return True, {"knowns": knowns, "goal": goal, "suffix": " Pa", "prefix": "",
+                  "unique": True}, "code", 0

@@ -105,6 +105,23 @@ CHEM_OPS = [
     Op("chem.molarity", ("moles", "volume"), "molarity"),        # molarity = moles / liters
 ]
 
+# molecular science: Avogadro (chemistry → molecular — moles feeds molecules)
+MOLECULAR_OPS = [
+    Op("molec.molecules_from_moles", ("moles",), "molecules"),
+]
+
+# material science: stress = force/area (physics force + geometry area → materials), then
+# Young's modulus = stress/strain. Two physical-science domains feed one materials goal.
+MATERIALS_OPS = [
+    Op("materials.stress", ("force", "area"), "stress"),
+    Op("materials.youngs_modulus", ("stress", "strain"), "youngs"),
+]
+
+# practical chemistry: ideal-gas pressure from moles (chemistry) + temperature + volume
+PCHEM_OPS = [
+    Op("pchem.ideal_gas_pressure", ("moles", "temp_k", "volume_l"), "gas_pressure"),
+]
+
 # cross-domain connectors. A cost produced by ANY domain funnels into a generic `cost` role,
 # and the universal finance terminals (split / tax / discount) apply to `cost` ONCE. This is a
 # deliberate puncture of the disjoint-role isolation at a chosen seam: a geometry/chemistry
@@ -125,7 +142,7 @@ CROSS_OPS = [
 ]
 
 ALL_OPS = (FINANCE_OPS + INTEREST_OPS + MOTION_OPS + PHYSICS_OPS + GEOMETRY_COST_OPS
-           + CHEM_OPS + CROSS_OPS)
+           + CHEM_OPS + MOLECULAR_OPS + MATERIALS_OPS + PCHEM_OPS + CROSS_OPS)
 
 _MEMO: dict = {}
 _searches = 0  # BFS runs actually executed (cache misses) — for tests/telemetry
