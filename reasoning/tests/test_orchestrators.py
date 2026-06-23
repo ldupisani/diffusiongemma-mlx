@@ -384,6 +384,8 @@ CASES = [
     # multi-goal synthesis: two properties in one plan
     ("What are the area and perimeter of a 4 by 6 rectangle?",
      "area: 24, perimeter: 20", "geometry_multi"),
+    # inverse synthesis: solve for the discount (input) given the target final price (output)
+    ("What discount on a $80 item results in a final price of $60?", "25%", "inverse_finance"),
 ]
 
 

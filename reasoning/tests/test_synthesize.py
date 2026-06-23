@@ -4,6 +4,8 @@ shared op pool), ambiguity detection, memoization, and no-path decline — all m
 
 import unittest
 
+import sympy
+
 from reasoning import synthesize as syn
 from reasoning.compiled import model_calls
 
@@ -121,6 +123,36 @@ class TestSynthesize(unittest.TestCase):
 
     def test_multi_goal_declines_if_any_unreachable(self):
         self.assertIsNone(syn.synthesize_multi({"length", "width"}, ["area", "total_cost"]))
+
+    # --- inverse synthesis: solve for an INPUT given the output ---
+    def test_inverse_finance_discount(self):
+        # 250*(1-d/100)*1.08 = 200  →  d = 700/27 ≈ 25.93
+        x = syn.inverse_synthesize({"price": 250.0, "tax_pct": 8.0}, "discount_pct",
+                                   "final_price", 200.0, syn.FINANCE_OPS)
+        self.assertAlmostEqual(x, 700 / 27, places=4)
+
+    def test_inverse_geometry_and_physics(self):
+        side = syn.inverse_synthesize({}, "side", "area", 25.0,
+                                      [syn.Op("geometry.square_area", ("side",), "area")])
+        self.assertEqual(side, 5.0)                       # positive root chosen
+        acc = syn.inverse_synthesize({"mass": 3.0}, "acceleration", "force", 12.0, syn.PHYSICS_OPS)
+        self.assertEqual(acc, 4.0)
+
+    def test_inverse_declines_non_invertible_op(self):
+        # a chain through a table-lookup skill (chem.molar_mass) has no symbolic mirror
+        self.assertIsNone(syn.inverse_synthesize({"formula": "H2O"}, "mass", "moles", 1.0,
+                                                 syn.CHEM_OPS))
+
+    def test_symbolic_mirrors_match_their_skills(self):
+        # the SYMBOLIC mirror of each skill must compute the same value as the skill itself,
+        # else inverse synthesis would solve the wrong equation
+        from reasoning import skills
+        for skill, mirror in syn.SYMBOLIC.items():
+            n = mirror.__code__.co_argcount
+            args = [2.0, 3.0, 4.0][:n]
+            expected = skills.call(skill, *args)
+            got = float(mirror(*[sympy.Float(a) for a in args]))
+            self.assertAlmostEqual(got, expected, places=6, msg=skill)
 
     def test_already_known_goal_is_zero_ops(self):
         self.assertEqual(syn.synthesize({"final_price"}, "final_price"), [])

@@ -6,7 +6,7 @@ Only if the bind falls back to the model extractor does it touch the sidecar.
 """
 
 from reasoning import engine
-from reasoning.bind import bind_discount_tax, bind_synthesis_finance
+from reasoning.bind import bind_discount_tax, bind_inverse_finance, bind_synthesis_finance
 from reasoning.compiled import CodeStep, Inp, Lit, Plan, Step, run_plan
 
 META = {
@@ -41,7 +41,8 @@ def precondition(query):
     q = query.lower()
     has_pct = "%" in q or "percent" in q
     return (has_pct and ("off" in q or "discount" in q) and ("tax" in q or "vat" in q)
-            and not bind_synthesis_finance(query)[0])  # defer the +split chain to synthesis
+            and not bind_synthesis_finance(query)[0]   # defer the +split chain to synthesis
+            and not bind_inverse_finance(query)[0])    # defer "what discount → target" to inverse
 
 
 def run(query):

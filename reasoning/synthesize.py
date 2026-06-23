@@ -23,6 +23,8 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass
 
+import sympy
+
 from .compiled import CodeStep, Inp, Lit, Plan, Step, format_number, run_plan
 from .engine import _no_model
 
@@ -218,6 +220,64 @@ def synthesize_and_run(knowns_values: dict, goal: str, ops=None, *, places: int 
     if seq is None:
         return None
     return run_plan(to_plan(seq, goal, places=places), knowns_values, shot=_no_model)
+
+
+# Symbolic mirror of a skill's formula (args in the op's `needs` order), used ONLY for inverse
+# synthesis: solving for an input given the output. A skill without a mirror (e.g. a table
+# lookup like chem.molar_mass) can't be inverted, so a chain through it declines. The mirrors
+# must match the skills (verified by a test) — they re-express the same arithmetic in SymPy.
+SYMBOLIC = {
+    "arith.multiply": lambda a, b: a * b,
+    "arith.divide": lambda a, b: a / b,
+    "arith.percent_of": lambda v, pct: v * pct / 100,
+    "arith.apply_discount": lambda price, pct: price * (1 - pct / 100),
+    "arith.apply_tax": lambda amt, pct: amt * (1 + pct / 100),
+    "physics.force": lambda m, a: m * a,
+    "physics.work": lambda f, d: f * d,
+    "physics.power": lambda w, t: w / t,
+    "physics.kinetic_energy": lambda m, v: sympy.Rational(1, 2) * m * v ** 2,
+    "physics.momentum": lambda m, v: m * v,
+    "geometry.rectangle_area": lambda length, width: length * width,
+    "geometry.rectangle_perimeter": lambda length, width: 2 * (length + width),
+    "geometry.square_area": lambda side: side ** 2,
+    "geometry.circle_area": lambda radius: sympy.pi * radius ** 2,
+    "geometry.triangle_area": lambda base, height: sympy.Rational(1, 2) * base * height,
+}
+
+
+def inverse_synthesize(knowns_values: dict, unknown: str, goal: str, target, ops=None, *,
+                       unique: bool = True):
+    """Solve for the value of input role `unknown` so the forward chain yields goal == target.
+
+    The inverse of forward synthesis: you know the OUTPUT and all inputs but one. We forward-
+    synthesize `goal` treating `unknown` as known (to discover the op chain), mirror that chain
+    symbolically (the unknown a free symbol, the other knowns their values), then
+    sympy.solve(chain == target). Returns the solution (a non-negative real preferred, since
+    these roles are magnitudes/percentages), or None if there's no path, a non-symbolic op
+    blocks it, or there's no real solution. 0 model calls."""
+    ops = ALL_OPS if ops is None else ops
+    seq = synthesize(set(knowns_values) | {unknown}, goal, ops, unique=unique)
+    if seq is None:
+        return None
+    x = sympy.Symbol(unknown, real=True)
+    # numeric knowns → exact rationals; non-numeric (e.g. a formula string) stays as-is and will
+    # hit a mirror-less op (table lookup) → decline, before it's used in any arithmetic
+    env = {r: (sympy.Rational(str(v)) if isinstance(v, (int, float)) else v)
+           for r, v in knowns_values.items()}
+    env[unknown] = x
+    for op in seq:
+        mirror = SYMBOLIC.get(op.skill)
+        if mirror is None:
+            return None  # an op in the path has no symbolic form → can't invert
+        env[op.produces] = mirror(*[env[r] for r in op.needs])
+    try:
+        sols = sympy.solve(sympy.Eq(env[goal], sympy.Rational(str(target))), x)
+    except (NotImplementedError, RecursionError):
+        return None
+    reals = [s for s in sols if s.is_real]
+    nonneg = [s for s in reals if s.is_nonnegative]
+    pick = (nonneg or reals)
+    return float(pick[0]) if pick else None
 
 
 def synthesize_multi(knowns, goals, ops=None, *, max_depth: int = 8, unique: bool = False):

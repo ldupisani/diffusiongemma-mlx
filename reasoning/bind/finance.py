@@ -311,3 +311,30 @@ def bind_synthesis_finance(query: str) -> tuple[bool, dict | None, str, int]:
     if seq is None or len(seq) < 2:
         return False, None, "code", 0
     return True, {"knowns": knowns, "goal": goal, "prefix": "$", "suffix": suffix}, "code", 0
+
+
+# inverse synthesis: solve for the DISCOUNT that yields a target final price (output known,
+# input unknown) — "what discount on a $250 jacket gives a final price of $200 with 8% tax?"
+_WHAT_DISCOUNT = re.compile(r"what discount|discount (?:would|to|needed|required|that|gives)",
+                            re.IGNORECASE)
+_FINAL_TARGET = re.compile(r"(?:final price|final cost|ends? up(?: at)?|comes? to|total of|"
+                           r"to (?:be|reach|get to)|for a final(?: price)? of)\s*(?:of|at|is|"
+                           r"to)?\s*\$?\s*(\d+(?:\.\d+)?)", re.IGNORECASE)
+
+
+def bind_inverse_finance(query: str) -> tuple[bool, dict | None, str, int]:
+    if not _WHAT_DISCOUNT.search(query):
+        return False, None, "code", 0
+    tm = _FINAL_TARGET.search(query)
+    if not tm:
+        return False, None, "code", 0
+    target = float(tm.group(1))
+    prices = [p for p in _dollars(query) if abs(p - target) > 1e-9]
+    if len(prices) != 1:  # need exactly one item price distinct from the target
+        return False, None, "code", 0
+    knowns = {"price": prices[0], "tax_pct": 0.0}
+    tax = _TAX.search(query)
+    if tax:
+        knowns["tax_pct"] = float(tax.group(1))
+    return True, {"knowns": knowns, "unknown": "discount_pct", "goal": "final_price",
+                  "target": target, "suffix": "%"}, "code", 0
