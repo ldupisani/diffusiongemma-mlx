@@ -381,6 +381,9 @@ CASES = [
     # unit-aware synthesis: 5 km is canonicalized to metres before the force→work chain
     ("How much work to push a 2 kg object accelerating at 3 m/s^2 over 5 km?",
      "30000 J", "synthesized_physics"),
+    # multi-goal synthesis: two properties in one plan
+    ("What are the area and perimeter of a 4 by 6 rectangle?",
+     "area: 24, perimeter: 20", "geometry_multi"),
 ]
 
 

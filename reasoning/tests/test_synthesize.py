@@ -103,6 +103,25 @@ class TestSynthesize(unittest.TestCase):
         self.assertIsNone(U.parse_quantity("at 3 m/s2", "speed"))    # m/s² is not a speed
         self.assertEqual(U.parse_quantity("at 5 m/s", "speed"), (5.0, "mps"))
 
+    # --- multi-goal: several outputs in one plan, shared sub-steps computed once ---
+    def test_multi_goal_shares_substeps(self):
+        pool = syn.GEOMETRY_COST_OPS + syn.CROSS_OPS
+        merged = syn.synthesize_multi({"length", "width", "unit_price"},
+                                      ["area", "total_cost"], pool, unique=True)
+        # area is produced once and reused by total_cost (not recomputed)
+        self.assertEqual([o.skill for o in merged],
+                         ["geometry.rectangle_area", "arith.multiply"])
+        res = syn.synthesize_multi_and_run(
+            {"length": 4.0, "width": 6.0, "unit_price": 8.0},
+            ["area", "total_cost"], pool, unique=True)
+        self.assertIsNotNone(res)
+        r, values = res
+        self.assertEqual(values, {"area": 24.0, "total_cost": 192.0})
+        self.assertEqual(model_calls(r), 0)
+
+    def test_multi_goal_declines_if_any_unreachable(self):
+        self.assertIsNone(syn.synthesize_multi({"length", "width"}, ["area", "total_cost"]))
+
     def test_already_known_goal_is_zero_ops(self):
         self.assertEqual(syn.synthesize({"final_price"}, "final_price"), [])
 

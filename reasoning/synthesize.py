@@ -218,3 +218,44 @@ def synthesize_and_run(knowns_values: dict, goal: str, ops=None, *, places: int 
     if seq is None:
         return None
     return run_plan(to_plan(seq, goal, places=places), knowns_values, shot=_no_model)
+
+
+def synthesize_multi(knowns, goals, ops=None, *, max_depth: int = 8, unique: bool = False):
+    """One op sequence producing SEVERAL goals from shared knowns, or None if any is unreachable.
+    Goals are derived in order; each reuses roles already produced for an earlier goal, so a
+    shared sub-step (e.g. `area`, used by both `perimeter`-free and `total_cost`) is computed
+    ONCE. Returns the merged ops in dependency order (deduped by produced role)."""
+    ops = ALL_OPS if ops is None else ops
+    produced = set(knowns)
+    merged, seen = [], set(knowns)
+    for goal in goals:
+        seq = synthesize(produced, goal, ops, max_depth=max_depth, unique=unique)
+        if seq is None:
+            return None
+        for op in seq:
+            if op.produces not in seen:
+                merged.append(op)
+                seen.add(op.produces)
+                produced.add(op.produces)
+        produced.add(goal)  # an earlier goal is a known for the next
+    return merged
+
+
+def synthesize_multi_and_run(knowns_values: dict, goals, ops=None, *, places: int = 2,
+                             unique: bool = False):
+    """Synthesize and execute a multi-goal plan (0 model calls). Returns (result, {goal: value})
+    with each goal rounded to `places`, or None if any goal is unreachable."""
+    seq = synthesize_multi(set(knowns_values), goals, ops, unique=unique)
+    if seq is None:
+        return None
+    produced: set = set()
+    steps = []
+    for op in seq:
+        args = [Step(r) if r in produced else Inp(r) for r in op.needs]
+        steps.append(CodeStep(op.skill, args, out=op.produces))
+        produced.add(op.produces)
+    # answer_ref is arbitrary (we read every goal from the env); first goal keeps .answer sane
+    r = run_plan(Plan(steps=steps, answer_ref=goals[0], answer_format=format_number),
+                 knowns_values, shot=_no_model)
+    values = {g: round(r.data[g], places) for g in goals}
+    return r, values

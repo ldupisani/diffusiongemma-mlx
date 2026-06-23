@@ -270,6 +270,26 @@ def bind_synthesis_geometry(query: str) -> tuple[bool, dict | None, str, int]:
                   "unique": unique}, "code", 0
 
 
+# multi-output synthesis: a query asking for ≥2 properties of one rectangle ("the area AND
+# perimeter of a 4 by 6 rectangle") → a single plan producing both, shared sub-steps once.
+_MULTI_PROPS = [("area", "area"), ("perimeter", "perimeter")]
+
+
+def bind_geometry_multi(query: str) -> tuple[bool, dict | None, str, int]:
+    q = query.lower()
+    goals = [role for kw, role in _MULTI_PROPS if kw in q]
+    if len(goals) < 2:  # single property → the `geometry` orchestrator handles it
+        return False, None, "code", 0
+    m = _BY_DIMS.search(query)
+    if not m:
+        return False, None, "code", 0
+    knowns = {"length": float(m.group(1)), "width": float(m.group(2))}
+    from reasoning.synthesize import GEOMETRY_COST_OPS, synthesize_multi
+    if synthesize_multi(set(knowns), goals, GEOMETRY_COST_OPS, unique=True) is None:
+        return False, None, "code", 0
+    return True, {"knowns": knowns, "goals": goals}, "code", 0
+
+
 def clarify_geometry(query: str) -> dict | None:
     det = detect_geometry(query)
     if not det or det[1] is None:  # unknown shape, or hypotenuse (legs phrasing) → no probe

@@ -7,7 +7,8 @@ the Pythagorean hypotenuse.
 """
 
 from reasoning import engine
-from reasoning.bind import bind_geometry, clarify_geometry, validate_geometry
+from reasoning.bind import (bind_geometry, bind_geometry_multi, clarify_geometry,
+                           validate_geometry)
 from reasoning.compiled import CodeStep, Inp, Lit, Plan, Step, clarify, explain, run_guarded
 
 META = {
@@ -38,7 +39,8 @@ META = {
 def precondition(query):
     # bindability, not just keywords: "square meters" in a pressure query must NOT make this
     # claim the query (it detects square_area but can't find a side → does not bind).
-    return bind_geometry(query)[0]
+    # Defer a multi-property request ("area AND perimeter") to geometry_multi.
+    return bind_geometry(query)[0] and not bind_geometry_multi(query)[0]
 
 
 clarify_probe = clarify_geometry  # routed only when nothing can ANSWER (a lower router tier)
