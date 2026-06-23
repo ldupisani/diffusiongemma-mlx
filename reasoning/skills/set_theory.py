@@ -94,3 +94,27 @@ def format_set(s) -> str:
         return (0, e)
 
     return "{" + ", ".join(_fmt_elem(e) for e in sorted(s, key=key)) + "}"
+
+
+@register("setops.is_proper_subset", "is A a proper subset of B (A ⊊ B)",
+          [((frozenset({1, 2}), _A), True), ((_A, _A), False)])
+def is_proper_subset(a, b) -> bool:
+    return frozenset(a) < frozenset(b)
+
+
+@register("setops.is_superset", "is A a superset of B (A ⊇ B)",
+          [((_A, frozenset({1, 2})), True), ((frozenset({1, 2}), _A), False)])
+def is_superset(a, b) -> bool:
+    return frozenset(a) >= frozenset(b)
+
+
+@register("setops.set_equals", "are A and B the same set",
+          [((_A, _A), True), ((_A, _B), False)])
+def set_equals(a, b) -> bool:
+    return frozenset(a) == frozenset(b)
+
+
+@register("setops.count_subsets", "the number of subsets of A (2^|A|)",
+          [((_A,), 8), ((frozenset(),), 1)])
+def count_subsets(a) -> int:
+    return 2 ** len(frozenset(a))

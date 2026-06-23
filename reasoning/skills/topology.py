@@ -94,3 +94,29 @@ def is_hausdorff(X, T) -> bool:
                        for u in T for v in T):
                 return False
     return True
+
+
+@register("topology.exterior", "the exterior of A (interior of its complement)",
+          [((_X, _SIERP, frozenset({1})), frozenset()),
+           ((_X, _SIERP, frozenset({2})), frozenset({1}))])
+def exterior(X, T, A) -> frozenset:
+    return interior(X, T, frozenset(X) - frozenset(A))
+
+
+@register("topology.is_dense", "is A dense in X (closure of A = X)?",
+          [((_X, _SIERP, frozenset({1})), True), ((_X, _SIERP, frozenset({2})), False)])
+def is_dense(X, T, A) -> bool:
+    return closure(X, T, A) == frozenset(X)
+
+
+@register("topology.is_t0", "is the space T0 (distinct points are topologically "
+          "distinguishable by some open set)?",
+          [((_X, _SIERP), True), ((_X, frozenset({frozenset(), _X})), False)])
+def is_t0(X, T) -> bool:
+    X, T = frozenset(X), _T(T)
+    pts = sorted(X)
+    for i, x in enumerate(pts):
+        for y in pts[i + 1:]:
+            if not any((x in o) != (y in o) for o in T):
+                return False
+    return True

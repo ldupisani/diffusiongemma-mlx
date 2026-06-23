@@ -2,7 +2,7 @@
 
 ![reasoning fidelity vs Claude](https://img.shields.io/badge/fidelity_vs_Claude-50%2F50-brightgreen)
 ![model-free](https://img.shields.io/badge/model--free-50%2F50-blue)
-![coded skills](https://img.shields.io/badge/skills-190-informational)
+![coded skills](https://img.shields.io/badge/skills-207-informational)
 
 Running `google/diffusiongemma-26B-A4B-it` — a 26B Mixture-of-Experts **diffusion**
 language model (~3.8B active params) — locally via `mlx-vlm` on an M3 Max (36 GB).
@@ -258,7 +258,7 @@ only for fuzzy steps (open generation, judgement, recall) and ambiguous NL parsi
   `date.*`, `text.*`, `stats.*`, `units.*`, `finance.*`, `geometry.*`, `physics.*`, `numtheory.*`,
   `chem.*`, `radix.*`, `trig.*`, `coord.*`, `clock.*`, `sets.*`, `prob.*`, `ratio.*`, `health.*`,
   `logic.*`, `expr.*`, and university math — `setops.*`, `group.*`, `topology.*` (pure stdlib),
-  plus `algebra.*`/`calculus.*` (SymPy-backed, still 0 model calls) — 190 and counting),
+  plus `algebra.*`/`calculus.*` (SymPy-backed, still 0 model calls) — 207 and counting),
   indexed in a `SKILLS`
   registry. Skills never import the engine (a test enforces it). Rounding goes through one
   `arith.round_to`/`round_money` chokepoint (`Decimal`+`ROUND_HALF_UP`). Concept-level skills
