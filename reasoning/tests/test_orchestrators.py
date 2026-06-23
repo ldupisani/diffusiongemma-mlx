@@ -399,6 +399,11 @@ CASES = [
      "synthesized_materials"),
     ("What is Young's modulus of a 3 by 4 m plate under 1200 N with strain 0.001?",
      "100000 Pa", "synthesized_materials"),
+    # §A ready seams: geometry shape → physics pressure; motion → physics kinetic energy
+    ("What is the pressure of a 100 N force on a circular plate of radius 2 m?",
+     "7.96 Pa", "synthesized_physics"),
+    ("What is the kinetic energy of a 1000 kg car that travels 200 m in 10 s?",
+     "200000 J", "synthesized_physics"),
 ]
 
 

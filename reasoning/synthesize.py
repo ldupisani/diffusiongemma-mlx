@@ -63,11 +63,14 @@ INTEREST_OPS = [
     Op("finance.simple_interest", ("principal", "rate_pct", "years"), "final_balance"),
 ]
 
-# distance–speed–time triangle: any one from the other two (goal-directed op selection)
+# distance–speed–time triangle: any one from the other two (goal-directed op selection). The
+# speed→velocity rename bridges MOTION → PHYSICS so a computed speed can feed kinetic energy /
+# momentum (which consume the `velocity` role).
 MOTION_OPS = [
     Op("physics.speed", ("distance", "time"), "speed"),
     Op("arith.multiply", ("speed", "time"), "distance"),
     Op("arith.divide", ("distance", "speed"), "time"),
+    Op("arith.identity", ("speed",), "velocity"),
 ]
 
 # mechanics chain: force → work → power (a 3-op derivation, no hand-written orchestrator)

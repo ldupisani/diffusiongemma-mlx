@@ -162,9 +162,14 @@ def bind_synthesis_physics(query: str) -> tuple[bool, dict | None, str, int]:
     vm = _FROM_TO_VEL.search(query)  # "from <v0> to <v1> m/s" → accelerate the object
     if vm and "m/s" in q:
         knowns["v_initial"], knowns["v_final"] = float(vm[1]), float(vm[2])
+    from reasoning.bind.measure import shape_dims
+    knowns.update(shape_dims(query))  # a SHAPE supplies area (→ pressure) or volume
     knowns.pop(goal, None)  # we're solving FOR the goal, not reading it as a known
-    from reasoning.synthesize import MOTION_OPS, PHYSICS_OPS, synthesize
-    seq = synthesize(set(knowns), goal, PHYSICS_OPS + MOTION_OPS)
+    from reasoning.synthesize import GEOMETRY_COST_OPS, MOTION_OPS, PHYSICS_OPS, synthesize
+    # cross-domain pool: geometry shapes feed pressure; motion speed feeds KE/momentum. unique=True
+    # so an ambiguous derivation declines rather than silently picking one.
+    pool = PHYSICS_OPS + MOTION_OPS + GEOMETRY_COST_OPS
+    seq = synthesize(set(knowns), goal, pool, unique=True)
     if seq is None or len(seq) < 2:  # single-formula → the `physics` orchestrator handles it
         return False, None, "code", 0
     return True, {"knowns": knowns, "goal": goal, "suffix": suffix}, "code", 0
