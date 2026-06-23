@@ -136,6 +136,16 @@ PRICED_OPS = [
     Op("arith.identity", ("energy_cost",), "cost"),
 ]
 
+# geospatial → finance / motion. haversine yields a distance in KM; the downstream roles are
+# km-native (price_per_km, speed_kmh) so units stay consistent without canonicalizing — the
+# `geo_distance` role is distinct from motion's metres `distance`, so they never clash.
+GEO_OPS = [
+    Op("geo.haversine", ("la1", "lo1", "la2", "lo2"), "geo_distance"),  # km between two points
+    Op("arith.multiply", ("geo_distance", "price_per_km"), "travel_cost"),   # geo → $
+    Op("arith.divide", ("geo_distance", "speed_kmh"), "flight_hours"),       # geo → motion (time)
+    Op("arith.identity", ("travel_cost",), "cost"),
+]
+
 # cross-domain connectors. A cost produced by ANY domain funnels into a generic `cost` role,
 # and the universal finance terminals (split / tax / discount) apply to `cost` ONCE. This is a
 # deliberate puncture of the disjoint-role isolation at a chosen seam: a geometry/chemistry
@@ -156,7 +166,8 @@ CROSS_OPS = [
 ]
 
 ALL_OPS = (FINANCE_OPS + INTEREST_OPS + MOTION_OPS + PHYSICS_OPS + GEOMETRY_COST_OPS
-           + CHEM_OPS + MOLECULAR_OPS + MATERIALS_OPS + PCHEM_OPS + PRICED_OPS + CROSS_OPS)
+           + CHEM_OPS + MOLECULAR_OPS + MATERIALS_OPS + PCHEM_OPS + PRICED_OPS + GEO_OPS
+           + CROSS_OPS)
 
 _MEMO: dict = {}
 _searches = 0  # BFS runs actually executed (cache misses) — for tests/telemetry

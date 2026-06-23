@@ -1,6 +1,6 @@
 """Geospatial — great-circle distance, bearing, DMS↔decimal. Coded, zero model calls."""
 
-from reasoning.bind import bind_geospatial
+from reasoning.bind import bind_geospatial, bind_synthesis_geo
 from reasoning.compiled import dispatch
 
 META = {
@@ -22,7 +22,7 @@ META = {
 
 
 def precondition(query):
-    return bind_geospatial(query)[0]
+    return bind_geospatial(query)[0] and not bind_synthesis_geo(query)[0]
 
 
 def run(query):

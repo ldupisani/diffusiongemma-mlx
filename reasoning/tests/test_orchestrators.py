@@ -410,6 +410,11 @@ CASES = [
      "$150 each", "priced_cost"),
     ("What is the cost of running a 2 kW heater for 3 hours at $0.15 per kWh?",
      "$0.9", "priced_cost"),
+    # geo → finance (travel cost) and geo → motion (flight time)
+    ("What is the travel cost between (40.7128, -74.0060) and (51.5074, -0.1278) at $0.10 per km?",
+     "$557.02", "synthesized_geo"),
+    ("How long is a flight between (40.7128, -74.0060) and (51.5074, -0.1278) at 900 km/h?",
+     "6.19 hours", "synthesized_geo"),
 ]
 
 

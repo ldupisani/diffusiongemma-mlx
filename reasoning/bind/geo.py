@@ -37,3 +37,32 @@ def bind_geospatial(query: str) -> tuple[bool, dict | None, str, int]:
         if dm:
             return ok("geo.decimal_to_dms", ["dd"], [float(dm[1])], round=False)
     return False, None, "code", 0
+
+
+# geo synthesis: two lat/long points → travel cost ($/km) or flight time (km/h), chaining
+# haversine into a finance / motion op. Requires a price or speed so plain "distance between"
+# stays with the geospatial orchestrator.
+_PER_KM = re.compile(r"\$\s*(\d+(?:\.\d+)?)\s*(?:per|/)\s*(?:km|kilomet\w*)", re.IGNORECASE)
+_KMH = re.compile(r"(\d+(?:\.\d+)?)\s*(?:km/?h|kph|kilomet\w*\s*per\s*hour)", re.IGNORECASE)
+
+
+def bind_synthesis_geo(query: str) -> tuple[bool, dict | None, str, int]:
+    q = query.lower()
+    pts = _E.pairs(query)
+    if len(pts) < 2:
+        return False, None, "code", 0
+    knowns = {"la1": pts[0][0], "lo1": pts[0][1], "la2": pts[1][0], "lo2": pts[1][1]}
+    price, speed = _PER_KM.search(query), _KMH.search(query)
+    if "cost" in q and price:
+        knowns["price_per_km"] = float(price[1])
+        goal, suffix, prefix = "travel_cost", "", "$"
+    elif any(w in q for w in ("how long", "flight time", "travel time", "how many hours")) and speed:
+        knowns["speed_kmh"] = float(speed[1])
+        goal, suffix, prefix = "flight_hours", " hours", ""
+    else:
+        return False, None, "code", 0
+    from reasoning.synthesize import CROSS_OPS, GEO_OPS, synthesize
+    seq = synthesize(set(knowns), goal, GEO_OPS + CROSS_OPS, unique=True)
+    if seq is None:
+        return False, None, "code", 0
+    return True, {"knowns": knowns, "goal": goal, "prefix": prefix, "suffix": suffix}, "code", 0
