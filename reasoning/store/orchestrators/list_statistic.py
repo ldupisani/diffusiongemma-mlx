@@ -7,7 +7,7 @@ list of any length, with zero model calls.
 """
 
 from reasoning import engine
-from reasoning.bind import bind_list_statistic, detect_stat_op
+from reasoning.bind import bind_list_statistic, bind_set_operations, detect_stat_op
 from reasoning.compiled import CodeStep, Inp, Plan, explain, run_plan
 
 META = {
@@ -33,8 +33,9 @@ META = {
 
 def precondition(query):
     # bindability, not just the keyword: "total for 5 shirts at $20 each …" has "total" but no
-    # numeric LIST, so it must not claim-and-decline (blocking a more specific orchestrator)
-    return bind_list_statistic(query)[0]
+    # numeric LIST, so it must not claim-and-decline (blocking a more specific orchestrator).
+    # Defer set-theory queries ("Cartesian product of {1,2} and {3}" — "product" + braces).
+    return bind_list_statistic(query)[0] and not bind_set_operations(query)[0]
 
 
 def run(query):

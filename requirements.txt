@@ -2,3 +2,6 @@
 # Install into a venv:  uv venv && uv pip install -r requirements.txt
 mlx-vlm>=0.6.3
 mcp>=1.12.0
+# reasoning compiler: SymPy powers the algebra & calculus domains (a deterministic CAS —
+# 0 model calls). All other reasoning domains are pure stdlib.
+sympy>=1.13

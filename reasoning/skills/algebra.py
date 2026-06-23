@@ -1,0 +1,50 @@
+"""Algebra — symbolic algebra via SymPy (a deterministic CAS, zero model calls): factor,
+expand, simplify, and solve equations. Expressions use ^ for powers and implicit
+multiplication ("5x"), normalized by the parser.
+"""
+
+from __future__ import annotations
+
+import sympy
+from sympy.parsing.sympy_parser import (convert_xor, implicit_multiplication_application,
+                                        parse_expr, standard_transformations)
+
+from .base import register
+
+_TRANS = standard_transformations + (implicit_multiplication_application, convert_xor)
+
+
+def parse(expr: str):
+    """Parse a human expression ('x^2 - 5x + 6') into a SymPy expression."""
+    return parse_expr(expr, transformations=_TRANS)
+
+
+@register("algebra.factor", "factor a polynomial expression",
+          [(("x^2 - 5x + 6",), "(x - 3)*(x - 2)")])
+def factor(expr: str) -> str:
+    return str(sympy.factor(parse(expr)))
+
+
+@register("algebra.expand", "expand a product of expressions",
+          [(("(x+1)(x+2)",), "x**2 + 3*x + 2")])
+def expand(expr: str) -> str:
+    return str(sympy.expand(parse(expr)))
+
+
+@register("algebra.simplify", "simplify an expression",
+          [(("(x^2-1)/(x-1)",), "x + 1")])
+def simplify(expr: str) -> str:
+    return str(sympy.simplify(parse(expr)))
+
+
+@register("algebra.solve", "solve an equation for a variable (RHS defaults to 0)",
+          [(("x^2 - 5x + 6", "x"), "[2, 3]"), (("2x + 6 = 0", "x"), "[-3]")])
+def solve(equation: str, var: str) -> str:
+    if "=" in equation:
+        lhs, rhs = equation.split("=", 1)
+        eq = sympy.Eq(parse(lhs), parse(rhs))
+    else:
+        eq = sympy.Eq(parse(equation), 0)
+    sols = sympy.solve(eq, sympy.Symbol(var))
+    sols = sorted(sols, key=lambda v: (sympy.re(v), sympy.im(v)))
+    return "[" + ", ".join(str(s) for s in sols) + "]"

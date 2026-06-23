@@ -17,6 +17,7 @@ META = {
     ],
     "keywords": ["best", "tagline", "slogan", "draft", "headline", "opening", "catchy", "polish", "rewrite"],
     "sub_orchestrators": [],
+    "fallback": True,  # a MODEL orchestrator — only when no coded orchestrator claims the query
 }
 
 

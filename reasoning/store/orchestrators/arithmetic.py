@@ -5,7 +5,7 @@ numeric_consensus model fallback. Conservative: the bind claims a query only whe
 one operation is unambiguously present, so compound expressions still defer to the model.
 """
 
-from reasoning.bind import bind_arithmetic
+from reasoning.bind import bind_arithmetic, bind_group_theory
 from reasoning.compiled import dispatch
 
 META = {
@@ -32,7 +32,8 @@ META = {
 
 
 def precondition(query):
-    return bind_arithmetic(query)[0]  # binds only one unambiguous operation
+    # defer modular arithmetic ("3 + 4 in Z_5") to group_theory
+    return bind_arithmetic(query)[0] and not bind_group_theory(query)[0]
 
 
 def run(query):

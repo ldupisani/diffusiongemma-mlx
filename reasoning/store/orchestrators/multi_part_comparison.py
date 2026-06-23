@@ -17,6 +17,7 @@ META = {
     ],
     "keywords": ["compare", "comparison", "vs", "versus", "difference", "differences", "better"],
     "sub_orchestrators": [],
+    "fallback": True,  # a MODEL orchestrator — only when no coded orchestrator claims the query
 }
 
 

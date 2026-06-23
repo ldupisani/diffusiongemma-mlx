@@ -288,6 +288,33 @@ CASES = [
     ("How much to fence a 4 by 6 yard at $5 per meter?", "$100", "synthesized_geometry"),
     ("How much to fill a cube with a side of 3 at $2 per cubic meter?", "$54", "synthesized_geometry"),
     ("What is the molarity of 58.44 grams of NaCl in 2 liters?", "0.5 M", "synthesized_chemistry"),
+    # set theory
+    ("What is {1, 2, 3} union {2, 3, 4}?", "{1, 2, 3, 4}", "set_operations"),
+    ("Is {1, 2} a subset of {1, 2, 3}?", "Yes.", "set_operations"),
+    ("What is the cardinality of {1, 2, 3, 4}?", "4", "set_operations"),
+    ("What is the power set of {1, 2}?", "{∅, {1}, {2}, {1, 2}}", "set_operations"),
+    ("What is the Cartesian product of {1, 2} and {3}?", "{(1, 3), (2, 3)}", "set_operations"),
+    # group theory
+    ("What is the order of the element 2 in Z_6?", "3", "group_theory"),
+    ("What are the generators of Z_8?", "{1, 3, 5, 7}", "group_theory"),
+    ("What is the order of the permutation (2, 3, 1)?", "3", "group_theory"),
+    ("Is the permutation (2, 1, 3) even or odd?", "odd", "group_theory"),
+    ("What is the order of the symmetric group S_4?", "24", "group_theory"),
+    ("What is 3 + 4 in Z_5?", "2", "group_theory"),
+    # topology
+    ("Is {∅, {1}, {1, 2}} a topology on {1, 2}?", "Yes.", "topology"),
+    ("What is the closure of {1} in the topology {∅, {1}, {1, 2}} on {1, 2}?", "{1, 2}", "topology"),
+    ("What is the interior of {2} in the topology {∅, {1}, {1, 2}} on {1, 2}?", "∅", "topology"),
+    ("Is the topology {∅, {1}, {2}, {1, 2}} on {1, 2} Hausdorff?", "Yes.", "topology"),
+    # algebra (SymPy)
+    ("Expand (x + 1)(x + 2).", "x**2 + 3*x + 2", "algebra"),
+    ("Factor x^2 - 5x + 6.", "(x - 3)*(x - 2)", "algebra"),
+    ("Solve x^2 - 5x + 6 = 0 for x.", "[2, 3]", "algebra"),
+    # calculus (SymPy)
+    ("What is the derivative of x^3 + 3x^2?", "3*x**2 + 6*x", "calculus"),
+    ("What is the integral of x^2?", "x**3/3", "calculus"),
+    ("What is the integral of x^2 from 0 to 1?", "1/3", "calculus"),
+    ("What is the limit of sin(x)/x as x approaches 0?", "1", "calculus"),
 ]
 
 
