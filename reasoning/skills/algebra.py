@@ -19,6 +19,15 @@ def parse(expr: str):
     return parse_expr(expr, transformations=_TRANS)
 
 
+def order_solutions(sols: list) -> list:
+    """Deterministic ordering of a solution list. Numeric solutions sort by (re, im);
+    if ANY solution is symbolic (e.g. parametric roots in another variable, where '<' has no
+    truth value), sort by string instead — never crash trying to compare expressions."""
+    if all(not getattr(s, "free_symbols", set()) for s in sols):
+        return sorted(sols, key=lambda v: (sympy.re(v), sympy.im(v)))
+    return sorted(sols, key=str)
+
+
 @register("algebra.factor", "factor a polynomial expression",
           [(("x^2 - 5x + 6",), "(x - 3)*(x - 2)")])
 def factor(expr: str) -> str:
@@ -45,8 +54,7 @@ def solve(equation: str, var: str) -> str:
         eq = sympy.Eq(parse(lhs), parse(rhs))
     else:
         eq = sympy.Eq(parse(equation), 0)
-    sols = sympy.solve(eq, sympy.Symbol(var))
-    sols = sorted(sols, key=lambda v: (sympy.re(v), sympy.im(v)))
+    sols = order_solutions(sympy.solve(eq, sympy.Symbol(var)))
     return "[" + ", ".join(str(s) for s in sols) + "]"
 
 

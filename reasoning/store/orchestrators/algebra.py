@@ -32,7 +32,10 @@ def run(query):
     ok, data, via, _ = bind_algebra(query)
     if not ok:
         return explain("could not parse the algebraic expression")
-    answer = skills.call(data["skill"], *data["args"])
+    try:
+        answer = skills.call(data["skill"], *data["args"])
+    except Exception as e:  # SymPy can raise many things on hard/unsupported input
+        return explain(f"{data['skill']} could not run ({type(e).__name__})")
     return PatternResult(answer=answer,
                          trace=[{"step": data["skill"], "via": "code", "output": answer},
                                 {"step": "summary", "model_calls": 0}])

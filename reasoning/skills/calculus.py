@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import sympy
 
-from .algebra import parse
+from .algebra import order_solutions, parse
 from .base import register
 
 
@@ -54,6 +54,5 @@ def taylor_series(expr: str, var: str, point: str, order: int) -> str:
           [(("x^3 - 3x", "x"), "[-1, 1]"), (("x^2", "x"), "[0]")])
 def critical_points(expr: str, var: str) -> str:
     x = sympy.Symbol(var)
-    pts = sympy.solve(sympy.diff(parse(expr), x), x)
-    pts = sorted(pts, key=lambda v: (sympy.re(v), sympy.im(v)))
+    pts = order_solutions(sympy.solve(sympy.diff(parse(expr), x), x))
     return "[" + ", ".join(str(p) for p in pts) + "]"

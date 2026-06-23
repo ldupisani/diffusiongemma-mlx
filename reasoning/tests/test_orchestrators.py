@@ -310,6 +310,9 @@ CASES = [
     ("Expand (x + 1)(x + 2).", "x**2 + 3*x + 2", "algebra"),
     ("Factor x^2 - 5x + 6.", "(x - 3)*(x - 2)", "algebra"),
     ("Solve x^2 - 5x + 6 = 0 for x.", "[2, 3]", "algebra"),
+    # parametric solve: roots in terms of y — must order by string, not crash on symbolic compare
+    ("Solve x^2 - 5x + 6 + y = 0 for x",
+     "[5/2 - sqrt(1 - 4*y)/2, sqrt(1 - 4*y)/2 + 5/2]", "algebra"),
     # calculus (SymPy)
     ("What is the derivative of x^3 + 3x^2?", "3*x**2 + 6*x", "calculus"),
     ("What is the integral of x^2?", "x**3/3", "calculus"),
