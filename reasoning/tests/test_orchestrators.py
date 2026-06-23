@@ -349,6 +349,17 @@ CASES = [
     ("What is the stress of a 100 N force over an area of 0.5 square meters?", "200 Pa", "materials"),
     ("What is Young's modulus if the stress is 200 Pa and the strain is 0.001?",
      "200000 Pa", "materials"),
+    # discrete mathematics
+    ("How many connected components are in the graph with edges (1,2), (2,3), (4,5)?",
+     "2", "discrete_math"),
+    ("What is the 10th Fibonacci number?", "55", "discrete_math"),
+    ("What is the 4th Catalan number?", "14", "discrete_math"),
+    ("What is the Stirling number of the second kind for 4 and 2?", "7", "discrete_math"),
+    # applied mathematics (linear algebra)
+    ("What is the determinant of [[1, 2], [3, 4]]?", "-2", "applied_math"),
+    ("What are the eigenvalues of [[2, 0], [0, 3]]?", "[2, 3]", "applied_math"),
+    ("What is the dot product of (1, 2, 3) and (4, 5, 6)?", "32", "applied_math"),
+    ("What is the magnitude of the vector (3, 4)?", "5.0", "applied_math"),
 ]
 
 

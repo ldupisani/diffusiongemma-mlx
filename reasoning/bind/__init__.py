@@ -28,3 +28,5 @@ from reasoning.bind.university import *  # noqa: F401,F403
 from reasoning.bind.geo import *         # noqa: F401,F403
 from reasoning.bind.life import *        # noqa: F401,F403
 from reasoning.bind.materials import *   # noqa: F401,F403
+from reasoning.bind.discrete import *    # noqa: F401,F403
+from reasoning.bind.linalg import *      # noqa: F401,F403
