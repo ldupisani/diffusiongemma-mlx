@@ -5,7 +5,7 @@ dimension in the units factor table, no separate orchestrator.)
 """
 
 from reasoning import engine
-from reasoning.bind import bind_radix
+from reasoning.bind import bind_geospatial, bind_radix
 from reasoning.compiled import CodeStep, Inp, Plan, run_guarded
 
 META = {
@@ -32,7 +32,7 @@ PLAN = Plan(
 
 
 def precondition(query):
-    return bind_radix(query)[0]  # needs a target base and a value valid in the source base
+    return bind_radix(query)[0] and not bind_geospatial(query)[0]  # defer DMS→decimal
 
 
 def run(query):

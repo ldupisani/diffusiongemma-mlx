@@ -1,6 +1,6 @@
 """Trigonometry / angles — sin/cos/tan of degrees and degree↔radian. Coded, zero model."""
 
-from reasoning.bind import bind_trig
+from reasoning.bind import bind_geospatial, bind_trig
 from reasoning.compiled import dispatch
 
 META = {
@@ -22,7 +22,7 @@ META = {
 
 
 def precondition(query):
-    return bind_trig(query)[0]
+    return bind_trig(query)[0] and not bind_geospatial(query)[0]
 
 
 def run(query):

@@ -1,6 +1,6 @@
 """Coordinate geometry — distance, midpoint, slope between two points. Coded, zero model."""
 
-from reasoning.bind import bind_coord
+from reasoning.bind import bind_coord, bind_geospatial
 from reasoning.compiled import dispatch
 
 META = {
@@ -20,7 +20,7 @@ META = {
 
 
 def precondition(query):
-    return bind_coord(query)[0]
+    return bind_coord(query)[0] and not bind_geospatial(query)[0]
 
 
 def run(query):

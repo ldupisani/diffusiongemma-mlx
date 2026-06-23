@@ -333,6 +333,22 @@ CASES = [
     ("What are the critical points of x^3 - 3x?", "[-1, 1]", "calculus"),
     ("What is the Taylor series of exp(x) around 0 to order 4?",
      "x**3/6 + x**2/2 + x + 1", "calculus"),
+    # geospatial
+    ("What is the distance in km between (40.7128, -74.0060) and (51.5074, -0.1278)?",
+     "5570.22 km", "geospatial"),
+    ("What is the bearing from (0, 0) to (0, 1) on Earth?", "90°", "geospatial"),
+    ("Convert 40 degrees 30 minutes 0 seconds to decimal degrees.", "40.5", "geospatial"),
+    ("Convert 40.5 degrees to degrees minutes seconds.", "40° 30' 0\"", "geospatial"),
+    # genetics
+    ("What are the Hardy-Weinberg genotype frequencies if the dominant allele frequency is 0.7?",
+     "AA: 0.49, Aa: 0.42, aa: 0.09", "genetics"),
+    ("What is the offspring ratio of a cross of Aa and Aa?", "1 AA : 2 Aa : 1 aa", "genetics"),
+    ("What is the allele frequency of 35 out of 50 alleles?", "0.7", "genetics"),
+    # material science
+    ("What is the atomic packing factor of an FCC structure?", "0.7405", "materials"),
+    ("What is the stress of a 100 N force over an area of 0.5 square meters?", "200 Pa", "materials"),
+    ("What is Young's modulus if the stress is 200 Pa and the strain is 0.001?",
+     "200000 Pa", "materials"),
 ]
 
 
