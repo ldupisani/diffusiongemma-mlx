@@ -404,6 +404,12 @@ CASES = [
      "7.96 Pa", "synthesized_physics"),
     ("What is the kinetic energy of a 1000 kg car that travels 200 m in 10 s?",
      "200000 J", "synthesized_physics"),
+    # §B priced quantities → cost (labour; electricity = kW×h×$/kWh, a physics→finance chain)
+    ("How much is a 5-hour job at $40 per hour?", "$200", "priced_cost"),
+    ("What does a 6-hour job at $50 per hour cost, split between 2 people?",
+     "$150 each", "priced_cost"),
+    ("What is the cost of running a 2 kW heater for 3 hours at $0.15 per kWh?",
+     "$0.9", "priced_cost"),
 ]
 
 

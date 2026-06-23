@@ -125,6 +125,17 @@ PCHEM_OPS = [
     Op("pchem.ideal_gas_pressure", ("moles", "temp_k", "volume_l"), "gas_pressure"),
 ]
 
+# priced quantities → cost (the universal "quantity × per-unit price" producers). Roles carry
+# their unit by name (hours, power_kw, …) so the price's unit and the quantity's unit always
+# match — no canonicalization needed. Each cost funnels into `cost` for split/tax/discount.
+PRICED_OPS = [
+    Op("arith.multiply", ("hours", "hourly_rate"), "labor_cost"),          # a job: time × $/hr
+    Op("arith.multiply", ("power_kw", "hours"), "energy_kwh"),             # physics: kW × h = kWh
+    Op("arith.multiply", ("energy_kwh", "price_per_kwh"), "energy_cost"),  # … → $ (per kWh)
+    Op("arith.identity", ("labor_cost",), "cost"),
+    Op("arith.identity", ("energy_cost",), "cost"),
+]
+
 # cross-domain connectors. A cost produced by ANY domain funnels into a generic `cost` role,
 # and the universal finance terminals (split / tax / discount) apply to `cost` ONCE. This is a
 # deliberate puncture of the disjoint-role isolation at a chosen seam: a geometry/chemistry
@@ -145,7 +156,7 @@ CROSS_OPS = [
 ]
 
 ALL_OPS = (FINANCE_OPS + INTEREST_OPS + MOTION_OPS + PHYSICS_OPS + GEOMETRY_COST_OPS
-           + CHEM_OPS + MOLECULAR_OPS + MATERIALS_OPS + PCHEM_OPS + CROSS_OPS)
+           + CHEM_OPS + MOLECULAR_OPS + MATERIALS_OPS + PCHEM_OPS + PRICED_OPS + CROSS_OPS)
 
 _MEMO: dict = {}
 _searches = 0  # BFS runs actually executed (cache misses) — for tests/telemetry

@@ -338,3 +338,45 @@ def bind_inverse_finance(query: str) -> tuple[bool, dict | None, str, int]:
         knowns["tax_pct"] = float(tax.group(1))
     return True, {"knowns": knowns, "unknown": "discount_pct", "goal": "final_price",
                   "target": target, "suffix": "%"}, "code", 0
+
+
+# priced quantities → cost: a job (hours × $/hr) or electricity (kW × h × $/kWh), then the
+# universal split/tax funnel. A genuine physics → finance chain for energy cost.
+_HOURS = re.compile(r"(\d+(?:\.\d+)?)\s*-?\s*hours?\b", re.IGNORECASE)
+_HRATE = re.compile(r"\$\s*(\d+(?:\.\d+)?)\s*(?:per|/|an?|a)\s*hour", re.IGNORECASE)
+_KW = re.compile(r"(\d+(?:\.\d+)?)\s*kw\b", re.IGNORECASE)  # \b after W rejects "kWh"
+_KWH_PRICE = re.compile(r"\$\s*(\d+(?:\.\d+)?)\s*(?:per|/)\s*k(?:ilo)?w(?:att)?[\s-]*h(?:ours?|r)?",
+                        re.IGNORECASE)
+
+
+def bind_priced_cost(query: str) -> tuple[bool, dict | None, str, int]:
+    q = query.lower()
+    hrs = _HOURS.search(q)
+    pw, pk = _KW.search(q), _KWH_PRICE.search(q)
+    knowns, goal = {}, None
+    if pw and pk and hrs:           # electricity: power(kW) × time(h) = energy(kWh) × $/kWh
+        knowns = {"power_kw": float(pw[1]), "hours": float(hrs[1]), "price_per_kwh": float(pk[1])}
+        goal = "energy_cost"
+    else:
+        rate = _HRATE.search(q)
+        if rate and hrs:            # labour: hours × $/hour
+            knowns = {"hours": float(hrs[1]), "hourly_rate": float(rate[1])}
+            goal = "labor_cost"
+    if goal is None:
+        return False, None, "code", 0
+    unique, suffix = False, ""
+    ppl = _PEOPLE.search(query) if any(w in q for w in ("split", "between", "among", "shared")) \
+        else None
+    tax = _TAX.search(query)
+    if ppl:
+        people = int(ppl.group(1) or ppl.group(2))
+        if people > 0:
+            knowns["people"], goal, unique, suffix = float(people), "cost_per_person", True, " each"
+    elif tax:
+        knowns["tax_pct"], goal, unique = float(tax.group(1)), "cost_with_tax", True
+    from reasoning.synthesize import CROSS_OPS, PRICED_OPS, synthesize
+    seq = synthesize(set(knowns), goal, PRICED_OPS + CROSS_OPS, unique=unique)
+    if seq is None:
+        return False, None, "code", 0
+    return True, {"knowns": knowns, "goal": goal, "prefix": "$", "suffix": suffix,
+                  "unique": unique}, "code", 0
