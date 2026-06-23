@@ -77,7 +77,17 @@ def fidelity(query: str, orchestrator: Orchestrator, *, teacher_seed: int = 0,
              teacher_backend: str = "diffusion") -> dict:
     t = get_teacher(teacher_backend).trace(query, seed=teacher_seed)
     teacher_ans = t.answer
-    o = orchestrator.run(query)
+    try:
+        o = orchestrator.run(query)
+    except Exception as e:
+        # an incomplete scaffold (or a real bug) should be REPORTED, not crash eval —
+        # a derived orchestrator is a stub until its bind/plan are wired up.
+        return {
+            "query": query, "teacher": teacher_ans,
+            "orchestrator": f"(orchestrator raised {type(e).__name__}: {e})",
+            "score": 0, "model_calls": None, "numeric_match": False, "trace": [],
+            "error": f"{type(e).__name__}: {e}",
+        }
 
     judge = one_shot(
         "Two answers to the same question are below. Output ONLY an integer 0-100 for how "

@@ -49,7 +49,10 @@ META = __META__
 
 
 def precondition(query):
-    return True
+    # TODO: define recognition. Until then the scaffold claims NOTHING — an unfinished
+    # orchestrator must stay inert so it can't hijack routing for every other query.
+    # Tighten to your query's signal (keywords, or `bind(query) != {}` once bind() works).
+    return False
 
 
 def run(query):
@@ -115,7 +118,10 @@ __STEPS__
 
 
 def precondition(query):
-    return True
+    # TODO: define recognition. Until then the scaffold claims NOTHING — an unfinished
+    # orchestrator must stay inert so it can't hijack routing for every other query.
+    # Tighten to your query's signal (keywords, or `bind(query) != {}` once bind() works).
+    return False
 
 
 def bind(query):

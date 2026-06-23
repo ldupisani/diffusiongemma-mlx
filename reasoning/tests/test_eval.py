@@ -2,7 +2,31 @@
 
 import unittest
 
-from reasoning.eval import agrees
+import reasoning.eval as evmod
+from reasoning.eval import agrees, fidelity
+
+
+class TestFidelityRobustness(unittest.TestCase):
+    def test_reports_orchestrator_crash_instead_of_raising(self):
+        # an incomplete scaffold whose run() raises must be REPORTED, not crash eval
+        class _Bad:
+            example_queries = ["q"]
+
+            def run(self, query):
+                raise RuntimeError("boom")
+
+        class _Teacher:
+            def trace(self, query, seed=0):
+                return type("R", (), {"answer": "42"})()
+
+        orig = evmod.get_teacher
+        evmod.get_teacher = lambda backend: _Teacher()
+        try:
+            res = fidelity("q", _Bad(), teacher_backend="stub")
+        finally:
+            evmod.get_teacher = orig
+        self.assertEqual(res["score"], 0)
+        self.assertIn("RuntimeError", res["orchestrator"])
 
 
 class TestAgrees(unittest.TestCase):
