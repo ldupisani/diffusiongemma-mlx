@@ -5,6 +5,7 @@ import math
 import re
 
 from reasoning.bind._common import *  # noqa: F401,F403
+from reasoning.bind.entities import _POINT  # noqa: F401  (single source)
 
 
 # --- geometry / measurement family ----------------------------------------------------
@@ -157,10 +158,7 @@ def bind_trig(query: str) -> tuple[bool, dict | None, str, int]:
                   "places": places}, "code", 0
 
 
-# --- coordinate-geometry family -------------------------------------------------------
-_POINT = re.compile(r"\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)")
-
-
+# --- coordinate-geometry family (_POINT imported from entities) -----------------------
 def bind_coord(query: str) -> tuple[bool, dict | None, str, int]:
     pts = _POINT.findall(query)
     if len(pts) < 2:

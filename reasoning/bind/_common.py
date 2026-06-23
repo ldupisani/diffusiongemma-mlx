@@ -4,6 +4,7 @@ from __future__ import annotations
 import json as _json  # noqa: F401  (used by _try_json)
 import re
 
+from reasoning.bind.entities import _NUMBER  # noqa: F401  (single source; re-exported)
 from reasoning.engine import one_shot  # noqa: F401  (re-exported: finance default arg)
 
 __all__ = ["_parse_list", "_parse_int", "_try_json", "_NUMBER", "one_shot"]
@@ -35,5 +36,3 @@ def _try_json(text: str):
             except Exception as e2:
                 return None, str(e2)
         return None, str(e)
-
-_NUMBER = re.compile(r"-?\d+(?:\.\d+)?")

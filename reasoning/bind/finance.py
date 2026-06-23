@@ -4,10 +4,11 @@ from __future__ import annotations
 import re
 
 from reasoning.bind._common import *  # noqa: F401,F403
+from reasoning.bind.entities import _PRICE  # noqa: F401  (single source)
+from reasoning.bind.entities import dollars as _dollars  # noqa: F401
 
 
 # --- discount+tax family --------------------------------------------------------------
-_PRICE = re.compile(r"\$\s*(\d+(?:\.\d+)?)")
 _DISCOUNT = re.compile(r"(\d+(?:\.\d+)?)\s*(?:%|percent)\s*off", re.IGNORECASE)
 _TAX = re.compile(r"(\d+(?:\.\d+)?)\s*(?:%|percent)\s*(?:sales\s*)?(?:tax|vat)", re.IGNORECASE)
 
@@ -90,13 +91,8 @@ def bind_compound_interest(query: str) -> tuple[bool, dict | None, str, int]:
 
 
 # --- shared finance parsing -----------------------------------------------------------
-def _dollars(query: str) -> list[float]:
-    """All $-prefixed amounts in order — the positional inputs most finance queries use.
-
-    Finance binds assign these BY POSITION, so they require an EXACT count (==2, ==3, …): a
-    stray or leading $ (a fee, a reference) would otherwise shift every operand and yield a
-    confident wrong answer. Extra $ ⇒ ambiguous operands ⇒ decline (the conservative rule)."""
-    return [float(m) for m in _PRICE.findall(query)]
+# _dollars = entities.dollars (imported above). Finance binds assign these BY POSITION, so
+# they require an EXACT count (==2, ==3, …): a stray/leading $ ⇒ ambiguous operands ⇒ decline.
 
 
 # payment/deposit cadence — keyed on explicit phrases so bare "annual" (as in "5% annual

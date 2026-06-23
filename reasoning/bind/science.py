@@ -4,6 +4,8 @@ from __future__ import annotations
 import re
 
 from reasoning.bind._common import *  # noqa: F401,F403
+from reasoning.bind.entities import _FROM_TO as _FROM_TO_VEL  # noqa: F401  (single source)
+from reasoning.bind.entities import number_before as _num_before  # noqa: F401
 
 
 # --- chemistry / stoichiometry family -------------------------------------------------
@@ -85,13 +87,7 @@ _PHYSICS = [
     (("force",), "physics.force", [("mass", "KG"), ("acceleration", "ACCEL")], " N"),
     (("speed", "how fast"), "physics.speed", [("distance", "METERS"), ("time", "SECONDS")], " m/s"),
 ]
-_FROM_TO_VEL = re.compile(r"from\s+(-?\d+(?:\.\d+)?)\s+to\s+(-?\d+(?:\.\d+)?)", re.IGNORECASE)
-
-
-def _num_before(query: str, unit_re: str):
-    """The number immediately before a unit token (case-sensitive — kg/N/m/s differ)."""
-    m = re.search(rf"(-?\d+(?:\.\d+)?)\s*(?:{unit_re})", query)
-    return float(m[1]) if m else None
+# _FROM_TO_VEL and _num_before are imported from entities (single source)
 
 
 def detect_physics(query: str):

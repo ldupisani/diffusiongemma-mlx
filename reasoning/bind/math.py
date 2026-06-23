@@ -4,6 +4,11 @@ from __future__ import annotations
 import re
 
 from reasoning.bind._common import *  # noqa: F401,F403
+# shared entity extractors (single source); keep local names so call sites are unchanged
+from reasoning.bind import entities as _E  # noqa: F401
+from reasoning.bind.entities import _FROM_TO, _INT  # noqa: F401
+from reasoning.bind.entities import numeric_list as _numeric_list  # noqa: F401
+from reasoning.bind.entities import values as _nums  # noqa: F401
 
 
 # --- number-theory family -------------------------------------------------------------
@@ -21,7 +26,6 @@ _NUMBER_THEORY = [
     (("arrange", "seated in a row", "in a row"), "numtheory.factorial", 1, "int"),
     (("prime",), "numtheory.is_prime", 1, "bool"),
 ]
-_INT = re.compile(r"-?\d+")  # keep the sign so e.g. factorial(-3) declines, not silently 3!
 
 
 def detect_number_theory(query: str):
@@ -120,33 +124,6 @@ def detect_stat_op(query: str) -> str | None:
     return None
 
 
-def _nums(text: str) -> list:
-    return [float(n) if "." in n else int(n) for n in _NUMBER.findall(text)]
-
-
-# a list's numbers are separated ONLY by commas / "and" / "or" / "$" / whitespace — so
-# "4, 8, and 15" is a list, but "100 yards at $3" (words between the numbers) is NOT.
-_LIST_GAP = re.compile(r"^[\s,$]*(?:and|or|&)?[\s,$]*$", re.IGNORECASE)
-
-
-def _numeric_list(text: str) -> list:
-    """The longest run of numbers separated only by list delimiters (else a short run)."""
-    matches = list(_NUMBER.finditer(text))
-    best: list = []
-    run: list = []
-    for m in matches:
-        val = float(m.group()) if "." in m.group() else int(m.group())
-        if run and _LIST_GAP.match(text[run[-1][0]:m.start()]):
-            run.append((m.end(), val))
-        else:
-            if len(run) > len(best):
-                best = run
-            run = [(m.end(), val)]
-    if len(run) > len(best):
-        best = run
-    return [v for _, v in best]
-
-
 def bind_list_statistic(query: str) -> tuple[bool, dict | None, str, int]:
     """Coded-only bind: a stat keyword + a list of ≥2 numbers → {nums, skill}. The numbers
     must form an actual list (delimiters only) — scattered numbers in prose ("total cost of
@@ -198,10 +175,7 @@ def validate_weighted_average(data: dict) -> tuple[bool, str]:
     return True, ""
 
 
-# --- percentage-change family ("from X to Y") -----------------------------------------
-_FROM_TO = re.compile(r"from\s+(-?\d+(?:\.\d+)?)\s+to\s+(-?\d+(?:\.\d+)?)", re.IGNORECASE)
-
-
+# --- percentage-change family ("from X to Y"; _FROM_TO imported from entities) --------
 def bind_percent_change(query: str) -> tuple[bool, dict | None, str, int]:
     """Coded-only bind: 'from <old> to <new>' → {old, new}."""
     m = _FROM_TO.search(query)
@@ -309,8 +283,8 @@ def bind_ratio(query: str) -> tuple[bool, dict | None, str, int]:
         return True, {"skill": "ratio.fraction_to_percent", "dims": ["num", "den"], "suffix": "%",
                       "places": 2, "num": float(frac[1]), "den": float(frac[2])}, "code", 0
     elif "unit rate" in q:
-        nums = re.findall(r"\d+(?:\.\d+)?", query)
-        if len(nums) == 2:  # exactly amount + per; a 3rd number ⇒ ambiguous ⇒ decline
+        nums = _E.exactly(query, 2)  # exactly amount + per; a 3rd number ⇒ ambiguous ⇒ decline
+        if nums:
             return True, {"skill": "ratio.unit_rate", "dims": ["amount", "per"], "places": 2,
                           "amount": float(nums[0]), "per": float(nums[1])}, "code", 0
     elif "servings" in q:
