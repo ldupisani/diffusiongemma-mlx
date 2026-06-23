@@ -1797,9 +1797,13 @@ def bind_algebra(query: str) -> tuple[bool, dict | None, str, int]:
     if not m:
         return False, None, "code", 0
     rest, var = m.group(1).strip(), "x"
-    vm = re.search(r"\bfor\s+([a-z])\b", rest, re.IGNORECASE)
+    # the solve variable must be a SINGLE letter at the end ("for x"); "for z-1" is not a
+    # valid variable — decline rather than silently grabbing "z" and dropping "-1".
+    vm = re.search(r"\bfor\s+([a-z])\s*[?.]?\s*$", rest, re.IGNORECASE)
     if vm:
         var, rest = vm.group(1), rest[:vm.start()]
+    elif re.search(r"\bfor\b", rest, re.IGNORECASE):
+        return False, None, "code", 0
     expr = re.sub(r"^(?:the|expression|equation|polynomial|function|of)\s+", "", rest.strip(),
                   flags=re.IGNORECASE).strip().rstrip("?.").strip()
     if not _valid_math(expr):

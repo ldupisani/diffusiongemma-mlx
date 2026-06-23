@@ -369,6 +369,12 @@ class TestOrchestrators(unittest.TestCase):
             self.assertTrue(fn(clean)[0])
             self.assertFalse(fn(stray)[0], "stray $ should make operands ambiguous → decline")
 
+    def test_algebra_declines_malformed_solve_variable(self):
+        # "for z-1" is not a valid variable — must decline, not silently solve for z
+        from reasoning.bind import bind_algebra
+        self.assertFalse(bind_algebra("Solve x^2 + 2z = 0 for z-1")[0])
+        self.assertTrue(bind_algebra("Solve x^2 + 2z = 0 for z")[0])
+
 
 if __name__ == "__main__":
     unittest.main()
