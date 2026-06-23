@@ -108,9 +108,11 @@ def run_plan(plan: Plan, bound_inputs: dict, *, shot=one_shot,
             args = [_resolve(a, env) for a in st.args]
             try:
                 val = skills.call(st.skill, *args, **st.kwargs)
-            except (ValueError, ZeroDivisionError, ArithmeticError, OverflowError, LookupError) as e:
-                # a skill rejecting bad/degenerate input is a coded NON-answer, not a crash.
-                # (programming errors — TypeError, etc. — are NOT caught: those are real bugs.)
+            except (ValueError, ArithmeticError, LookupError, NotImplementedError,
+                    RecursionError) as e:
+                # a skill rejecting bad/degenerate/unsupported input is a coded NON-answer, not
+                # a crash — incl. a CAS that can't solve/compute (NotImplementedError). Programming
+                # errors (TypeError, AttributeError, …) are NOT caught: those are real bugs.
                 trace.append({"step": st.out, "via": "code", "skill": st.skill, "error": str(e)})
                 trace.append({"step": "summary", "model_calls": model_calls,
                               "code_steps": sum(1 for t in trace if t.get("via") == "code")})

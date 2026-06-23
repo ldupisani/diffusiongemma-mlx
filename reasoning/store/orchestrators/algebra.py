@@ -1,9 +1,8 @@
 """Algebra — factor, expand, simplify, solve (SymPy-backed, deterministic, zero model calls)."""
 
-from reasoning import skills
+from reasoning import engine
 from reasoning.bind import bind_algebra
-from reasoning.compiled import explain
-from reasoning.patterns import PatternResult
+from reasoning.compiled import CodeStep, Lit, Plan, explain, run_plan
 
 META = {
     "id": "algebra",
@@ -32,10 +31,8 @@ def run(query):
     ok, data, via, _ = bind_algebra(query)
     if not ok:
         return explain("could not parse the algebraic expression")
-    try:
-        answer = skills.call(data["skill"], *data["args"])
-    except Exception as e:  # SymPy can raise many things on hard/unsupported input
-        return explain(f"{data['skill']} could not run ({type(e).__name__})")
-    return PatternResult(answer=answer,
-                         trace=[{"step": data["skill"], "via": "code", "output": answer},
-                                {"step": "summary", "model_calls": 0}])
+    # run through run_plan to inherit the crash-proofing backstop (a CAS that can't
+    # solve/compute degrades to "(no result: …)" instead of raising)
+    plan = Plan(steps=[CodeStep(data["skill"], [Lit(a) for a in data["args"]], out="r")],
+                answer_ref="r")
+    return run_plan(plan, {}, shot=engine._no_model)

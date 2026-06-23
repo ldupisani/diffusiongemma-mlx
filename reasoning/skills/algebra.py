@@ -67,7 +67,10 @@ def evaluate(expr: str, var: str, value: str) -> str:
 @register("algebra.degree", "the degree of a polynomial in a variable",
           [(("x^3 + 2x", "x"), "3"), (("x^2 + x + 1", "x"), "2")])
 def degree(expr: str, var: str) -> str:
-    return str(sympy.degree(parse(expr), sympy.Symbol(var)))
+    try:
+        return str(sympy.degree(parse(expr), sympy.Symbol(var)))
+    except sympy.PolynomialError as e:  # not a polynomial → a coded non-answer, not a crash
+        raise ValueError(str(e)) from e
 
 
 @register("algebra.solve_system", "solve a system of equations (';'-separated) for the variables "
