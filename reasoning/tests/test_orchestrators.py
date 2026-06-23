@@ -360,6 +360,21 @@ CASES = [
     ("What are the eigenvalues of [[2, 0], [0, 3]]?", "[2, 3]", "applied_math"),
     ("What is the dot product of (1, 2, 3) and (4, 5, 6)?", "32", "applied_math"),
     ("What is the magnitude of the vector (3, 4)?", "5.0", "applied_math"),
+    # practical chemistry
+    ("What is the pressure of 2 moles of gas at 300 K in 10 liters?", "4.9234 atm",
+     "practical_chemistry"),
+    ("What is the percent composition of O in H2O?", "88.81%", "practical_chemistry"),
+    ("What is the pOH if the pH is 3?", "11", "practical_chemistry"),
+    ("What is the mass percent of 20 g solute in 80 g of solution?", "25%", "practical_chemistry"),
+    # molecular science
+    ("How many molecules are in 2 moles?", "1.2044e+24", "molecular_science"),
+    ("What are the degrees of unsaturation of C6H6?", "4", "molecular_science"),
+    # biochemistry
+    ("What is the GC content of ATGC?", "50%", "biochemistry"),
+    ("What is the reverse complement of ATGC?", "GCAT", "biochemistry"),
+    ("Transcribe ATGC to mRNA.", "AUGC", "biochemistry"),
+    ("What is the buffer pH with pKa 4.76, base 10, and acid 1?", "5.76", "biochemistry"),
+    ("What is the reaction rate with Vmax 100, Km 5, and substrate 15?", "75", "biochemistry"),
 ]
 
 
