@@ -93,8 +93,20 @@ CHEM_OPS = [
     Op("chem.molarity", ("moles", "volume"), "molarity"),        # molarity = moles / liters
 ]
 
+# cross-domain connectors: a cost produced by ANY domain (geometry's total_cost, …) flows
+# into a finance-style terminal op (split, tax, discount). These deliberately PUNCTURE the
+# disjoint-role isolation at a chosen seam, so a geometry derivation can finish with a finance
+# operation — e.g. "tile a floor … then split it 3 ways" = (area→total_cost)→(/people). Because
+# this opens shared seams, the binds that use it MUST pass unique=True (an ambiguous goal — two
+# equal-length derivations — then declines instead of silently picking one).
+CROSS_OPS = [
+    Op("arith.divide", ("total_cost", "people"), "cost_per_person"),
+    Op("arith.apply_tax", ("total_cost", "tax_pct"), "total_with_tax"),
+    Op("arith.apply_discount", ("total_cost", "discount_pct"), "total_after_discount"),
+]
+
 ALL_OPS = (FINANCE_OPS + INTEREST_OPS + MOTION_OPS + PHYSICS_OPS + GEOMETRY_COST_OPS
-           + CHEM_OPS)
+           + CHEM_OPS + CROSS_OPS)
 
 _MEMO: dict = {}
 _searches = 0  # BFS runs actually executed (cache misses) — for tests/telemetry

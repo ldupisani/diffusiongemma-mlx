@@ -375,6 +375,9 @@ CASES = [
     ("Transcribe ATGC to mRNA.", "AUGC", "biochemistry"),
     ("What is the buffer pH with pKa 4.76, base 10, and acid 1?", "5.76", "biochemistry"),
     ("What is the reaction rate with Vmax 100, Km 5, and substrate 15?", "75", "biochemistry"),
+    # cross-domain synthesis: geometry area → cost → finance-style split
+    ("What does it cost to tile a 4 by 6 meter floor at $8 per square meter, split between "
+     "3 people?", "$64 each", "synthesized_geometry"),
 ]
 
 

@@ -5,6 +5,7 @@ import math
 import re
 
 from reasoning.bind._common import *  # noqa: F401,F403
+from reasoning.bind import entities as _E
 from reasoning.bind.entities import _POINT  # noqa: F401  (single source)
 
 
@@ -251,11 +252,22 @@ def bind_synthesis_geometry(query: str) -> tuple[bool, dict | None, str, int]:
         lm = re.search(rf"{label}\s+(?:of\s+)?(-?\d+(?:\.\d+)?)", query, re.IGNORECASE)
         if lm:
             knowns[label] = float(lm.group(1))
-    from reasoning.synthesize import GEOMETRY_COST_OPS, synthesize
-    seq = synthesize(set(knowns), goal, GEOMETRY_COST_OPS)
+    # cross-domain tail: a cost that's then SPLIT among N people chains geometry → finance
+    # (total_cost → /people). Only on total_cost (the tile/paint/carpet case), and the unique
+    # path is required so an ambiguous shape (two area derivations) declines rather than guesses.
+    unique, suffix = False, ""
+    q = query.lower()
+    if goal == "total_cost" and any(w in q for w in ("split", "shared", "between", "among")):
+        people = _E.count_of(query, "people", "friends", "ways", "guests", "of them")
+        if people and people > 0:
+            knowns["people"], goal, unique, suffix = float(people), "cost_per_person", True, " each"
+    from reasoning.synthesize import CROSS_OPS, GEOMETRY_COST_OPS, synthesize
+    pool = GEOMETRY_COST_OPS + CROSS_OPS
+    seq = synthesize(set(knowns), goal, pool, unique=unique)
     if seq is None or len(seq) < 2:
         return False, None, "code", 0
-    return True, {"knowns": knowns, "goal": goal, "prefix": "$", "suffix": ""}, "code", 0
+    return True, {"knowns": knowns, "goal": goal, "prefix": "$", "suffix": suffix,
+                  "unique": unique}, "code", 0
 
 
 def clarify_geometry(query: str) -> dict | None:

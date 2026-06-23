@@ -65,6 +65,26 @@ class TestSynthesize(unittest.TestCase):
         self.assertIsNone(syn.synthesize({"p"}, "g", ops, unique=True))   # declines
         self.assertIsNotNone(syn.synthesize({"p"}, "g", ops, unique=False))  # picks one
 
+    # --- cross-domain composition: a geometry cost flows into a finance-style split ---
+    def test_cross_domain_geometry_then_split(self):
+        pool = syn.GEOMETRY_COST_OPS + syn.CROSS_OPS
+        seq = syn.synthesize({"length", "width", "unit_price", "people"}, "cost_per_person",
+                             pool, unique=True)
+        self.assertEqual([op.skill for op in seq],
+                         ["geometry.rectangle_area", "arith.multiply", "arith.divide"])
+        r = syn.synthesize_and_run(
+            {"length": 4.0, "width": 6.0, "unit_price": 8.0, "people": 3.0},
+            "cost_per_person", pool, unique=True)
+        self.assertEqual(r.answer, "64")          # (4*6*8)/3
+        self.assertEqual(model_calls(r), 0)
+
+    def test_cross_domain_ambiguous_shape_declines(self):
+        # two area derivations (rectangle from length+width, square from side) → not unique
+        pool = syn.GEOMETRY_COST_OPS + syn.CROSS_OPS
+        self.assertIsNone(syn.synthesize(
+            {"length", "width", "side", "unit_price", "people"}, "cost_per_person",
+            pool, unique=True))
+
     def test_already_known_goal_is_zero_ops(self):
         self.assertEqual(syn.synthesize({"final_price"}, "final_price"), [])
 
