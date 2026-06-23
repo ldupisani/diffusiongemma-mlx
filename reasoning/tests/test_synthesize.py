@@ -156,6 +156,16 @@ class TestSynthesize(unittest.TestCase):
             got = float(mirror(*[sympy.Float(a) for a in args]))
             self.assertAlmostEqual(got, expected, places=6, msg=skill)
 
+    def test_inverse_cross_domain(self):
+        # solve a geometry dimension for a target geometry→finance cost: side² × unit_price = 200
+        side = syn.inverse_synthesize({"unit_price": 8.0}, "side", "total_cost", 200.0,
+                                      syn.GEOMETRY_COST_OPS + syn.CROSS_OPS)
+        self.assertEqual(side, 5.0)
+        # solve a chemistry mass for a target chem→finance reagent cost
+        mass = syn.inverse_synthesize({"price_per_gram": 0.5}, "mass", "reagent_cost", 50.0,
+                                      syn.CROSS_OPS)
+        self.assertEqual(mass, 100.0)
+
     def test_already_known_goal_is_zero_ops(self):
         self.assertEqual(syn.synthesize({"final_price"}, "final_price"), [])
 

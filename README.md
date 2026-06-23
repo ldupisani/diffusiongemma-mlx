@@ -1,13 +1,13 @@
 # DiffusionGemma on Apple Silicon (MLX)
 
-![reasoning fidelity vs Claude](https://img.shields.io/badge/fidelity_vs_Claude-58%2F58-brightgreen)
-![model-free](https://img.shields.io/badge/model--free-58%2F58-blue)
-![coded skills](https://img.shields.io/badge/skills-244-informational)
+![reasoning fidelity vs Claude](https://img.shields.io/badge/fidelity_vs_Claude-63%2F63-brightgreen)
+![model-free](https://img.shields.io/badge/model--free-63%2F63-blue)
+![coded skills](https://img.shields.io/badge/skills-246-informational)
 
 Running `google/diffusiongemma-26B-A4B-it` — a 26B Mixture-of-Experts **diffusion**
 language model (~3.8B active params) — locally via `mlx-vlm` on an M3 Max (36 GB).
 
-> **Reasoning compiler:** 58/58 coded orchestrators reproduce the Claude teacher's answer
+> **Reasoning compiler:** 63/63 coded orchestrators reproduce the Claude teacher's answer
 > ([`reasoning.cli eval-all`](#reasoning-compiler-reasoning)), each at **0 model calls** (sidecar
 > cold). Static badges — regenerate with `eval-all` after changes.
 
@@ -196,7 +196,7 @@ python -m reasoning.cli list                # stored orchestrators
 `--teacher claude`) and checks agreement with a deterministic comparator (numeric tolerance +
 normalized-string) — **no sidecar needed**: coded orchestrators make 0 model calls and the
 comparator uses no model. It reports per-orchestrator agreement and confirms every coded answer
-used 0 model calls — the capability-gap gate across the whole graph (currently 58/58 agree, 58/58
+used 0 model calls — the capability-gap gate across the whole graph (currently 63/63 agree, 63/63
 model-free vs Claude). The comparator is tolerant (numeric/normalized-string/yes-no verdict); the
 teacher's final answer is taken as its last line when it skips the `ANSWER:` marker.
 
@@ -219,11 +219,20 @@ teacher's final answer is taken as its last line when it skips the `ANSWER:` mar
   distance–speed–time triangle (goal-directed op selection), and simple interest — all model-free.
   Roles live on ops (not skills), so disjoint role vocabularies keep domains from interfering
   (a finance goal can't pull a physics op); ambiguous goals (two shortest paths) are detectable.
-  Memoized, and now LIVE across four domains, each spanning several chains: synthesized_physics
-  (force→work→power, Δv→force, force→pressure), synthesized_finance (discount→tax→split,
-  N-items→discount→tax), synthesized_geometry (area/perimeter/volume→cost), and
-  synthesized_chemistry (formula→molar mass→moles/mass/molarity) answer real queries whose plans
-  are discovered, not hand-written — each via a bind that maps NL → {typed knowns, goal}, 0 model calls.
+  Memoized, and LIVE across many domains, each via a bind that maps NL → {typed knowns, goal}:
+  synthesized_physics (force→work→power, geometry area→pressure, motion→kinetic energy),
+  synthesized_finance, synthesized_geometry (area/perimeter/volume→cost), synthesized_chemistry
+  (formula→molar mass→moles/mass/molarity), synthesized_materials (force + a shape's area→stress→
+  Young's modulus), synthesized_geo (haversine→travel cost / flight time), and priced_cost
+  (labour, electricity). **Cross-domain composition**: a cost produced by ANY domain funnels into
+  a generic `cost` role and inherits the finance terminals (split / tax / discount) once — so
+  geometry→finance ("tile a floor … split 3 ways"), chemistry→finance→split (a 5-op chain), and
+  physics→finance (kWh→cost) compose automatically. **Unit-aware roles** carry a canonical unit so
+  "5 km" / "20 minutes" feed correctly, and the planner inserts a coercion op (g→kg) between
+  same-dimension roles in different domains. **Inverse synthesis** solves backward for an input
+  given the output (sympy.solve over a symbolic mirror of the chain) — "what discount yields a
+  $200 final price?". Cross-domain seams pass unique=True, so an ambiguous derivation declines
+  rather than guesses. All 0 model calls.
 
 Modules: `engine.py` (one-shot / one-shot-N thinking-off calls via the sidecar; N varies the
 **seed** for diverse candidates), `patterns.py` (decompose-solve-combine, map-reduce,

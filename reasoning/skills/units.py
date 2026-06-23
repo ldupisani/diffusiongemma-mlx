@@ -48,6 +48,11 @@ def kg_to_lb(kg: float) -> float:
     return kg / 0.45359237
 
 
+@register("units.g_to_kg", "convert grams to kilograms", [((1000,), 1.0), ((36.03,), 0.03603)])
+def g_to_kg(g: float) -> float:
+    return g / 1000
+
+
 # --- general unit conversion (canonical base-unit factor table) -----------------------
 # Each unit's factor converts it TO its dimension's base unit; conversion within a
 # dimension is value * factor[from] / factor[to]. ONE table + one convert() replaces the

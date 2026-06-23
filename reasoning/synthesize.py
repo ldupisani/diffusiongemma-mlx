@@ -136,6 +136,14 @@ PRICED_OPS = [
     Op("arith.identity", ("energy_cost",), "cost"),
 ]
 
+# §F unit coercion as a planner-inserted op: chemistry's mass is in GRAMS, physics.weight wants
+# KILOGRAMS — the g→kg op bridges the same-dimension roles so "the weight of N moles of <formula>"
+# chains chem (mass) → units (mass_kg) → physics (weight) without silent magnitude corruption.
+COERCION_OPS = [
+    Op("units.g_to_kg", ("mass",), "mass_kg"),
+    Op("physics.weight", ("mass_kg",), "weight"),
+]
+
 # geospatial → finance / motion. haversine yields a distance in KM; the downstream roles are
 # km-native (price_per_km, speed_kmh) so units stay consistent without canonicalizing — the
 # `geo_distance` role is distinct from motion's metres `distance`, so they never clash.
@@ -167,7 +175,7 @@ CROSS_OPS = [
 
 ALL_OPS = (FINANCE_OPS + INTEREST_OPS + MOTION_OPS + PHYSICS_OPS + GEOMETRY_COST_OPS
            + CHEM_OPS + MOLECULAR_OPS + MATERIALS_OPS + PCHEM_OPS + PRICED_OPS + GEO_OPS
-           + CROSS_OPS)
+           + COERCION_OPS + CROSS_OPS)
 
 _MEMO: dict = {}
 _searches = 0  # BFS runs actually executed (cache misses) — for tests/telemetry

@@ -193,9 +193,20 @@ def bind_synthesis_chemistry(query: str) -> tuple[bool, dict | None, str, int]:
     if "cost" in q and price_g and moles_given:  # chem → finance: molar_mass → mass → $ per gram
         knowns["moles"], knowns["price_per_gram"] = float(moles_given[1]), float(price_g[1])
         goal, suffix, prefix, unique = "reagent_cost", "", "$", True
+        # §D multi-hop tail: chem → finance → split/tax (reagent_cost funnels into cost)
+        sp = (re.search(r"(?:among|between|by)\s+(\d+)|(\d+)\s+(?:people|friends|ways)", q)
+              if any(w in q for w in ("split", "between", "among", "shared")) else None)
+        tx = re.search(r"(\d+(?:\.\d+)?)\s*(?:%|percent)\s*(?:sales\s*)?(?:tax|vat)", q)
+        if sp:
+            knowns["people"], goal, suffix = float(int(sp[1] or sp[2])), "cost_per_person", " each"
+        elif tx:
+            knowns["tax_pct"], goal = float(tx[1]), "cost_with_tax"
     elif "molecule" in q and grams:    # chem → molecular: mass → moles → molecules (Avogadro)
         knowns["mass"] = float(grams[1])
         goal, suffix, unique = "molecules", "", True
+    elif "weight" in q and moles_given:  # chem → units(g→kg) → physics: mass → weight (§F coercion)
+        knowns["moles"] = float(moles_given[1])
+        goal, suffix, unique = "weight", " N", True
     elif "molarity" in q and grams and volume:  # molar_mass → moles → molarity
         knowns["mass"], knowns["volume"] = float(grams[1]), float(volume[1])
         goal, suffix = "molarity", " M"
@@ -207,8 +218,10 @@ def bind_synthesis_chemistry(query: str) -> tuple[bool, dict | None, str, int]:
         goal, suffix = "mass", " g"
     else:
         return False, None, "code", 0
-    from reasoning.synthesize import CHEM_OPS, CROSS_OPS, MOLECULAR_OPS, synthesize
-    seq = synthesize(set(knowns), goal, CHEM_OPS + MOLECULAR_OPS + CROSS_OPS, unique=unique)
+    from reasoning.synthesize import (CHEM_OPS, COERCION_OPS, CROSS_OPS, MOLECULAR_OPS,
+                                      synthesize)
+    seq = synthesize(set(knowns), goal, CHEM_OPS + MOLECULAR_OPS + COERCION_OPS + CROSS_OPS,
+                     unique=unique)
     if seq is None or len(seq) < 2:
         return False, None, "code", 0
     return True, {"knowns": knowns, "goal": goal, "prefix": prefix, "suffix": suffix,
