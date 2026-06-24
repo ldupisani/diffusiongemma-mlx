@@ -4,7 +4,22 @@ from __future__ import annotations
 import re
 
 from reasoning.bind._common import *  # noqa: F401,F403
-from reasoning.bind import entities as _E
+
+# A coordinate pair, geo-scoped (broader than entities.pairs, which is parens-only): wrapped in
+# (), [], or {}, OR bare "lat, lon". The bare form REQUIRES decimals so it doesn't grab a stray
+# integer pair from prose; bracketed forms allow integers. Only used by the geo binds, which are
+# gated by geo cues / "travel cost", so the looseness can't leak into list/set/matrix parsing.
+_GEO_PAIR = re.compile(r"[(\[{]\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*[)\]}]"
+                       r"|(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)")
+
+
+def _geo_pairs(query: str) -> list:
+    out = []
+    for m in _GEO_PAIR.finditer(query):
+        a, b = (m.group(1), m.group(2)) if m.group(1) is not None else (m.group(3), m.group(4))
+        out.append((float(a), float(b)))
+    return out
+
 
 # require a geo cue so a plain "(x, y)" pair stays with coordinate_geometry (euclidean)
 _GEO_CUES = ("latitude", "longitude", "gps", "great circle", "great-circle", "haversine",
@@ -19,7 +34,7 @@ def bind_geospatial(query: str) -> tuple[bool, dict | None, str, int]:
     def ok(skill, dims, vals, **extra):
         return True, {"skill": skill, "dims": dims, **dict(zip(dims, vals)), **extra}, "code", 0
 
-    pts = _E.pairs(query)
+    pts = _geo_pairs(query)
     if len(pts) >= 2 and any(c in q for c in _GEO_CUES):
         a = [pts[0][0], pts[0][1], pts[1][0], pts[1][1]]
         dims = ["la1", "lo1", "la2", "lo2"]
@@ -51,7 +66,7 @@ _PER_UNIT = re.compile(r"\$\s*(\d+(?:\.\d+)?)\s*(?:per|/)\s*([a-zA-Z][a-zA-Z.]*)
 def bind_synthesis_geo(query: str) -> tuple[bool, dict | None, str, int]:
     from reasoning.skills import units as _U
     q = query.lower()
-    pts = _E.pairs(query)
+    pts = _geo_pairs(query)
     if len(pts) < 2:
         return False, None, "code", 0
     knowns = {"la1": pts[0][0], "lo1": pts[0][1], "la2": pts[1][0], "lo2": pts[1][1]}
