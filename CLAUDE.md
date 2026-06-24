@@ -24,9 +24,14 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
 ## Backends (`backend.py`)
 
 Two backends share ONE interface (`load` / `apply_template` / `stream` / `parse_tool_calls`
-/ `strip_thought`), so every consumer is written once and works with either. Both yield
-response objects with identical fields (`.text`, `.finish_reason`, `.prompt_tokens`,
-`.generation_tokens`, `.peak_memory`).
+/ `strip_thought` / `gen_params` / `params_from_request`), so every consumer is written once
+and works with either. Both yield response objects with identical fields (`.text`,
+`.finish_reason`, `.prompt_tokens`, `.generation_tokens`, `.peak_memory`).
+
+Each backend owns its own generation params — callers never branch on backend type:
+`gen_params(quality, max_tokens)` is the REPL/CLI preset path; `params_from_request(req)` is
+the HTTP `/generate` path. The base (autoregressive) returns just a `temperature`;
+`DiffusionBackend` overrides both to add its canvas knobs.
 
 - **`AutoregressiveBackend`** (`mlx-lm`, **default**) — small standard instruct models.
   Default `mlx-community/Qwen2.5-3B-Instruct-4bit` (~1.86 GB). JSON tool calls
@@ -44,8 +49,9 @@ else autoregressive). `mlx-vlm`/`mlx-lm` imports are deferred per backend.
 - Qwen2.5's bundled chat template shows the tool-call example with doubled braces
   (`{{...}}`, a Jinja-escape artifact) and the model copies them. The JSON parser
   (`parse_tool_calls_json` / TS `loadsFirstObject`) peels redundant outer brace layers.
-- Diffusion-only knobs (`max_denoising_steps`, `block_length`, `diffusion_sampler`) are
-  ignored by the autoregressive backend, which uses only `temperature`.
+- Diffusion-only knobs (`max_denoising_steps`, `block_length`, `diffusion_sampler`) only
+  exist on `DiffusionBackend`; the autoregressive backend's `params_from_request`/`gen_params`
+  pull only `temperature`, so those keys in a request are simply never read.
 
 ## Commands
 
@@ -63,5 +69,8 @@ Env: `DIFG_PORT` (8088), `DIFG_MODEL`, `DIFG_BACKEND`, `DIFG_PYTHON` (`.venv/bin
 
 - Adding an orchestrator: new module in `reasoning/store/orchestrators/`, add a collision
   guard / `precondition`, and keep it model-free where possible. Run `eval-all` after changes.
+- Adding a backend: subclass `Backend`, set the capability flags, and override `gen_params`
+  / `params_from_request` if it needs knobs beyond `temperature`. No call site should branch
+  on backend type — keep that logic inside the backend.
 - Keep the sidecar HTTP contract (`/info` + `/generate` NDJSON) stable — it's the seam that
   insulates the TS REPL from the Python internals.
