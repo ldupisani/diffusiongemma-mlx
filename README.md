@@ -65,9 +65,12 @@ python chat.py "Give me three tips for naming variables." --quality fast --max-t
 python chat_stream.py                 # default small AR model; optional arg: model id
 # diffusion instead:  python chat_stream.py mlx-community/diffusiongemma-26B-A4B-it-4bit
 ```
-Multi-turn REPL with live streaming output. **Tool calling is built in**: it
-launches `mcp_server_demo.py` over MCP and lets the model call tools mid-chat
-(pass `--no-tools` to disable). In-session commands:
+Multi-turn REPL with live streaming output. **Code-first**: each turn first tries the
+deterministic engine (`reasoning.solve.try_coded`: recognize → 0-call compound split →
+≤1-call reformulation); only non-computational turns fall through to a full LLM generation, so
+e.g. "how much surface does a circular table of radius 5 m have?" answers `78.54` at 1 model
+call. **Tool calling is built in**: it launches `mcp_server_demo.py` over MCP and lets the model
+call tools mid-chat (pass `--no-tools` to disable). In-session commands:
 `/quality fast|balanced|quality` · `/think` (toggle reasoning channel) ·
 `/continue` (extend a reply that hit the token cap) · `/auto <max>` ·
 `/tools` (list MCP tools) · `/reset` · `/exit`.
@@ -152,13 +155,16 @@ Notes:
 
 ## TypeScript REPL (`ts/`)
 A TypeScript port of `chat_stream.py` with full feature parity (streaming, `/quality`,
-`/think`, `/continue`, `/auto`, `/tools`, MCP tool calling, context readout).
+`/think`, `/continue`, `/auto`, `/tools`, MCP tool calling, context readout, code-first turns).
 
 **Why it needs a Python sidecar:** MLX only runs through Python — there is no MLX runtime
 for JS. So inference is delegated to a tiny local HTTP server (`infer_server.py`) that wraps
 whichever backend is active; the TypeScript REPL owns everything else and talks to it over
 NDJSON streaming. The REPL adapts to the sidecar's `/info` (backend, `tool_call_format`,
 `supports_thinking`) — so it parses JSON or Gemma-DSL tool calls and gates `/think` automatically.
+**Code-first** like the Python REPL: each turn first calls the sidecar's `POST /solve` (the
+deterministic engine, run with an in-process shot to avoid re-entrant generation) and only
+generates a full reply when nothing coded answers.
 
 **One command (recommended)** — `run.sh` boots the sidecar, waits for it, launches the REPL,
 and stops the sidecar on exit (an already-running sidecar is reused and left alone):
@@ -226,6 +232,15 @@ teacher's final answer is taken as its last line when it skips the `ANSWER:` mar
   a coded orchestrator: 0 calls (code-first split) or ≤1 (a single model call only SPLITS; coded
   orchestrators solve the parts — vs the old N+2). The router is a five-tier cascade:
   compose → domain → bind-gated → clarify → fallback.
+- **Reformulate-then-route** (`reformulate.py`) — the single-question sibling of decomposition:
+  when a question doesn't route as-written, one model call *rewrites* it into a phrasing the coded
+  engine recognizes (e.g. "how much room is inside a circle of radius 5?" → "area of a circle with
+  radius 5"), a coded orchestrator answers it (0 further calls), and a **deterministic** guard
+  confirms the rewrite invented no number absent from the original (with a word→digit map so "five"
+  matches "5") — chosen over a model self-verify, which a small model does unreliably. A cheap
+  `_looks_computational` pre-gate (digit / number-word / domain keyword) skips the call entirely on
+  conversational turns. `cli run`'s fallback ladder is: 0-call compound split → reformulate+verify →
+  model-assisted compound split → teacher.
 - **Goal-directed plan synthesis** (`synthesize.py`) — BFS over a typed-op library finds the
   shortest operation path from typed knowns to a goal. Generalized across domains in one search
   pool (`ALL_OPS`): re-derives finance discount→tax, a 3-op physics chain (force→work→power), the
