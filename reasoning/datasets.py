@@ -13,7 +13,8 @@ Model:
     is too large — a NEW handle plus a preview (schema, row count, head). Never a data dump.
   * Everything is deterministic and model-free (0 model calls).
 
-Supported: CSV/TSV, Parquet, JSON/JSONL, SQLite (.sqlite/.db), DuckDB (.duckdb).
+Supported: CSV/TSV, Parquet, JSON/JSONL, SQLite (.sqlite/.db), DuckDB (.duckdb), Arrow/Feather
+(.arrow/.feather, via pyarrow), and NumPy arrays (.npy, via numpy — flattened to columns).
 """
 
 from __future__ import annotations
@@ -30,7 +31,9 @@ PREVIEW_ROWS = 5
 _FILE_FORMATS = {".csv": "csv", ".tsv": "csv", ".parquet": "parquet", ".pq": "parquet",
                  ".json": "json", ".jsonl": "json", ".ndjson": "json"}
 _DB_FORMATS = {".sqlite": "sqlite", ".db": "sqlite", ".duckdb": "duckdb"}
-SUPPORTED = set(_FILE_FORMATS) | set(_DB_FORMATS)
+# read via pyarrow/numpy (not DuckDB-native), then registered into the connection
+_PY_FORMATS = {".arrow": "arrow", ".feather": "arrow", ".npy": "numpy"}
+SUPPORTED = set(_FILE_FORMATS) | set(_DB_FORMATS) | set(_PY_FORMATS)
 
 
 def data_dir() -> Path:
@@ -72,6 +75,20 @@ def _read_sql(path: Path) -> str:
     return f"read_json_auto('{lit}')"
 
 
+def _py_table(path: Path):
+    """Load an Arrow/Feather or .npy file into a pyarrow Table (a .npy array becomes columns
+    c0..cN, or a single 'value' column when 1-D)."""
+    if _PY_FORMATS[path.suffix.lower()] == "arrow":
+        import pyarrow.feather as feather
+        return feather.read_table(str(path))
+    import numpy as np
+    import pyarrow as pa
+    a = np.load(path, allow_pickle=False)
+    if a.ndim == 1:
+        return pa.table({"value": a})
+    return pa.table({f"c{i}": a[:, i] for i in range(a.shape[1])})
+
+
 def _register(con: duckdb.DuckDBPyConnection) -> None:
     """Register every dataset in the data dir as a view (or attached DB) named by its handle."""
     for path in data_dir().iterdir():
@@ -82,6 +99,8 @@ def _register(con: duckdb.DuckDBPyConnection) -> None:
         try:
             if ext in _FILE_FORMATS:
                 con.execute(f'CREATE OR REPLACE VIEW "{name}" AS SELECT * FROM {_read_sql(path)}')
+            elif ext in _PY_FORMATS:
+                con.register(name, _py_table(path))
             elif ext in _DB_FORMATS:
                 kind = _DB_FORMATS[ext]
                 alias = f"_db_{name}"
@@ -119,8 +138,23 @@ def _fmt_table(cols, rows) -> str:
     return f"{head}\n{body}" if body else head
 
 
+def _arrow_table(con, sql: str):
+    rel = con.sql(sql)
+    return rel.to_arrow_table() if hasattr(rel, "to_arrow_table") else rel.fetch_arrow_table()
+
+
 def _write(con, sql: str, name: str, fmt: str = "parquet") -> Path:
-    out = data_dir() / f"{name}.{'parquet' if fmt == 'parquet' else fmt}"
+    if fmt == "arrow":                           # via pyarrow (DuckDB COPY has no Arrow format)
+        import pyarrow.feather as feather
+        out = data_dir() / f"{name}.arrow"
+        feather.write_feather(_arrow_table(con, sql), str(out))
+        return out
+    if fmt == "npy":                             # numeric matrix only
+        import numpy as np
+        out = data_dir() / f"{name}.npy"
+        np.save(out, np.asarray(_arrow_table(con, sql).to_pandas().to_numpy(), dtype=float))
+        return out
+    out = data_dir() / f"{name}.{fmt}"
     copy_fmt = {"parquet": "(FORMAT parquet)", "csv": "(FORMAT csv, HEADER)",
                 "json": "(FORMAT json)"}[fmt]
     con.execute(f"COPY ({sql}) TO '{_q(out)}' {copy_fmt}")

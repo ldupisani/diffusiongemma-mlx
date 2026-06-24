@@ -86,6 +86,26 @@ class TestDatasets(unittest.TestCase):
         # guard: a plain stat query (no dataset) must NOT be claimed by the dataset domain
         self.assertEqual(route("What is the average of 10, 20, 30?")[0], "list_statistic")
 
+    def test_arrow_and_npy(self):
+        import numpy as np
+        import pyarrow as pa
+        import pyarrow.feather as feather
+        feather.write_feather(pa.table({"a": [1, 2, 3], "b": [10.0, 20.0, 30.0]}),
+                              os.path.join(self.tmp.name, "metrics.arrow"))
+        np.save(os.path.join(self.tmp.name, "matrix.npy"),
+                np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]))
+        # Arrow/Feather: tabular, columns by name
+        self.assertEqual(self.ds.aggregate("metrics", "b", "sum"), "60")
+        self.assertEqual(self.ds.count_rows("metrics"), "3")
+        # .npy: 2-D array → columns c0, c1
+        self.assertIn("matrix", self.ds.list_datasets())
+        self.assertEqual(self.ds.aggregate("matrix", "c0", "sum"), "9")   # 1+3+5
+        # round-trip the other way: export to npy and to arrow
+        self.ds.convert("metrics", "metrics_npy", "npy")
+        self.assertIn("metrics_npy", self.ds.list_datasets())
+        self.ds.convert("matrix", "matrix_arrow", "arrow")
+        self.assertEqual(self.ds.aggregate("matrix_arrow", "c1", "sum"), "12")  # 2+4+6
+
     def test_import_file(self):
         src = os.path.join(self.tmp.name, "external.csv")
         with open(src, "w") as f:

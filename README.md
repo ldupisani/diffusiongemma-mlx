@@ -351,7 +351,9 @@ Skill tests: `python -m unittest discover -s reasoning -p "test_*.py" -t .` (no 
 ## Datasets — larger-than-text data (`reasoning/datasets.py`)
 For inputs, scratch storage, or outputs too big to inline as text. A **separate I/O subsystem**
 (the `skills/` library stays pure): **DuckDB is the single engine** over CSV/TSV, Parquet,
-JSON/JSONL, SQLite, and DuckDB files. A dataset is a **handle** — a file in `$DIFG_DATA_DIR`
+JSON/JSONL, SQLite, and DuckDB files — plus **Arrow/Feather** and **NumPy `.npy`** (read via
+pyarrow/numpy and registered into DuckDB; a 2-D `.npy` becomes columns `c0…cN`). A dataset is a
+**handle** — a file in `$DIFG_DATA_DIR`
 (default `<repo>/data`) registered as a DuckDB view, so every operation is just SQL over
 `SELECT … FROM <handle>`. **Results stay small**: a scalar, a compact table (≤20 rows), or — when
 the output is large — a *new handle* plus a preview (schema, row count, head). Still **0 model

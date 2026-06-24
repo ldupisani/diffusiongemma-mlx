@@ -13,7 +13,8 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   matches an incoming query to a `query_type`. Composition between orchestrators is via
   `SubStep(..., orchestrator="<id>")` in a `Plan` (see `compiled.py`), NOT via metadata.
 - **`reasoning/datasets.py`** — dataset subsystem for larger-than-text data (separate from the
-  pure no-I/O `skills/`). DuckDB is the single engine over CSV/Parquet/JSON/SQLite/DuckDB:
+  pure no-I/O `skills/`). DuckDB is the single engine over CSV/Parquet/JSON/SQLite/DuckDB, plus
+  Arrow/Feather and NumPy `.npy` (read via pyarrow/numpy, registered into DuckDB):
   datasets are handles (files in `$DIFG_DATA_DIR`, default `<repo>/data`) registered as views, so
   ops are SQL. Results stay small (scalar / ≤20-row table / new handle + preview). Reached via the
   `dataset` orchestrator (NL) and `python -m reasoning.cli data …` (import/list/describe/query/

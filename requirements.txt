@@ -8,3 +8,5 @@ mcp>=1.12.0
 sympy>=1.13
 # dataset subsystem (reasoning/datasets.py): one SQL engine over CSV/Parquet/JSON/SQLite/DuckDB.
 duckdb>=1.0
+pyarrow>=14     # Arrow/Feather datasets + result export
+numpy>=1.24     # .npy array datasets
