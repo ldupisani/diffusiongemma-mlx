@@ -13,6 +13,13 @@ def bind_discrete(query: str) -> tuple[bool, dict | None, str, int]:
     def ok(skill, args):
         return True, {"skill": skill, "args": args}, "code", 0
 
+    # minimum spanning tree needs WEIGHTED triples — parse before the 2-tuple graph block
+    if "spanning tree" in q or re.search(r"\bmst\b", q):
+        tri = [(int(a), int(b), int(w))
+               for a, b, w in re.findall(r"\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)", query)]
+        if tri:
+            return ok("discrete.mst_weight", [tri])
+
     if any(c in q for c in ("graph", "edges", "vertex", "vertices")):
         edges = tuple(tuple(int(x) for x in p) for p in _E.pairs(query))
         if edges:
@@ -22,10 +29,34 @@ def bind_discrete(query: str) -> tuple[bool, dict | None, str, int]:
                     return ok("discrete.shortest_path", [edges, int(m[1]), int(m[2])])
             if "component" in q:
                 return ok("discrete.graph_components", [edges])
+            if "degree sequence" in q:
+                return ok("discrete.degree_sequence", [edges])
+            if "bipartite" in q:
+                return ok("discrete.is_bipartite", [edges])
+            if "euler" in q:
+                return ok("discrete.eulerian", [edges])
             if "degree" in q:
                 m = re.search(r"vertex\s+(\d+)|degree of\s+(\d+)", q)
                 if m:
                     return ok("discrete.graph_degree", [edges, int(m[1] or m[2])])
+
+    if "derangement" in q or "subfactorial" in q:
+        n = _E.only_number(query)
+        if n is not None:
+            return ok("discrete.derangement", [int(n)])
+    if "multinomial" in q:
+        nums = [int(x) for x in re.findall(r"\d+", q.split("multinomial", 1)[-1])]
+        if len(nums) >= 2:
+            return ok("discrete.multinomial", [nums])
+    if "stars and bars" in q or ("identical" in q and ("bin" in q or "box" in q)):
+        nums = [int(x) for x in re.findall(r"\d+", query)]
+        if len(nums) >= 2:
+            return ok("discrete.stars_and_bars", [nums[0], nums[1]])
+    if "partition" in q and "set" not in q and "bell" not in q:
+        n = _E.only_number(query)
+        if n is not None:
+            return ok("discrete.integer_partitions", [int(n)])
+
     if "catalan" in q:
         n = _E.only_number(query)
         if n is not None:

@@ -128,6 +128,10 @@ def bind_list_statistic(query: str) -> tuple[bool, dict | None, str, int]:
     """Coded-only bind: a stat keyword + a list of ≥2 numbers → {nums, skill}. The numbers
     must form an actual list (delimiters only) — scattered numbers in prose ("total cost of
     100 yards at $3") would otherwise be summed into a confident wrong answer."""
+    # graph/discrete queries (e.g. "minimum spanning tree of the graph with edges …") carry a
+    # stat word that isn't the operator — leave them to the discrete-math domain.
+    if re.search(r"spanning tree|\bgraph\b|\bedges\b", query, re.IGNORECASE):
+        return False, None, "code", 0
     skill = detect_stat_op(query)
     nums = _numeric_list(query)
     if skill and len(nums) >= 2:

@@ -522,6 +522,15 @@ CASES = [
     ("What is the radius of curvature of x^2 at x=0?", "0.5", "differential_geometry"),
     ("What is the arc length of x^2 from 0 to 1?", "1.478943", "differential_geometry"),
     ("What is the curvature of sqrt(1-x^2) at x=0?", "1", "differential_geometry"),
+    # combinatorics + graph-theory extensions to discrete_math
+    ("How many derangements of 4 items are there?", "9", "discrete_math"),
+    ("How many ways to place 5 identical items into 3 bins?", "21", "discrete_math"),
+    ("How many integer partitions of 5 are there?", "7", "discrete_math"),
+    ("Is the graph with edges (1,2), (2,3), (3,4) bipartite?", "True", "discrete_math"),
+    ("What is the minimum spanning tree weight of the graph with edges "
+     "(1,2,4), (2,3,1), (3,4,2), (4,1,3)?", "6", "discrete_math"),
+    # collision guards: a plain stat query must NOT be claimed by optimization/discrete
+    ("What is the minimum of 5, 3, 8, 1?", "1", "list_statistic"),
 ]
 
 

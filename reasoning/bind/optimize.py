@@ -32,13 +32,14 @@ def bind_optimize(query: str) -> tuple[bool, dict | None, str, int]:
         return False, None, "code", 0
 
     m = re.search(r"(?:maximize|maximum of)\s+(.+?)\s*[?.]?$", query, re.IGNORECASE)
-    if m:
+    if m and re.search(r"[xy]", _expr(m[1])):   # a function of x/y, not a plain number list
         return ok("optimize.maximize", ["expr"], [_expr(m[1])], round=False)
 
     m = re.search(r"(?:minimize|minimum of|optimi[sz]e)\s+(.+?)\s*[?.]?$", query, re.IGNORECASE)
     if m:
         e = _expr(m[1])
-        skill = "optimize.minimize2" if re.search(r"\by\b", e) else "optimize.minimize"
-        return ok(skill, ["expr"], [e], round=False)
+        if re.search(r"[xy]", e):                # otherwise "minimum of 5,3,8" is a stat query
+            skill = "optimize.minimize2" if re.search(r"\by\b", e) else "optimize.minimize"
+            return ok(skill, ["expr"], [e], round=False)
 
     return False, None, "code", 0
