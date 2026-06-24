@@ -44,6 +44,28 @@ export async function fetchInfo(server: string): Promise<SidecarInfo> {
   };
 }
 
+// Ask the sidecar to try the deterministic reasoning engine (incl. ≤2-call reformulation).
+// Returns the coded answer, or answer=null to defer to a full LLM generation. Tolerates an
+// older sidecar without /solve (treated as "no coded answer").
+export async function solve(
+  server: string,
+  query: string,
+): Promise<{ answer: string | null; modelCalls: number }> {
+  let res: Response;
+  try {
+    res = await fetch(`${server}/solve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+    });
+  } catch {
+    return { answer: null, modelCalls: 0 };
+  }
+  if (!res.ok) return { answer: null, modelCalls: 0 };
+  const data = (await res.json()) as { answer: string | null; model_calls?: number };
+  return { answer: data.answer ?? null, modelCalls: data.model_calls ?? 0 };
+}
+
 // Stream one generation, calling onChunk for each text fragment as it arrives.
 export async function streamReply(
   server: string,

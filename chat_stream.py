@@ -26,7 +26,9 @@ from contextlib import AsyncExitStack
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from backend import DEFAULT_MODEL, get_backend
+from backend import DEFAULT_MODEL, backend_shot, get_backend
+from reasoning.compiled import model_calls
+from reasoning.solve import try_coded
 from tools_util import mcp_tool_to_model
 
 # Default tool-round budget per turn when /auto is OFF (runaway guard). When
@@ -191,6 +193,7 @@ async def run_repl(backend, ctx_max, session, tools):
     last_prompt, last_raw, last_finish = "", "", None
     last_max, last_think = max_tokens, False
     tool_names = [t["function"]["name"] for t in tools]
+    coded_shot = backend_shot(backend)  # in-process one-shot for the code engine's reformulation
 
     while True:
         try:
@@ -258,6 +261,21 @@ async def run_repl(backend, ctx_max, session, tools):
                 )
             else:
                 print("(nothing to continue — last reply finished naturally)\n")
+            continue
+
+        # --- try the deterministic engine first; the LLM is the fallback ---
+        # (recognize → 0-call compound split → ≤2-call reformulation+verify). Returns None
+        # for anything non-computational, which then proceeds to a normal generation.
+        try:
+            coded = try_coded(user, shot=coded_shot)
+        except Exception:
+            coded = None  # never let the code path break the chat
+        if coded is not None:
+            print(f"difg> {coded.answer}")
+            print(f"(coded answer — {model_calls(coded)} model call(s), no full generation)\n")
+            history.append({"role": "user", "content": user})
+            history.append({"role": "assistant", "content": coded.answer})
+            last_finish = None
             continue
 
         # --- a normal user turn (may involve tool calls) ---

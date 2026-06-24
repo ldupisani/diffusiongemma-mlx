@@ -22,7 +22,7 @@ import {
   parseToolCallsFor,
   stripThoughtFor,
 } from "./tools.js";
-import { fetchInfo, GenBody, GenStats, SidecarInfo, streamReply } from "./infer.js";
+import { fetchInfo, GenBody, GenStats, SidecarInfo, solve, streamReply } from "./infer.js";
 
 const THINK_MAX_TOKENS = 1024; // reasoning + answer need a larger budget
 const DEFAULT_TOOL_STEPS = 6; // tool-round budget per turn when /auto is off
@@ -255,6 +255,19 @@ async function repl(state: State, rl: readline.Interface): Promise<void> {
       } else {
         console.log("(nothing to continue — last reply finished naturally)\n");
       }
+      continue;
+    }
+
+    // --- try the deterministic engine first; the LLM is the fallback ---
+    // (recognize → 0-call compound split → ≤2-call reformulation+verify). answer=null for
+    // anything non-computational, which then proceeds to a normal generation.
+    const coded = await solve(state.server, user);
+    if (coded.answer) {
+      process.stdout.write(`difg> ${coded.answer}\n`);
+      console.log(`(coded answer — ${coded.modelCalls} model call(s), no full generation)\n`);
+      state.history.push({ role: "user", content: user });
+      state.history.push({ role: "assistant", content: coded.answer });
+      state.lastFinish = null;
       continue;
     }
 

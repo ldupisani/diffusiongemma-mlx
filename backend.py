@@ -33,6 +33,7 @@ package for the backend you actually use.
 from __future__ import annotations
 
 import os
+from types import SimpleNamespace
 
 # The out-of-the-box default: a small, capable, tool-calling instruct model.
 DEFAULT_MODEL = "mlx-community/Qwen2.5-3B-Instruct-4bit"
@@ -221,6 +222,19 @@ class AutoregressiveBackend(Backend):
 
     def strip_thought(self, text):
         return text.strip()  # no thought channel to strip
+
+
+def backend_shot(backend: "Backend"):
+    """Adapt a loaded backend into the `shot(prompt, *, max_tokens, quality)` callable the
+    reasoning engine's reformulation/decomposition expect (it returns an object with `.text`).
+
+    Calls the backend in-process — so the sidecar's /solve endpoint can run the engine without
+    making a re-entrant HTTP request back to its own (single-threaded) /generate."""
+    def shot(prompt, *, max_tokens=256, quality="fast"):
+        text, _ = backend.generate(prompt, max_tokens=max_tokens,
+                                   params=backend.gen_params(quality, max_tokens))
+        return SimpleNamespace(text=text)
+    return shot
 
 
 def _auto_backend(model_id: str) -> str:

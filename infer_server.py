@@ -32,7 +32,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import mlx.core as mx
 
-from backend import DEFAULT_MODEL, get_backend
+from backend import DEFAULT_MODEL, backend_shot, get_backend
 
 BACKEND = None
 
@@ -58,6 +58,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json(404, {"error": "not found"})
 
     def do_POST(self):
+        if self.path == "/solve":
+            return self._solve()
         if self.path != "/generate":
             self._json(404, {"error": "not found"})
             return
@@ -113,6 +115,23 @@ class Handler(BaseHTTPRequestHandler):
             "generation_tokens": getattr(last, "generation_tokens", 0) or 0,
             "peak_memory": getattr(last, "peak_memory", None),
         })
+
+    def _solve(self):
+        """Try to answer a query with the deterministic reasoning engine (incl. ≤2-call
+        reformulation), returning {"answer": <str>, "model_calls": <int>} or {"answer": null}
+        if nothing coded answers — so the chat REPL can try code first and fall back to a full
+        generation. The engine's model calls run via the in-process backend (no re-entrant
+        HTTP into this single-threaded server)."""
+        from reasoning.compiled import model_calls
+        from reasoning.solve import try_coded
+
+        length = int(self.headers.get("Content-Length", 0))
+        req = json.loads(self.rfile.read(length) or b"{}")
+        result = try_coded(req.get("query", ""), shot=backend_shot(BACKEND))
+        if result is None:
+            self._json(200, {"answer": None})
+        else:
+            self._json(200, {"answer": result.answer, "model_calls": model_calls(result)})
 
 
 def main():
