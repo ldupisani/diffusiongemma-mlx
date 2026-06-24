@@ -375,6 +375,22 @@ CASES = [
     ("Transcribe ATGC to mRNA.", "AUGC", "biochemistry"),
     ("What is the buffer pH with pKa 4.76, base 10, and acid 1?", "5.76", "biochemistry"),
     ("What is the reaction rate with Vmax 100, Km 5, and substrate 15?", "75", "biochemistry"),
+    # N-dimensional shapes
+    ("What is the volume of a 4-dimensional ball of radius 2?", "78.9568", "nd_geometry"),
+    ("What is the volume of a 4-dimensional cube of side 2?", "16", "nd_geometry"),
+    ("How many edges does a 4-dimensional hypercube have?", "32", "nd_geometry"),
+    # tensor maths
+    ("What is the rank of [[1, 2], [3, 4]]?", "2", "tensor_math"),
+    ("What is the trace of [[1, 2], [3, 4]]?", "5", "tensor_math"),
+    ("What is the outer product of [1, 2] and [3, 4]?", "[[3, 4], [6, 8]]", "tensor_math"),
+    # complex numbers
+    ("What is the modulus of 3+4i?", "5", "complex_numbers"),
+    ("What is the conjugate of 3+4i?", "3-4i", "complex_numbers"),
+    ("What is (1+1i) raised to the power 3?", "-2+2i", "complex_numbers"),
+    # complex calculus
+    ("What is the residue of 1/z at 0?", "1", "complex_calculus"),
+    ("What is the residue of 1/(z^2+1) at i?", "-I/2", "complex_calculus"),
+    ("What is the contour integral of 1/z around 0?", "2*I*pi", "complex_calculus"),
     # cross-domain synthesis: geometry area → cost → finance-style split
     ("What does it cost to tile a 4 by 6 meter floor at $8 per square meter, split between "
      "3 people?", "$64 each", "synthesized_geometry"),

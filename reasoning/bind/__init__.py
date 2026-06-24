@@ -32,3 +32,6 @@ from reasoning.bind.discrete import *    # noqa: F401,F403
 from reasoning.bind.linalg import *      # noqa: F401,F403
 from reasoning.bind.chem_applied import *  # noqa: F401,F403
 from reasoning.bind.biochem import *     # noqa: F401,F403
+from reasoning.bind.ndim import *        # noqa: F401,F403
+from reasoning.bind.tensor import *      # noqa: F401,F403
+from reasoning.bind.complex_nums import *  # noqa: F401,F403

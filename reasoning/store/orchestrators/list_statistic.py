@@ -7,7 +7,7 @@ list of any length, with zero model calls.
 """
 
 from reasoning import engine
-from reasoning.bind import (bind_linalg, bind_list_statistic, bind_set_operations,
+from reasoning.bind import (bind_linalg, bind_list_statistic, bind_set_operations, bind_tensor,
                            detect_stat_op)
 from reasoning.compiled import CodeStep, Inp, Plan, explain, run_plan
 
@@ -38,7 +38,8 @@ def precondition(query):
     # Defer "product" queries that belong elsewhere: set theory ("Cartesian product of {1,2}…")
     # and vectors ("dot/cross product of (1,2,3)…").
     return (bind_list_statistic(query)[0]
-            and not bind_set_operations(query)[0] and not bind_linalg(query)[0])
+            and not bind_set_operations(query)[0] and not bind_linalg(query)[0]
+            and not bind_tensor(query)[0])  # "outer/kronecker PRODUCT of […]" → tensor_math
 
 
 def run(query):

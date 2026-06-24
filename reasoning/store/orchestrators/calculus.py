@@ -3,7 +3,7 @@ zero model calls).
 """
 
 from reasoning import engine
-from reasoning.bind import bind_calculus
+from reasoning.bind import bind_calculus, bind_ccalc
 from reasoning.compiled import CodeStep, Lit, Plan, explain, run_plan
 
 META = {
@@ -26,7 +26,9 @@ META = {
 
 
 def precondition(query):
-    return bind_calculus(query)[0]
+    # defer a CONTOUR integral / complex-derivative to complex_calculus (a real integral of
+    # 1/z would wrongly answer a contour integral)
+    return bind_calculus(query)[0] and not bind_ccalc(query)[0]
 
 
 def run(query):
