@@ -487,6 +487,12 @@ CASES = [
     ("Find a root of x^2 - 2 by bisection on [1, 2].", "1.414214", "numerical_methods"),
     ("Apply Simpson's rule to x^2 from 0 to 1 using 2 intervals.", "0.333333", "numerical_methods"),
     ("Apply fixed-point iteration to cos(x) from 1.", "0.739085", "numerical_methods"),
+    # game theory: zero-sum value, pure Nash, expected payoff, dominant strategy
+    ("What is the value of the zero-sum game [[1,-1],[-1,1]]?", "0", "game_theory"),
+    ("Find the pure Nash equilibria of row payoffs [[3,0],[5,1]] and column payoffs [[3,5],[0,1]].",
+     "(2,2)", "game_theory"),
+    ("What is the expected payoff for [[3,1],[0,2]] with p=0.5 and q=0.5?", "1.5", "game_theory"),
+    ("What is the dominant strategy for [[3,1],[0,0]]?", "row 1", "game_theory"),
 ]
 
 
