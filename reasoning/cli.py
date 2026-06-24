@@ -52,16 +52,29 @@ def cmd_run(args):
     query = args.query
     m = router.recognize(query, matcher=matcher)
     if not m:
-        # ≤1-model-call decomposition: split with ONE model call, solve parts with coded
-        # orchestrators. (Code-first compounds already routed via the composer tier above.)
+        # No direct route. Try the coded fallbacks cheapest-first before the LLM teacher:
+        #   (a) 0-call compound split on conjunctions
+        #   (b) ≤2-call single-question reformulation (rewrite → coded answer → verify)
+        #   (c) ≤1-call model-assisted compound split
+        # Each yields a code-computed answer or None; the teacher is the last resort.
         from . import engine
-        from .decompose import decompose_with_model
-        composed = decompose_with_model(query, shot=engine.one_shot)
+        from .decompose import decompose_code_first, decompose_with_model
+        from .reformulate import reformulate_with_model
+        composed = decompose_code_first(query)
         if composed is not None:
-            print("[no single match — decomposed into coded sub-answers]\n")
+            print("[no single match — split into coded sub-answers]\n")
+        else:
+            composed = reformulate_with_model(query, shot=engine.one_shot)
+            if composed is not None:
+                print("[no direct match — reformulated into a coded query]\n")
+            else:
+                composed = decompose_with_model(query, shot=engine.one_shot)
+                if composed is not None:
+                    print("[no single match — decomposed into coded sub-answers]\n")
+        if composed is not None:
             print(composed.answer)
-            print(f"\n[decomposition used {model_calls(composed)} model call(s); "
-                  "sub-answers were coded]")
+            print(f"\n[coded fallback used {model_calls(composed)} model call(s); "
+                  "the answer itself was computed by code]")
             return
         print(f"[no orchestrator matched — falling back to TEACHER ({args.teacher})]\n")
         print(get_teacher(args.teacher).trace(query).answer)
