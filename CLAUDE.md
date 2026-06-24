@@ -19,6 +19,10 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   ops are SQL. Results stay small (scalar / ≤20-row table / new handle + preview). Reached via the
   `dataset` orchestrator (NL) and `python -m reasoning.cli data …` (import/list/describe/query/
   generate/convert). 0 model calls.
+- **`reasoning/datagen.py`** — domain dataset generators (primes/Fibonacci, random samples,
+  logistic trajectories, projectile motion, amortization, …) that produce rows (reusing pure
+  skills + numpy/SymPy) and save via `datasets.save_rows`. Registry `GENERATORS`; reached via
+  `data gen <name> <handle> key=value …` and NL ("generate the first 100 primes").
 - **`backend.py`** — pluggable inference backend (see below).
 - **`infer_server.py`** — tiny HTTP sidecar (`/info`, `/generate` NDJSON) wrapping the active
   backend. Single-threaded on purpose (MLX's GPU stream is thread-local).

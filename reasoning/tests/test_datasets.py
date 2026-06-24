@@ -106,6 +106,31 @@ class TestDatasets(unittest.TestCase):
         self.ds.convert("matrix", "matrix_arrow", "arrow")
         self.assertEqual(self.ds.aggregate("matrix_arrow", "c1", "sum"), "12")  # 2+4+6
 
+    def test_domain_generators(self):
+        from reasoning import datagen
+        datagen.generate("primes", "p", n="10")
+        self.assertEqual(self.ds.count_rows("p"), "10")
+        self.assertEqual(self.ds.query("SELECT max(prime) FROM p"), "29")   # 10th prime
+        datagen.generate("fibonacci", "fib", n="20")
+        self.assertEqual(self.ds.query("SELECT max(value) FROM fib"), "4181")  # F_19
+        datagen.generate("normal_sample", "ns", n="2000", mean="10", seed="0")
+        self.assertTrue(9.5 < float(self.ds.aggregate("ns", "value", "avg")) < 10.5)
+        datagen.generate("amortization", "am", principal="100000", annual_rate="6", years="30")
+        self.assertEqual(self.ds.count_rows("am"), "360")
+        datagen.generate("logistic_trajectory", "lt", r="3.9", x0="0.5", n="300")
+        self.assertEqual(self.ds.count_rows("lt"), "300")
+
+    def test_nl_generation_routing(self):
+        from reasoning import router
+        q = "Generate the first 100 primes."
+        m = router.recognize(q)
+        self.assertEqual(m.orchestrator.id, "dataset")
+        m.orchestrator.run(q)
+        self.assertIn("primes", self.ds.list_datasets())
+        self.assertEqual(self.ds.count_rows("primes"), "100")
+        # a non-dataset "generate" must not be claimed
+        self.assertIsNone(router.recognize("Generate some ideas for dinner."))
+
     def test_import_file(self):
         src = os.path.join(self.tmp.name, "external.csv")
         with open(src, "w") as f:

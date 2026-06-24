@@ -174,6 +174,13 @@ def cmd_data(args):
         print(ds.generate(int(a[0]), a[1], select=args.select))
     elif args.action == "convert":
         print(ds.convert(a[0], a[1], a[2]))
+    elif args.action == "gen":
+        from . import datagen
+        if not a:  # list available domain generators
+            print("\n".join(f"{k:22} {d}" for k, (_, d) in sorted(datagen.GENERATORS.items())))
+            return
+        params = dict(kv.split("=", 1) for kv in a[2:] if "=" in kv)
+        print(datagen.generate(a[0], a[1], **params))
 
 
 def main():
@@ -202,8 +209,10 @@ def main():
     ea.set_defaults(fn=cmd_eval_all)
     sub.add_parser("list").set_defaults(fn=cmd_list)
     da = sub.add_parser("data", help="manage datasets in $DIFG_DATA_DIR")
-    da.add_argument("action", choices=["list", "import", "describe", "query", "generate", "convert"])
-    da.add_argument("args", nargs="*", help="action arguments (e.g. a path, handle, or SQL)")
+    da.add_argument("action",
+                    choices=["list", "import", "describe", "query", "generate", "convert", "gen"])
+    da.add_argument("args", nargs="*",
+                    help="action args (e.g. path/handle/SQL; for gen: <generator> <name> key=value …)")
     da.add_argument("--name", help="handle name for import")
     da.add_argument("--save-as", dest="save_as", help="save a query result as a new dataset")
     da.add_argument("--select", help="SQL projection for generate (over range(n) t(i))")

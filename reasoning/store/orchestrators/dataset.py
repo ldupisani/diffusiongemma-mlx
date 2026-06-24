@@ -9,14 +9,19 @@ from reasoning.patterns import PatternResult
 META = {
     "id": "dataset", "query_type": "dataset",
     "description": "analytics over a named dataset (CSV/Parquet/JSON/SQLite/DuckDB handle in the "
-                   "data dir): describe it, count rows, aggregate a column, or run SQL",
+                   "data dir): describe it, count rows, aggregate a column, run SQL, or GENERATE "
+                   "a domain dataset (primes, samples, trajectories, schedules, …)",
     "example_queries": [
         "What is the average of the price column in sales?",
         "How many rows are in the orders dataset?",
         "Describe the dataset sales.",
         "Run the SQL SELECT status, count(*) FROM sales GROUP BY status.",
+        "Generate the first 100 primes.",
+        "Generate 500 normal samples with mean 10 and std 2.",
+        "Generate an amortization schedule for a $100000 loan at 6% over 30 years.",
+        "Generate a synthetic regression dataset of 200 points.",
     ],
-    "keywords": ["dataset", "column", "rows in", "describe the dataset", "sql"],
+    "keywords": ["dataset", "column", "rows in", "describe the dataset", "sql", "generate"],
     "model_free": True,
 }
 
@@ -39,6 +44,9 @@ def run(query):
             ans = ds.aggregate(data["name"], data["column"], data["agg"], where=data.get("where"))
         elif op == "query":
             ans = ds.query(data["sql"])
+        elif op == "generate":
+            from reasoning import datagen
+            ans = datagen.generate(data["gen"], data["save_as"], **data["params"])
         else:
             return explain(f"unknown dataset op {op!r}")
     except (FileNotFoundError, Exception) as e:  # missing handle / bad SQL → coded decline

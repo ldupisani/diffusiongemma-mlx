@@ -25,6 +25,10 @@ def bind_dynamics(query: str) -> tuple[bool, dict | None, str, int]:
 
     if not _GATE.search(query):
         return False, None, "code", 0
+    # "generate a logistic trajectory/dataset …" wants the whole series as a dataset (datagen),
+    # not a single iterate — let the dataset subsystem claim it.
+    if "generate" in q or "trajectory" in q or "dataset" in q:
+        return False, None, "code", 0
 
     if "mandelbrot" in q:
         m = re.search(r"c\s*=\s*([-\d.+\s]*i?[-\d.+\s]*?)(?:\s+in|\?|$)", query, re.IGNORECASE)

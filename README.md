@@ -364,9 +364,17 @@ python -m reasoning.cli data import sales.csv --name sales   # input (also Parqu
 python -m reasoning.cli data describe sales                  # schema + row count + head
 python -m reasoning.cli data query "SELECT status, count(*) FROM sales GROUP BY status"
 python -m reasoning.cli data query "SELECT * FROM sales WHERE price > 100" --save-as big   # output handle
-python -m reasoning.cli data generate 1000000 synth         # generate a large dataset
+python -m reasoning.cli data generate 1000000 synth         # generate a large dataset (SQL)
 python -m reasoning.cli data convert sales sales_pq parquet  # format conversion
+python -m reasoning.cli data gen                            # list domain generators
+python -m reasoning.cli data gen primes myprimes n=1000     # domain generator → handle
 ```
+**Domain generators** (`reasoning/datagen.py`) produce a domain-relevant dataset and save it as
+a handle: number theory & combinatorics (primes, Fibonacci, factorials, partitions), statistics
+& probability (uniform/normal samples, coin/dice rolls, synthetic regression/classification),
+dynamical/numerical/physics (logistic trajectory, bifurcation, `f(x)` over `[a,b]`, Euler ODE
+path, projectile motion), and finance (amortization schedule, compound growth). Each reuses the
+pure domain skills + numpy/SymPy and returns a handle + preview; random ones take a `seed`.
 NL also routes through the engine via the `dataset` orchestrator: *"What is the average of the
 price column in sales?"* → `20`; *"How many rows in sales where status = 'active'?"* → `2`;
 *"Describe the dataset sales."* It's gated on an explicit dataset reference, so a plain

@@ -237,6 +237,17 @@ def convert(name: str, out_name: str, fmt: str) -> str:
     return describe(out_name)
 
 
+def save_rows(name: str, columns: list[str], rows) -> str:
+    """Write Python rows (an iterable of tuples) to a dataset (parquet) and return its
+    description. Used by the domain generators in datagen.py for stateful/recursive series."""
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    rows = list(rows)
+    cols = {c: [r[i] for r in rows] for i, c in enumerate(columns)}
+    pq.write_table(pa.table(cols), data_dir() / f"{name}.parquet")
+    return describe(name)
+
+
 def generate(n: int, save_as: str, select: str | None = None) -> str:
     """Generate a dataset of n rows. Default columns: id (1..n) and a uniform random value;
     pass a custom `select` (a SQL projection over `range(n) t(i)`) for other shapes."""
