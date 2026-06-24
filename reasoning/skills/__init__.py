@@ -12,8 +12,8 @@ from . import (  # noqa: E402,F401
     complex_calc, complex_math, coord, crypto, dates, discrete, expr, finance, game, genetics,
     geo, geometry,
     group_theory, health, hypercomplex, hyperreal, logic, materials, ml, molecular, ndim,
-    number_theory, numerical, ordinals, padic, pchem, physics, probability, quantum, ratio,
-    set_theory, sets, stats, surreal, tensor, text, topology, trig, units,
+    number_theory, numerical, optimize, ordinals, padic, pchem, physics, probability, quantum,
+    ratio, set_theory, sets, stats, surreal, tensor, text, topology, trig, units,
 )
 
 __all__ = ["SKILLS", "Skill", "call", "get", "register"]

@@ -505,6 +505,12 @@ CASES = [
     ("What is the F1 score with tp=8, fp=2, fn=1?", "0.842105", "ml_theory"),
     ("What is the Shannon entropy of [0.5, 0.5]?", "1", "ml_theory"),
     ("What is the MSE between [1,2,3] and [1,2,4]?", "0.333333", "ml_theory"),
+    # optimization: 1-D/2-D minima, gradient descent
+    ("Minimize x^2 - 4x + 7.", "3 at x = 2", "optimization"),
+    ("Maximize -x^2 + 4x - 1.", "3 at x = 2", "optimization"),
+    ("Minimize x^2 + y^2 - 2x - 4y.", "-5 at (x, y) = (1, 2)", "optimization"),
+    ("Run gradient descent on x^2 - 4x + 7 from 0 with learning rate 0.1 for 100 steps.",
+     "2", "optimization"),
 ]
 
 

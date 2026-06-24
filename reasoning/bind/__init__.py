@@ -49,3 +49,5 @@ from reasoning.bind.game import *       # noqa: F401,F403
 from reasoning.bind.quantum import *     # noqa: F401,F403
 
 from reasoning.bind.ml import *          # noqa: F401,F403
+
+from reasoning.bind.optimize import *    # noqa: F401,F403
