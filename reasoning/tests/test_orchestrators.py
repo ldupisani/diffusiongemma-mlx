@@ -493,6 +493,12 @@ CASES = [
      "(2,2)", "game_theory"),
     ("What is the expected payoff for [[3,1],[0,2]] with p=0.5 and q=0.5?", "1.5", "game_theory"),
     ("What is the dominant strategy for [[3,1],[0,0]]?", "row 1", "game_theory"),
+    # quantum mechanics (single qubit): measurement, gates, expectation, normalize
+    ("What are the measurement probabilities for the qubit (0.6, 0.8)?",
+     "P(0) = 0.36, P(1) = 0.64", "quantum_mechanics"),
+    ("Apply the Hadamard gate to |0>.", "0.7071, 0.7071", "quantum_mechanics"),
+    ("What is the expectation value of Z for the state (0.6, 0.8)?", "-0.28", "quantum_mechanics"),
+    ("Normalize the qubit state (3, 4).", "0.6, 0.8", "quantum_mechanics"),
 ]
 
 
