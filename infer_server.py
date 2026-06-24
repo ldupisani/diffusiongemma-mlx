@@ -121,8 +121,11 @@ def main():
     port = int(sys.argv[2]) if len(sys.argv) > 2 else 8088
     BACKEND = get_backend(model_id)
     BACKEND.load(model_id)
+    # context_window may be None if a model config doesn't expose it (clients already
+    # treat it as optional); don't let that crash the startup banner.
+    ctx = f"{BACKEND.context_window:,}" if BACKEND.context_window else "unknown"
     print(f"Inference sidecar ready on http://127.0.0.1:{port} "
-          f"({BACKEND.name} backend, context {BACKEND.context_window:,})", flush=True)
+          f"({BACKEND.name} backend, context {ctx})", flush=True)
     HTTPServer(("127.0.0.1", port), Handler).serve_forever()
 
 

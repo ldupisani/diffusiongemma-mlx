@@ -49,8 +49,11 @@ async def run(user_prompt: str):
                 # Generate on the main thread (NOT via asyncio.to_thread): MLX's GPU
                 # stream is thread-local. This blocks the event loop during generation,
                 # which is fine — model inference and MCP I/O never overlap in this loop.
+                # temperature 0.0 = greedy, for reliable tool calls. max_denoising_steps
+                # only affects the diffusion backend (autoregressive ignores it).
                 text, _ = backend.generate(
-                    formatted, max_tokens=256, params={"temperature": 0.0},
+                    formatted, max_tokens=256,
+                    params={"temperature": 0.0, "max_denoising_steps": 24},
                 )
                 calls = backend.parse_tool_calls(text)
 
