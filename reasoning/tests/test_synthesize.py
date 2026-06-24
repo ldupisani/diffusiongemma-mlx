@@ -161,10 +161,32 @@ class TestSynthesize(unittest.TestCase):
         side = syn.inverse_synthesize({"unit_price": 8.0}, "side", "total_cost", 200.0,
                                       syn.GEOMETRY_COST_OPS + syn.CROSS_OPS)
         self.assertEqual(side, 5.0)
-        # solve a chemistry mass for a target chem→finance reagent cost
-        mass = syn.inverse_synthesize({"price_per_gram": 0.5}, "mass", "reagent_cost", 50.0,
+        # solve a chemistry mass (grams) for a target chem→finance reagent cost
+        mass = syn.inverse_synthesize({"price_per_gram": 0.5}, "mass_g", "reagent_cost", 50.0,
                                       syn.CROSS_OPS)
         self.assertEqual(mass, 100.0)
+
+    # --- §F dimension-aware coercion: auto-generated convert ops + permutation-safe uniqueness ---
+    def test_coercion_ops_auto_generated(self):
+        pairs = {(o.needs[0], o.produces, o.consts) for o in syn.COERCION_OPS}
+        self.assertIn(("mass_g", "mass", ("g", "kg")), pairs)        # chem grams → physics kg
+        self.assertIn(("geo_distance", "geo_distance_mi", ("km", "mi")), pairs)
+        self.assertIn(("speed_mph", "speed_kmh", ("mph", "kph")), pairs)
+
+    def test_shortest_paths_dedupes_op_permutations(self):
+        # two INDEPENDENT ops (x needs p, y needs q) reorder freely → ONE derivation, not two,
+        # so a chain with a parallel unit conversion isn't seen as ambiguous under unique=True
+        ops = [syn.Op("a.x", ("p",), "g1"), syn.Op("a.y", ("q",), "g2"),
+               syn.Op("a.z", ("g1", "g2"), "goal")]
+        self.assertEqual(len(syn.shortest_paths({"p", "q"}, "goal", ops)), 1)
+        self.assertIsNotNone(syn.synthesize({"p", "q"}, "goal", ops, unique=True))
+
+    def test_coercion_bridges_units_in_a_plan(self):
+        # mass in GRAMS feeds physics.weight (kg) via the auto-inserted convert
+        r = syn.synthesize_and_run({"mass_g": 1000.0}, "weight",
+                                   syn.WEIGHT_OPS + syn.COERCION_OPS)
+        self.assertAlmostEqual(float(r.answer), 9.8, places=1)   # 1000 g = 1 kg × g
+        self.assertEqual(model_calls(r), 0)
 
     def test_already_known_goal_is_zero_ops(self):
         self.assertEqual(syn.synthesize({"final_price"}, "final_price"), [])

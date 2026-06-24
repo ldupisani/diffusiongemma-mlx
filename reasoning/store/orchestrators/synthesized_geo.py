@@ -4,7 +4,7 @@ motion time (km/h). geo → finance / geo → motion. Coded, zero model calls.""
 from reasoning.bind import bind_synthesis_geo
 from reasoning.compiled import explain
 from reasoning.patterns import PatternResult
-from reasoning.synthesize import CROSS_OPS, GEO_OPS, synthesize_and_run
+from reasoning.synthesize import COERCION_OPS, CROSS_OPS, GEO_OPS, synthesize_and_run
 
 META = {
     "id": "synthesized_geo",
@@ -30,7 +30,8 @@ def run(query):
     ok, data, via, _ = bind_synthesis_geo(query)
     if not ok:
         return explain("could not extract two points and a price or speed")
-    r = synthesize_and_run(data["knowns"], data["goal"], GEO_OPS + CROSS_OPS, unique=True)
+    r = synthesize_and_run(data["knowns"], data["goal"], GEO_OPS + COERCION_OPS + CROSS_OPS,
+                           unique=True)
     if r is None:
         return explain("no derivation path to the goal")
     return PatternResult(answer=data["prefix"] + r.answer + data["suffix"],

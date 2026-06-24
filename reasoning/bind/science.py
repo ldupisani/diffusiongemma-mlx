@@ -202,25 +202,26 @@ def bind_synthesis_chemistry(query: str) -> tuple[bool, dict | None, str, int]:
         elif tx:
             knowns["tax_pct"], goal = float(tx[1]), "cost_with_tax"
     elif "molecule" in q and grams:    # chem → molecular: mass → moles → molecules (Avogadro)
-        knowns["mass"] = float(grams[1])
+        knowns["mass_g"] = float(grams[1])
         goal, suffix, unique = "molecules", "", True
-    elif "weight" in q and moles_given:  # chem → units(g→kg) → physics: mass → weight (§F coercion)
+    elif "weight" in q and moles_given:  # chem → coerce(g→kg) → physics: mass → weight (§F)
         knowns["moles"] = float(moles_given[1])
         goal, suffix, unique = "weight", " N", True
     elif "molarity" in q and grams and volume:  # molar_mass → moles → molarity
-        knowns["mass"], knowns["volume"] = float(grams[1]), float(volume[1])
+        knowns["mass_g"], knowns["volume"] = float(grams[1]), float(volume[1])
         goal, suffix = "molarity", " M"
     elif "mole" in q and grams:        # moles from grams + formula
-        knowns["mass"] = float(grams[1])
+        knowns["mass_g"] = float(grams[1])
         goal, suffix = "moles", " mol"
     elif "mass" in q and moles_given:  # mass of N moles of formula
         knowns["moles"] = float(moles_given[1])
-        goal, suffix = "mass", " g"
+        goal, suffix = "mass_g", " g"
     else:
         return False, None, "code", 0
     from reasoning.synthesize import (CHEM_OPS, COERCION_OPS, CROSS_OPS, MOLECULAR_OPS,
-                                      synthesize)
-    seq = synthesize(set(knowns), goal, CHEM_OPS + MOLECULAR_OPS + COERCION_OPS + CROSS_OPS,
+                                      WEIGHT_OPS, synthesize)
+    seq = synthesize(set(knowns), goal,
+                     CHEM_OPS + MOLECULAR_OPS + WEIGHT_OPS + COERCION_OPS + CROSS_OPS,
                      unique=unique)
     if seq is None or len(seq) < 2:
         return False, None, "code", 0

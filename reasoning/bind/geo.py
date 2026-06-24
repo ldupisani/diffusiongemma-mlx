@@ -72,8 +72,8 @@ def bind_synthesis_geo(query: str) -> tuple[bool, dict | None, str, int]:
         goal, suffix, prefix = "flight_hours", " hours", ""
     else:
         return False, None, "code", 0
-    from reasoning.synthesize import CROSS_OPS, GEO_OPS, synthesize
-    seq = synthesize(set(knowns), goal, GEO_OPS + CROSS_OPS, unique=True)
+    from reasoning.synthesize import COERCION_OPS, CROSS_OPS, GEO_OPS, synthesize
+    seq = synthesize(set(knowns), goal, GEO_OPS + COERCION_OPS + CROSS_OPS, unique=True)
     if seq is None:
         return False, None, "code", 0
     return True, {"knowns": knowns, "goal": goal, "prefix": prefix, "suffix": suffix}, "code", 0

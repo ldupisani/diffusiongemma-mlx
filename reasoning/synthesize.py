@@ -31,10 +31,22 @@ from .engine import _no_model
 
 @dataclass(frozen=True)
 class Op:
-    """A skill typed by the semantic roles it consumes (in arg order) and produces."""
+    """A skill typed by the semantic roles it consumes (in arg order) and produces. `consts` are
+    literal trailing args appended after the role args — used by auto-generated unit-coercion ops
+    to carry the from/to unit tokens (which aren't roles). They don't affect planning, only
+    execution."""
     skill: str
     needs: tuple
     produces: str
+    consts: tuple = ()
+
+
+def _compile_op(op: Op, produced: set) -> CodeStep:
+    """One op → a CodeStep: role args (Inp if an original known, Step if produced upstream) then
+    any literal consts."""
+    args = [Step(r) if r in produced else Inp(r) for r in op.needs]
+    args += [Lit(c) for c in op.consts]
+    return CodeStep(op.skill, args, out=op.produces)
 
 
 # Unit-aware roles: a role that carries a physical dimension declares its CANONICAL unit (the
@@ -100,11 +112,12 @@ GEOMETRY_COST_OPS = [
     Op("arith.multiply", ("volume", "volume_price"), "fill_cost"),  # fill / concrete / mulch
 ]
 
-# chemistry: compute molar mass from a FORMULA (string role), then moles or mass
+# chemistry: compute molar mass from a FORMULA (string role), then moles or mass. Chem mass is
+# in GRAMS (role `mass_g`) — distinct from physics `mass` (kg) so a coercion can bridge them.
 CHEM_OPS = [
     Op("chem.molar_mass", ("formula",), "molar_mass"),
-    Op("chem.moles", ("mass", "molar_mass"), "moles"),          # moles = grams / molar_mass
-    Op("arith.multiply", ("moles", "molar_mass"), "mass"),       # mass  = moles × molar_mass
+    Op("chem.moles", ("mass_g", "molar_mass"), "moles"),         # moles = grams / molar_mass
+    Op("arith.multiply", ("moles", "molar_mass"), "mass_g"),     # mass  = moles × molar_mass
     Op("chem.molarity", ("moles", "volume"), "molarity"),        # molarity = moles / liters
 ]
 
@@ -136,24 +149,42 @@ PRICED_OPS = [
     Op("arith.identity", ("energy_cost",), "cost"),
 ]
 
-# §F unit coercion as a planner-inserted op: chemistry's mass is in GRAMS, physics.weight wants
-# KILOGRAMS — the g→kg op bridges the same-dimension roles so "the weight of N moles of <formula>"
-# chains chem (mass) → units (mass_kg) → physics (weight) without silent magnitude corruption.
-COERCION_OPS = [
-    Op("units.g_to_kg", ("mass",), "mass_kg"),
-    Op("physics.weight", ("mass_kg",), "weight"),
-]
+# §F dimension-aware unit coercion. Some roles are the SAME quantity in DIFFERENT units (chem's
+# grams vs physics' kilograms; a trip distance in km vs miles). Rather than hand-write a g→kg /
+# km→mi op per pair, declare the unit variants and AUTO-GENERATE a units.convert op between every
+# same-quantity / different-unit pair. The planner then inserts the conversion wherever a chain
+# crosses a unit boundary — "weight of N moles" (g→kg) and "$/mile travel cost" (km→mi) just work.
+# Grouping by QUANTITY (not dimension) is what keeps radius↔width — same dimension, different
+# quantity — from being (wrongly) treated as convertible.
+UNIT_VARIANTS = {
+    "object_mass": [("mass", "kg"), ("mass_g", "g")],
+    "trip_distance": [("geo_distance", "km"), ("geo_distance_mi", "mi")],
+    "trip_speed": [("speed_kmh", "kph"), ("speed_mph", "mph")],
+}
 
-# geospatial → finance / motion. haversine yields a distance in KM; the downstream roles are
-# km-native (price_per_km, speed_kmh) so units stay consistent without canonicalizing — the
-# `geo_distance` role is distinct from motion's metres `distance`, so they never clash.
+
+def coercion_ops() -> list:
+    """A units.convert op for each same-quantity / different-unit role pair (both directions)."""
+    ops = []
+    for members in UNIT_VARIANTS.values():
+        for ra, ua in members:
+            for rb, ub in members:
+                if ra != rb and ua != ub:
+                    ops.append(Op("units.convert", (ra,), rb, consts=(ua, ub)))
+    return ops
+
+
+COERCION_OPS = coercion_ops()
+WEIGHT_OPS = [Op("physics.weight", ("mass",), "weight")]  # mass in kg (chem grams coerce in)
+
+# geospatial → finance / motion. haversine yields a distance in KM; for a per-mile price the
+# planner coerces geo_distance → geo_distance_mi (via COERCION_OPS), for an mph speed it coerces
+# speed_mph → speed_kmh. Only the km-native ops are listed; the conversions are auto-inserted.
 GEO_OPS = [
     Op("geo.haversine", ("la1", "lo1", "la2", "lo2"), "geo_distance"),  # km between two points
-    Op("units.km_to_mi", ("geo_distance",), "geo_distance_mi"),         # … or in miles
-    Op("arith.multiply", ("geo_distance", "price_per_km"), "travel_cost"),     # geo → $ (per km)
-    Op("arith.multiply", ("geo_distance_mi", "price_per_mile"), "travel_cost"),  # geo → $ (per mi)
-    Op("arith.divide", ("geo_distance", "speed_kmh"), "flight_hours"),   # geo → motion (km/h)
-    Op("arith.divide", ("geo_distance_mi", "speed_mph"), "flight_hours"),  # geo → motion (mph)
+    Op("arith.multiply", ("geo_distance", "price_per_km"), "travel_cost"),       # $ per km
+    Op("arith.multiply", ("geo_distance_mi", "price_per_mile"), "travel_cost"),  # $ per mile
+    Op("arith.divide", ("geo_distance", "speed_kmh"), "flight_hours"),  # geo → motion (km/h or mph)
     Op("arith.identity", ("travel_cost",), "cost"),
 ]
 
@@ -169,7 +200,7 @@ CROSS_OPS = [
     Op("arith.identity", ("total_cost",), "cost"),        # geometry: tile / paint / carpet
     Op("arith.identity", ("fence_cost",), "cost"),        # geometry: fencing / edging
     Op("arith.identity", ("fill_cost",), "cost"),         # geometry: concrete / mulch
-    Op("arith.multiply", ("mass", "price_per_gram"), "reagent_cost"),  # chemistry → $ (per gram)
+    Op("arith.multiply", ("mass_g", "price_per_gram"), "reagent_cost"),  # chemistry → $ (per gram)
     Op("arith.identity", ("reagent_cost",), "cost"),
     Op("arith.divide", ("cost", "people"), "cost_per_person"),         # split
     Op("arith.apply_tax", ("cost", "tax_pct"), "cost_with_tax"),       # + tax
@@ -178,7 +209,7 @@ CROSS_OPS = [
 
 ALL_OPS = (FINANCE_OPS + INTEREST_OPS + MOTION_OPS + PHYSICS_OPS + GEOMETRY_COST_OPS
            + CHEM_OPS + MOLECULAR_OPS + MATERIALS_OPS + PCHEM_OPS + PRICED_OPS + GEO_OPS
-           + COERCION_OPS + CROSS_OPS)
+           + WEIGHT_OPS + COERCION_OPS + CROSS_OPS)
 
 _MEMO: dict = {}
 _searches = 0  # BFS runs actually executed (cache misses) — for tests/telemetry
@@ -254,7 +285,16 @@ def shortest_paths(knowns, goal: str, ops=None, *, max_depth: int = 6) -> list:
     if not out:
         return []
     m = min(len(p) for p in out)
-    return [p for p in out if len(p) == m]
+    # Dedupe by op-SET: a path is determined by its ops (each produces a distinct role), so two
+    # orderings of the same independent ops (e.g. haversine and a unit conversion, both needing
+    # only original knowns) are the SAME derivation — not an ambiguity. Without this, any chain
+    # with two parallel ops would spuriously look ambiguous and decline under unique=True.
+    seen, unique_paths = set(), []
+    for p in out:
+        if len(p) == m and frozenset(p) not in seen:
+            seen.add(frozenset(p))
+            unique_paths.append(p)
+    return unique_paths
 
 
 def to_plan(ops, goal: str, *, places: int | None = 2) -> Plan:
@@ -263,8 +303,7 @@ def to_plan(ops, goal: str, *, places: int | None = 2) -> Plan:
     produced: set = set()
     steps = []
     for op in ops:
-        args = [Step(r) if r in produced else Inp(r) for r in op.needs]
-        steps.append(CodeStep(op.skill, args, out=op.produces))
+        steps.append(_compile_op(op, produced))
         produced.add(op.produces)
     ref = goal
     if places is not None:
@@ -372,8 +411,7 @@ def synthesize_multi_and_run(knowns_values: dict, goals, ops=None, *, places: in
     produced: set = set()
     steps = []
     for op in seq:
-        args = [Step(r) if r in produced else Inp(r) for r in op.needs]
-        steps.append(CodeStep(op.skill, args, out=op.produces))
+        steps.append(_compile_op(op, produced))
         produced.add(op.produces)
     # answer_ref is arbitrary (we read every goal from the env); first goal keeps .answer sane
     r = run_plan(Plan(steps=steps, answer_ref=goals[0], answer_format=format_number),

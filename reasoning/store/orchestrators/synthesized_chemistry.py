@@ -8,7 +8,7 @@ computes it from the formula first — a derivation no single step does. 0 model
 from reasoning.bind import bind_synthesis_chemistry
 from reasoning.compiled import explain
 from reasoning.patterns import PatternResult
-from reasoning.synthesize import (CHEM_OPS, COERCION_OPS, CROSS_OPS, MOLECULAR_OPS,
+from reasoning.synthesize import (CHEM_OPS, COERCION_OPS, CROSS_OPS, MOLECULAR_OPS, WEIGHT_OPS,
                                   synthesize_and_run)
 
 META = {
@@ -38,7 +38,7 @@ def run(query):
     if not ok:
         return explain("could not extract a chemical formula and a mass or mole quantity")
     r = synthesize_and_run(data["knowns"], data["goal"],
-                           CHEM_OPS + MOLECULAR_OPS + COERCION_OPS + CROSS_OPS,
+                           CHEM_OPS + MOLECULAR_OPS + WEIGHT_OPS + COERCION_OPS + CROSS_OPS,
                            unique=data.get("unique", False))
     if r is None:
         return explain("no derivation path to the goal")
