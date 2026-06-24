@@ -224,6 +224,21 @@ def bind_sets(query: str) -> tuple[bool, dict | None, str, int]:
 # --- probability family (computable subset) -------------------------------------------
 def bind_probability(query: str) -> tuple[bool, dict | None, str, int]:
     q = query.lower()
+    if "binomial" in q or ("exactly" in q and "trial" in q):
+        km = re.search(r"exactly\s+(\d+)", q)
+        nm = re.search(r"(\d+)\s+trials?", q)
+        pm = re.search(r"(?:probability|chance|p)\s*(?:of|=|is|:)?\s*(0?\.\d+)", q) \
+            or re.search(r"(\d+)\s*%", q)
+        if km and nm and pm:
+            p = float(pm[1]) if "." in pm[1] else float(pm[1]) / 100
+            return True, {"skill": "prob.binomial", "dims": ["n", "k", "p"], "places": 6,
+                          "n": int(nm[1]), "k": int(km[1]), "p": p}, "code", 0
+    if "bayes" in q or "posterior" in q:
+        nums = re.findall(r"0?\.\d+", q)
+        if len(nums) >= 3:
+            return True, {"skill": "prob.bayes", "dims": ["prior", "likelihood", "false_positive"],
+                          "places": 6, "prior": float(nums[0]), "likelihood": float(nums[1]),
+                          "false_positive": float(nums[2])}, "code", 0
     if "does not" in q or "not rain" in q or "complement" in q:
         m = re.search(r"(\d+)\s*percent|(\d+)\s*%", q)
         if m:

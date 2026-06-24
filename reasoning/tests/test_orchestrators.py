@@ -531,6 +531,11 @@ CASES = [
      "(1,2,4), (2,3,1), (3,4,2), (4,1,3)?", "6", "discrete_math"),
     # collision guards: a plain stat query must NOT be claimed by optimization/discrete
     ("What is the minimum of 5, 3, 8, 1?", "1", "list_statistic"),
+    # probability extension: binomial distribution, Bayes' theorem
+    ("What is the probability of exactly 3 successes in 10 trials with probability 0.5?",
+     "0.117188", "probability"),
+    ("Use Bayes' theorem with prior 0.01, likelihood 0.99, false positive 0.05.",
+     "0.166667", "probability"),
 ]
 
 

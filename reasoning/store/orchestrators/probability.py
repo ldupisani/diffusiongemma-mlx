@@ -19,8 +19,11 @@ META = {
         "What is the probability of rolling a 6 on a fair die?",
         "What is the probability of rolling a sum of 7 with two dice?",
         "What is the expected value of rolling a fair six-sided die?",
+        "What is the probability of exactly 3 successes in 10 trials with probability 0.5?",
+        "Use Bayes' theorem with prior 0.01, likelihood 0.99, false positive 0.05.",
     ],
-    "keywords": ["probability", "chance", "coin", "heads", "die", "dice", "expected", "roll"],
+    "keywords": ["probability", "chance", "coin", "heads", "die", "dice", "expected", "roll",
+                 "binomial", "bayes", "trials", "posterior"],
     "model_free": True,
 }
 

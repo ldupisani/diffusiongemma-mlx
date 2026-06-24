@@ -40,3 +40,21 @@ def dice_sum(target: int) -> float:
           [((6,), 3.5), ((20,), 10.5)])
 def expected_die(sides: int = 6) -> float:
     return (int(sides) + 1) / 2
+
+
+# --- distributions / inference ---------------------------------------------
+from math import comb as _comb  # noqa: E402
+
+
+@register("prob.binomial", "binomial probability of exactly k successes in n trials: C(n,k)p^k(1-p)^(n-k)",
+          [((10, 3, 0.5), 0.117188), ((5, 2, 0.3), 0.3087)])
+def binomial(n: int, k: int, p: float) -> float:
+    n, k, p = int(n), int(k), float(p)
+    return round(_comb(n, k) * p ** k * (1 - p) ** (n - k), 6)
+
+
+@register("prob.bayes", "posterior P(A|B) from prior P(A), P(B|A), and P(B|¬A)",
+          [((0.01, 0.99, 0.05), 0.166667), ((0.5, 0.9, 0.1), 0.9)])
+def bayes(prior: float, likelihood: float, false_positive: float) -> float:
+    prior, likelihood, fp = float(prior), float(likelihood), float(false_positive)
+    return round(prior * likelihood / (prior * likelihood + (1 - prior) * fp), 6)
