@@ -476,6 +476,12 @@ CASES = [
     ("What is the surreal {1 | 2}?", "3/2", "surreal"),
     ("What is the birthday of the surreal 3/4?", "3", "surreal"),
     ("What is the simplest surreal between 0 and 1?", "1/2", "surreal"),
+    # cryptography: totient, modular inverse, RSA, Diffie–Hellman, Caesar
+    ("What is the Euler totient of 12?", "4", "cryptography"),
+    ("What is the modular inverse of 3 mod 11?", "4", "cryptography"),
+    ("What is the RSA private key for p=61, q=53, e=17?", "2753", "cryptography"),
+    ("What is the Diffie-Hellman secret for g=5, p=23, a=4, b=3?", "18", "cryptography"),
+    ("Encrypt 'Hello, World!' with a Caesar shift of 3.", "Khoor, Zruog!", "cryptography"),
 ]
 
 
