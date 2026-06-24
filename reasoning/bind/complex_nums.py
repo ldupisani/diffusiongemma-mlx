@@ -22,6 +22,10 @@ def bind_complex(query: str) -> tuple[bool, dict | None, str, int]:
     def ok(skill, dims, vals, **extra):
         return True, {"skill": skill, "dims": dims, **dict(zip(dims, vals)), **extra}, "code", 0
 
+    # A j/k imaginary unit or the word "quaternion" means this is a hypercomplex query, not a
+    # complex one — decline so bind_hypercomplex claims it (complex numbers have only i).
+    if re.search(r"[\d.\s+\-][jk]\b|\b[jk]\b|quaternion", query, re.IGNORECASE):
+        return False, None, "code", 0
     nums = _complexes(query)
     if not nums:
         return False, None, "code", 0

@@ -36,3 +36,4 @@ from reasoning.bind.ndim import *        # noqa: F401,F403
 from reasoning.bind.tensor import *      # noqa: F401,F403
 from reasoning.bind.complex_nums import *  # noqa: F401,F403
 from reasoning.bind.padic import *       # noqa: F401,F403
+from reasoning.bind.hypercomplex import *  # noqa: F401,F403

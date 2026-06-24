@@ -451,6 +451,11 @@ CASES = [
     ("What is the 5-adic absolute value of 100?", "0.04", "padic"),
     ("Give the 5-adic expansion of 100 to 3 digits.", "0 + 0·5 + 4·5^2", "padic"),
     ("What is the 3-adic distance between 1 and 28?", "0.037", "padic"),
+    # hypercomplex (quaternion): conjugate, norm, inverse
+    ("What is the conjugate of 1+2i+3j+4k?", "1-2i-3j-4k", "hypercomplex"),
+    ("What is the norm of 1+2i+3j+4k?", "5.4772", "hypercomplex"),
+    ("What is the inverse of the quaternion i?", "-i", "hypercomplex"),
+    ("What is the magnitude of the quaternion 2+3i+6k?", "7", "hypercomplex"),
 ]
 
 

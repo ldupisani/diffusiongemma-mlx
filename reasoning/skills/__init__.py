@@ -10,8 +10,8 @@ from .base import SKILLS, Skill, call, get, register
 from . import (  # noqa: E402,F401
     algebra, applied_math, arithmetic, bases, biochem, calculus, chemistry, clock, complex_calc,
     complex_math, coord, dates, discrete, expr, finance, genetics, geo, geometry, group_theory,
-    health, logic, materials, molecular, ndim, number_theory, padic, pchem, physics, probability,
-    ratio, set_theory, sets, stats, tensor, text, topology, trig, units,
+    health, hypercomplex, logic, materials, molecular, ndim, number_theory, padic, pchem,
+    physics, probability, ratio, set_theory, sets, stats, tensor, text, topology, trig, units,
 )
 
 __all__ = ["SKILLS", "Skill", "call", "get", "register"]
