@@ -348,6 +348,28 @@ add it to `skills/`, re-derive, and coded coverage climbs. `eval` reports fideli
 count, with an exact numeric backstop that catches rounding regressions the fuzzy judge would miss.
 Skill tests: `python -m unittest discover -s reasoning -p "test_*.py" -t .` (no sidecar, no network).
 
+## Datasets — larger-than-text data (`reasoning/datasets.py`)
+For inputs, scratch storage, or outputs too big to inline as text. A **separate I/O subsystem**
+(the `skills/` library stays pure): **DuckDB is the single engine** over CSV/TSV, Parquet,
+JSON/JSONL, SQLite, and DuckDB files. A dataset is a **handle** — a file in `$DIFG_DATA_DIR`
+(default `<repo>/data`) registered as a DuckDB view, so every operation is just SQL over
+`SELECT … FROM <handle>`. **Results stay small**: a scalar, a compact table (≤20 rows), or — when
+the output is large — a *new handle* plus a preview (schema, row count, head). Still **0 model
+calls**.
+
+```bash
+python -m reasoning.cli data import sales.csv --name sales   # input (also Parquet/JSON/SQLite/…)
+python -m reasoning.cli data describe sales                  # schema + row count + head
+python -m reasoning.cli data query "SELECT status, count(*) FROM sales GROUP BY status"
+python -m reasoning.cli data query "SELECT * FROM sales WHERE price > 100" --save-as big   # output handle
+python -m reasoning.cli data generate 1000000 synth         # generate a large dataset
+python -m reasoning.cli data convert sales sales_pq parquet  # format conversion
+```
+NL also routes through the engine via the `dataset` orchestrator: *"What is the average of the
+price column in sales?"* → `20`; *"How many rows in sales where status = 'active'?"* → `2`;
+*"Describe the dataset sales."* It's gated on an explicit dataset reference, so a plain
+*"average of 10, 20, 30"* still goes to the stats domain. Needs `duckdb` (in `requirements.txt`).
+
 ## Model variants (mlx-community)
 `-4bit` (default, ~13 GB) · `-5bit` · `-6bit` · `-8bit` (~26 GB) · `-bf16`.
 On 36 GB, 4-bit is the safe default; 6-bit fits with headroom; 8-bit is tight.
