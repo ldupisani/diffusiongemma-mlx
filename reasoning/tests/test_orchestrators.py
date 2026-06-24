@@ -466,6 +466,11 @@ CASES = [
     ("What is 2 to the power of aleph_0?", "𝔠", "cardinals"),
     ("What is the cardinality of the real numbers?", "𝔠", "cardinals"),
     ("Is aleph_0 less than the continuum?", "ℵ₀ < 𝔠", "cardinals"),
+    # hyperreals: ε infinitesimal, ω = 1/ε infinite (gated apart from ordinal ω)
+    ("What is the standard part of 3+ε?", "3", "hyperreal"),
+    ("Classify the hyperreal ε.", "infinitesimal", "hyperreal"),
+    ("What is ω·ε?", "1", "hyperreal"),
+    ("Is ω greater than 5 in the hyperreals?", "ω > 5", "hyperreal"),
 ]
 
 

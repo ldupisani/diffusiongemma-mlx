@@ -26,6 +26,9 @@ def bind_ordinal(query: str) -> tuple[bool, dict | None, str, int]:
 
     if "ω" not in query and "omega" not in q and "ordinal" not in q:
         return False, None, "code", 0
+    # a hyperreal-specific signal means ω is the infinite ε^-1, not an ordinal — decline.
+    if re.search(r"ε|epsilon|infinitesimal|hyperreal|standard[ -]?part", query, re.IGNORECASE):
+        return False, None, "code", 0
     exprs = _exprs(query)
     if not exprs:
         return False, None, "code", 0
