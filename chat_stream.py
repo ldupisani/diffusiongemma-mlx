@@ -26,7 +26,7 @@ from contextlib import AsyncExitStack
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from backend import DEFAULT_MODEL, choose_params, get_backend
+from backend import DEFAULT_MODEL, get_backend
 from tools_util import mcp_tool_to_model
 
 # Default tool-round budget per turn when /auto is OFF (runaway guard). When
@@ -57,7 +57,7 @@ def print_context(last, ctx_max):
 
 def stream_reply(backend, formatted, effective_max, quality, think):
     """Stream one generation to stdout. Returns (raw_text, finish_reason, last_chunk)."""
-    params = choose_params(quality, effective_max, backend)
+    params = backend.gen_params(quality, effective_max)
     text, finish, last = "", None, None
     for chunk in backend.stream(formatted, max_tokens=effective_max,
                                 enable_thinking=think, params=params):

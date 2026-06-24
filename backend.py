@@ -71,14 +71,6 @@ def choose_diffusion_params(quality: str, max_tokens: int) -> dict:
     return p
 
 
-def choose_params(quality: str, max_tokens: int, backend: "Backend") -> dict:
-    """Per-backend generation params for a 'quality' preset. Diffusion gets the full
-    canvas config; autoregressive gets just a temperature (other keys are ignored)."""
-    if getattr(backend, "name", "") == "diffusion":
-        return choose_diffusion_params(quality, max_tokens)
-    return {"temperature": _AR_TEMP.get(quality, 0.4)}
-
-
 # --- backends --------------------------------------------------------------
 
 class Backend:
@@ -105,6 +97,19 @@ class Backend:
             last = chunk
         return text, last
 
+    def gen_params(self, quality: str, max_tokens: int) -> dict:
+        """Generation params for a 'quality' preset (the REPL/CLI path). The base
+        (autoregressive) behavior is just a sampling temperature; backends that have
+        more knobs (e.g. diffusion's canvas) override this. The backend owns its own
+        params so callers never branch on backend type."""
+        return {"temperature": _AR_TEMP.get(quality, 0.4)}
+
+    def params_from_request(self, req: dict) -> dict:
+        """Pull this backend's generation params out of an HTTP /generate request.
+        The base reads only `temperature`; diffusion also reads its canvas knobs. This
+        keeps backend-specific request fields out of the shared sidecar code."""
+        return {"temperature": req.get("temperature", 0.4)}
+
     def info(self) -> dict:
         """The /info payload the sidecar reports so clients know how to parse output."""
         return {
@@ -129,6 +134,17 @@ class DiffusionBackend(Backend):
         self.context_window = context_limit(self.config)
         self.model_id = model_id
         return self
+
+    def gen_params(self, quality, max_tokens):
+        return choose_diffusion_params(quality, max_tokens)
+
+    def params_from_request(self, req):
+        return {
+            "max_denoising_steps": req.get("max_denoising_steps", 32),
+            "block_length": req.get("block_length", 256),
+            "diffusion_sampler": req.get("diffusion_sampler", "entropy-bound"),
+            "temperature": req.get("temperature", 0.4),
+        }
 
     def apply_template(self, messages, *, tools=None, enable_thinking=False):
         from mlx_vlm.prompt_utils import apply_chat_template

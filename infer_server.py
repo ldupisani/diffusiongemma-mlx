@@ -77,14 +77,9 @@ class Handler(BaseHTTPRequestHandler):
             )
             emit_prompt = True
 
-        # Diffusion-only knobs are forwarded for the diffusion backend and ignored by
-        # the autoregressive one (which uses only `temperature`).
-        params = {
-            "max_denoising_steps": req.get("max_denoising_steps", 32),
-            "block_length": req.get("block_length", 256),
-            "diffusion_sampler": req.get("diffusion_sampler", "entropy-bound"),
-            "temperature": req.get("temperature", 0.4),
-        }
+        # Each backend pulls only the generation params it understands out of the
+        # request — diffusion reads its canvas knobs, autoregressive just temperature.
+        params = BACKEND.params_from_request(req)
 
         # Seeding the global PRNG makes sampling reproducible (and, for diffusion, the
         # random initial canvas). Varying the seed is what gives one_shot_n diversity.
