@@ -67,8 +67,9 @@ Env: `DIFG_PORT` (8088), `DIFG_MODEL`, `DIFG_BACKEND`, `DIFG_PYTHON` (`.venv/bin
 
 ## Conventions
 
-- Adding an orchestrator: new module in `reasoning/store/orchestrators/`, add a collision
-  guard / `precondition`, and keep it model-free where possible. Run `eval-all` after changes.
+- Adding a domain: follow `docs/adding-domains.md` — skill module + bind + orchestrator, gate
+  conservatively, and test routing in BOTH directions (a new domain must not steal or be stolen
+  from). New module in `reasoning/store/orchestrators/`; keep it model-free. Run `eval-all` after.
 - Adding a backend: subclass `Backend`, set the capability flags, and override `gen_params`
   / `params_from_request` if it needs knobs beyond `temperature`. No call site should branch
   on backend type — keep that logic inside the backend.
