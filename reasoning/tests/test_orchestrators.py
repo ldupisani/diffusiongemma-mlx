@@ -517,6 +517,11 @@ CASES = [
     ("What is the Lyapunov exponent of the logistic map at r=4 with x0=0.2 over 2000 iterations?",
      "0.6932", "dynamical_systems"),
     ("Is c = 1 in the Mandelbrot set?", "escapes at iteration 3", "dynamical_systems"),
+    # differential geometry: curvature, radius of curvature, arc length
+    ("What is the curvature of x^2 at x=0?", "2", "differential_geometry"),
+    ("What is the radius of curvature of x^2 at x=0?", "0.5", "differential_geometry"),
+    ("What is the arc length of x^2 from 0 to 1?", "1.478943", "differential_geometry"),
+    ("What is the curvature of sqrt(1-x^2) at x=0?", "1", "differential_geometry"),
 ]
 
 
