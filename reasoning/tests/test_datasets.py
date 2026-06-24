@@ -1,0 +1,85 @@
+"""Dataset subsystem — import/describe/query/aggregate/convert/generate over the supported
+formats (CSV, JSON/JSONL, Parquet, SQLite, DuckDB). Uses a temp data dir; no model calls."""
+
+import importlib
+import os
+import sqlite3
+import tempfile
+import unittest
+
+duckdb = importlib.util.find_spec("duckdb")
+
+
+@unittest.skipUnless(duckdb, "duckdb not installed")
+class TestDatasets(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        os.environ["DIFG_DATA_DIR"] = self.tmp.name
+        from reasoning import datasets
+        self.ds = datasets
+        # a CSV dataset
+        with open(os.path.join(self.tmp.name, "sales.csv"), "w") as f:
+            f.write("id,price,status\n1,10,active\n2,20,active\n3,30,closed\n")
+        # a JSONL dataset
+        with open(os.path.join(self.tmp.name, "items.jsonl"), "w") as f:
+            f.write('{"sku": "a", "qty": 5}\n{"sku": "b", "qty": 7}\n')
+        # a SQLite dataset
+        con = sqlite3.connect(os.path.join(self.tmp.name, "people.db"))
+        con.execute("CREATE TABLE people (name TEXT, age INTEGER)")
+        con.executemany("INSERT INTO people VALUES (?, ?)", [("Ada", 36), ("Alan", 41)])
+        con.commit()
+        con.close()
+
+    def tearDown(self):
+        os.environ.pop("DIFG_DATA_DIR", None)
+        self.tmp.cleanup()
+
+    def test_list_and_describe(self):
+        self.assertEqual(set(self.ds.list_datasets()), {"sales", "items", "people"})
+        d = self.ds.describe("sales")
+        self.assertIn("3 rows", d)
+        self.assertIn("price", d)
+
+    def test_aggregate_and_count(self):
+        self.assertEqual(self.ds.aggregate("sales", "price", "average"), "20")
+        self.assertEqual(self.ds.aggregate("sales", "price", "sum"), "60")
+        self.assertEqual(self.ds.count_rows("sales"), "3")
+        self.assertEqual(self.ds.count_rows("sales", where="status = 'active'"), "2")
+
+    def test_query_scalar_and_table(self):
+        self.assertEqual(self.ds.query('SELECT max(price) FROM sales'), "30")
+        out = self.ds.query('SELECT status, count(*) AS n FROM sales GROUP BY status ORDER BY status')
+        self.assertIn("active", out)
+        self.assertIn("closed", out)
+
+    def test_jsonl_and_sqlite_sources(self):
+        self.assertEqual(self.ds.aggregate("items", "qty", "sum"), "12")
+        self.assertEqual(self.ds.count_rows("people"), "2")
+        self.assertEqual(self.ds.query('SELECT max(age) FROM people'), "41")
+
+    def test_large_result_is_saved_with_preview(self):
+        out = self.ds.query("SELECT i AS n FROM range(100) t(i)")
+        self.assertIn("saved 100 rows", out)
+        self.assertIn("head:", out)
+        self.assertIn("result_", "".join(self.ds.list_datasets()) + out)
+
+    def test_generate_and_convert(self):
+        msg = self.ds.generate(50, "gen")
+        self.assertIn("saved 50 rows", msg)
+        self.assertIn("gen", self.ds.list_datasets())
+        self.assertEqual(self.ds.count_rows("gen"), "50")
+        self.ds.convert("sales", "sales_pq", "parquet")
+        self.assertIn("sales_pq", self.ds.list_datasets())
+        self.assertEqual(self.ds.aggregate("sales_pq", "price", "average"), "20")
+
+    def test_import_file(self):
+        src = os.path.join(self.tmp.name, "external.csv")
+        with open(src, "w") as f:
+            f.write("x\n1\n2\n3\n4\n")
+        msg = self.ds.import_file(src, name="imported")
+        self.assertIn("4 rows", msg)
+        self.assertEqual(self.ds.aggregate("imported", "x", "sum"), "10")
+
+
+if __name__ == "__main__":
+    unittest.main()

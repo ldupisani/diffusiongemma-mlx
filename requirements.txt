@@ -6,3 +6,5 @@ mcp>=1.12.0
 # reasoning compiler: SymPy powers the algebra & calculus domains (a deterministic CAS —
 # 0 model calls). All other reasoning domains are pure stdlib.
 sympy>=1.13
+# dataset subsystem (reasoning/datasets.py): one SQL engine over CSV/Parquet/JSON/SQLite/DuckDB.
+duckdb>=1.0
