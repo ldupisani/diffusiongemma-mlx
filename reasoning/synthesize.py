@@ -149,8 +149,11 @@ COERCION_OPS = [
 # `geo_distance` role is distinct from motion's metres `distance`, so they never clash.
 GEO_OPS = [
     Op("geo.haversine", ("la1", "lo1", "la2", "lo2"), "geo_distance"),  # km between two points
-    Op("arith.multiply", ("geo_distance", "price_per_km"), "travel_cost"),   # geo → $
-    Op("arith.divide", ("geo_distance", "speed_kmh"), "flight_hours"),       # geo → motion (time)
+    Op("units.km_to_mi", ("geo_distance",), "geo_distance_mi"),         # … or in miles
+    Op("arith.multiply", ("geo_distance", "price_per_km"), "travel_cost"),     # geo → $ (per km)
+    Op("arith.multiply", ("geo_distance_mi", "price_per_mile"), "travel_cost"),  # geo → $ (per mi)
+    Op("arith.divide", ("geo_distance", "speed_kmh"), "flight_hours"),   # geo → motion (km/h)
+    Op("arith.divide", ("geo_distance_mi", "speed_mph"), "flight_hours"),  # geo → motion (mph)
     Op("arith.identity", ("travel_cost",), "cost"),
 ]
 
