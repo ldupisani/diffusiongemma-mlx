@@ -482,6 +482,11 @@ CASES = [
     ("What is the RSA private key for p=61, q=53, e=17?", "2753", "cryptography"),
     ("What is the Diffie-Hellman secret for g=5, p=23, a=4, b=3?", "18", "cryptography"),
     ("Encrypt 'Hello, World!' with a Caesar shift of 3.", "Khoor, Zruog!", "cryptography"),
+    # numerical methods: Newton, bisection, Simpson, fixed-point
+    ("Use Newton's method on x^2 - 2 from 1.", "1.414214", "numerical_methods"),
+    ("Find a root of x^2 - 2 by bisection on [1, 2].", "1.414214", "numerical_methods"),
+    ("Apply Simpson's rule to x^2 from 0 to 1 using 2 intervals.", "0.333333", "numerical_methods"),
+    ("Apply fixed-point iteration to cos(x) from 1.", "0.739085", "numerical_methods"),
 ]
 
 
