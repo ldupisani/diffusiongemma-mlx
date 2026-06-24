@@ -499,6 +499,12 @@ CASES = [
     ("Apply the Hadamard gate to |0>.", "0.7071, 0.7071", "quantum_mechanics"),
     ("What is the expectation value of Z for the state (0.6, 0.8)?", "-0.28", "quantum_mechanics"),
     ("Normalize the qubit state (3, 4).", "0.6, 0.8", "quantum_mechanics"),
+    # machine learning theory: activations, losses, metrics, entropy
+    ("What is the sigmoid of 2?", "0.880797", "ml_theory"),
+    ("What is the softmax of [1, 2, 3]?", "0.09, 0.2447, 0.6652", "ml_theory"),
+    ("What is the F1 score with tp=8, fp=2, fn=1?", "0.842105", "ml_theory"),
+    ("What is the Shannon entropy of [0.5, 0.5]?", "1", "ml_theory"),
+    ("What is the MSE between [1,2,3] and [1,2,4]?", "0.333333", "ml_theory"),
 ]
 
 
