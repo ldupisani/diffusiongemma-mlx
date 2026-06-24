@@ -536,6 +536,10 @@ CASES = [
      "0.117188", "probability"),
     ("Use Bayes' theorem with prior 0.01, likelihood 0.99, false positive 0.05.",
      "0.166667", "probability"),
+    # mathematical statistics: correlation, regression, z-score
+    ("What is the correlation between [1,2,3] and [2,4,6]?", "1", "statistics"),
+    ("What is the linear regression of [1,2,3] and [2,4,6]?", "y = 2x + 0", "statistics"),
+    ("What is the z-score of 85 with mean 75 and standard deviation 5?", "2", "statistics"),
 ]
 
 

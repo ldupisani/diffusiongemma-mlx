@@ -97,3 +97,47 @@ def percentile(nums: list, p: float) -> float:
           [(([80, 90, 100], [1, 2, 3]), 93.333333), (([10, 20], [1, 1]), 15.0)])
 def weighted_mean(values: list, weights: list) -> float:
     return sum(v * w for v, w in zip(values, weights)) / sum(weights)
+
+
+# --- inferential / bivariate -----------------------------------------------
+import re as _re  # noqa: E402
+
+
+def _pairnums(s):
+    return [float(n) for n in _re.findall(r"-?\d+(?:\.\d+)?", str(s))]
+
+
+def _num2(x):
+    x = round(float(x), 4)
+    return int(x) if x == int(x) else x
+
+
+@register("stats.correlation", "Pearson correlation coefficient between two equal-length lists",
+          [(("1,2,3", "2,4,6"), 1.0), (("1,2,3", "6,4,2"), -1.0)])
+def correlation(xs, ys) -> float:
+    a, b = _pairnums(xs), _pairnums(ys)
+    n = len(a)
+    ma, mb = sum(a) / n, sum(b) / n
+    cov = sum((x - ma) * (y - mb) for x, y in zip(a, b))
+    sa = sum((x - ma) ** 2 for x in a) ** 0.5
+    sb = sum((y - mb) ** 2 for y in b) ** 0.5
+    return round(cov / (sa * sb), 6)
+
+
+@register("stats.linear_regression", "least-squares line y = m·x + b for two lists",
+          [(("1,2,3", "2,4,6"), "y = 2x + 0"), (("1,2,3,4", "2,4,5,4"), "y = 0.7x + 2")])
+def linear_regression(xs, ys) -> str:
+    a, b = _pairnums(xs), _pairnums(ys)
+    n = len(a)
+    ma, mb = sum(a) / n, sum(b) / n
+    var = sum((x - ma) ** 2 for x in a)
+    m = sum((x - ma) * (y - mb) for x, y in zip(a, b)) / var
+    c = mb - m * ma
+    sign = "+" if c >= 0 else "-"
+    return f"y = {_num2(m)}x {sign} {_num2(abs(c))}"
+
+
+@register("stats.zscore", "standard score (x − mean) / stddev",
+          [((85, 75, 5), 2.0), ((70, 75, 5), -1.0)])
+def zscore(x: float, mean: float, sd: float) -> float:
+    return round((float(x) - float(mean)) / float(sd), 6)
