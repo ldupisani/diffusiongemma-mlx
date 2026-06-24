@@ -299,8 +299,11 @@ only for fuzzy steps (open generation, judgement, recall) and ambiguous NL parsi
   haversine/bearing/DMS), `genetics.*` (Hardy–Weinberg, Punnett), `materials.*` (stress/modulus/
   packing factor), `discrete.*` (graphs + Catalan/Fibonacci/Stirling/Bell), `linalg.*` (SymPy
   matrices & vectors), `pchem.*` (ideal gas, % composition), `molec.*` (Avogadro, unsaturation),
-  `biochem.*` (GC content, transcription, Henderson–Hasselbalch, Michaelis–Menten) — all still 0
-  model calls — 244 and counting), indexed in a `SKILLS` registry. Skills never import the engine (a test enforces it). Rounding goes through one
+  `biochem.*` (GC content, transcription, Henderson–Hasselbalch, Michaelis–Menten); and
+  number systems beyond the reals — `padic.*` (p-adic valuation/abs/expansion/distance),
+  `hyper.*` (quaternions), `ord.*` (ordinals, Cantor normal form), `card.*` (cardinals ℵ₀/𝔠),
+  `hreal.*` (hyperreals: ε/ω, standard part), `surr.*` (surreals: {L|R}, birthday) — all still 0
+  model calls — 298 and counting), indexed in a `SKILLS` registry. Skills never import the engine (a test enforces it). Rounding goes through one
   `arith.round_to`/`round_money` chokepoint (`Decimal`+`ROUND_HALF_UP`). Concept-level skills
   (`stats.mean` over any-length list, `finance.loan_payment`, `units.f_to_c`) capture an operation as
   one named step, so a single orchestrator generalizes — vs. the teacher's brittle fixed chain of
