@@ -109,11 +109,16 @@ class ClaudeTeacher:
 
     Uses the user's existing Claude Code auth (no API key, no extra plumbing). `seed` is
     accepted for interface parity but ignored — Claude is not seeded here.
+
+    Defaults to the `sonnet` model alias (the current Claude Sonnet) so fidelity runs are
+    reproducible regardless of the CLI's configured default. Pass `model=None` to defer to
+    the CLI's default instead, or another id/alias to pin a specific model.
     """
 
     name = "claude"
+    DEFAULT_MODEL = "sonnet"  # CLI alias -> the current Claude Sonnet (tracks version bumps)
 
-    def __init__(self, *, model: str | None = None, system: str = CLAUDE_TEACHER_SYSTEM,
+    def __init__(self, *, model: str | None = DEFAULT_MODEL, system: str = CLAUDE_TEACHER_SYSTEM,
                  timeout: int = 180):
         if shutil.which("claude") is None:
             raise RuntimeError("`claude` CLI not found on PATH — install Claude Code or use "
