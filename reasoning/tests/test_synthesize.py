@@ -170,8 +170,7 @@ class TestSynthesize(unittest.TestCase):
     def test_coercion_ops_auto_generated(self):
         pairs = {(o.needs[0], o.produces, o.consts) for o in syn.COERCION_OPS}
         self.assertIn(("mass_g", "mass", ("g", "kg")), pairs)        # chem grams → physics kg
-        self.assertIn(("geo_distance", "geo_distance_mi", ("km", "mi")), pairs)
-        self.assertIn(("speed_mph", "speed_kmh", ("mph", "kph")), pairs)
+        self.assertIn(("mass", "mass_g", ("kg", "g")), pairs)        # both directions
 
     def test_shortest_paths_dedupes_op_permutations(self):
         # two INDEPENDENT ops (x needs p, y needs q) reorder freely → ONE derivation, not two,

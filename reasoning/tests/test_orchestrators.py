@@ -415,9 +415,11 @@ CASES = [
      "$557.02", "synthesized_geo"),
     ("How long is a flight between (40.7128, -74.0060) and (51.5074, -0.1278) at 900 km/h?",
      "6.19 hours", "synthesized_geo"),
-    # per-mile price / mph speed route through a km→mile conversion (units must match)
+    # the bind normalizes a price per ANY length unit to $/km (mile, inch, … all work)
     ("What is the travel cost between (40.7128, -74.0060) and (51.5074, -0.1278) at $0.10 per mile?",
      "$346.12", "synthesized_geo"),
+    ("What is the travel cost between (40.7128, -74.0060) and (51.5074, -0.1278) at $0.10 per inch?",
+     "$21930008.58", "synthesized_geo"),
     # §D multi-hop: chemistry → finance → split (a 5-op chain)
     ("What is the cost of 3 moles of NaCl at $0.50 per gram, split between 2 people?",
      "$43.83 each", "synthesized_chemistry"),

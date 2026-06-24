@@ -149,17 +149,17 @@ PRICED_OPS = [
     Op("arith.identity", ("energy_cost",), "cost"),
 ]
 
-# §F dimension-aware unit coercion. Some roles are the SAME quantity in DIFFERENT units (chem's
-# grams vs physics' kilograms; a trip distance in km vs miles). Rather than hand-write a g→kg /
-# km→mi op per pair, declare the unit variants and AUTO-GENERATE a units.convert op between every
-# same-quantity / different-unit pair. The planner then inserts the conversion wherever a chain
-# crosses a unit boundary — "weight of N moles" (g→kg) and "$/mile travel cost" (km→mi) just work.
-# Grouping by QUANTITY (not dimension) is what keeps radius↔width — same dimension, different
-# quantity — from being (wrongly) treated as convertible.
+# §F dimension-aware unit coercion for MID-PLAN unit boundaries — where a quantity in one unit is
+# DERIVED (not extracted) and feeds an op expecting another unit, so a bind can't pre-convert it.
+# Some roles are the SAME quantity in DIFFERENT units (chem's grams vs physics' kilograms). Rather
+# than hand-write a g→kg op, declare the unit variants and AUTO-GENERATE a units.convert op between
+# every same-quantity / different-unit pair; the planner inserts it wherever a chain crosses the
+# boundary — "weight of N moles" derives grams then coerces to kg for physics.weight. Grouping by
+# QUANTITY (not dimension) keeps radius↔width — same dimension, different quantity — non-convertible.
+# (INPUT units, like a "$/mile" price, are normalized by the bind instead, since the unit is known
+# at parse time — see bind_synthesis_geo.)
 UNIT_VARIANTS = {
     "object_mass": [("mass", "kg"), ("mass_g", "g")],
-    "trip_distance": [("geo_distance", "km"), ("geo_distance_mi", "mi")],
-    "trip_speed": [("speed_kmh", "kph"), ("speed_mph", "mph")],
 }
 
 
@@ -177,14 +177,12 @@ def coercion_ops() -> list:
 COERCION_OPS = coercion_ops()
 WEIGHT_OPS = [Op("physics.weight", ("mass",), "weight")]  # mass in kg (chem grams coerce in)
 
-# geospatial → finance / motion. haversine yields a distance in KM; for a per-mile price the
-# planner coerces geo_distance → geo_distance_mi (via COERCION_OPS), for an mph speed it coerces
-# speed_mph → speed_kmh. Only the km-native ops are listed; the conversions are auto-inserted.
+# geospatial → finance / motion. haversine yields KM; the bind normalizes the price to $/km and
+# the speed to km/h (any input unit), so only the km-native ops are needed here.
 GEO_OPS = [
     Op("geo.haversine", ("la1", "lo1", "la2", "lo2"), "geo_distance"),  # km between two points
-    Op("arith.multiply", ("geo_distance", "price_per_km"), "travel_cost"),       # $ per km
-    Op("arith.multiply", ("geo_distance_mi", "price_per_mile"), "travel_cost"),  # $ per mile
-    Op("arith.divide", ("geo_distance", "speed_kmh"), "flight_hours"),  # geo → motion (km/h or mph)
+    Op("arith.multiply", ("geo_distance", "price_per_km"), "travel_cost"),  # geo → $
+    Op("arith.divide", ("geo_distance", "speed_kmh"), "flight_hours"),      # geo → motion (time)
     Op("arith.identity", ("travel_cost",), "cost"),
 ]
 

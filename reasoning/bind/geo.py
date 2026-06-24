@@ -39,41 +39,40 @@ def bind_geospatial(query: str) -> tuple[bool, dict | None, str, int]:
     return False, None, "code", 0
 
 
-# geo synthesis: two lat/long points → travel cost ($/km or $/mile) or flight time (km/h or
-# mph), chaining haversine into a finance / motion op. haversine yields KM; a per-mile price or
-# mph speed routes through a km→mi conversion so the units always match. Requires a price/speed
-# so plain "distance between" stays with the geospatial orchestrator.
-_PER_KM = re.compile(r"\$\s*(\d+(?:\.\d+)?)\s*(?:per|/)\s*(?:km|kilomet\w*)", re.IGNORECASE)
-_PER_MI = re.compile(r"\$\s*(\d+(?:\.\d+)?)\s*(?:per|/)\s*(?:miles?|mi)\b", re.IGNORECASE)
-_KMH = re.compile(r"(\d+(?:\.\d+)?)\s*(?:km/?h|kph|kilomet\w*\s*per\s*hour)", re.IGNORECASE)
-_MPH = re.compile(r"(\d+(?:\.\d+)?)\s*(?:mph|mi/?h|miles?\s*per\s*hour)", re.IGNORECASE)
+# geo synthesis: two lat/long points → travel cost ($/<length>) or flight time (<speed>),
+# chaining haversine into a finance / motion op. haversine yields KM, and the price/speed UNIT is
+# in the query, so we normalize at bind time: a price per ANY length unit → $/km, a speed in ANY
+# speed unit → km/h, via the units table. (Mid-plan unit boundaries — e.g. derived grams → kg —
+# still use the planner's auto-coercion; here the unit is an extracted input, so the bind converts
+# it.) Requires a price/speed, so plain "distance between" stays with the geospatial orchestrator.
+_PER_UNIT = re.compile(r"\$\s*(\d+(?:\.\d+)?)\s*(?:per|/)\s*([a-zA-Z][a-zA-Z.]*)", re.IGNORECASE)
 
 
 def bind_synthesis_geo(query: str) -> tuple[bool, dict | None, str, int]:
+    from reasoning.skills import units as _U
     q = query.lower()
     pts = _E.pairs(query)
     if len(pts) < 2:
         return False, None, "code", 0
     knowns = {"la1": pts[0][0], "lo1": pts[0][1], "la2": pts[1][0], "lo2": pts[1][1]}
-    price_km, price_mi = _PER_KM.search(query), _PER_MI.search(query)
-    speed_km, speed_mi = _KMH.search(query), _MPH.search(query)
     flight = any(w in q for w in ("how long", "flight time", "travel time", "how many hours"))
-    if "cost" in q and (price_km or price_mi):
-        if price_km:
-            knowns["price_per_km"] = float(price_km[1])
-        else:
-            knowns["price_per_mile"] = float(price_mi[1])
+    pm = _PER_UNIT.search(query)
+    if "cost" in q and pm:
+        canon = _U.canonical(pm.group(2))
+        if not canon or _U.DIMENSION.get(canon) != "length":  # not a price per length → not ours
+            return False, None, "code", 0
+        knowns["price_per_km"] = float(pm[1]) * _U.convert(1, "km", canon)  # $/unit → $/km
         goal, suffix, prefix = "travel_cost", "", "$"
-    elif flight and (speed_km or speed_mi):
-        if speed_km:
-            knowns["speed_kmh"] = float(speed_km[1])
-        else:
-            knowns["speed_mph"] = float(speed_mi[1])
+    elif flight:
+        pq = _U.parse_quantity(query, "speed")  # "<n> mph / km/h / m/s …"
+        if not pq:
+            return False, None, "code", 0
+        knowns["speed_kmh"] = _U.convert(pq[0], pq[1], "kph")
         goal, suffix, prefix = "flight_hours", " hours", ""
     else:
         return False, None, "code", 0
-    from reasoning.synthesize import COERCION_OPS, CROSS_OPS, GEO_OPS, synthesize
-    seq = synthesize(set(knowns), goal, GEO_OPS + COERCION_OPS + CROSS_OPS, unique=True)
+    from reasoning.synthesize import CROSS_OPS, GEO_OPS, synthesize
+    seq = synthesize(set(knowns), goal, GEO_OPS + CROSS_OPS, unique=True)
     if seq is None:
         return False, None, "code", 0
     return True, {"knowns": knowns, "goal": goal, "prefix": prefix, "suffix": suffix}, "code", 0
