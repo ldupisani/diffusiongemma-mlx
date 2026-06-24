@@ -32,15 +32,25 @@ class TestReformulateWithModel(unittest.TestCase):
         self.assertEqual(model_calls(r), 1)            # coded orchestrator adds 0
         self.assertEqual(r.data["rewrite"], "area of a circle with radius 5")
 
+    def test_pregate_skips_conversational_turns(self):
+        # No digit, number word, or domain keyword -> never spend a model call.
+        shot = _Shot("should not be called")
+        for q in ["write me a haiku about the sea", "thanks, that's helpful!",
+                  "what do you think about that?", "tell me more"]:
+            with self.subTest(q=q):
+                self.assertIsNone(reformulate_with_model(q, shot=shot))
+        self.assertEqual(len(shot.calls), 0)
+
     def test_rewrite_none_declines(self):
+        # Passes the pre-gate (has a number), but the rewrite bails with NONE.
         shot = _Shot("NONE")
-        r = reformulate_with_model("write me a haiku about the sea", shot=shot)
+        r = reformulate_with_model("do something artful with 240", shot=shot)
         self.assertIsNone(r)
         self.assertEqual(len(shot.calls), 1)
 
     def test_rewrite_that_does_not_route_declines(self):
         shot = _Shot("explain quantum gravity")
-        r = reformulate_with_model("what's the deal with gravity at small scales?", shot=shot)
+        r = reformulate_with_model("what's the deal with the 5 forces of nature?", shot=shot)
         self.assertIsNone(r)
         self.assertEqual(len(shot.calls), 1)
 
@@ -60,7 +70,7 @@ class TestReformulateWithModel(unittest.TestCase):
 
     def test_empty_rewrite_declines(self):
         shot = _Shot("")
-        r = reformulate_with_model("anything", shot=shot)
+        r = reformulate_with_model("what is 5 of anything", shot=shot)
         self.assertIsNone(r)
         self.assertEqual(len(shot.calls), 1)
 
@@ -74,7 +84,7 @@ class TestReformulateWithModel(unittest.TestCase):
 
     def test_tagged_none_declines(self):
         shot = _Shot("NONE</q>")
-        r = reformulate_with_model("write a poem", shot=shot)
+        r = reformulate_with_model("the area of a poem with 3 stanzas", shot=shot)
         self.assertIsNone(r)
         self.assertEqual(len(shot.calls), 1)
 

@@ -40,11 +40,12 @@ class TestTryCoded(unittest.TestCase):
         self.assertEqual(r.answer, "78.54")
         self.assertEqual(len(shot.calls), 1)  # rewrite only; the drift check is deterministic
 
-    def test_non_computational_declines(self):
-        shot = _Shot("NONE")
+    def test_non_computational_declines_without_model_call(self):
+        # The pre-gate skips reformulation for purely conversational turns: 0 model calls.
+        shot = _Shot("should not be called")
         r = try_coded("tell me a joke about cats", shot=shot)
         self.assertIsNone(r)  # caller's LLM handles it
-        self.assertEqual(len(shot.calls), 1)
+        self.assertEqual(len(shot.calls), 0)
 
 
 if __name__ == "__main__":

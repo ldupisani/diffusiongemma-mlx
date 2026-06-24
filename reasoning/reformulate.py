@@ -44,6 +44,32 @@ _WORD_NUM = {
 }
 _NUM_RE = re.compile(r"\d+(?:\.\d+)?")
 
+# Cheap pre-gate: skip the reformulation model call on purely conversational turns. A query
+# "looks computational" if it has a digit, a number word, or a domain keyword. This is only an
+# optimization — a false negative just defers to the caller's LLM (safe), so the bar is "could
+# this plausibly be a computation/lookup?", kept deliberately inclusive.
+_COMPUTE_WORDS = frozenset(_WORD_NUM) | frozenset({
+    "percent", "percentage", "plus", "minus", "times", "multiply", "multiplied", "divide",
+    "divided", "sum", "total", "average", "mean", "median", "product", "difference", "square",
+    "squared", "sqrt", "root", "power", "factorial", "modulo", "remainder", "ratio",
+    "proportion", "fraction", "decimal", "gcd", "lcm", "prime", "factor", "probability",
+    "area", "perimeter", "volume", "radius", "diameter", "circumference", "circle",
+    "rectangle", "triangle", "sphere", "square", "convert", "conversion", "celsius",
+    "fahrenheit", "kelvin", "km", "kilometer", "kilometers", "mile", "miles", "meter",
+    "meters", "metre", "metres", "foot", "feet", "inch", "inches", "kg", "gram", "grams",
+    "pound", "pounds", "liter", "liters", "gallon", "gallons", "bmi", "interest", "discount",
+    "tax", "tip", "profit", "margin", "speed", "velocity", "distance", "rate", "cost", "price",
+    "mole", "moles", "molar", "mass", "density", "pressure", "force", "energy", "work", "leap",
+    "weekday", "palindrome", "reverse", "count", "depreciation", "annuity", "loan", "payment",
+})
+_WORD_RE = re.compile(r"[a-z]+")
+
+
+def _looks_computational(query: str) -> bool:
+    if _NUM_RE.search(query):
+        return True
+    return bool(set(_WORD_RE.findall(query.lower())) & _COMPUTE_WORDS)
+
 
 def _number_set(text: str) -> set[float]:
     """All numeric values in `text`, with number words normalized to digits."""
@@ -75,6 +101,8 @@ def _extract_rewrite(text: str) -> str:
 def reformulate_with_model(query: str, *, shot) -> PatternResult | None:
     """1-model-call reformulation: rewrite → coded answer → deterministic drift check. None if
     the rewrite bails, doesn't route to a coded orchestrator, or introduces a new number."""
+    if not _looks_computational(query):
+        return None  # pre-gate: don't spend a model call on a purely conversational turn
     rewrite = _extract_rewrite(shot(_REWRITE_PROMPT.format(q=query),
                                     max_tokens=64, quality="fast").text)
     if not rewrite or rewrite.upper().startswith("NONE"):
