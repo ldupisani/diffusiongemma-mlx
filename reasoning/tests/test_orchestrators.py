@@ -540,6 +540,13 @@ CASES = [
     ("What is the correlation between [1,2,3] and [2,4,6]?", "1", "statistics"),
     ("What is the linear regression of [1,2,3] and [2,4,6]?", "y = 2x + 0", "statistics"),
     ("What is the z-score of 85 with mean 75 and standard deviation 5?", "2", "statistics"),
+    # functional analysis fragment: vector norms, inner product, Cauchy–Schwarz
+    ("What is the L1 norm of [3, 4]?", "7", "functional_analysis"),
+    ("What is the infinity norm of [3, -4]?", "4", "functional_analysis"),
+    ("What is the inner product of [1, 2, 3] and [4, 5, 6]?", "32", "functional_analysis"),
+    ("Check the Cauchy-Schwarz inequality for [1, 2] and [3, 4].",
+     "holds: 11 ≤ 11.18034", "functional_analysis"),
+    ("What is the product of 2, 3, 4?", "24", "list_statistic"),  # guard: not inner product
 ]
 
 

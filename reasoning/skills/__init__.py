@@ -10,7 +10,7 @@ from .base import SKILLS, Skill, call, get, register
 from . import (  # noqa: E402,F401
     algebra, applied_math, arithmetic, bases, biochem, calculus, cardinals, chemistry, clock,
     complex_calc, complex_math, coord, crypto, dates, diffgeo, discrete, dynamics, expr, finance,
-    game, genetics, geo, geometry,
+    funcanalysis, game, genetics, geo, geometry,
     group_theory, health, hypercomplex, hyperreal, logic, materials, ml, molecular, ndim,
     number_theory, numerical, optimize, ordinals, padic, pchem, physics, probability, quantum,
     ratio, set_theory, sets, stats, surreal, tensor, text, topology, trig, units,

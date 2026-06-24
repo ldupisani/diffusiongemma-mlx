@@ -57,3 +57,5 @@ from reasoning.bind.dynamics import *    # noqa: F401,F403
 from reasoning.bind.diffgeo import *     # noqa: F401,F403
 
 from reasoning.bind.statistics import *  # noqa: F401,F403
+
+from reasoning.bind.funcanalysis import *  # noqa: F401,F403
