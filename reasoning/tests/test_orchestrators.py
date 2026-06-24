@@ -511,6 +511,12 @@ CASES = [
     ("Minimize x^2 + y^2 - 2x - 4y.", "-5 at (x, y) = (1, 2)", "optimization"),
     ("Run gradient descent on x^2 - 4x + 7 from 0 with learning rate 0.1 for 100 steps.",
      "2", "optimization"),
+    # dynamical systems & chaos: logistic map, fixed points, Lyapunov, Mandelbrot
+    ("Iterate the logistic map with r=3.2 and x0=0.5 for 2 iterations.", "0.512", "dynamical_systems"),
+    ("What are the fixed points of the logistic map with r=3?", "0, 0.6667", "dynamical_systems"),
+    ("What is the Lyapunov exponent of the logistic map at r=4 with x0=0.2 over 2000 iterations?",
+     "0.6932", "dynamical_systems"),
+    ("Is c = 1 in the Mandelbrot set?", "escapes at iteration 3", "dynamical_systems"),
 ]
 
 
