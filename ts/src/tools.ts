@@ -1,7 +1,8 @@
 // Port of tools_util.py + the diffusion presets and thought-stripping.
-// The model emits tool calls in Gemma's native DSL (NOT JSON):
-//   <|tool_call>call:NAME{key:<|"|>value<|"|>,n:42}<tool_call|>
-// and may emit several back-to-back (parallel calls).
+// Two tool-call wire formats are supported, one per backend family:
+//   * Gemma DSL (diffusion):  <|tool_call>call:NAME{key:<|"|>value<|"|>,n:42}<tool_call|>
+//   * JSON (autoregressive):  <tool_call>{"name": NAME, "arguments": {...}}</tool_call>
+// Both may emit several blocks back-to-back (parallel calls).
 
 export const QUOTE = '<|"|>'; // Gemma's string-quote token inside the call DSL
 const OPEN = "<|tool_call>call:"; // each call starts here; the close token is optional
@@ -10,6 +11,11 @@ const THOUGHT_RE = /<\|channel>thought[\s\S]*?<channel\|>\s*/g;
 
 export function stripThought(text: string): string {
   return text.replace(THOUGHT_RE, "").trim();
+}
+
+// Backend-aware thought stripping: only the diffusion model has a <thought> channel.
+export function stripThoughtFor(text: string, supportsThinking: boolean): string {
+  return supportsThinking ? stripThought(text) : text.trim();
 }
 
 export interface ToolCall {
@@ -87,6 +93,82 @@ export function parseToolCalls(text: string): ToolCall[] {
     calls.push({ name, args: parseArgs(text.slice(brace + 1, end)) });
     i = end + 1;
   }
+}
+
+// JSON.parse the first balanced {...} object in blob, or null. Tolerates redundant
+// outer brace layers: Qwen2.5's bundled chat template shows the tool-call example as
+// {{"name": ..., "arguments": ...}} (a Jinja-escape artifact) and the model copies the
+// doubled braces verbatim — so we peel matched outer layers until it parses to an object.
+function loadsFirstObject(blob: string): Record<string, unknown> | null {
+  const brace = blob.indexOf("{");
+  if (brace === -1) return null;
+  const end = balancedBraceEnd(blob, brace);
+  if (end === -1) return null;
+  let candidate = blob.slice(brace, end + 1).trim();
+  for (let i = 0; i < 4; i++) {
+    try {
+      const obj = JSON.parse(candidate);
+      if (obj && typeof obj === "object" && !Array.isArray(obj)) {
+        return obj as Record<string, unknown>;
+      }
+    } catch {
+      /* fall through to peel a layer */
+    }
+    if (candidate.startsWith("{") && candidate.endsWith("}")) {
+      candidate = candidate.slice(1, -1).trim(); // peel one redundant brace layer
+    } else {
+      return null;
+    }
+  }
+  return null;
+}
+
+// JSON tool-call format emitted by standard instruct models (Qwen2.5, Llama-3.2,
+// Hermes-style): <tool_call>{"name": "foo", "arguments": {...}}</tool_call>. Robust
+// to a missing </tool_call> terminator and to several calls back-to-back.
+const JSON_OPEN = "<tool_call>";
+const JSON_CLOSE = "</tool_call>";
+
+export function parseToolCallsJson(text: string): ToolCall[] {
+  const calls: ToolCall[] = [];
+  let i = 0;
+  for (;;) {
+    const start = text.indexOf(JSON_OPEN, i);
+    if (start === -1) return calls;
+    const bodyStart = start + JSON_OPEN.length;
+    const close = text.indexOf(JSON_CLOSE, bodyStart);
+    let blob: string;
+    if (close === -1) {
+      const brace = text.indexOf("{", bodyStart);
+      if (brace === -1) return calls;
+      const end = balancedBraceEnd(text, brace);
+      if (end === -1) return calls; // truncated mid-args; stop
+      blob = text.slice(brace, end + 1);
+      i = end + 1;
+    } else {
+      blob = text.slice(bodyStart, close);
+      i = close + JSON_CLOSE.length;
+    }
+    const obj = loadsFirstObject(blob);
+    if (!obj || typeof obj.name !== "string") continue;
+    let args = (obj.arguments ?? obj.parameters ?? {}) as unknown;
+    if (typeof args === "string") {
+      try {
+        args = JSON.parse(args);
+      } catch {
+        args = {};
+      }
+    }
+    calls.push({
+      name: obj.name,
+      args: (args && typeof args === "object" ? args : {}) as Record<string, unknown>,
+    });
+  }
+}
+
+// Pick the parser matching the sidecar's reported tool_call_format.
+export function parseToolCallsFor(text: string, format: string): ToolCall[] {
+  return format === "json" ? parseToolCallsJson(text) : parseToolCalls(text);
 }
 
 export interface DiffusionParams {

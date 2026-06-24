@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """Tiny MLX inference sidecar for the TypeScript REPL (chat_stream.ts).
 
-DiffusionGemma only runs through mlx-vlm (Python), so the TS port delegates the
-single non-portable piece — generation — to this local HTTP server and owns
-everything else itself.
+MLX generation (diffusion via mlx-vlm, or autoregressive via mlx-lm) is the one
+non-portable piece, so the TS port delegates it to this local HTTP server and owns
+everything else itself. The actual model family is chosen by backend.py — this
+server is backend-agnostic and just forwards the resolved generation params.
 
 Why plain http.server (not FastAPI/uvicorn): MLX's GPU stream is thread-local, so
 generation must run on the main thread. HTTPServer (single-threaded) processes each
 request on the serving thread, which is exactly what we want. One client at a time.
 
 Endpoints:
-  GET  /info      -> {"context_window": int, "model": str}
+  GET  /info      -> {"model","context_window","backend","supports_thinking","tool_call_format"}
   POST /generate  -> streams NDJSON, one JSON object per line:
       {"type":"prompt","prompt": "<resolved templated prompt>"}   (templated path only)
       {"type":"chunk","text": "..."}                              (repeated)
@@ -21,7 +22,8 @@ Request body (POST /generate):
   Either {"messages":[...], "tools":[...]|null}  (server applies the chat template)
   or     {"raw_prompt":"..."}                    (fed verbatim — used for /continue).
   Plus: enable_thinking, max_tokens, max_denoising_steps, block_length,
-        diffusion_sampler, temperature.
+        diffusion_sampler, temperature. (Diffusion-only knobs are ignored by the
+        autoregressive backend.)
 """
 
 import json
@@ -29,16 +31,10 @@ import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import mlx.core as mx
-from mlx_vlm import load, stream_generate
-from mlx_vlm.prompt_utils import apply_chat_template
 
-from chat import DEFAULT_MODEL
-from chat_stream import context_limit
+from backend import DEFAULT_MODEL, get_backend
 
-MODEL = None
-PROCESSOR = None
-CONFIG = None
-CTX_MAX = None
+BACKEND = None
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -57,7 +53,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/info":
-            self._json(200, {"context_window": CTX_MAX, "model": DEFAULT_MODEL})
+            self._json(200, BACKEND.info())
         else:
             self._json(404, {"error": "not found"})
 
@@ -67,31 +63,31 @@ class Handler(BaseHTTPRequestHandler):
             return
         length = int(self.headers.get("Content-Length", 0))
         req = json.loads(self.rfile.read(length) or b"{}")
+        enable_thinking = req.get("enable_thinking", False)
 
         # Resolve the prompt: either a raw continuation prompt or templated messages.
         if req.get("raw_prompt") is not None:
             prompt = req["raw_prompt"]
             emit_prompt = False
         else:
-            prompt = apply_chat_template(
-                PROCESSOR, CONFIG, req.get("messages", []), num_images=0,
+            prompt = BACKEND.apply_template(
+                req.get("messages", []),
                 tools=req.get("tools") or None,
-                enable_thinking=req.get("enable_thinking", False),
+                enable_thinking=enable_thinking,
             )
             emit_prompt = True
 
-        gen_kwargs = dict(
-            max_tokens=req.get("max_tokens", 256),
-            max_denoising_steps=req.get("max_denoising_steps", 32),
-            block_length=req.get("block_length", 256),
-            diffusion_sampler=req.get("diffusion_sampler", "entropy-bound"),
-            temperature=req.get("temperature", 0.4),
-            enable_thinking=req.get("enable_thinking", False),
-        )
+        # Diffusion-only knobs are forwarded for the diffusion backend and ignored by
+        # the autoregressive one (which uses only `temperature`).
+        params = {
+            "max_denoising_steps": req.get("max_denoising_steps", 32),
+            "block_length": req.get("block_length", 256),
+            "diffusion_sampler": req.get("diffusion_sampler", "entropy-bound"),
+            "temperature": req.get("temperature", 0.4),
+        }
 
-        # Seeding the global PRNG makes the random initial canvas + sampling
-        # reproducible. It is NOT a stream_generate kwarg — set it here, before
-        # generating. Varying the seed is what gives one_shot_n diverse candidates.
+        # Seeding the global PRNG makes sampling reproducible (and, for diffusion, the
+        # random initial canvas). Varying the seed is what gives one_shot_n diversity.
         seed = req.get("seed")
         if seed is not None:
             mx.random.seed(int(seed))
@@ -109,7 +105,8 @@ class Handler(BaseHTTPRequestHandler):
 
         last = None
         try:
-            for chunk in stream_generate(MODEL, PROCESSOR, prompt, **gen_kwargs):
+            for chunk in BACKEND.stream(prompt, max_tokens=req.get("max_tokens", 256),
+                                        enable_thinking=enable_thinking, params=params):
                 last = chunk
                 write({"type": "chunk", "text": chunk.text})
         except (BrokenPipeError, ConnectionResetError):
@@ -124,15 +121,13 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    global MODEL, PROCESSOR, CONFIG, CTX_MAX
+    global BACKEND
     model_id = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_MODEL
     port = int(sys.argv[2]) if len(sys.argv) > 2 else 8088
-    print(f"Loading {model_id} ...", flush=True)
-    MODEL, PROCESSOR = load(model_id)
-    CONFIG = MODEL.config
-    CTX_MAX = context_limit(CONFIG)
+    BACKEND = get_backend(model_id)
+    BACKEND.load(model_id)
     print(f"Inference sidecar ready on http://127.0.0.1:{port} "
-          f"(context {CTX_MAX:,})", flush=True)
+          f"({BACKEND.name} backend, context {BACKEND.context_window:,})", flush=True)
     HTTPServer(("127.0.0.1", port), Handler).serve_forever()
 
 

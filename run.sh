@@ -4,13 +4,17 @@
 #   ./run.sh                 # tools on, default model/port
 #   ./run.sh --no-tools      # pass-through flags go to the REPL
 #
-# Env overrides: DIFG_PORT (8088), DIFG_MODEL (4-bit), DIFG_PYTHON (.venv/bin/python).
+# Env overrides: DIFG_PORT (8088), DIFG_MODEL, DIFG_BACKEND, DIFG_PYTHON (.venv/bin/python).
+#   DIFG_MODEL    default mlx-community/Qwen2.5-3B-Instruct-4bit (small, fast, tool-calling)
+#   DIFG_BACKEND  diffusion | autoregressive (auto-detected from the model id if unset)
+# To use the original 26B DiffusionGemma experiment:
+#   DIFG_MODEL=mlx-community/diffusiongemma-26B-A4B-it-4bit ./run.sh
 # If a sidecar is already serving on the port, it is reused (and left running).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PORT="${DIFG_PORT:-8088}"
-MODEL="${DIFG_MODEL:-mlx-community/diffusiongemma-26B-A4B-it-4bit}"
+MODEL="${DIFG_MODEL:-mlx-community/Qwen2.5-3B-Instruct-4bit}"
 PYTHON="${DIFG_PYTHON:-$ROOT/.venv/bin/python}"
 BASE="http://127.0.0.1:$PORT"
 

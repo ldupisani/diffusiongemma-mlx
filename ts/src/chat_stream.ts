@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-// Interactive streaming chat with DiffusionGemma — TypeScript port of chat_stream.py.
+// Interactive streaming chat — TypeScript port of chat_stream.py.
 //
 // Inference (the one non-portable piece) is delegated to the Python MLX sidecar
-// (infer_server.py over HTTP). Everything else — REPL, commands, MCP tool calling,
-// the tool-call DSL parser, /continue, /auto, context readout — lives here.
+// (infer_server.py over HTTP), which runs whichever backend is active. Everything else
+// — REPL, commands, MCP tool calling, the tool-call parsers, /continue, /auto, context
+// readout — lives here. The tool-call format and thinking support are read from /info.
 //
 // Commands: /quality <preset>, /think, /continue, /auto <max>, /tools, /reset, /exit.
 // Tool calling is on by default (spawns ../mcp_server_demo.py over MCP); --no-tools off.
@@ -18,10 +19,10 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import {
   chooseDiffusionParams,
   mcpToolToModel,
-  parseToolCalls,
-  stripThought,
+  parseToolCallsFor,
+  stripThoughtFor,
 } from "./tools.js";
-import { fetchInfo, GenBody, GenStats, streamReply } from "./infer.js";
+import { fetchInfo, GenBody, GenStats, SidecarInfo, streamReply } from "./infer.js";
 
 const THINK_MAX_TOKENS = 1024; // reasoning + answer need a larger budget
 const DEFAULT_TOOL_STEPS = 6; // tool-round budget per turn when /auto is off
@@ -32,6 +33,9 @@ const PYTHON = process.env.DIFG_PYTHON ?? join(REPO_ROOT, ".venv/bin/python");
 interface State {
   server: string;
   ctxMax: number;
+  backend: string;
+  supportsThinking: boolean;
+  toolCallFormat: string;
   session: Client | null;
   tools: unknown[];
   toolNames: string[];
@@ -98,9 +102,15 @@ async function agentTurn(
     if (stats.prompt !== undefined) formatted = stats.prompt;
     printContext(stats, state.ctxMax);
 
-    const calls = state.tools.length && state.session ? parseToolCalls(text) : [];
+    const calls =
+      state.tools.length && state.session
+        ? parseToolCallsFor(text, state.toolCallFormat)
+        : [];
     if (calls.length === 0) {
-      state.history.push({ role: "assistant", content: stripThought(text) });
+      state.history.push({
+        role: "assistant",
+        content: stripThoughtFor(text, state.supportsThinking),
+      });
       return [formatted, text, stats.finish];
     }
 
@@ -146,7 +156,7 @@ async function extendReply(state: State): Promise<void> {
   state.lastFinish = stats.finish;
   state.history[state.history.length - 1] = {
     role: "assistant",
-    content: stripThought(state.lastRaw),
+    content: stripThoughtFor(state.lastRaw, state.supportsThinking),
   };
 }
 
@@ -212,6 +222,12 @@ async function repl(state: State, rl: readline.Interface): Promise<void> {
       continue;
     }
     if (user === "/think") {
+      if (!state.supportsThinking) {
+        console.log(
+          `(the ${state.backend} backend has no <thought> channel — /think ignored)\n`,
+        );
+        continue;
+      }
       state.think = !state.think;
       console.log(`(thinking -> ${state.think ? "on" : "off"})\n`);
       continue;
@@ -268,7 +284,7 @@ async function main(): Promise<void> {
   const server =
     argv.includes("--server") && serverArg ? serverArg : "http://127.0.0.1:8088";
 
-  let info: { context_window: number; model: string };
+  let info: SidecarInfo;
   try {
     info = await fetchInfo(server);
   } catch (e) {
@@ -302,6 +318,9 @@ async function main(): Promise<void> {
   const state: State = {
     server,
     ctxMax: info.context_window,
+    backend: info.backend,
+    supportsThinking: info.supports_thinking,
+    toolCallFormat: info.tool_call_format,
     session,
     tools,
     toolNames,
@@ -318,7 +337,8 @@ async function main(): Promise<void> {
   };
 
   console.log(
-    `Ready (model ${info.model}, context ${info.context_window.toLocaleString()} tokens, ` +
+    `Ready (${info.backend} backend, model ${info.model}, ` +
+      `context ${info.context_window.toLocaleString()} tokens, ` +
       `${tools.length ? "with tools" : "no tools"}). ` +
       "Commands: /quality, /think, /continue, /auto <max>, /tools, /reset, /exit.\n",
   );

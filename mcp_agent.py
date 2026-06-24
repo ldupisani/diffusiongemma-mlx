@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Minimal MCP agent loop for DiffusionGemma on MLX.
+"""Minimal MCP agent loop over a pluggable MLX backend (see backend.py).
 
 Wires three things together:
   1. An MCP server (mcp_server_demo.py), launched as a subprocess over stdio.
-  2. DiffusionGemma via mlx-vlm, which emits tool calls in Gemma's native
-     `<|tool_call>call:NAME{...}<tool_call|>` format.
+  2. An MLX model (diffusion or autoregressive, per backend.py) that emits tool
+     calls in its native format.
   3. The glue: translate MCP tool schemas -> the model's `tools=` format, parse
      the model's tool call, execute it over MCP, feed the result back, repeat.
 
@@ -20,20 +20,16 @@ import sys
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
-from mlx_vlm import load, generate
-from mlx_vlm.prompt_utils import apply_chat_template
 
-from chat import DEFAULT_MODEL
-from chat_stream import strip_thought
-from tools_util import mcp_tool_to_model, parse_tool_calls
+from backend import DEFAULT_MODEL, get_backend
+from tools_util import mcp_tool_to_model
 
 MAX_STEPS = 6  # guard against a model that loops on tool calls forever
 
 
 async def run(user_prompt: str):
-    print(f"Loading {DEFAULT_MODEL} ...")
-    model, processor = load(DEFAULT_MODEL)
-    config = model.config
+    backend = get_backend(DEFAULT_MODEL)
+    backend.load(DEFAULT_MODEL)
 
     server = StdioServerParameters(command=sys.executable, args=["mcp_server_demo.py"])
     async with stdio_client(server) as (read, write):
@@ -47,24 +43,19 @@ async def run(user_prompt: str):
             print(f"user> {user_prompt}\n")
 
             for step in range(1, MAX_STEPS + 1):
-                formatted = apply_chat_template(
-                    processor, config, messages, num_images=0,
-                    tools=tools, enable_thinking=False,
+                formatted = backend.apply_template(
+                    messages, tools=tools, enable_thinking=False,
                 )
-                # Call generate() directly (NOT via asyncio.to_thread): MLX's GPU
-                # stream is thread-local, so it must run on the main thread. This
-                # blocks the event loop during generation, which is fine — model
-                # inference and MCP I/O never overlap in this loop.
-                result = generate(
-                    model, processor, formatted,
-                    max_tokens=256, max_denoising_steps=24,
-                    block_length=256, temperature=0.0, verbose=False,
+                # Generate on the main thread (NOT via asyncio.to_thread): MLX's GPU
+                # stream is thread-local. This blocks the event loop during generation,
+                # which is fine — model inference and MCP I/O never overlap in this loop.
+                text, _ = backend.generate(
+                    formatted, max_tokens=256, params={"temperature": 0.0},
                 )
-                text = result.text
-                calls = parse_tool_calls(text)
+                calls = backend.parse_tool_calls(text)
 
                 if not calls:
-                    print("difg>", strip_thought(text))
+                    print("difg>", backend.strip_thought(text))
                     return
 
                 # Execute every call this turn (the model may issue several at

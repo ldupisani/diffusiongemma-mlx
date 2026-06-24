@@ -22,12 +22,26 @@ export interface GenBody {
   temperature?: number;
 }
 
-export async function fetchInfo(
-  server: string,
-): Promise<{ context_window: number; model: string }> {
+export interface SidecarInfo {
+  context_window: number;
+  model: string;
+  backend: string; // "diffusion" | "autoregressive"
+  supports_thinking: boolean;
+  tool_call_format: string; // "gemma-dsl" | "json"
+}
+
+export async function fetchInfo(server: string): Promise<SidecarInfo> {
   const res = await fetch(`${server}/info`);
   if (!res.ok) throw new Error(`sidecar /info ${res.status}`);
-  return (await res.json()) as { context_window: number; model: string };
+  const raw = (await res.json()) as Partial<SidecarInfo>;
+  // Tolerate an older sidecar that only reports model + context_window.
+  return {
+    context_window: raw.context_window ?? 0,
+    model: raw.model ?? "unknown",
+    backend: raw.backend ?? "diffusion",
+    supports_thinking: raw.supports_thinking ?? true,
+    tool_call_format: raw.tool_call_format ?? "gemma-dsl",
+  };
 }
 
 // Stream one generation, calling onChunk for each text fragment as it arrives.

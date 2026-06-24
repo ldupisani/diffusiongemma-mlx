@@ -4,8 +4,17 @@
 ![model-free](https://img.shields.io/badge/model--free-63%2F63-blue)
 ![coded skills](https://img.shields.io/badge/skills-246-informational)
 
-Running `google/diffusiongemma-26B-A4B-it` — a 26B Mixture-of-Experts **diffusion**
-language model (~3.8B active params) — locally via `mlx-vlm` on an M3 Max (36 GB).
+A local reasoning toolkit on Apple Silicon (MLX). It started as an experiment running
+`google/diffusiongemma-26B-A4B-it` — a 26B Mixture-of-Experts **diffusion** language model
+(~3.8B active params) — via `mlx-vlm`. Since the reasoning engine answers most queries
+deterministically (0 model calls), the LLM is only a fallback, so the model is now a
+**pluggable backend** and the default is a small autoregressive instruct model.
+
+**Backends** (see `backend.py`) — picked by `$DIFG_BACKEND`, else auto-detected from the model id:
+- **autoregressive** (`mlx-lm`, *default*) — small standard instruct models. Default
+  `mlx-community/Qwen2.5-3B-Instruct-4bit` (~1.8 GB): left-to-right streaming, JSON tool calls.
+- **diffusion** (`mlx-vlm`) — the original `diffusiongemma-26B-A4B-it-4bit` (~14 GB):
+  denoising-canvas sampling, Gemma-DSL tool calls, a `<thought>` reasoning channel.
 
 > **Reasoning compiler:** 63/63 coded orchestrators reproduce the Claude teacher's answer
 > ([`reasoning.cli eval-all`](#reasoning-compiler-reasoning)), each at **0 model calls** (sidecar
@@ -22,7 +31,7 @@ tokens and refines the whole block in parallel over N denoising steps. Consequen
 ```bash
 uv venv --python 3.12 .venv
 source .venv/bin/activate
-uv pip install -U "mlx-vlm>=0.6.3"
+uv pip install -r requirements.txt   # mlx-lm (default backend) + mlx-vlm (diffusion) + mcp + sympy
 ```
 
 ## Run — CLI
@@ -53,7 +62,8 @@ python chat.py "Give me three tips for naming variables." --quality fast --max-t
 
 ## Run — interactive streaming chat
 ```bash
-python chat_stream.py                 # uses 4-bit default; optional arg: model id
+python chat_stream.py                 # default small AR model; optional arg: model id
+# diffusion instead:  python chat_stream.py mlx-community/diffusiongemma-26B-A4B-it-4bit
 ```
 Multi-turn REPL with live streaming output. **Tool calling is built in**: it
 launches `mcp_server_demo.py` over MCP and lets the model call tools mid-chat
@@ -113,9 +123,11 @@ output arrives in canvas-block chunks rather than smooth token-by-token.
 - `fast` (12 steps): ~30 tok/s  (≈3× faster — the speed lever is *steps*, not model size)
 
 ## MCP tool calling (`mcp_agent.py`)
-DiffusionGemma supports tool calling natively (Gemma's `<|tool_call>call:NAME{...}<tool_call|>`
-DSL — not JSON). The model never "speaks MCP"; `mcp_agent.py` is the host that owns the
-MCP connection and the call→execute→continue loop.
+Both backends support tool calling, each in its native wire format — JSON
+(`<tool_call>{"name":…,"arguments":…}</tool_call>`) for autoregressive models, Gemma's
+`<|tool_call>call:NAME{…}<tool_call|>` DSL for diffusion. The active backend picks the
+matching parser (`tools_util.py`). The model never "speaks MCP"; `mcp_agent.py` is the host
+that owns the MCP connection and the call→execute→continue loop.
 
 ```bash
 uv pip install mcp                      # one-time
@@ -142,11 +154,11 @@ Notes:
 A TypeScript port of `chat_stream.py` with full feature parity (streaming, `/quality`,
 `/think`, `/continue`, `/auto`, `/tools`, MCP tool calling, context readout).
 
-**Why it needs a Python sidecar:** DiffusionGemma only runs through `mlx-vlm` (Python) —
-there is no MLX runtime for JS, and the diffusion sampler isn't supported by JS-native
-engines (transformers.js / llama.cpp are autoregressive). So inference is delegated to a
-tiny local HTTP server (`infer_server.py`) that wraps the exact same `stream_generate` call;
-the TypeScript REPL owns everything else and talks to it over NDJSON streaming.
+**Why it needs a Python sidecar:** MLX only runs through Python — there is no MLX runtime
+for JS. So inference is delegated to a tiny local HTTP server (`infer_server.py`) that wraps
+whichever backend is active; the TypeScript REPL owns everything else and talks to it over
+NDJSON streaming. The REPL adapts to the sidecar's `/info` (backend, `tool_call_format`,
+`supports_thinking`) — so it parses JSON or Gemma-DSL tool calls and gates `/think` automatically.
 
 **One command (recommended)** — `run.sh` boots the sidecar, waits for it, launches the REPL,
 and stops the sidecar on exit (an already-running sidecar is reused and left alone):
@@ -154,7 +166,8 @@ and stops the sidecar on exit (an already-running sidecar is reused and left alo
 ./run.sh                # tools on; pass-through flags go to the REPL, e.g. ./run.sh --no-tools
 # or from the ts/ dir:  npm run dev
 ```
-Env overrides: `DIFG_PORT` (8088), `DIFG_MODEL` (4-bit), `DIFG_PYTHON` (`.venv/bin/python`).
+Env overrides: `DIFG_PORT` (8088), `DIFG_MODEL` (default Qwen2.5-3B-Instruct-4bit),
+`DIFG_BACKEND` (`diffusion`|`autoregressive`; auto-detected if unset), `DIFG_PYTHON` (`.venv/bin/python`).
 
 **Or run the two pieces by hand:**
 ```bash

@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Interactive streaming chat with DiffusionGemma via mlx-vlm.
+"""Interactive streaming chat over a pluggable MLX backend (see backend.py).
 
-Streaming on a diffusion LM looks different from an autoregressive one: tokens
-are revealed as canvas blocks finish denoising, so output arrives in chunks
-rather than smoothly left-to-right. The diffusion text path is TEXT-ONLY
-(no images) when streaming.
+Works with either backend family. With the diffusion backend, output arrives in
+canvas blocks as they finish denoising rather than smoothly left-to-right; with the
+autoregressive backend it streams token-by-token. The REPL itself doesn't care —
+it only consumes the shared chunk interface.
 
 Commands inside the REPL:
   /quality fast|balanced|quality   switch the speed/quality preset
-  /think    toggle the model's <thought> reasoning channel on/off
+  /think    toggle the model's <thought> reasoning channel (diffusion backend only)
   /continue extend a truncated reply OR resume a capped tool loop
   /auto <n> budget for both text continuations AND tool-call rounds per turn
   /tools    list MCP tools available to the model
@@ -20,47 +20,23 @@ the model call its tools mid-conversation. Pass --no-tools to disable.
 """
 
 import asyncio
-import re
 import sys
 from contextlib import AsyncExitStack
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
-from mlx_vlm import load, stream_generate
-from mlx_vlm.prompt_utils import apply_chat_template
 
-from chat import choose_diffusion_params, DEFAULT_MODEL
-from tools_util import mcp_tool_to_model, parse_tool_calls
+from backend import DEFAULT_MODEL, choose_params, get_backend
+from tools_util import mcp_tool_to_model
 
 # Default tool-round budget per turn when /auto is OFF (runaway guard). When
 # /auto N is set, N becomes the budget — so the same "how long do I keep going?"
 # dial governs both text continuations and tool-call rounds.
 DEFAULT_TOOL_STEPS = 6
 
-# DiffusionGemma wraps its reasoning in <|channel>thought ... <channel|>.
-# We show it live when thinking is on, but strip it from stored history so it
-# doesn't accumulate as context on later turns.
-_THOUGHT_RE = re.compile(r"<\|channel>thought.*?<channel\|>\s*", re.DOTALL)
-
 # Reasoning + answer need ~3-4x a normal answer's budget; the model still stops
 # early at EOS if it finishes sooner, so this is a ceiling, not a fixed cost.
 THINK_MAX_TOKENS = 1024
-
-
-def strip_thought(text: str) -> str:
-    return _THOUGHT_RE.sub("", text).strip()
-
-
-def context_limit(config):
-    """Dig max_position_embeddings out of the (possibly nested) config."""
-    for obj in (getattr(config, "text_config", None), config):
-        if obj is None:
-            continue
-        get = obj.get if isinstance(obj, dict) else lambda k, d=None: getattr(obj, k, d)
-        val = get("max_position_embeddings")
-        if val:
-            return int(val)
-    return None
 
 
 def print_context(last, ctx_max):
@@ -79,14 +55,12 @@ def print_context(last, ctx_max):
     print(f"(context: {ctx}{mem_str})\n")
 
 
-def stream_reply(model, processor, formatted, effective_max, quality, think):
+def stream_reply(backend, formatted, effective_max, quality, think):
     """Stream one generation to stdout. Returns (raw_text, finish_reason, last_chunk)."""
-    params = choose_diffusion_params(quality, effective_max)
+    params = choose_params(quality, effective_max, backend)
     text, finish, last = "", None, None
-    for chunk in stream_generate(
-        model, processor, formatted,
-        max_tokens=effective_max, enable_thinking=think, **params,
-    ):
+    for chunk in backend.stream(formatted, max_tokens=effective_max,
+                                enable_thinking=think, params=params):
         text += chunk.text
         finish = chunk.finish_reason
         last = chunk
@@ -95,28 +69,28 @@ def stream_reply(model, processor, formatted, effective_max, quality, think):
     return text, finish, last
 
 
-def extend_reply(model, processor, history, last_prompt, last_raw, last_max,
+def extend_reply(backend, history, last_prompt, last_raw, last_max,
                  last_think, quality, ctx_max):
     """Run ONE continuation of the last (truncated) reply.
 
     Resume by raw concatenation: original templated prompt + the partial reply,
-    fed straight to the engine. We deliberately do NOT re-run apply_chat_template
-    here, because the chat template strips the ephemeral <thought> channel on
-    re-render — which would delete the continuation anchor whenever the cut lands
-    mid-thought. Concatenation keeps the partial text (open thought and all) intact.
+    fed straight to the engine. We deliberately do NOT re-run apply_template here,
+    because the chat template strips the ephemeral <thought> channel on re-render —
+    which would delete the continuation anchor whenever the cut lands mid-thought.
+    Concatenation keeps the partial text (open thought and all) intact.
     Returns (updated_last_raw, finish_reason).
     """
     formatted = last_prompt + last_raw
     print("difg> ", end="", flush=True)
-    more, finish, last = stream_reply(model, processor, formatted, last_max, quality, last_think)
+    more, finish, last = stream_reply(backend, formatted, last_max, quality, last_think)
     print()
     print_context(last, ctx_max)
     last_raw += more
-    history[-1] = {"role": "assistant", "content": strip_thought(last_raw)}
+    history[-1] = {"role": "assistant", "content": backend.strip_thought(last_raw)}
     return last_raw, finish
 
 
-def auto_extend(model, processor, history, last_prompt, last_raw, last_finish,
+def auto_extend(backend, history, last_prompt, last_raw, last_finish,
                 last_max, last_think, quality, auto_max, ctx_max):
     """Extend repeatedly until EOS or auto_max extensions are used."""
     n = 0
@@ -124,7 +98,7 @@ def auto_extend(model, processor, history, last_prompt, last_raw, last_finish,
         n += 1
         print(f"(auto-continue {n}/{auto_max})")
         last_raw, last_finish = extend_reply(
-            model, processor, history, last_prompt, last_raw, last_max,
+            backend, history, last_prompt, last_raw, last_max,
             last_think, quality, ctx_max,
         )
     if last_finish == "length":
@@ -132,7 +106,7 @@ def auto_extend(model, processor, history, last_prompt, last_raw, last_finish,
     return last_raw, last_finish
 
 
-async def agent_turn(model, processor, config, history, tools, session,
+async def agent_turn(backend, history, tools, session,
                      effective_max, quality, think, ctx_max, budget):
     """Run (or resume) one user turn, looping over tool calls until a final answer.
 
@@ -143,24 +117,19 @@ async def agent_turn(model, processor, config, history, tools, session,
     already holds every tool result, to keep going).
 
     Tool-call/response messages are appended to `history` in OpenAI style; the
-    chat template renders them back into Gemma's native tool blocks each round.
+    chat template renders them back into the model's native tool blocks each round.
     """
     formatted = ""
     for step in range(1, budget + 1):
-        formatted = apply_chat_template(
-            processor, config, history, num_images=0,
-            tools=tools or None, enable_thinking=think,
-        )
+        formatted = backend.apply_template(history, tools=tools or None, enable_thinking=think)
         print("difg> ", end="", flush=True)
-        text, finish, last = stream_reply(
-            model, processor, formatted, effective_max, quality, think
-        )
+        text, finish, last = stream_reply(backend, formatted, effective_max, quality, think)
         print_context(last, ctx_max)
 
-        calls = parse_tool_calls(text) if (tools and session) else []
+        calls = backend.parse_tool_calls(text) if (tools and session) else []
         if not calls:
             # Final answer — store the clean text (no ephemeral thought channel).
-            history.append({"role": "assistant", "content": strip_thought(text)})
+            history.append({"role": "assistant", "content": backend.strip_thought(text)})
             return formatted, text, finish
 
         # Execute every call this round (the model may issue several at once).
@@ -188,7 +157,7 @@ async def agent_turn(model, processor, config, history, tools, session,
     return formatted, "", "tool_cap"
 
 
-async def turn_with_followups(model, processor, config, history, tools, session,
+async def turn_with_followups(backend, history, tools, session,
                               effective_max, quality, think, ctx_max, auto_max):
     """Run a turn (or resume one) and apply the matching follow-up policy.
 
@@ -197,13 +166,13 @@ async def turn_with_followups(model, processor, config, history, tools, session,
     """
     budget = auto_max if auto_max > 0 else DEFAULT_TOOL_STEPS
     last_prompt, last_raw, last_finish = await agent_turn(
-        model, processor, config, history, tools, session,
+        backend, history, tools, session,
         effective_max, quality, think, ctx_max, budget,
     )
     if last_finish == "length":  # the text answer was cut off
         if auto_max > 0:
             last_raw, last_finish = auto_extend(
-                model, processor, history, last_prompt, last_raw, last_finish,
+                backend, history, last_prompt, last_raw, last_finish,
                 effective_max, think, quality, auto_max, ctx_max,
             )
         else:
@@ -214,7 +183,7 @@ async def turn_with_followups(model, processor, config, history, tools, session,
     return last_prompt, last_raw, last_finish
 
 
-async def run_repl(model, processor, config, ctx_max, session, tools):
+async def run_repl(backend, ctx_max, session, tools):
     quality, think, auto_max = "balanced", False, 0
     max_tokens = 256
     history = []
@@ -249,6 +218,9 @@ async def run_repl(model, processor, config, ctx_max, session, tools):
                 print("usage: /quality fast|balanced|quality\n")
             continue
         if user == "/think":
+            if not backend.supports_thinking:
+                print(f"(the {backend.name} backend has no <thought> channel — /think ignored)\n")
+                continue
             think = not think
             print(f"(thinking -> {'on' if think else 'off'})\n")
             continue
@@ -261,12 +233,12 @@ async def run_repl(model, processor, config, ctx_max, session, tools):
                 # Apply the new budget to whatever is currently paused.
                 if auto_max > 0 and last_finish == "length":
                     last_raw, last_finish = auto_extend(
-                        model, processor, history, last_prompt, last_raw, last_finish,
+                        backend, history, last_prompt, last_raw, last_finish,
                         last_max, last_think, quality, auto_max, ctx_max,
                     )
                 elif auto_max > 0 and last_finish == "tool_cap":
                     last_prompt, last_raw, last_finish = await turn_with_followups(
-                        model, processor, config, history, tools, session,
+                        backend, history, tools, session,
                         last_max, quality, last_think, ctx_max, auto_max,
                     )
             else:
@@ -275,13 +247,13 @@ async def run_repl(model, processor, config, ctx_max, session, tools):
         if user == "/continue":
             if last_finish == "length":
                 last_raw, last_finish = extend_reply(
-                    model, processor, history, last_prompt, last_raw,
+                    backend, history, last_prompt, last_raw,
                     last_max, last_think, quality, ctx_max,
                 )
             elif last_finish == "tool_cap":
                 # Resume the tool loop: history already holds every tool result.
                 last_prompt, last_raw, last_finish = await turn_with_followups(
-                    model, processor, config, history, tools, session,
+                    backend, history, tools, session,
                     last_max, quality, last_think, ctx_max, auto_max,
                 )
             else:
@@ -297,7 +269,7 @@ async def run_repl(model, processor, config, ctx_max, session, tools):
         last_max, last_think = effective_max, think
         try:
             last_prompt, last_raw, last_finish = await turn_with_followups(
-                model, processor, config, history, tools, session,
+                backend, history, tools, session,
                 effective_max, quality, think, ctx_max, auto_max,
             )
         except Exception as e:
@@ -308,10 +280,9 @@ async def run_repl(model, processor, config, ctx_max, session, tools):
 
 
 async def run(model_id, use_tools):
-    print(f"Loading {model_id} ...")
-    model, processor = load(model_id)
-    config = model.config
-    ctx_max = context_limit(config)
+    backend = get_backend(model_id)
+    backend.load(model_id)
+    ctx_max = backend.context_window
 
     async with AsyncExitStack() as stack:
         session, tools = None, []
@@ -331,9 +302,9 @@ async def run(model_id, use_tools):
                 session, tools = None, []
 
         tool_note = "with tools" if tools else "no tools"
-        print(f"Ready (context window: {ctx_max:,} tokens, {tool_note}). "
+        print(f"Ready ({backend.name} backend, context window: {ctx_max:,} tokens, {tool_note}). "
               "Commands: /quality, /think, /continue, /auto <max>, /tools, /reset, /exit.\n")
-        await run_repl(model, processor, config, ctx_max, session, tools)
+        await run_repl(backend, ctx_max, session, tools)
 
 
 def main():

@@ -16,46 +16,10 @@ import argparse
 from mlx_vlm import load, generate
 from mlx_vlm.prompt_utils import apply_chat_template
 
-DEFAULT_MODEL = "mlx-community/diffusiongemma-26B-A4B-it-4bit"
-
-
-def choose_diffusion_params(quality: str, max_tokens: int) -> dict:
-    """Map a human 'quality' preference to diffusion sampling parameters.
-
-    This is the one genuinely interesting decision in running a diffusion LM,
-    and there is no single right answer — it's a speed/quality trade-off that
-    depends on your use case. The reference defaults from Google's guide are
-    48 denoising steps over a 256-token canvas with the 'entropy-bound' sampler.
-
-    TODO(you): implement this. Return a dict with these keys:
-        {
-            "max_denoising_steps": int,   # refinement passes (e.g. 12 / 32 / 48)
-            "block_length": int,          # canvas size; >= max_tokens is typical
-            "diffusion_sampler": str,     # "entropy-bound" or "confidence-threshold"
-            "temperature": float,         # 0.0 = greedy; guide uses ~0.4-0.8
-        }
-
-    Consider:
-      - "fast"     -> few steps (~12), entropy-bound, low temp. Great for
-                      structured/constrained tasks (the guide's Sudoku demo hit
-                      80% at just 12 steps after fine-tuning).
-      - "balanced" -> ~32 steps, the everyday default.
-      - "quality"  -> 48 steps, more self-correction passes for open-ended prose.
-      - block_length should be at least `max_tokens`; the canvas can't emit more
-        tokens than it has slots. 256 is the model's design point.
-    """
-    presets = {
-        # few passes, greedy: fast + stable for structured/constrained tasks
-        "fast": {"max_denoising_steps": 12, "diffusion_sampler": "entropy-bound", "temperature": 0.2},
-        # everyday default
-        "balanced": {"max_denoising_steps": 32, "diffusion_sampler": "entropy-bound", "temperature": 0.4},
-        # full reference config: most self-correction passes for open-ended prose
-        "quality": {"max_denoising_steps": 48, "diffusion_sampler": "entropy-bound", "temperature": 0.6},
-    }
-    params = presets[quality]
-    # canvas must have at least as many slots as tokens we want to emit; 256 is the design point
-    params["block_length"] = max(256, max_tokens)
-    return params
+# This CLI is the diffusion demo specifically, so it defaults to the diffusion model.
+# The shared default for the rest of the toolkit (a small autoregressive model) and the
+# diffusion preset table both live in backend.py.
+from backend import DEFAULT_DIFFUSION_MODEL as DEFAULT_MODEL, choose_diffusion_params
 
 
 def main():
