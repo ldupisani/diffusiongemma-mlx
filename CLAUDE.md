@@ -70,6 +70,10 @@ Env: `DIFG_PORT` (8088), `DIFG_MODEL`, `DIFG_BACKEND`, `DIFG_PYTHON` (`.venv/bin
 - Adding a domain: follow `docs/adding-domains.md` — skill module + bind + orchestrator, gate
   conservatively, and test routing in BOTH directions (a new domain must not steal or be stolen
   from). New module in `reasoning/store/orchestrators/`; keep it model-free. Run `eval-all` after.
+- After finishing a set of domains, update `docs/adding-domains.md` if the work taught something
+  new: a fresh collision class or decline-guard, a parsing gotcha, a routing/tier subtlety, or a
+  cleaner step. Add it as a concrete "Learning" (the real bug + how it was caught) or fold it into
+  the checklist — keep the playbook ahead of the codebase. If nothing new came up, leave it.
 - Adding a backend: subclass `Backend`, set the capability flags, and override `gen_params`
   / `params_from_request` if it needs knobs beyond `temperature`. No call site should branch
   on backend type — keep that logic inside the backend.
