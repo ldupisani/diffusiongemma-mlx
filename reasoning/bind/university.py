@@ -241,6 +241,11 @@ _ALG_KW = [("solve", "algebra.solve"), ("factorize", "algebra.factor"),
 def bind_algebra(query: str) -> tuple[bool, dict | None, str, int]:
     q = query.lower()
 
+    # ω / "ordinal" means this is ordinal arithmetic, not symbolic algebra (sympy would parse
+    # the words as variables) — decline so bind_ordinal claims it.
+    if "ω" in query or "omega" in q or "ordinal" in q:
+        return False, None, "code", 0
+
     # solve a SYSTEM of equations (before plain "solve")
     if "system" in q:
         em = re.search(r"system\s*(?:of\s+equations)?\s*:?\s*(.+?)\s*[?.]?$", query, re.IGNORECASE)

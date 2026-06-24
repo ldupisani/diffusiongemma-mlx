@@ -456,6 +456,11 @@ CASES = [
     ("What is the norm of 1+2i+3j+4k?", "5.4772", "hypercomplex"),
     ("What is the inverse of the quaternion i?", "-i", "hypercomplex"),
     ("What is the magnitude of the quaternion 2+3i+6k?", "7", "hypercomplex"),
+    # ordinals (Cantor normal form, non-commutative): 'transfinite' folds in here too
+    ("What is the Cantor normal form of 1+ω?", "ω", "ordinals"),
+    ("Simplify the ordinal ω·2+ω.", "ω·3", "ordinals"),
+    ("Is ω+1 greater than ω?", "ω+1 > ω", "ordinals"),
+    ("What is the transfinite ordinal ω·ω?", "ω^2", "ordinals"),
 ]
 
 
