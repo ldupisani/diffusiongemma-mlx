@@ -478,6 +478,16 @@ class TestOrchestrators(unittest.TestCase):
         self.assertNotIn(m.orchestrator.id if m else None,
                          ("synthesized_geometry", "ratio_proportion"))
 
+    def test_days_between_ignores_year_substring(self):
+        # "lightYEAR" must NOT trip the year keyword (substring false-positive), so an
+        # unsupported-unit travel-cost query falls to the teacher instead of being mis-claimed
+        import reasoning.store.orchestrators.days_between_dates as d
+        self.assertFalse(d.precondition("travel cost between (1,2) and (3,4) at $1 per lightyear"))
+        self.assertTrue(d.precondition("how many days between 2024-01-01 and 2024-02-01"))
+        m = router.recognize("What is the travel cost between (40.7128, -74.0060) and "
+                             "(51.5074, -0.1278) at $0.10 per lightyear?")
+        self.assertNotEqual(m.orchestrator.id if m else None, "days_between_dates")
+
     def test_algebra_declines_malformed_solve_variable(self):
         # "for z-1" is not a valid variable — must decline, not silently solve for z
         from reasoning.bind import bind_algebra

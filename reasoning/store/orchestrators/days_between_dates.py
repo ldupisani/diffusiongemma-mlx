@@ -4,8 +4,13 @@ Generalized from days-only: the bind detects the unit asked for and run() picks 
 matching skill (rounding weeks to 2 dp).
 """
 
+import re
+
 from reasoning.bind import bind_date_difference
 from reasoning.compiled import CodeStep, Inp, Lit, Plan, Step, run_guarded
+
+# whole-word time units — substring matching would fire on "lightYEAR", "sunDAY", "everyDAY", …
+_TIME_UNIT = re.compile(r"\b(?:days?|weeks?|months?|years?)\b")
 
 META = {
     "id": "days_between_dates",
@@ -25,8 +30,7 @@ META = {
 
 def precondition(query):
     q = query.lower()
-    has_unit = any(u in q for u in ("day", "week", "month", "year"))
-    return has_unit and ("between" in q or ("from" in q and "to" in q))
+    return bool(_TIME_UNIT.search(q)) and ("between" in q or ("from" in q and "to" in q))
 
 
 def _plan(data):
