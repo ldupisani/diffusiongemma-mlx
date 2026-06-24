@@ -461,6 +461,11 @@ CASES = [
     ("Simplify the ordinal ω·2+ω.", "ω·3", "ordinals"),
     ("Is ω+1 greater than ω?", "ω+1 > ω", "ordinals"),
     ("What is the transfinite ordinal ω·ω?", "ω^2", "ordinals"),
+    # cardinals (ℵ₀, 𝔠 = 2^ℵ₀): 'transfinite' folds in here too
+    ("What is aleph_0 + aleph_0?", "ℵ₀", "cardinals"),
+    ("What is 2 to the power of aleph_0?", "𝔠", "cardinals"),
+    ("What is the cardinality of the real numbers?", "𝔠", "cardinals"),
+    ("Is aleph_0 less than the continuum?", "ℵ₀ < 𝔠", "cardinals"),
 ]
 
 
