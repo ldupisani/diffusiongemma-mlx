@@ -446,6 +446,11 @@ CASES = [
      "$43.83 each", "synthesized_chemistry"),
     # §F unit coercion: chem mass (g) → units(g→kg) → physics weight
     ("What is the weight of 2 moles of H2O?", "0.35 N", "synthesized_chemistry"),
+    # p-adic numbers: valuation, absolute value, expansion, distance
+    ("What is the 2-adic valuation of 24?", "3", "padic"),
+    ("What is the 5-adic absolute value of 100?", "0.04", "padic"),
+    ("Give the 5-adic expansion of 100 to 3 digits.", "0 + 0·5 + 4·5^2", "padic"),
+    ("What is the 3-adic distance between 1 and 28?", "0.037", "padic"),
 ]
 
 
