@@ -14,7 +14,7 @@ META = {
         "What is the complex derivative of z^2?",
     ],
     "keywords": ["residue", "contour", "complex derivative", "pole", "analytic"],
-    "sub_orchestrators": [], "model_free": True, "bind_gated": True,
+    "model_free": True, "bind_gated": True,
 }
 
 

@@ -28,7 +28,6 @@ META = {
     ],
     "keywords": ["reverse", "uppercase", "lowercase", "capitalize", "vowels", "consonants",
                  "characters", "word", "words", "longest", "acronym", "string"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

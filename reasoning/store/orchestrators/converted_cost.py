@@ -3,8 +3,8 @@ the price's unit, so it must convert first.
 
 "What is the total cost of 10 miles at $3 per km?"  →  convert 10 miles → km (delegated to
 the `unit_conversion` orchestrator via a SubStep), then × $3. This is the first orchestrator
-to USE `sub_orchestrators`: it composes another coded orchestrator and stays model-free iff
-that one does (the SubStep folds its model-call tally into this plan's).
+to compose another via a SubStep: it stays model-free iff that one does (the SubStep folds
+its model-call tally into this plan's).
 """
 
 from reasoning import engine
@@ -23,7 +23,6 @@ META = {
         "What is the total cost of 100 kg at $4 per pound?",
     ],
     "keywords": ["cost", "total", "per", "at"],
-    "sub_orchestrators": ["unit_conversion"],  # composed via the SubStep below
     "model_free": True,
 }
 

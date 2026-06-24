@@ -12,7 +12,6 @@ META = {
         "With $12000 fixed costs, $40 price and $16 cost per unit, what's the break-even quantity?",
     ],
     "keywords": ["break", "even", "fixed", "units", "breakeven"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

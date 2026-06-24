@@ -4,7 +4,7 @@ Each orchestrator is a real Python module under store/orchestrators/ — so it's
 inspectable, git-versioned, and can import patterns or call sibling orchestrators
 (that's the "graph"). A module exposes:
 
-    META = {"id", "query_type", "description", "example_queries", "sub_orchestrators"}
+    META = {"id", "query_type", "description", "example_queries", "keywords"}
     def precondition(query) -> bool       # optional guard; default True
     def run(query) -> PatternResult       # the coded reasoning flow
 
@@ -31,7 +31,6 @@ class Orchestrator:
     description: str
     example_queries: list[str] = field(default_factory=list)
     keywords: list[str] = field(default_factory=list)
-    sub_orchestrators: list[str] = field(default_factory=list)
     precondition: Callable[[str], bool] = lambda q: True
     run: Optional[Callable] = None
     source: str = ""
@@ -69,7 +68,6 @@ def load_orchestrators() -> list[Orchestrator]:
                 description=meta.get("description", ""),
                 example_queries=meta.get("example_queries", []),
                 keywords=meta.get("keywords", []),
-                sub_orchestrators=meta.get("sub_orchestrators", []),
                 precondition=getattr(mod, "precondition", lambda q: True),
                 run=getattr(mod, "run", None),
                 source=str(path),

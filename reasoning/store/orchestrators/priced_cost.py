@@ -18,7 +18,6 @@ META = {
         "What is the cost of running a 2 kW heater for 3 hours at $0.15 per kWh?",
     ],
     "keywords": ["per hour", "per kwh", "hourly", "job", "kw", "electricity"],
-    "sub_orchestrators": [],
     "model_free": True,
     "bind_gated": True,
 }

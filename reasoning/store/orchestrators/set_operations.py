@@ -23,7 +23,6 @@ META = {
     ],
     "keywords": ["set", "union", "intersection", "subset", "power set", "cardinality",
                  "complement", "disjoint", "cartesian"],
-    "sub_orchestrators": [],
     "model_free": True,
     "bind_gated": True,  # the {…} parse is dispositive (symbolic, few keywords)
 }

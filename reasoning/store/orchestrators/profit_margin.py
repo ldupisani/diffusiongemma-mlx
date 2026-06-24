@@ -16,7 +16,6 @@ META = {
         "If it costs $8 and sells for $20, what's the margin?",
     ],
     "keywords": ["profit", "margin"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

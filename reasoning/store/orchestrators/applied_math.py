@@ -21,7 +21,6 @@ META = {
     ],
     "keywords": ["determinant", "inverse", "eigenvalues", "dot product", "cross product",
                  "magnitude", "matrix", "vector"],
-    "sub_orchestrators": [],
     "model_free": True,
     "bind_gated": True,
 }

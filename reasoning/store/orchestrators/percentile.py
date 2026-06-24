@@ -15,7 +15,6 @@ META = {
         "What is the 25th percentile of 5, 10, 15, and 20?",
     ],
     "keywords": ["percentile"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

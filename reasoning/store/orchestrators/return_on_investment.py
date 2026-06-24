@@ -16,7 +16,6 @@ META = {
         "Bought a bike for $300, sold it for $450 — what was my ROI?",
     ],
     "keywords": ["return", "investment", "roi", "bought", "sold", "gain"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

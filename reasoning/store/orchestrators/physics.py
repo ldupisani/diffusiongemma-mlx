@@ -31,7 +31,6 @@ META = {
     "keywords": ["speed", "force", "energy", "kinetic", "potential", "work", "power",
                  "density", "voltage", "momentum", "pressure", "acceleration", "weight",
                  "current", "velocity", "joules"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

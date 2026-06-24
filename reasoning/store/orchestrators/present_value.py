@@ -16,7 +16,6 @@ META = {
         "Present value of $5000 in 3 years at 6%?",
     ],
     "keywords": ["present", "value", "discount", "received", "today"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

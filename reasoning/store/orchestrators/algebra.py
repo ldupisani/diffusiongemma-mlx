@@ -17,7 +17,6 @@ META = {
         "Solve x^2 - 5x + 6 = 0 for x.",
     ],
     "keywords": ["factor", "expand", "simplify", "solve", "equation", "polynomial"],
-    "sub_orchestrators": [],
     "model_free": True,
     "bind_gated": True,
 }

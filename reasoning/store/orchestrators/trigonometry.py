@@ -16,7 +16,6 @@ META = {
         "Convert pi radians to degrees.",
     ],
     "keywords": ["sine", "cosine", "tangent", "degrees", "radians", "angle"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

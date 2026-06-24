@@ -23,7 +23,6 @@ META = {
         "What is the cost of 3 moles of NaCl at $0.50 per gram?",
     ],
     "keywords": ["moles", "mass", "grams", "formula", "cost"],
-    "sub_orchestrators": [],
     "model_free": True,
     "bind_gated": True,
 }

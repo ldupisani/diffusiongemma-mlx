@@ -204,7 +204,7 @@ teacher's final answer is taken as its last line when it skips the `ANSWER:` mar
 - **Compound arithmetic** — `expression` evaluates full order-of-operations ("15% of 200 plus 10",
   "(5+3)*2-4") via a recursive-descent parser (`skills/expr.py`). 0 model calls.
 - **Sub-orchestrator composition** — a `SubStep` lets one plan delegate a sub-question to another
-  orchestrator (finally using `sub_orchestrators`); e.g. `converted_cost` delegates a unit
+  orchestrator (via `SubStep(..., orchestrator=...)`); e.g. `converted_cost` delegates a unit
   conversion then multiplies. Model-free iff its parts are (the sub-run's call tally folds in).
 - **Ask for missing info** — a recognized type missing a field returns a `clarify` result
   (`{field: (question, template)}`); `cli run` prompts and re-runs by appending the answer in a

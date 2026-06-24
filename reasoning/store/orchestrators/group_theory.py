@@ -23,7 +23,6 @@ META = {
         "What is 3 + 4 in Z_5?",
     ],
     "keywords": ["permutation", "cyclic", "generators", "symmetric group", "order", "cycle"],
-    "sub_orchestrators": [],
     "model_free": True,
     "bind_gated": True,
 }

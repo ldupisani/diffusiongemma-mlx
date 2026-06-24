@@ -12,7 +12,6 @@ META = {
         "Which weekday was 2000-01-01?",
     ],
     "keywords": ["day", "week", "weekday"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

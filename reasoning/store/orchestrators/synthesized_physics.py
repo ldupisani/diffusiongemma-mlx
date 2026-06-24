@@ -26,7 +26,6 @@ META = {
         "What is the kinetic energy of a 1000 kg car that travels 200 m in 10 s?",
     ],
     "keywords": ["power", "work", "force", "kinetic", "momentum", "pressure"],
-    "sub_orchestrators": [],
     "model_free": True,
     "bind_gated": True,  # the synthesizable parse is dispositive (and ≥2-op, so physics can't bind)
 }

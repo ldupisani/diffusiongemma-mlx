@@ -21,7 +21,6 @@ META = {
         "$120 of groceries, 20% off, 5% tax, divided among 2 people — each?",
     ],
     "keywords": ["each", "per person", "split", "off", "tax", "between"],
-    "sub_orchestrators": [],
     "model_free": True,
     "bind_gated": True,
 }

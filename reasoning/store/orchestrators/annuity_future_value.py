@@ -17,7 +17,6 @@ META = {
         "Depositing $500 every month at 4% for 20 years — final amount?",
     ],
     "keywords": ["save", "deposit", "contribute", "per", "month", "monthly", "savings"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

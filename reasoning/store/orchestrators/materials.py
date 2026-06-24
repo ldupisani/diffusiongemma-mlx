@@ -16,7 +16,6 @@ META = {
         "What is the thermal expansion of a 10 m rod with coefficient 0.000012 heated 50 degrees?",
     ],
     "keywords": ["stress", "strain", "young", "modulus", "packing factor", "thermal expansion"],
-    "sub_orchestrators": [],
     "model_free": True,
     "bind_gated": True,
 }

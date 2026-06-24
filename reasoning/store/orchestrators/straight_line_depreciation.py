@@ -12,7 +12,6 @@ META = {
         "Asset worth $9000, salvage $1000, 4-year life — annual depreciation?",
     ],
     "keywords": ["depreciation", "salvage", "depreciate", "useful", "life"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

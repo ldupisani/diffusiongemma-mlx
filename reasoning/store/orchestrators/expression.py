@@ -21,7 +21,6 @@ META = {
         "What is 2 to the power of 10 minus 24?",
     ],
     "keywords": ["plus", "minus", "times", "divided", "percent", "power", "calculate"],
-    "sub_orchestrators": [],
     "model_free": True,
     "bind_gated": True,  # the parse is dispositive — a symbolic "(5+3)*2-4" has no keywords
 }

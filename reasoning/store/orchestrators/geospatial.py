@@ -15,7 +15,6 @@ META = {
         "Convert 40.5 degrees to degrees minutes seconds.",
     ],
     "keywords": ["latitude", "longitude", "bearing", "great circle", "coordinates", "gps"],
-    "sub_orchestrators": [],
     "model_free": True,
     "bind_gated": True,
 }

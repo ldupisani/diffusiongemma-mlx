@@ -16,7 +16,6 @@ META = {
         "If set A has 12 elements, set B has 8, and 3 are in both, how many are in A union B?",
     ],
     "keywords": ["both", "neither", "union", "either", "only", "group", "set"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

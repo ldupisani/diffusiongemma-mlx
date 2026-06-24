@@ -17,7 +17,6 @@ META = {
         "What are the degrees of unsaturation of C6H6?",
     ],
     "keywords": ["molecules", "moles", "avogadro", "degrees of unsaturation"],
-    "sub_orchestrators": [],
     "model_free": True,
     "bind_gated": True,
 }

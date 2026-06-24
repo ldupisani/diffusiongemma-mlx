@@ -31,7 +31,6 @@ META = {
     ],
     "keywords": ["tautology", "contradiction", "satisfiable", "equivalent", "truth", "table",
                  "negation", "converse", "inverse", "contrapositive", "implies", "evaluate"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

@@ -17,7 +17,6 @@ META = {
     ],
     "keywords": ["compound", "compounded", "interest", "invested", "principal",
                  "balance", "annually", "monthly"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

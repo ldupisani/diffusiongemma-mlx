@@ -22,7 +22,6 @@ META = {
     ],
     "keywords": ["topology", "closure", "interior", "boundary", "connected", "hausdorff",
                  "open set", "closed set"],
-    "sub_orchestrators": [],
     "model_free": True,
     "bind_gated": True,
 }

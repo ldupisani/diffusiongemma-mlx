@@ -24,7 +24,6 @@ META = {
         "split between 3 people?",
     ],
     "keywords": ["cost", "tile", "carpet", "paint", "per square", "how much", "split"],
-    "sub_orchestrators": [],
     "model_free": True,
     "bind_gated": True,
 }

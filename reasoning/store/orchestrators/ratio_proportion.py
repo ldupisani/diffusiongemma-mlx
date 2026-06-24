@@ -21,7 +21,6 @@ META = {
     ],
     "keywords": ["simplify", "fraction", "ratio", "decimal", "percentage", "proportion",
                  "unit rate", "servings", "cost"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

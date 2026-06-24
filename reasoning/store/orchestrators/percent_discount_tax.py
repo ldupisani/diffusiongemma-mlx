@@ -19,7 +19,6 @@ META = {
         "$120 jacket, 25% off, plus 9% tax. Final price?",
     ],
     "keywords": ["off", "discount", "tax", "vat", "percent", "price", "%"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

@@ -22,7 +22,6 @@ META = {
         "Convert 100 Celsius to Fahrenheit and what is the GCD of 24 and 36?",
     ],
     "keywords": [],
-    "sub_orchestrators": [],
     "model_free": False,   # excluded from leaf-fidelity eval (see module docstring)
     "fallback": True,      # only after specific / bind-gated / clarify tiers
     "composer": True,      # routed by the composer tier when its precondition decomposes

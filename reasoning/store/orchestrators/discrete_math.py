@@ -20,7 +20,6 @@ META = {
         "What is the 4th Bell number?",
     ],
     "keywords": ["graph", "edges", "catalan", "fibonacci", "stirling", "bell", "components"],
-    "sub_orchestrators": [],
     "model_free": True,
     "bind_gated": True,
 }

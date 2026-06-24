@@ -21,7 +21,6 @@ META = {
         "Convert binary 11111111 to decimal.",
     ],
     "keywords": ["binary", "hexadecimal", "hex", "octal", "decimal", "convert", "base"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

@@ -16,7 +16,6 @@ META = {
         "How long is it from 8:00 AM to 5:30 PM?",
     ],
     "keywords": ["time", "hours", "minutes", "after", "before", "12-hour", "24-hour", "between"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

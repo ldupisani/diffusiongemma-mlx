@@ -18,7 +18,6 @@ META = {
         "Was 1900 a leap year?",
     ],
     "keywords": ["leap", "year"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

@@ -18,7 +18,6 @@ META = {
     ],
     "keywords": ["gc content", "reverse complement", "transcribe", "mrna", "henderson",
                  "michaelis", "vmax"],
-    "sub_orchestrators": [],
     "model_free": True,
     "bind_gated": True,
 }

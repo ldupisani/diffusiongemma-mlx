@@ -30,7 +30,6 @@ META = {
                  "meters", "feet", "inches", "centimeters", "pounds", "kg", "grams", "ounces",
                  "liters", "gallons", "milliliters", "seconds", "minutes", "hours", "into",
                  "bytes", "kilobytes", "megabytes", "gigabytes", "terabytes", "terabyte"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

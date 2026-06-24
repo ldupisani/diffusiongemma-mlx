@@ -16,7 +16,6 @@ META = {
         "Find the perimeter and area of a 5 by 3 rectangle.",
     ],
     "keywords": ["area", "perimeter", "and"],
-    "sub_orchestrators": [],
     "model_free": True,
     "bind_gated": True,
 }

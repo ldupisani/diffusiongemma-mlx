@@ -13,7 +13,7 @@ META = {
         "How many edges does a 4-dimensional hypercube have?",
     ],
     "keywords": ["dimensional", "hypercube", "n-ball", "n-sphere", "hypersphere", "dimensions"],
-    "sub_orchestrators": [], "model_free": True, "bind_gated": True,
+    "model_free": True, "bind_gated": True,
 }
 
 

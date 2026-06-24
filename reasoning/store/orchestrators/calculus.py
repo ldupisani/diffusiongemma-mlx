@@ -19,7 +19,6 @@ META = {
     ],
     "keywords": ["derivative", "differentiate", "integral", "integrate", "limit",
                  "antiderivative"],
-    "sub_orchestrators": [],
     "model_free": True,
     "bind_gated": True,
 }

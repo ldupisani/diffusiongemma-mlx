@@ -31,7 +31,6 @@ META = {
     "keywords": ["area", "perimeter", "circumference", "volume", "surface", "diagonal",
                  "hypotenuse", "circle", "rectangle", "triangle", "square", "cube", "sphere",
                  "cylinder", "radius"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

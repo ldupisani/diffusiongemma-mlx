@@ -23,7 +23,6 @@ META = {
         "How many years are between 2000-05-20 and 2024-05-20?",
     ],
     "keywords": ["days", "weeks", "months", "years", "between", "from", "to", "until"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

@@ -27,7 +27,6 @@ META = {
     "keywords": ["average", "mean", "median", "sum", "total", "highest", "lowest",
                  "maximum", "minimum", "range", "mode", "product", "geometric",
                  "deviation", "variance", "standard"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

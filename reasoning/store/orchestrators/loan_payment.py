@@ -15,7 +15,6 @@ META = {
         "Monthly payment on a $300000 mortgage at 5% over 30 years?",
     ],
     "keywords": ["loan", "mortgage", "payment", "borrow", "monthly", "repay"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

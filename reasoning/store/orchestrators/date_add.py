@@ -12,7 +12,6 @@ META = {
         "What date is 12 weeks after 2024-06-01?",
     ],
     "keywords": ["date", "days", "weeks", "after", "from"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

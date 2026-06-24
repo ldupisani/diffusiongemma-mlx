@@ -16,7 +16,6 @@ META = {
         "How many days are between March 3 and July 15 in the same year?",
     ],
     "keywords": ["many", "percent", "calculate", "total", "sum", "average", "count", "times", "digit"],
-    "sub_orchestrators": [],
     # generic catch-all: only matched when no specific orchestrator claims the query, so its
     # broad "many/count/percent" keywords no longer tie against specific coded orchestrators.
     "fallback": True,

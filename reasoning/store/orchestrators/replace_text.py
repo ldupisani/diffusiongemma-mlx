@@ -16,7 +16,6 @@ META = {
         "In 'hello world', replace 'world' with 'there'",
     ],
     "keywords": ["replace", "substitute", "swap"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

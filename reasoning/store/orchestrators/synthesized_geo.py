@@ -16,7 +16,6 @@ META = {
         "How long is a flight between (40.7128, -74.0060) and (51.5074, -0.1278) at 900 km/h?",
     ],
     "keywords": ["travel cost", "flight", "how long", "per km", "km/h", "coordinates"],
-    "sub_orchestrators": [],
     "model_free": True,
     "bind_gated": True,
 }

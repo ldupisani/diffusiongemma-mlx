@@ -12,7 +12,6 @@ META = {
         "Weighted mean of grades 70 and 95 with weights 2 and 3?",
     ],
     "keywords": ["weighted", "weights", "weight"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

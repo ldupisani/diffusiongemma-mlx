@@ -16,7 +16,6 @@ META = {
         "$80 bill, 20% tip, split between 2 — how much each?",
     ],
     "keywords": ["tip", "split", "bill", "each", "person", "people"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

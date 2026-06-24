@@ -16,7 +16,6 @@ META = {
         "Compare a Civic and a Corolla on price, reliability and resale value",
     ],
     "keywords": ["compare", "comparison", "vs", "versus", "difference", "differences", "better"],
-    "sub_orchestrators": [],
     "fallback": True,  # a MODEL orchestrator — only when no coded orchestrator claims the query
 }
 

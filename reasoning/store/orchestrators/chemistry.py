@@ -25,7 +25,6 @@ META = {
     ],
     "keywords": ["molar", "mass", "moles", "molarity", "ph", "concentration", "diluted",
                  "solution", "moles", "grams"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

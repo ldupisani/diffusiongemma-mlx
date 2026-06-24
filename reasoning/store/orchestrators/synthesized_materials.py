@@ -21,7 +21,6 @@ META = {
         "What is Young's modulus of a 3 by 4 m plate under 1200 N with strain 0.001?",
     ],
     "keywords": ["stress", "young", "modulus", "plate", "force"],
-    "sub_orchestrators": [],
     "model_free": True,
     "bind_gated": True,
 }

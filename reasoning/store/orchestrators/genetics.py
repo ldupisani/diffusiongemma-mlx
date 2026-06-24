@@ -17,7 +17,6 @@ META = {
         "What is the allele frequency of 35 out of 50 alleles?",
     ],
     "keywords": ["hardy-weinberg", "hardy weinberg", "allele", "genotype", "cross", "punnett"],
-    "sub_orchestrators": [],
     "model_free": True,
     "bind_gated": True,
 }

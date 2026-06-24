@@ -16,7 +16,6 @@ META = {
         "Revenue went from $2M to $5M in 3 years — what's the CAGR?",
     ],
     "keywords": ["compound", "annual", "growth", "rate", "cagr", "grew"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

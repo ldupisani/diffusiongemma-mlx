@@ -154,7 +154,6 @@ def _meta(sample: dict, query_type: str | None) -> dict:
         "description": f"TODO describe this query type. Derived from: {query!r}",
         "example_queries": [query],
         "keywords": sorted(_tokens(query))[:6],
-        "sub_orchestrators": [],
         "provenance_sample": oid,
     }
 

@@ -15,7 +15,6 @@ META = {
         "What is the mass percent of 20 g solute in 80 g of solution?",
     ],
     "keywords": ["ideal gas", "percent composition", "poh", "mass percent", "pressure", "moles"],
-    "sub_orchestrators": [],
     "model_free": True,
     "bind_gated": True,
 }

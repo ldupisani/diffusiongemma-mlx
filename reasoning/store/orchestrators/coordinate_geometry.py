@@ -14,7 +14,6 @@ META = {
         "What is the distance between (-2,-3) and (1,1)?",
     ],
     "keywords": ["distance", "midpoint", "slope", "points", "between", "line"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

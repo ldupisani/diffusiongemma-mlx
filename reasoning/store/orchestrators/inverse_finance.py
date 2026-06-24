@@ -16,7 +16,6 @@ META = {
         "What discount on a $80 item results in a final price of $60?",
     ],
     "keywords": ["what discount", "discount needed", "final price", "discount to"],
-    "sub_orchestrators": [],
     "model_free": True,
     "bind_gated": True,
 }

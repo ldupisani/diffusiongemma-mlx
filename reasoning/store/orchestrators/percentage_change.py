@@ -13,7 +13,6 @@ META = {
         "What is the percent decrease from 200 to 150?",
     ],
     "keywords": ["percentage", "percent", "increase", "decrease", "change", "from", "to"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

@@ -13,7 +13,7 @@ META = {
         "What is (1+1i) raised to the power 3?",
     ],
     "keywords": ["complex", "modulus", "argument", "conjugate", "imaginary", "i"],
-    "sub_orchestrators": [], "model_free": True, "bind_gated": True,
+    "model_free": True, "bind_gated": True,
 }
 
 

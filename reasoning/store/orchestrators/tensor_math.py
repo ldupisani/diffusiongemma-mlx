@@ -14,7 +14,7 @@ META = {
         "What is the outer product of [1, 2] and [3, 4]?",
     ],
     "keywords": ["tensor", "rank", "trace", "frobenius", "kronecker", "outer product", "shape"],
-    "sub_orchestrators": [], "model_free": True, "bind_gated": True,
+    "model_free": True, "bind_gated": True,
 }
 
 

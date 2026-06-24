@@ -30,7 +30,6 @@ META = {
     "keywords": ["gcd", "lcm", "factorial", "prime", "factorization", "divisors", "choose",
                  "combinations", "permutations", "arranged", "seated", "row", "ways",
                  "perfect", "square"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

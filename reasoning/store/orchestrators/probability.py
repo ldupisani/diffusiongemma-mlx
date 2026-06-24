@@ -21,7 +21,6 @@ META = {
         "What is the expected value of rolling a fair six-sided die?",
     ],
     "keywords": ["probability", "chance", "coin", "heads", "die", "dice", "expected", "roll"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

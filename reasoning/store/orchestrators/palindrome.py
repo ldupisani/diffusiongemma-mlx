@@ -17,7 +17,6 @@ META = {
         "Is 'hello' a palindrome?",
     ],
     "keywords": ["palindrome"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

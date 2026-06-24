@@ -13,7 +13,6 @@ META = {
         "How many times does 'ss' appear in 'mississippi'?",
     ],
     "keywords": ["many", "times", "appear", "occur", "count", "occurrences"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

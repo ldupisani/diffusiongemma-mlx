@@ -74,7 +74,7 @@ class SubStep:
     The sub-query is a str.format template filled from `args`; it is routed via
     `router.recognize` (or forced to `orchestrator` by id) and run, binding the sub-result's
     raw value under `out`. The sub-run's model calls fold into this plan's tally, so a
-    composition stays model-free iff every part is. This is how `sub_orchestrators` is used.
+    composition stays model-free iff every part is. This is the orchestrator-composition mechanism.
     """
     query_template: str
     out: str

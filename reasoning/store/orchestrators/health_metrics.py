@@ -16,7 +16,6 @@ META = {
         "What is the ideal body weight for a man who is 180 cm tall?",
     ],
     "keywords": ["bmi", "heart rate", "pace", "bmr", "ideal body weight", "calories"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 

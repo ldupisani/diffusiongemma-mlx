@@ -12,7 +12,6 @@ META = {
         "Which day number of the year is 2024-12-31?",
     ],
     "keywords": ["day", "year", "ordinal"],
-    "sub_orchestrators": [],
     "model_free": True,
 }
 
