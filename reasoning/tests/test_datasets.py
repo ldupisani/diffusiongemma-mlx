@@ -72,6 +72,20 @@ class TestDatasets(unittest.TestCase):
         self.assertIn("sales_pq", self.ds.list_datasets())
         self.assertEqual(self.ds.aggregate("sales_pq", "price", "average"), "20")
 
+    def test_nl_routing_through_the_engine(self):
+        from reasoning import router
+
+        def route(q):
+            m = router.recognize(q)
+            return (m.orchestrator.id, m.orchestrator.run(q).answer.split("\n")[0]) if m else (None, None)
+
+        self.assertEqual(route("What is the average of the price column in sales?"), ("dataset", "20"))
+        self.assertEqual(route("How many rows are in the sales dataset?"), ("dataset", "3"))
+        self.assertEqual(route("How many rows in sales where status = 'active'?"), ("dataset", "2"))
+        self.assertEqual(route("Describe the dataset sales.")[0], "dataset")
+        # guard: a plain stat query (no dataset) must NOT be claimed by the dataset domain
+        self.assertEqual(route("What is the average of 10, 20, 30?")[0], "list_statistic")
+
     def test_import_file(self):
         src = os.path.join(self.tmp.name, "external.csv")
         with open(src, "w") as f:

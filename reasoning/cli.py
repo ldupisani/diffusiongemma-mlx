@@ -158,6 +158,24 @@ def cmd_list(args):
         print(f"{o.id:24} type={o.query_type:22} examples={len(o.example_queries)} kw={o.keywords}")
 
 
+def cmd_data(args):
+    """Manage datasets in $DIFG_DATA_DIR (import / list / describe / query / generate / convert)."""
+    from . import datasets as ds
+    a = args.args
+    if args.action == "list":
+        print("\n".join(ds.list_datasets()) or "(no datasets — import one first)")
+    elif args.action == "import":
+        print(ds.import_file(a[0], name=args.name))
+    elif args.action == "describe":
+        print(ds.describe(a[0]))
+    elif args.action == "query":
+        print(ds.query(a[0], save_as=args.save_as))
+    elif args.action == "generate":
+        print(ds.generate(int(a[0]), a[1], select=args.select))
+    elif args.action == "convert":
+        print(ds.convert(a[0], a[1], a[2]))
+
+
 def main():
     p = argparse.ArgumentParser(prog="reasoning")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -183,6 +201,13 @@ def main():
                     help="teacher backend (default: claude — no sidecar needed)")
     ea.set_defaults(fn=cmd_eval_all)
     sub.add_parser("list").set_defaults(fn=cmd_list)
+    da = sub.add_parser("data", help="manage datasets in $DIFG_DATA_DIR")
+    da.add_argument("action", choices=["list", "import", "describe", "query", "generate", "convert"])
+    da.add_argument("args", nargs="*", help="action arguments (e.g. a path, handle, or SQL)")
+    da.add_argument("--name", help="handle name for import")
+    da.add_argument("--save-as", dest="save_as", help="save a query result as a new dataset")
+    da.add_argument("--select", help="SQL projection for generate (over range(n) t(i))")
+    da.set_defaults(fn=cmd_data)
 
     args = p.parse_args()
     args.fn(args)
