@@ -471,6 +471,11 @@ CASES = [
     ("Classify the hyperreal ε.", "infinitesimal", "hyperreal"),
     ("What is ω·ε?", "1", "hyperreal"),
     ("Is ω greater than 5 in the hyperreals?", "ω > 5", "hyperreal"),
+    # surreal numbers (dyadic fragment): {L|R} value, simplest-between, birthday
+    ("What is the value of the surreal {0 | 1}?", "1/2", "surreal"),
+    ("What is the surreal {1 | 2}?", "3/2", "surreal"),
+    ("What is the birthday of the surreal 3/4?", "3", "surreal"),
+    ("What is the simplest surreal between 0 and 1?", "1/2", "surreal"),
 ]
 
 

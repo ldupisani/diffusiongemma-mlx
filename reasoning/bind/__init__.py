@@ -40,3 +40,4 @@ from reasoning.bind.hypercomplex import *  # noqa: F401,F403
 from reasoning.bind.ordinals import *     # noqa: F401,F403
 from reasoning.bind.cardinals import *    # noqa: F401,F403
 from reasoning.bind.hyperreal import *    # noqa: F401,F403
+from reasoning.bind.surreal import *      # noqa: F401,F403
