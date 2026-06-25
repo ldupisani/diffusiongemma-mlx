@@ -341,6 +341,46 @@ def unused_givens(question: str, program: str) -> list:
     return sorted(v for v in question_numbers(question) if v not in p)
 
 
+# --- direct baseline (the model solves it ITSELF — no deterministic execution) ---------
+
+_DIRECT_SYSTEM = (
+    "Solve the math word problem. Reason briefly step by step, then on a NEW LINE write\n"
+    "'#### ' followed by ONLY the final numeric answer (digits, no units)."
+)
+_DIRECT_ANS = re.compile(r"####\s*(-?[\d,]+(?:\.\d+)?)")
+
+
+def build_direct_prompt(question: str) -> str:
+    return f"{_DIRECT_SYSTEM}\n\nQuestion: {question}\nAnswer:"
+
+
+def solve_direct(question: str, *, asker=None, model: str = "haiku", backend: str = "claude",
+                 timeout: int = 60, max_tokens: int = 512) -> dict:
+    """Baseline: the MODEL solves the problem and emits the final number itself (CoT → '#### N').
+    No program, no deterministic execution — the model does the arithmetic. Returns {answer,
+    model_calls, error}. The contrast to solve(): same model, but arithmetic by tokens vs by code."""
+    if asker is None:
+        asker = _default_asker(backend, model=model, timeout=timeout, max_tokens=max_tokens)
+    raw = asker(build_direct_prompt(question))
+    if not raw:
+        return {"answer": None, "model_calls": 1, "error": "no response from the model"}
+    m = _DIRECT_ANS.search(raw)
+    val = None
+    if m:
+        try:
+            val = float(m.group(1).replace(",", ""))
+        except ValueError:
+            val = None
+    if val is None:                                  # no marker → fall back to the last number
+        nums = re.findall(r"-?\d[\d,]*(?:\.\d+)?", raw)
+        if nums:
+            try:
+                val = float(nums[-1].replace(",", ""))
+            except ValueError:
+                val = None
+    return {"answer": val, "model_calls": 1, "error": None if val is not None else "no number found"}
+
+
 # --- self-consistency (a semantic confidence signal) ----------------------------------
 
 def _sampler(backend: str, *, model: str, timeout: int, max_tokens: int, temperature: float):

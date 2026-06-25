@@ -153,6 +153,19 @@ def cmd_eval_all(args):
 def cmd_bench(args):
     from . import bench
 
+    if args.direct:
+        limit = args.limit if args.limit is not None else 25
+        who = "local MLX sidecar" if args.backend == "sidecar" else f"claude/{args.model}"
+        print(f"GSM8K [{args.slice}] — DIRECT baseline via {who} (the model solves it itself, "
+              f"no deterministic execution)\n")
+        solved, total, buckets = bench.run_direct(slice=args.slice, limit=limit,
+                                                  model=args.model, backend=args.backend)
+        print(f"solved direct:  {solved}/{total}  ({solved/total:.1%})")
+        for b in ("solved", "wrong", "no_answer"):
+            if buckets.get(b):
+                print(f"  {b:10} {buckets[b]:>4}")
+        return
+
     if args.ablation:
         limit = args.limit if args.limit is not None else 40
         who = "local MLX sidecar" if args.backend == "sidecar" else f"claude/{args.model}"
@@ -507,6 +520,8 @@ def main():
                          "recall/false-alarm tradeoff measured on dev — a lone dissenter is still confident)")
     bn.add_argument("--ablation", action="store_true",
                     help="grid-test query-preprocessing transforms (none/each/pairs/all) on the same questions")
+    bn.add_argument("--direct", action="store_true",
+                    help="DIRECT baseline: the model solves each question itself (no program/execution)")
     bn.add_argument("--style", choices=["program", "analyze", "auto"], default="program",
                     help="translation prompt: 'program' (default), 'analyze' (facts/relations first), "
                          "or 'auto' (analyze only for relationship/coreference questions)")

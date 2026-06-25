@@ -198,6 +198,16 @@ def test_analysis_prompt_demonstrates_structure_and_parses_program():
     assert out["answer"] == 42
 
 
+def test_solve_direct_parses_hash_marker_and_fallback():
+    # the model's own answer via the '#### N' marker
+    out = translate.solve_direct("q", asker=lambda _p: "step 1... so 6*7.\n#### 42")
+    assert out["answer"] == 42.0 and out["model_calls"] == 1
+    # thousands separator in the marker
+    assert translate.solve_direct("q", asker=lambda _p: "#### 1,024")["answer"] == 1024.0
+    # no marker → fall back to the last number in the reply
+    assert translate.solve_direct("q", asker=lambda _p: "the total is 18 dollars")["answer"] == 18.0
+
+
 def test_relationship_cue_detector():
     # fires on the relationship-binding class
     assert translate.has_relationship_cue("twice as many green as the pink he removed")

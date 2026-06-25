@@ -317,6 +317,27 @@ def run_translate(slice: str = "dev", limit: int | None = 25, *, asker=None,
                            answered_wrong=answered_wrong)
 
 
+def run_direct(slice: str = "dev", limit: int | None = 25, *, asker=None, model: str = "haiku",
+               backend: str = "claude") -> tuple[int, int, Counter]:
+    """Baseline: the model solves each question ITSELF (translate.solve_direct, CoT → number) — no
+    program, no deterministic execution. Returns (solved, total, buckets). The contrast to
+    run_translate: same model, arithmetic done by the model's tokens vs by our executor."""
+    from . import translate
+    if slice not in _SLICE_HANDLE:
+        raise ValueError(f"slice must be one of {list(_SLICE_HANDLE)}")
+    rows = _rows(_SLICE_HANDLE[slice], limit)
+    solved = 0
+    buckets: Counter = Counter()
+    for question, answer in rows:
+        out = translate.solve_direct(question, asker=asker, model=model, backend=backend)
+        if out["answer"] is not None and is_correct(str(out["answer"]), gold_answer(answer)):
+            solved += 1
+            buckets["solved"] += 1
+        else:
+            buckets["wrong" if out["answer"] is not None else "no_answer"] += 1
+    return solved, len(rows), buckets
+
+
 def run_ablation(slice: str = "dev", limit: int | None = 40, *, backend: str = "sidecar",
                  model: str = "haiku", configs=None) -> tuple[dict, int]:
     """Ablate query-preprocessing transforms: run the translator (single greedy draw, so the
