@@ -20,11 +20,36 @@ never with per-question handling.
 """
 from __future__ import annotations
 
+import contextlib
 import re
 from collections import Counter
 from dataclasses import dataclass
+from urllib.error import URLError
 
 from . import datasets
+
+
+class _ModelCallAttempted(Exception):
+    """Raised when routing/binding tries to reach the LLM sidecar during a code-only run.
+    Some orchestrators declare model_free but have binds that fall back to the model on hard
+    input (e.g. extract_validate_repair); for benchmarking that IS a non-code-only outcome."""
+
+
+@contextlib.contextmanager
+def _code_only_guard():
+    """Block every model call at the choke point (engine._post) so a code-only bench run never
+    touches the network — any attempt raises _ModelCallAttempted, caught by solve()."""
+    from . import engine
+    orig = engine._post
+
+    def blocked(*_a, **_k):
+        raise _ModelCallAttempted()
+
+    engine._post = blocked
+    try:
+        yield
+    finally:
+        engine._post = orig
 
 # GSM8K gold lives on the final line as "#### <number>" (commas allowed, e.g. "1,024").
 _GOLD_RE = re.compile(r"####\s*(-?[\d,]+(?:\.\d+)?)")
@@ -128,34 +153,47 @@ def solve(query: str) -> Outcome:
     from .compiled import model_calls, needs_input
     from .decompose import decompose_code_first
 
-    m = router.recognize(query)
-    if m and m.orchestrator.model_free and not m.orchestrator.fallback:
-        r = m.orchestrator.run(query)
-        if needs_input(r):                       # matched but asked us for more input
-            return Outcome(True, model_calls(r) or 0, m.orchestrator.id, None)
-        return Outcome(True, model_calls(r) or 0, m.orchestrator.id, r.answer)
-    composed = decompose_code_first(query)
-    if composed is not None:
-        return Outcome(True, model_calls(composed) or 0, "compose", composed.answer)
-    return Outcome(False, 0, m.orchestrator.id if m else None, None)
+    try:
+        m = router.recognize(query)
+        if m and m.orchestrator.model_free and not m.orchestrator.fallback:
+            r = m.orchestrator.run(query)
+            if needs_input(r):                   # matched but asked us for more input
+                return Outcome(True, model_calls(r) or 0, m.orchestrator.id, None)
+            return Outcome(True, model_calls(r) or 0, m.orchestrator.id, r.answer)
+        composed = decompose_code_first(query)
+        if composed is not None:
+            return Outcome(True, model_calls(composed) or 0, "compose", composed.answer)
+        return Outcome(False, 0, m.orchestrator.id if m else None, None)
+    except (_ModelCallAttempted, URLError):
+        # A "model_free" path reached for the LLM on this input → not code-only solvable.
+        return Outcome(True, 1, None, None)
+
+
+def is_decline(answer: str | None) -> bool:
+    """A coded NON-answer: the engine claimed the query but produced no usable value. Mirrors
+    decompose._solve_clause — a "(no result: …)" string (or clarify) starts with "(" / is None."""
+    return answer is None or answer.strip().startswith("(")
 
 
 def classify(o: Outcome, correct: bool) -> str:
     """The miss taxonomy — what converts a failure into a capability work-item.
 
-    DESIGN CHOICE: these buckets are the gap report's vocabulary.
-      correct         — solved at 0 calls (the win condition)
-      wrong_answer    — a domain routed AND answered, but the value is wrong
-                        (a binding/parsing/formula bug — usually the cheapest to fix)
-      needs_llm       — matched a type that has no code answer (a fallback/clarify path)
-      no_route        — nothing coded claimed it (a missing general capability)
+    DESIGN CHOICE: these buckets are the gap report's vocabulary, ordered by *harm*.
+      correct       — solved at 0 calls (the win condition)
+      wrong_answer  — committed to a WRONG NUMBER (the real safety bug: confident & wrong)
+      needs_llm     — a model call was attempted (a leaky "model_free" path or fallback)
+      declined      — claimed the query but honestly bailed ("(no result: …)" / clarify);
+                      low harm — same end-state as no_route, but a routing-precision smell
+      no_route      — nothing coded claimed it (a missing general capability)
     """
     if correct:
         return "correct"
     if not o.matched:
         return "no_route"
-    if o.answer is None:
+    if o.model_calls > 0:
         return "needs_llm"
+    if is_decline(o.answer):
+        return "declined"
     return "wrong_answer"
 
 
@@ -179,6 +217,7 @@ class Report:
     buckets: Counter            # classify() -> count
     by_domain: Counter          # domain -> count routed (any outcome)
     domain_correct: Counter     # domain -> count correct
+    domain_wrong: Counter       # domain -> count of confident-WRONG numbers (safety target)
     no_route_depth: Counter     # depth bucket -> count among no_route misses
     solved_depth: Counter       # depth bucket -> count among solved@0call
     misses: list                # [(question, gold, Outcome)] — populated for DEV only
@@ -186,6 +225,18 @@ class Report:
     @property
     def accuracy(self) -> float:
         return self.solved_0call / self.total if self.total else 0.0
+
+    @property
+    def answered(self) -> int:
+        """Questions where the engine committed to a NUMBER (right or wrong) — excludes
+        declines/no_route. The denominator for precision."""
+        return self.solved_0call + self.buckets.get("wrong_answer", 0)
+
+    @property
+    def precision(self) -> float:
+        """When the engine commits to a number, how often is it right? The safety metric:
+        hardening routing should push this toward 1.0 by killing confident-wrong answers."""
+        return self.solved_0call / self.answered if self.answered else 0.0
 
     @property
     def coverage(self) -> float:
@@ -204,31 +255,35 @@ def run(slice: str = "test", limit: int | None = None, *, keep_misses: int = 40)
     buckets: Counter = Counter()
     by_domain: Counter = Counter()
     domain_correct: Counter = Counter()
+    domain_wrong: Counter = Counter()
     no_route_depth: Counter = Counter()
     solved_depth: Counter = Counter()
     misses: list = []
     solved = 0
 
-    for question, answer in rows:
-        gold = gold_answer(answer)
-        depth = structure(answer)["depth"]
-        o = solve(question)
-        correct = o.model_calls == 0 and is_correct(o.answer, gold)
-        bucket = classify(o, correct)
-        buckets[bucket] += 1
-        if o.matched and o.domain:   # a genuine code-only claim (not a rejected fallback)
-            by_domain[o.domain] += 1
+    with _code_only_guard():            # offline-safe: any model-call attempt → needs_llm
+        for question, answer in rows:
+            gold = gold_answer(answer)
+            depth = structure(answer)["depth"]
+            o = solve(question)
+            correct = o.model_calls == 0 and is_correct(o.answer, gold)
+            bucket = classify(o, correct)
+            buckets[bucket] += 1
+            if o.matched and o.domain:  # a genuine code-only claim (not a rejected fallback)
+                by_domain[o.domain] += 1
+                if correct:
+                    domain_correct[o.domain] += 1
+                elif bucket == "wrong_answer":
+                    domain_wrong[o.domain] += 1
             if correct:
-                domain_correct[o.domain] += 1
-        if correct:
-            solved += 1
-            solved_depth[depth] += 1
-        else:
-            if bucket == "no_route":
-                no_route_depth[depth] += 1
-            if slice == "dev" and len(misses) < keep_misses:
-                misses.append((question, gold, o))
+                solved += 1
+                solved_depth[depth] += 1
+            else:
+                if bucket == "no_route":
+                    no_route_depth[depth] += 1
+                if slice == "dev" and len(misses) < keep_misses:
+                    misses.append((question, gold, o))
 
     return Report(slice=slice, total=len(rows), solved_0call=solved, buckets=buckets,
-                  by_domain=by_domain, domain_correct=domain_correct,
+                  by_domain=by_domain, domain_correct=domain_correct, domain_wrong=domain_wrong,
                   no_route_depth=no_route_depth, solved_depth=solved_depth, misses=misses)

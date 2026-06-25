@@ -28,11 +28,22 @@ def test_is_correct_tolerant():
     assert not bench.is_correct("18", None)
 
 
+def test_is_decline():
+    assert bench.is_decline(None)
+    assert bench.is_decline("(no result: could not find two dates)")
+    assert bench.is_decline("  (no result: …)")
+    assert not bench.is_decline("18.0 square meters")
+
+
 def test_classify_buckets():
     O = bench.Outcome
     assert bench.classify(O(True, 0, "arithmetic", "5"), correct=True) == "correct"
-    assert bench.classify(O(True, 0, "arithmetic", "5"), correct=False) == "wrong_answer"
-    assert bench.classify(O(True, 0, "x", None), correct=False) == "needs_llm"
+    # a confident WRONG number — the real safety bug
+    assert bench.classify(O(True, 0, "ratio_proportion", "1666.67"), correct=False) == "wrong_answer"
+    # an honest code decline — claimed but bailed
+    assert bench.classify(O(True, 0, "days_between_dates", "(no result: …)"), correct=False) == "declined"
+    # a model call was attempted (leaky model_free / fallback)
+    assert bench.classify(O(True, 1, None, None), correct=False) == "needs_llm"
     assert bench.classify(O(False, 0, None, None), correct=False) == "no_route"
 
 

@@ -173,26 +173,27 @@ def cmd_bench(args):
     print()
 
     rep = bench.run(slice=args.slice, limit=args.limit)
-    scope = f"{rep.total}" + (f" (--limit)" if args.limit else "")
+    scope = f"{rep.total}" + (" (--limit)" if args.limit else "")
     print(f"--- code-only engine on {scope} routed questions ---")
     print(f"solved @0call:  {rep.solved_0call}/{rep.total}  ({rep.accuracy:.1%})   ← headline")
-    print(f"coverage:       {rep.coverage:.1%} routed to a coded domain\n")
+    print(f"precision:      {rep.solved_0call}/{rep.answered}  ({rep.precision:.1%})   "
+          f"← when it commits to a number, how often right (safety metric)")
+    print(f"coverage:       {rep.coverage:.1%} claimed a coded domain\n")
+    print("miss buckets (ordered by harm):")
+    for bucket in ("correct", "wrong_answer", "needs_llm", "declined", "no_route"):
+        n = rep.buckets.get(bucket, 0)
+        if n:
+            print(f"  {bucket:14} {n:>5}  ({n / rep.total:.1%})")
+    if rep.domain_wrong:
+        print("\nconfident-WRONG by domain (the safety target — tighten these gates):")
+        for dom, n in rep.domain_wrong.most_common(12):
+            print(f"  {dom:22} {n:>4} wrong")
     if rep.no_route_depth:
-        print("no_route misses by arithmetic depth (is even the shallow tail unreached?):")
+        print("\nno_route misses by arithmetic depth (is even the shallow tail unreached?):")
         for d in bench.DEPTH_ORDER:
             n = rep.no_route_depth.get(d, 0)
             if n:
                 print(f"  {d:12} {n:>5}")
-        print()
-    print("miss buckets (a capability work-list):")
-    for bucket in ("correct", "wrong_answer", "needs_llm", "no_route"):
-        n = rep.buckets.get(bucket, 0)
-        if n:
-            print(f"  {bucket:14} {n:>5}  ({n / rep.total:.1%})")
-    if rep.by_domain:
-        print("\ndomains claiming questions (correct / routed):")
-        for dom, routed in rep.by_domain.most_common(12):
-            print(f"  {dom:22} {rep.domain_correct.get(dom, 0):>4} / {routed:<4}")
     if rep.misses:  # DEV only — TEST keeps none (aggregate-only firewall)
         show = min(args.show_misses, len(rep.misses))
         print(f"\nsample DEV misses (first {show}, for gap-mining):")
