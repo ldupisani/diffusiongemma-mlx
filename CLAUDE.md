@@ -75,6 +75,15 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   number, how often right — the routing-safety metric), per-domain confident-wrong (the §3f-hardening
   target list), and an arithmetic-depth *reachable-ceiling* curve read from the gold's `<<…>>` calc
   markers. CLI: `python -m reasoning.cli bench --slice dev|test [--limit N]`. 0 model calls.
+- **`reasoning/translate.py`** — hybrid **LLM-as-translator** (Program-of-Thought) for parse-limited
+  word problems (the path the bench diagnostic pointed to: GSM8K is parse-limited, not depth-limited).
+  The model is a TRANSLATOR, not a solver — one call turns prose into a tiny arithmetic *program*,
+  which `run_program` EXECUTES deterministically (a security-critical **safe evaluator**: `ast.parse`
+  + an operator/function whitelist, never eval/exec — a program can do arithmetic and nothing else).
+  The model never does the math; the engine's re-execution is what's trusted and reported, so the
+  answer is correct-by-construction and auditable (1 model call, 0 arithmetic calls). `solve(question,
+  asker=…)` has an injectable asker (default: Claude CLI). Measured via `bench --translate`; not yet
+  wired into `ask` as a fallback orchestrator (that would make the MCP service non-0-call).
 - **`backend.py`** — pluggable inference backend (see below).
 - **`reasoning/mcp_server.py`** — exposes the reasoning project as an MCP service (FastMCP, stdio):
   `ask` (route → coded answer + domain + model-call count; 0-call compound split; non-coded types
