@@ -2,8 +2,9 @@
 needs: the full playbook (docs/adding-domains.md), the skill-registry contract, a worked exemplar
 domain (all four pieces), and the list of existing query_types to avoid colliding with.
 
-It builds a context-rich prompt, calls the model (Opus by default), and parses the returned files
-from a delimiter format. This is CODE GENERATION — the playbook's own rule applies: review the
+It builds a context-rich prompt, calls the model (Haiku by default — cheapest/fastest, and shown
+to author a correct draft of a well-specified domain; --model opus for harder ones), and parses
+the returned files from a delimiter format. This is CODE GENERATION — the playbook's own rule applies: review the
 output, run the tests (`pytest` + `cli eval-all`), and route-test both directions before committing.
 Nothing here runs the generated code; it only writes files (new ones; never clobbers existing).
 """
@@ -75,11 +76,14 @@ def parse_files(text: str) -> dict:
             for m in re.finditer(r"<<<FILE (.+?)>>>\n(.*?)\n<<<END>>>", text, re.DOTALL)}
 
 
-def author_domain(description: str, *, model: str = "opus", effort: str | None = None,
+def author_domain(description: str, *, model: str = "haiku", effort: str | None = None,
                   timeout: int = 600, context: str | None = None, asker=None) -> dict:
     """Call Claude to implement the domain; return {files, raw, error}. `model`/`effort` pick the
     Claude model and reasoning level (effort: low/medium/high/xhigh/max, None → CLI default).
-    `asker(prompt)->str|None` is injectable for testing."""
+    Default `model` is haiku — it authored a correct draft of a fresh test domain (modulo a
+    one-line example-rounding fix the test suite flags), at ~5x lower cost than opus; bump to
+    `model="opus"` for harder or under-specified domains. `asker(prompt)->str|None` is injectable
+    for testing."""
     if asker is None:
         from . import teachers
         asker = lambda p: teachers.ask_claude(p, model=model, timeout=timeout, effort=effort)  # noqa: E731

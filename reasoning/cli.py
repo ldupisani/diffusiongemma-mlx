@@ -336,9 +336,11 @@ def main():
                     help="import: <csv> <table>; promote: <op> <place> [year]")
     rf.set_defaults(fn=cmd_reference)
     ad = sub.add_parser("author-domain",
-                        help="implement a new domain via Claude (high-reasoning), per the playbook")
+                        help="implement a new domain via Claude, per the playbook")
     ad.add_argument("args", nargs="+", help="the domain description (name + the operations it covers)")
-    ad.add_argument("--model", default="opus", help="Claude model alias/id (default: opus)")
+    ad.add_argument("--model", default="haiku",
+                    help="Claude model alias/id (default: haiku — cheapest/fastest; "
+                         "use --model opus for harder or less-specified domains)")
     ad.add_argument("--effort", choices=["low", "medium", "high", "xhigh", "max"],
                     help="reasoning effort level (default: the CLI default)")
     ad.add_argument("--dry-run", action="store_true", help="print what would be written, don't write")
