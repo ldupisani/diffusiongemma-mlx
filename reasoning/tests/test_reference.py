@@ -95,8 +95,12 @@ class TestReference(unittest.TestCase):
                          "-600000 (-5.83%)")              # a decline → negative
         # a change with a projected endpoint is flagged an estimate
         self.assertIn("estimate", ans("How did London's population change from 2015 to 2025?"))
+        # implied-population: a growth query WITHOUT the word "population" still works
+        self.assertEqual(ans("How much did Lagos grow from 1990 to 2020?"), "+9200000 (+191.67%)")
         # guard: a single-year lookup is NOT treated as a change
         self.assertEqual(ans("What is the population of London in 2010?"), "8000000")
+        # guard: a different metric (GDP) is NOT answered as population change
+        self.assertIsNone(router.recognize("How much did China's GDP grow from 2000 to 2020?"))
         # API
         ch = self.ref.population_change("London", 2010, 2020)
         self.assertEqual((ch["delta"], ch["pct"], ch["estimated"]), (900000, 11.25, False))

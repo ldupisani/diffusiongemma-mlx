@@ -8,7 +8,14 @@ import re
 from reasoning.bind._common import *  # noqa: F401,F403
 
 _GATE = re.compile(r"population|coordinates|latitude|longitude|where is|\bcapital\b|continent|"
-                   r"\barea\b", re.IGNORECASE)
+                   r"\barea\b|\bgrow|\bgrew\b|\bgrown\b|growth", re.IGNORECASE)
+
+# a population CHANGE between two years — even without the word "population" ("how much did Lagos
+# grow from 1990 to 2020"). Implied-population unless another metric is named (GDP, area, …).
+_CHANGE_VERB = re.compile(r"\b(grow|grew|grown|growth|increas|decreas|declin|change|chang|rise|"
+                          r"rose|fall|fell|gain|drop|differ)\w*", re.IGNORECASE)
+_OTHER_METRIC = re.compile(r"\bgdp\b|econom|revenue|sales|income|profit|\barea\b|temperature|"
+                           r"rainfall|gdp", re.IGNORECASE)
 
 
 def _find_place(query: str):
@@ -64,6 +71,12 @@ def bind_geography(query: str) -> tuple[bool, dict | None, str, int]:
         if not place:
             return False, None, "code", 0
 
+    # population change between two years (with or without the word "population"), unless another
+    # metric is named (so "China's GDP grew …" isn't answered as population)
+    years = [int(y) for y in re.findall(r"\b(\d{4})\b", q)]
+    if _CHANGE_VERB.search(q) and len(years) >= 2 and not _OTHER_METRIC.search(q):
+        return ok("change", place, year_from=years[0], year_to=years[1])
+
     if "capital" in q:
         return ok("capital", place)
     if "continent" in q:
@@ -73,11 +86,5 @@ def bind_geography(query: str) -> tuple[bool, dict | None, str, int]:
     if "coordinate" in q or "latitude" in q or "longitude" in q or "where is" in q:
         return ok("coordinates", place)
     if "population" in q:
-        years = [int(y) for y in re.findall(r"\b(\d{4})\b", q)]
-        # "how much did X grow/change/increase from Y1 to Y2" → a two-year delta, not a lookup
-        change = re.search(r"\b(grow|grew|growth|increas|decreas|declin|change|chang|rise|rose|"
-                           r"fall|fell|gain|drop|differ)\w*", q)
-        if change and len(years) >= 2:
-            return ok("change", place, year_from=years[0], year_to=years[1])
         return ok("population", place, year=years[0] if years else None)
     return False, None, "code", 0
