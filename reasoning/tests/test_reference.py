@@ -112,6 +112,12 @@ class TestReference(unittest.TestCase):
         self.assertNotIn("projected", far)
         self.assertEqual(mc, 0)
         self.assertIsNone(self.ref.project_population("London", 4001))
+        self.assertIn("2023", far)   # future beyond-horizon anchors on the nearest (latest) year
+        # a far PAST year anchors on the NEAREST available year (1990), not the latest
+        past = run("What is the projected population for London in 1820?")[0]
+        self.assertIn("6800000", past)
+        self.assertIn("1990", past)
+        self.assertEqual(self.ref.nearest_population("London", 1820), {"value": 6800000, "year": 1990})
 
     def test_user_dataset_shadows_reference(self):
         # a user dataset named like a reference table takes precedence

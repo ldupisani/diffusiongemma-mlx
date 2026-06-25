@@ -205,6 +205,22 @@ def project_population(place: str, year: int):
     return {"value": int(round(est)), "basis": f"projected from the {span} trend", "span": span}
 
 
+def nearest_population(place: str, year: int) -> dict | None:
+    """The population from the available year CLOSEST to `year` — the beyond-horizon fallback when
+    a projection would be irresponsible. Returns {value, year} (year None if only a flat figure
+    exists), or None if the place is unknown."""
+    con = _con()
+    try:
+        rows = con.execute("SELECT year, population FROM population WHERE place=?", (place,)).fetchall()
+    finally:
+        con.close()
+    if rows:
+        y, p = min(rows, key=lambda r: abs(int(r[0]) - int(year)))
+        return {"value": int(p), "year": int(y)}
+    cv = city_population(place)
+    return {"value": cv, "year": None} if cv is not None else None
+
+
 def place_names() -> dict:
     """lowercased name -> canonical name, for every country, city, and population entry (so a
     promoted population for an otherwise-unknown place still routes). For NL place matching."""

@@ -84,10 +84,12 @@ def run(query):
         proj = reference.project_population(place, year)
         if proj is not None:
             val, via, note = str(proj["value"]), "projection", f" ({proj['basis']}; estimate, not curated)"
-        else:
-            det = reference.population_detail(place, year)   # single-point place → latest + note
-            if det:
-                val, note = str(det["value"]), f" (no {year} figure; this is the {det['year']} figure)"
+        else:                                # beyond the projection horizon → nearest curated year
+            near = reference.nearest_population(place, year)
+            if near and near["year"] is not None:
+                val, note = str(near["value"]), f" (no {year} figure; nearest available is the {near['year']} figure)"
+            elif near:
+                val, note = str(near["value"]), f" (no {year} figure in the reference)"
     if val is None:
         return explain(f"no reference data for '{place}' ({op})")
     display = (f"{val} km^2" if op == "area" else val) + note
