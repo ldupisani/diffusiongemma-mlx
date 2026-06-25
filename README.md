@@ -367,9 +367,15 @@ python -m reasoning.cli data query "SELECT status, count(*) FROM sales GROUP BY 
 python -m reasoning.cli data query "SELECT * FROM sales WHERE price > 100" --save-as big   # output handle
 python -m reasoning.cli data generate 1000000 synth         # generate a large dataset (SQL)
 python -m reasoning.cli data convert sales sales_pq parquet  # format conversion
-python -m reasoning.cli data gen                            # list domain generators
-python -m reasoning.cli data gen primes myprimes n=1000     # domain generator → handle
+python -m reasoning.cli data domains                        # what domains can create datasets
+python -m reasoning.cli data gen primes myprimes n=1000     # domain generator → handle (explicit)
+python -m reasoning.cli data gen "generate first 1000 prime numbers"   # …or natural language
+python -m reasoning.cli data list                           # what datasets exist
+python -m reasoning.cli data info primes                    # schema + how to query it
 ```
+**Discovery flow.** `data domains` lists each domain and its dataset-creation tools; `data gen
+"<phrase>"` runs one from natural language (*"generate first 1000 prime numbers"*); `data list` +
+`data info <handle>` show what exists and print copy-paste SQL/NL queries for it.
 **Domain generators** (`reasoning/datagen.py`) produce a domain-relevant dataset and save it as
 a handle: number theory & combinatorics (primes, Fibonacci, factorials, partitions), statistics
 & probability (uniform/normal samples, coin/dice rolls, synthetic regression/classification),

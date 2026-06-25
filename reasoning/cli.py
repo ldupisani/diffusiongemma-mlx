@@ -159,7 +159,8 @@ def cmd_list(args):
 
 
 def cmd_data(args):
-    """Manage datasets in $DIFG_DATA_DIR (import / list / describe / query / generate / convert)."""
+    """Manage datasets in $DIFG_DATA_DIR (list / import / describe / info / query / generate /
+    convert / gen / domains)."""
     from . import datasets as ds
     a = args.args
     if args.action == "list":
@@ -174,13 +175,44 @@ def cmd_data(args):
         print(ds.generate(int(a[0]), a[1], select=args.select))
     elif args.action == "convert":
         print(ds.convert(a[0], a[1], a[2]))
+    elif args.action == "domains":
+        from . import datagen
+        for dom, gens in datagen.list_domains().items():
+            print(f"\n{dom}:")
+            for n, doc in gens:
+                print(f"  {n:22} {doc}")
+        print('\nGenerate with:  data gen <generator> <name> [key=value …]'
+              '\n            or:  data gen "generate first 1000 prime numbers"')
     elif args.action == "gen":
         from . import datagen
         if not a:  # list available domain generators
             print("\n".join(f"{k:22} {d}" for k, (_, d) in sorted(datagen.GENERATORS.items())))
             return
-        params = dict(kv.split("=", 1) for kv in a[2:] if "=" in kv)
-        print(datagen.generate(a[0], a[1], **params))
+        if a[0] in datagen.GENERATORS and len(a) >= 2:           # explicit: <generator> <name> [k=v]
+            params = dict(kv.split("=", 1) for kv in a[2:] if "=" in kv)
+            print(datagen.generate(a[0], a[1], **params))
+            return
+        from .bind import bind_dataset                            # natural language: "generate …"
+        text = " ".join(a)
+        if "generate" not in text.lower() and "synthesize" not in text.lower():
+            text = "generate " + text
+        ok, d, _, _ = bind_dataset(text)
+        if ok and d.get("op") == "generate":
+            print(datagen.generate(d["gen"], d["save_as"], **d["params"]))
+        else:
+            print(f"could not parse a generator from: {' '.join(a)}\n"
+                  "try `data domains` to see what's available")
+    elif args.action == "info":
+        print(ds.describe(a[0]))
+        nums = [c for c, t in ds.schema(a[0])
+                if any(k in t.upper() for k in ("INT", "DOUBLE", "DEC", "FLOAT", "REAL"))]
+        print("\nHow to query it:")
+        print(f'  rows:   reasoning.cli data query "SELECT * FROM {a[0]} LIMIT 5"')
+        print(f'  count:  reasoning.cli data query "SELECT count(*) FROM {a[0]}"')
+        if nums:
+            print(f'  agg:    reasoning.cli data query "SELECT avg({nums[0]}) FROM {a[0]}"')
+            print(f'  NL:     reasoning.cli run "what is the average of the {nums[0]} '
+                  f'column in {a[0]}?"')
 
 
 def cmd_reference(args):
@@ -231,9 +263,11 @@ def main():
     sub.add_parser("list").set_defaults(fn=cmd_list)
     da = sub.add_parser("data", help="manage datasets in $DIFG_DATA_DIR")
     da.add_argument("action",
-                    choices=["list", "import", "describe", "query", "generate", "convert", "gen"])
+                    choices=["list", "import", "describe", "info", "query", "generate",
+                             "convert", "gen", "domains"])
     da.add_argument("args", nargs="*",
-                    help="action args (e.g. path/handle/SQL; for gen: <generator> <name> key=value …)")
+                    help="action args (e.g. path/handle/SQL; gen: <generator> <name> key=value … "
+                         "or a 'generate …' phrase; info: <handle>)")
     da.add_argument("--name", help="handle name for import")
     da.add_argument("--save-as", dest="save_as", help="save a query result as a new dataset")
     da.add_argument("--select", help="SQL projection for generate (over range(n) t(i))")

@@ -35,8 +35,11 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   a verified 0-call lookup and its log row clears.
 - **`reasoning/datagen.py`** — domain dataset generators (primes/Fibonacci, random samples,
   logistic trajectories, projectile motion, amortization, …) that produce rows (reusing pure
-  skills + numpy/SymPy) and save via `datasets.save_rows`. Registry `GENERATORS`; reached via
-  `data gen <name> <handle> key=value …` and NL ("generate the first 100 primes").
+  skills + numpy/SymPy) and save via `datasets.save_rows`. Registry `GENERATORS`, grouped by
+  `DOMAINS` (`list_domains`/`domain_of`). Reached via `data gen <name> <handle> key=value …`,
+  natural language (`data gen "generate first 1000 prime numbers"`, or the NL engine), with
+  discovery via `data domains` (what can create datasets) and `data list`/`data info <handle>`
+  (what exists + how to query it; `datasets.schema` gives columns+types).
 - **`backend.py`** — pluggable inference backend (see below).
 - **`infer_server.py`** — tiny HTTP sidecar (`/info`, `/generate` NDJSON) wrapping the active
   backend. Single-threaded on purpose (MLX's GPU stream is thread-local).

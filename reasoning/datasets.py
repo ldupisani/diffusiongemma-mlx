@@ -218,6 +218,14 @@ def import_file(src: str, name: str | None = None) -> str:
     return describe(handle)
 
 
+def schema(name: str) -> list[tuple[str, str]]:
+    """[(column, duckdb_type)] for a dataset/reference handle — for programmatic introspection."""
+    if not _exists(name):
+        raise FileNotFoundError(f"no dataset '{name}' (have: {list_datasets()})")
+    con = _con()
+    return [(c[0], c[1]) for c in con.execute(f'DESCRIBE SELECT * FROM "{name}"').fetchall()]
+
+
 def describe(name: str) -> str:
     if not _exists(name):
         raise FileNotFoundError(f"no dataset '{name}' (have: {list_datasets()})")

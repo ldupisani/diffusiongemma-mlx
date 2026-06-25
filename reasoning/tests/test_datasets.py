@@ -137,6 +137,30 @@ class TestDatasets(unittest.TestCase):
         # a non-dataset "generate" must not be claimed
         self.assertIsNone(router.recognize("Generate some ideas for dinner."))
 
+    def test_generator_domains_cover_all(self):
+        from reasoning import datagen
+        flat = [n for gens in datagen.DOMAINS.values() for n in gens]
+        self.assertEqual(set(flat), set(datagen.GENERATORS))   # every generator in a domain
+        self.assertEqual(len(flat), len(set(flat)))            # in exactly one domain
+        self.assertEqual(datagen.domain_of("primes"), "number-theory")
+        self.assertEqual(datagen.domain_of("eoq_curve"), "logistics")
+
+    def test_schema_introspection(self):
+        from reasoning import datagen
+        datagen.generate("primes", "p", n="10")
+        sch = self.ds.schema("p")
+        self.assertEqual([c for c, _ in sch], ["index", "prime"])
+        self.assertTrue(all("INT" in t.upper() for _, t in sch))
+
+    def test_nl_generate_via_bind(self):
+        from reasoning import datagen
+        from reasoning.bind import bind_dataset
+        ok, d, _, _ = bind_dataset("generate first 1000 prime numbers")
+        self.assertTrue(ok)
+        self.assertEqual((d["op"], d["gen"]), ("generate", "primes"))
+        datagen.generate(d["gen"], d["save_as"], **d["params"])
+        self.assertEqual(self.ds.count_rows("primes"), "1000")
+
     def test_import_file(self):
         src = os.path.join(self.tmp.name, "external.csv")
         with open(src, "w") as f:

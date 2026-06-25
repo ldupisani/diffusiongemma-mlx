@@ -262,6 +262,28 @@ GENERATORS = {
 }
 
 
+# Each domain's dataset-creation tools. Every generator belongs to exactly one domain
+# (asserted in tests), so "what domains are available" is answerable.
+DOMAINS = {
+    "number-theory": ["primes", "fibonacci", "factorials", "partitions"],
+    "statistics-probability": ["normal_sample", "uniform_sample", "coin_flips", "dice_rolls",
+                               "regression", "classification"],
+    "dynamics-numerical-physics": ["logistic_trajectory", "bifurcation", "sample_function",
+                                   "euler_trajectory", "projectile"],
+    "finance": ["amortization", "compound_growth"],
+    "logistics": ["eoq_curve", "inventory_simulation"],
+}
+
+
+def list_domains() -> dict:
+    """{domain: [(generator, doc), …]} — the dataset-creation tools available per domain."""
+    return {dom: [(n, GENERATORS[n][1]) for n in gens] for dom, gens in DOMAINS.items()}
+
+
+def domain_of(generator: str) -> str | None:
+    return next((dom for dom, gens in DOMAINS.items() if generator in gens), None)
+
+
 def generate(name: str, save_as: str, **params) -> str:
     if name not in GENERATORS:
         raise ValueError(f"unknown generator {name!r} (have: {sorted(GENERATORS)})")
