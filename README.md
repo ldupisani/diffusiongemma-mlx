@@ -342,6 +342,19 @@ python -m reasoning.cli run "What is the average of 4, 8, 15, 16, and 42?"      
 python -m reasoning.cli run "What is the percentage increase from 50 to 75?"        # → 50%, 0 calls
 python -m reasoning.cli run "Convert 100 degrees Fahrenheit to Celsius."            # → 37.78°C, 0 calls
 ```
+
+**Introspection / help.** The system can describe its own capabilities (0 model calls):
+```bash
+python -m reasoning.cli help                       # overview: every domain + one-line description
+python -m reasoning.cli help geometry              # a domain's example queries + keywords
+python -m reasoning.cli help --search prime        # domains/skills/generators mentioning a term
+python -m reasoning.cli run "What can you do?"      # same, as an NL meta-query
+python -m reasoning.cli run "What can I ask about geometry?"
+```
+The `introspect` orchestrator answers meta-questions in-engine, and pure `introspect.*` skills
+(`domain_exists`, `skill_exists`, `generator_exists`, `can_answer`) let higher-level reasoning
+probe what's available before acting — all reading the same `reasoning/introspect.py` API over the
+orchestrator, skill, and generator registries.
 `derive` now grows the library: it maps each atomic line of a teacher trace onto a skill where one
 matches (`--mode steps`), leaving unmatched lines as model steps and reporting coverage
 (`matched 3/4 atomic steps to skills`). Each remaining model step is a candidate for the next skill —

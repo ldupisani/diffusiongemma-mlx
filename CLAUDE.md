@@ -40,6 +40,14 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   natural language (`data gen "generate first 1000 prime numbers"`, or the NL engine), with
   discovery via `data domains` (what can create datasets) and `data list`/`data info <handle>`
   (what exists + how to query it; `datasets.schema` gives columns+types).
+- **`reasoning/introspect.py`** — self-introspection over the three capability registries
+  (orchestrators / skills / generators): `domains`, `domain(id)`, `search(term)`, `skills`,
+  `summary`. In-memory, deterministic, lazy imports (the registry pulls in orchestrators → binds
+  → skills). Surfaced three ways: the `introspect` orchestrator (NL meta-queries — "what can you
+  do?", "what can I ask about geometry?" — 0 calls, bind-gated and digit-free so it never steals a
+  computational query), the CLI (`reasoning.cli help [domain] [--search term]`), and pure
+  `introspect.*` skills (`domain_exists`/`skill_exists`/`generator_exists`/`can_answer`) for
+  higher-level reasoning to probe availability before acting.
 - **`backend.py`** — pluggable inference backend (see below).
 - **`infer_server.py`** — tiny HTTP sidecar (`/info`, `/generate` NDJSON) wrapping the active
   backend. Single-threaded on purpose (MLX's GPU stream is thread-local).

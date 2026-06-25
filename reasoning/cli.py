@@ -236,6 +236,39 @@ def cmd_reference(args):
         print(reference.promote(a[0], a[1], year))
 
 
+def cmd_help(args):
+    """Introspection: what can I ask? — overview, per-domain examples, or a capability search."""
+    from . import introspect
+    if args.search:
+        hit = introspect.search(args.search)
+        print(f"capabilities matching '{args.search}':")
+        print("  domains:    " + (", ".join(hit["domains"]) or "(none)"))
+        sk = hit["skills"]
+        print("  skills:     " + ((", ".join(sk[:20]) + (f" (+{len(sk) - 20} more)" if len(sk) > 20 else ""))
+                                   if sk else "(none)"))
+        print("  generators: " + (", ".join(hit["generators"]) or "(none)"))
+        return
+    if args.domain:
+        d = introspect.domain(args.domain)
+        if not d:
+            print(f"no domain '{args.domain}'. Try `reasoning.cli help` or `help --search {args.domain}`.")
+            return
+        print(f"{d['id']} ({d['type']}) — {d['description']}\nmodel-free: {d['model_free']}\n")
+        print("example queries:")
+        for e in d["examples"]:
+            print(f"  • {e}")
+        if d["keywords"]:
+            print("\nkeywords: " + ", ".join(d["keywords"]))
+        return
+    s = introspect.summary()
+    print(f"{s['domains']} reasoning domains ({s['model_free_domains']} at 0 model calls), "
+          f"{s['skills']} skills, {s['generators']} dataset generators "
+          f"({s['generator_domains']} domains).\n")
+    for d in introspect.domains():
+        print(f"  {d['id']:26} {d['description'][:58]}")
+    print("\ndrill in:  reasoning.cli help <domain>   |   search:  reasoning.cli help --search <term>")
+
+
 def main():
     p = argparse.ArgumentParser(prog="reasoning")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -277,6 +310,10 @@ def main():
     rf.add_argument("args", nargs="*",
                     help="import: <csv> <table>; promote: <op> <place> [year]")
     rf.set_defaults(fn=cmd_reference)
+    hp = sub.add_parser("help", help="introspection: what can I ask? (domains / examples / search)")
+    hp.add_argument("domain", nargs="?", help="a domain id to show example queries for")
+    hp.add_argument("--search", help="find domains/skills/generators mentioning a term")
+    hp.set_defaults(fn=cmd_help)
 
     args = p.parse_args()
     args.fn(args)
