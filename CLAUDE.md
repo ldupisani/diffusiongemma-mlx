@@ -81,9 +81,19 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   which `run_program` EXECUTES deterministically (a security-critical **safe evaluator**: `ast.parse`
   + an operator/function whitelist, never eval/exec — a program can do arithmetic and nothing else).
   The model never does the math; the engine's re-execution is what's trusted and reported, so the
-  answer is correct-by-construction and auditable (1 model call, 0 arithmetic calls). `solve(question,
-  asker=…)` has an injectable asker (default: Claude CLI). Measured via `bench --translate`; not yet
-  wired into `ask` as a fallback orchestrator (that would make the MCP service non-0-call).
+  ARITHMETIC is correct-by-construction and auditable (1 model call, 0 arithmetic calls) — but the
+  TRANSLATION can be silently wrong, hence the confidence signals below. `solve(question, asker=…)`
+  has an injectable asker; `backend=` picks the model path — `claude` (the Claude CLI, default) or
+  `sidecar` (the local MLX model via `engine.one_shot` — the project's own small LLM, free/offline).
+  **Prompt `style=`:** `program` (default — direct prose→program), `analyze` (the model first lays
+  out facts/relations/answer-type, then the program — structured CoT demonstrated in the exemplars;
+  helps relationship/coreference problems but is net-negative overall on the small model), or `auto`
+  (route only relationship-cue questions to `analyze`, plain `program` otherwise — a near-free
+  no-regret opt-in; ≈ `program` within noise on held-out test, so `program` stays the default).
+  Two label-free confidence signals: `unused_givens` (a question number absent from the program)
+  and `solve_consistent` (K-draw majority vote; `agreement` is the signal — also lifts accuracy).
+  Measured via `bench --translate [--backend …] [--style …] [--consistency K]` and the preprocessing
+  `bench --ablation`. Wired into `ask` as an OPT-IN fallback (default off — keeps the service 0-call).
 - **`backend.py`** — pluggable inference backend (see below).
 - **`reasoning/mcp_server.py`** — exposes the reasoning project as an MCP service (FastMCP, stdio):
   `ask` (route → coded answer + domain + model-call count; 0-call compound split; non-coded types
