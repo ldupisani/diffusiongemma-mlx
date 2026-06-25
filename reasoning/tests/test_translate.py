@@ -128,6 +128,13 @@ def test_unused_givens_ignores_thousands_separator():
     assert translate.unused_givens(q, "answer = 100000 - 40000") == []
 
 
+def test_question_numbers_masks_ordinals_and_fractions():
+    # ordinals (1st/2nd/3rd) and a 1/2 fraction are not quantities → not required as literals
+    q = "After the 1st and 2nd turns, add 1/2 cup. The 3rd box holds 8."
+    assert translate.question_numbers(q) == {8.0}
+    assert translate.unused_givens(q, "answer = 8") == []
+
+
 def test_solve_reports_unused_givens():
     asker = lambda _p: "<program>\nx = 5\nanswer = x\n</program>"
     out = translate.solve("a value of 5 and an unused 99", asker=asker)

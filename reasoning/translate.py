@@ -161,6 +161,8 @@ def _default_asker(backend: str, *, model: str, timeout: int, max_tokens: int):
 # --- the unused-given check (a label-free confidence signal) --------------------------
 
 _QNUM = re.compile(r"-?\d[\d,]*(?:\.\d+)?")
+_ORDINAL = re.compile(r"\d+(?:st|nd|rd|th)\b", re.IGNORECASE)  # 1st, 2nd … — labels, not quantities
+_FRACTION = re.compile(r"\d+\s*/\s*\d+")                       # 1/2 — encoded as division, not a literal
 
 
 def _values(text: str) -> set:
@@ -174,8 +176,12 @@ def _values(text: str) -> set:
 
 
 def question_numbers(question: str) -> set:
-    """The digit-literal quantities stated in the question (thousands separators stripped)."""
-    return _values(question)
+    """The digit-literal quantities stated in the question (thousands separators stripped). Ordinals
+    (1st/2nd…) and explicit fractions (1/2) are masked out: they are labels or division-encoded, not
+    quantities the program must echo as a literal — counting them inflates the unused-given flag's
+    false-alarm rate (a correct program writes `/2`, not the literal 1 and 2)."""
+    text = _FRACTION.sub(" ", _ORDINAL.sub(" ", question or ""))
+    return _values(text)
 
 
 def program_numbers(program: str) -> set:
