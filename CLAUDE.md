@@ -29,7 +29,10 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   — opt-in via `DIFG_REFERENCE_RETRIEVAL=1` (off by default; records `model_calls=1`). Retrieved
   values are persisted to a `retrieved` log table (repeat query → 0 calls, "previously
   retrieved"); batch requests ("all cities in France", "populations of A, B and C") go through
-  `retrieve_set` → a CSV from the model saved as a model-sourced dataset handle.
+  `retrieve_set` → a CSV from the model saved as a model-sourced dataset handle. `reference
+  review`/`promote` move a logged value into version-controlled curated data
+  (`store/reference/promoted.json`, merged into the DB at build alongside `seed.py`) — it becomes
+  a verified 0-call lookup and its log row clears.
 - **`reasoning/datagen.py`** — domain dataset generators (primes/Fibonacci, random samples,
   logistic trajectories, projectile motion, amortization, …) that produce rows (reusing pure
   skills + numpy/SymPy) and save via `datasets.save_rows`. Registry `GENERATORS`; reached via

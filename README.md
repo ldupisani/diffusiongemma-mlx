@@ -409,6 +409,13 @@ Germany and Italy?"* asks Claude for a **CSV table**, validates it, and saves it
 model-sourced **dataset handle** (e.g. `list_all_cities_in_france`) — queryable like any other
 (`data query`, `aggregate`). Also opt-in via `DIFG_REFERENCE_RETRIEVAL`.
 
+**Review & promote** — `reasoning.cli reference review` lists the model-retrieved log;
+`reasoning.cli reference promote <op> <place> [year]` (e.g. `promote population Mongolia 2015`)
+merges a reviewed value into the **version-controlled curated data** (`store/reference/
+promoted.json`, merged into the DB at build alongside `seed.py`). The promoted point becomes a
+**verified, 0-model-call** lookup — resolvable even with retrieval disabled — and its log row is
+cleared.
+
 ## Model variants (mlx-community)
 `-4bit` (default, ~13 GB) · `-5bit` · `-6bit` · `-8bit` (~26 GB) · `-bf16`.
 On 36 GB, 4-bit is the safe default; 6-bit fits with headroom; 8-bit is tight.

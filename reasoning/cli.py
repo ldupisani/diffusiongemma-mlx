@@ -184,12 +184,24 @@ def cmd_data(args):
 
 
 def cmd_reference(args):
-    """Manage bundled reference data: list tables, or import a CSV as a reference table."""
+    """Manage bundled reference data: list tables, import a CSV, review the model-retrieved log,
+    or promote a retrieved value into the curated data."""
     from . import reference
+    a = args.args
     if args.action == "list":
         print("\n".join(reference.tables()))
     elif args.action == "import":
-        print(reference.import_csv(args.args[0], args.args[1]))
+        print(reference.import_csv(a[0], a[1]))
+    elif args.action == "review":
+        rows = reference.list_retrieved()
+        if not rows:
+            print("(retrieved log is empty)")
+        for r in rows:
+            yr = f" {r['year']}" if r["year"] is not None else ""
+            print(f"{r['op']:12} {r['place']}{yr:6} = {r['value']:14} [{r['source']} {r['retrieved_at']}]")
+    elif args.action == "promote":
+        year = int(a[2]) if len(a) > 2 else None
+        print(reference.promote(a[0], a[1], year))
 
 
 def main():
@@ -227,8 +239,9 @@ def main():
     da.add_argument("--select", help="SQL projection for generate (over range(n) t(i))")
     da.set_defaults(fn=cmd_data)
     rf = sub.add_parser("reference", help="manage bundled reference data")
-    rf.add_argument("action", choices=["list", "import"])
-    rf.add_argument("args", nargs="*", help="for import: <csv path> <table name>")
+    rf.add_argument("action", choices=["list", "import", "review", "promote"])
+    rf.add_argument("args", nargs="*",
+                    help="import: <csv> <table>; promote: <op> <place> [year]")
     rf.set_defaults(fn=cmd_reference)
 
     args = p.parse_args()

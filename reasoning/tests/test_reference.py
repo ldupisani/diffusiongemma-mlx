@@ -148,6 +148,20 @@ class TestReferenceRetrieval(unittest.TestCase):
         from reasoning import datasets
         self.assertIn("Mongolia", datasets.query("SELECT place FROM retrieved"))  # queryable log
 
+    def test_promote_to_curated(self):
+        self.assertEqual(self._run("What is the population of Mongolia in 2015?")[2], 1)  # retrieve
+        msg = self.reference.promote("population", "Mongolia", 2015)
+        self.assertIn("Mongolia", msg)
+        self.assertEqual(self.reference.list_retrieved(), [])           # log cleared
+        # now a verified, curated, 0-model-call lookup — even with retrieval turned OFF
+        os.environ["DIFG_REFERENCE_RETRIEVAL"] = ""
+        self.assertEqual(self._run("What is the population of Mongolia in 2015?"),
+                         ("geography", "3170000", 0))
+        # and queryable as curated data
+        from reasoning import datasets
+        self.assertEqual(datasets.query("SELECT population FROM population WHERE place='Mongolia'"),
+                         "3170000")
+
     def test_batch_set_retrieval(self):
         rid, ans, mc = self._run("List all cities in France.")
         self.assertEqual(rid, "geography")

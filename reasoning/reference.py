@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import os
 import re
 import sqlite3
@@ -40,13 +41,44 @@ def _sqltype(v) -> str:
         "REAL" if isinstance(v, float) else "TEXT")
 
 
-def build_db(path: Path) -> None:
-    con = sqlite3.connect(path)
-    for table, (cols, rows) in seed.TABLES.items():
-        types = [_sqltype(rows[0][i]) for i in range(len(cols))]
+def _promoted_path() -> Path:
+    """The version-controlled promotions store (bundled by default; in $DIFG_REFERENCE_DIR when
+    overridden, so tests/custom installs don't touch the repo file)."""
+    if "DIFG_REFERENCE_DIR" in os.environ:
+        return _dir() / "promoted.json"
+    return Path(__file__).resolve().parent / "store" / "reference" / "promoted.json"
+
+
+def _load_promoted() -> dict:
+    p = _promoted_path()
+    data = json.loads(p.read_text()) if p.exists() else {}
+    return {t: data.get(t, []) for t in ("population", "cities", "countries")}
+
+
+def _save_promoted(data: dict) -> None:
+    _promoted_path().write_text(json.dumps(
+        {t: sorted(data.get(t, [])) for t in ("population", "cities", "countries")}, indent=2) + "\n")
+
+
+def _merged_tables() -> dict:
+    """Seed tables plus promoted facts — the curated dataset that builds into the DB."""
+    pr = _load_promoted()
+    return {t: (cols, list(rows) + [tuple(r) for r in pr.get(t, [])])
+            for t, (cols, rows) in seed.TABLES.items()}
+
+
+def _write_tables(con: sqlite3.Connection, tabs: dict) -> None:
+    for table, (cols, rows) in tabs.items():
+        types = [_sqltype(rows[0][i]) for i in range(len(cols))]   # types from a seed (non-null) row
         coldef = ", ".join(f'"{c}" {t}' for c, t in zip(cols, types))
+        con.execute(f'DROP TABLE IF EXISTS "{table}"')
         con.execute(f'CREATE TABLE "{table}" ({coldef})')
         con.executemany(f'INSERT INTO "{table}" VALUES ({",".join("?" * len(cols))})', rows)
+
+
+def build_db(path: Path) -> None:
+    con = sqlite3.connect(path)
+    _write_tables(con, _merged_tables())
     con.commit()
     con.close()
 
@@ -109,11 +141,14 @@ def population(place: str, year: int | None = None):
 
 
 def place_names() -> dict:
-    """lowercased name -> canonical name, for every country and city (for NL place matching)."""
+    """lowercased name -> canonical name, for every country, city, and population entry (so a
+    promoted population for an otherwise-unknown place still routes). For NL place matching."""
     con = _con()
     try:
         names = {n.lower(): n for (n,) in con.execute("SELECT name FROM countries")}
         for (n,) in con.execute("SELECT name FROM cities"):
+            names.setdefault(n.lower(), n)
+        for (n,) in con.execute("SELECT DISTINCT place FROM population"):
             names.setdefault(n.lower(), n)
         return names
     finally:
@@ -241,6 +276,72 @@ def retrieve_set(request: str, save_as: str, *, asker=None, model: str = "sonnet
     csv.writer(buf).writerows(rows)
     (datasets.data_dir() / f"{save_as}.csv").write_text(buf.getvalue())
     return len(rows) - 1
+
+
+# --- review & promote (model-sourced log → verified curated data) -----------
+
+def list_retrieved() -> list[dict]:
+    """The model-retrieved log, for review before promotion."""
+    con = _con()
+    try:
+        cols = ("op", "place", "year", "value", "source", "retrieved_at")
+        return [dict(zip(cols, r)) for r in con.execute(
+            f"SELECT {', '.join(cols)} FROM retrieved ORDER BY retrieved_at")]
+    finally:
+        con.close()
+
+
+def _delete_retrieved(op: str, place: str, year) -> None:
+    con = _con()
+    try:
+        if year is None:
+            con.execute("DELETE FROM retrieved WHERE op=? AND place=? AND year IS NULL", (op, place))
+        else:
+            con.execute("DELETE FROM retrieved WHERE op=? AND place=? AND year=?", (op, place, int(year)))
+        con.commit()
+    finally:
+        con.close()
+
+
+def _rebuild_curated_tables() -> None:
+    """Rebuild ONLY the curated tables (seed + promoted) in the live DB, leaving the retrieved log
+    intact."""
+    con = sqlite3.connect(ensure_db())
+    try:
+        _write_tables(con, _merged_tables())
+        con.commit()
+    finally:
+        con.close()
+
+
+def promote(op: str, place: str, year: int | None = None) -> str:
+    """Promote a value from the retrieved log into the version-controlled curated data: it becomes
+    a 0-model-call lookup, the curated tables are rebuilt, and the log row is cleared."""
+    val = cached_value(op, place, year)
+    if val is None:
+        raise ValueError(f"no retrieved value to promote for {op} {place!r} {year}")
+    pr = _load_promoted()
+    if op == "population":
+        pr["population"] = [r for r in pr["population"] if not (r[0] == place and r[1] == year)]
+        pr["population"].append([place, year, int(val)])
+    elif op == "coordinates":
+        lat, lon = (float(x) for x in val.split(","))
+        row = next((r for r in pr["cities"] if r[0] == place), [place, None, None, None, None])
+        row[2], row[3] = lat, lon
+        pr["cities"] = [r for r in pr["cities"] if r[0] != place] + [row]
+    elif op in ("capital", "continent", "area"):
+        idx = {"capital": 2, "continent": 3, "area": 4}[op]
+        row = next((r for r in pr["countries"] if r[0] == place),
+                   [place, None, None, None, None, None, None])
+        row[idx] = int(val) if op == "area" else val
+        pr["countries"] = [r for r in pr["countries"] if r[0] != place] + [row]
+    else:
+        raise ValueError(f"cannot promote op {op!r}")
+    _save_promoted(pr)
+    _rebuild_curated_tables()
+    _delete_retrieved(op, place, year)
+    return (f"promoted {op} for {place}{f' ({year})' if year else ''} = {val} "
+            f"into the curated reference data (now a 0-model-call lookup)")
 
 
 def import_csv(src: str, table: str, name: str = DB) -> str:
