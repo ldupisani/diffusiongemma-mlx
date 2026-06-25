@@ -20,3 +20,6 @@ node_modules/
 
 # built reference DB artifacts (source of truth is store/reference/seed.py)
 reasoning/store/reference/*.sqlite
+
+# user/generated datasets ($DIFG_DATA_DIR, default <repo>/data) — runtime artifacts
+/data/
