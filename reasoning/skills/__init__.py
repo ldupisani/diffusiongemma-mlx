@@ -11,7 +11,7 @@ from . import (  # noqa: E402,F401
     acoustics, algebra, applied_math, arithmetic, bases, biochem, calculus, cardinals, chemistry,
     clock,
     complex_calc, complex_math, coord, crypto, dates, diffgeo, discrete, dynamics, expr, finance,
-    funcanalysis, game, genetics, geo, geometry,
+    fluid_mechanics, funcanalysis, game, genetics, geo, geometry,
     group_theory, health, hypercomplex, hyperreal, introspect, logic, logistics, materials, ml,
     molecular, ndim,
     number_theory, numerical, optics, optimize, ordinals, padic, pchem, photometry, physics,

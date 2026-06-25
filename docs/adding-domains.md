@@ -253,6 +253,23 @@ to `geometry`, `trigonometry`, `unit_conversion`, `compound_interest`, `base_con
 > dropped. The model's own notes even claimed "decline guards added to physics.py" — but the tool only
 > *writes new files, never edits existing ones*, so those cross-domain guards never existed.
 
+### 3f. Gate calibration is the residual hand-pass (with `--verify`)
+
+> **Learning (where the autonomy line sits now).** With `num_near` (extraction) and the routing
+> probe's answer-cross-check (sub-skill arbitration) in place, authored domains route their own
+> example_queries and resist stealing neighbours *unaided* — the remaining hand-fixes across recent
+> domains were all **gate keyword logic**, which the routing-repair loop does NOT reliably self-heal:
+> - **Over-broad collision DECLINE** — `fluid_mechanics` guarded against physics with
+>   `if ("force" in q or "area" in q) and "fluid" not in q …: decline`, but "area" alone is a real
+>   input to its OWN flow-rate/continuity ops, so it declined them. A physics pressure query needs
+>   force **and** area → use `and`, not `or`.
+> - **Too-narrow context gate** — the same domain's `has_fluid_context` allow-list omitted
+>   `"continuity"`/`"inlet"`/`"outlet"`, so the continuity op (which uses none of the other fluid
+>   words) was declined at the gate before its branch ran.
+> Symptom of both: a forward example_query routes to **no match** (gate declined it), not a wrong
+> answer. When `--verify` reports forward mis-routes that aren't extraction problems, audit the
+> gate's allow-list and any blanket collision-decline for over-reach in BOTH directions.
+
 ---
 
 ## 4. Parsing gotchas (each cost a debugging cycle)

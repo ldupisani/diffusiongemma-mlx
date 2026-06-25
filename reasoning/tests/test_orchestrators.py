@@ -626,6 +626,17 @@ CASES = [
     ("The illuminance is 100 lux at an original distance of 2 meters. What is it at 5 meters?", "16 lux", "photometry"),
     # reverse guard: efficacy's "watts" must not steal physics power.
     ("What is the power if 100 J of work is done in 5 seconds?", "20 W", "physics"),
+    # fluid_mechanics (authored via Haiku --verify; the two-pressure ambiguity + physics collision
+    # routed correctly unaided — two GATE-logic hand fixes: a too-broad force/area decline and a
+    # context gate missing "continuity").
+    ("What is the hydrostatic pressure at a depth of 10 meters in water with density 1000 kg/m³?", "98100 Pa", "fluid_mechanics"),
+    ("Calculate the dynamic pressure for a fluid with density 1.225 kg/m³ and velocity 20 m/s.", "245 Pa", "fluid_mechanics"),
+    ("What is the volumetric flow rate with a cross-sectional area of 0.5 m² and velocity 2 m/s?", "1 m³/s", "fluid_mechanics"),
+    ("Find the Reynolds number for a fluid with density 1000 kg/m³, velocity 2 m/s, diameter 0.05 m, and viscosity 0.001 Pa·s.", "100000", "fluid_mechanics"),
+    ("What is the outlet velocity using the continuity equation for inlet area 0.2 m², inlet velocity 3 m/s, and outlet area 0.1 m²?", "6 m/s", "fluid_mechanics"),
+    # reverse guards: must not steal physics pressure (force/area) or density (mass/volume).
+    ("What is the pressure of a 50 N force over an area of 10 square meters?", "5 Pa", "physics"),
+    ("What is the density of an object with mass 300 g and volume 100 cm^3?", "3 g/cm³", "physics"),
     # geography population change between two years (delta + percent); the single-year lookup must
     # NOT grab these (it would silently answer the first year only).
     ("How much did the population of London grow from 2010 to 2020?", "+900000 (+11.25%)", "geography"),
