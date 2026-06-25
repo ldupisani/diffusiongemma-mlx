@@ -507,8 +507,9 @@ def main():
                          "recall/false-alarm tradeoff measured on dev — a lone dissenter is still confident)")
     bn.add_argument("--ablation", action="store_true",
                     help="grid-test query-preprocessing transforms (none/each/pairs/all) on the same questions")
-    bn.add_argument("--style", choices=["program", "analyze"], default="program",
-                    help="translation prompt: direct 'program' (default) or 'analyze' (facts/relations/type first)")
+    bn.add_argument("--style", choices=["program", "analyze", "auto"], default="program",
+                    help="translation prompt: 'program' (default), 'analyze' (facts/relations first), "
+                         "or 'auto' (analyze only for relationship/coreference questions)")
     bn.set_defaults(fn=cmd_bench)
     sub.add_parser("list").set_defaults(fn=cmd_list)
     da = sub.add_parser("data", help="manage datasets in $DIFG_DATA_DIR")

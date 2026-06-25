@@ -169,6 +169,22 @@ def build_analysis_prompt(question: str) -> str:
     return f"{_ANALYZE_SYSTEM}\n\n{shots}\n\nQ: {question}\n"
 
 
+# A comparison/coreference cue — "twice as many", "3 times as much", or "as many … as … he/the
+# number". This is the relationship-binding class where the analysis step demonstrably helped
+# (the hard-hats error); style="auto" routes ONLY these to the (costlier, riskier) analyze prompt.
+_REL_CUE = re.compile(
+    r"\b(?:twice|thrice|double|triple|half|\d+(?:\.\d+)?)\s+(?:times\s+)?as\s+(?:many|much)\b"
+    r"|\btimes\s+as\s+(?:many|much)\b"
+    r"|\bas\s+(?:many|much)\b[^.?!]*\b(?:he|she|they|him|her|them|the\s+number)\b",
+    re.IGNORECASE)
+
+
+def has_relationship_cue(question: str) -> bool:
+    """True if the question has a 'N times as many … as …' / coreference comparison — the class
+    where the analyze style earned its cost. Used by style='auto'."""
+    return bool(_REL_CUE.search(question or ""))
+
+
 # --- programmatic query preprocessing (0 extra model calls) ----------------------------
 # Independent, toggleable transforms applied to the question BEFORE translation. Each is a pure
 # str→str function; `preprocess(q, steps)` composes a chosen subset in a fixed order so they can
@@ -383,6 +399,8 @@ def solve(question: str, *, asker=None, model: str = "haiku", backend: str = "cl
     "analyze" (the model first lays out facts/relations/answer-type, then the program — 1 longer
     call). `preprocess_steps` deterministically rewrites the question first (0 extra calls); the
     unused-given check still uses the ORIGINAL question. `asker(prompt)->str|None` is injectable."""
+    if style == "auto":   # route only relationship/coreference problems to the analyze prompt
+        style = "analyze" if has_relationship_cue(question) else "program"
     builder = build_analysis_prompt if style == "analyze" else build_prompt
     if max_tokens is None:
         max_tokens = 768 if style == "analyze" else 512   # analysis output is longer

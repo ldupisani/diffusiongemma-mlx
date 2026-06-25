@@ -198,6 +198,27 @@ def test_analysis_prompt_demonstrates_structure_and_parses_program():
     assert out["answer"] == 42
 
 
+def test_relationship_cue_detector():
+    # fires on the relationship-binding class
+    assert translate.has_relationship_cue("twice as many green as the pink he removed")
+    assert translate.has_relationship_cue("3 times as much flour as sugar")
+    assert translate.has_relationship_cue("half as many clips in May")
+    # does NOT fire on frequency/round-trip phrasing or plain problems
+    assert not translate.has_relationship_cue("he walks to work three times a week")
+    assert not translate.has_relationship_cue("she bought 5 apples and 3 oranges")
+
+
+def test_style_auto_routes_by_cue():
+    seen = {}
+    def asker(prompt):
+        seen["analyze"] = "Facts:" in prompt
+        return "<program>\nanswer = 1\n</program>"
+    translate.solve("twice as many X as the Y he took", asker=asker, style="auto")
+    assert seen["analyze"] is True                      # relationship → analyze prompt
+    translate.solve("she bought 5 apples", asker=asker, style="auto")
+    assert seen["analyze"] is False                     # plain → program prompt
+
+
 def test_preprocess_composes_in_order_and_validates():
     q = "He had three boxes. How many are left?"
     both = translate.preprocess(q, ["normalize", "question"])
