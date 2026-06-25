@@ -311,6 +311,18 @@ to `geometry`, `trigonometry`, `unit_conversion`, `compound_interest`, `base_con
   explicit `\bat\b` anchor — which the routing-repair loop does NOT reliably self-heal; that still
   needs a human pass, even though the harder sub-skill arbitration now happens autonomously
   (photometry: the two-illuminance ambiguity routed correctly unaided).
+- **Units & scientific notation are the verifier's blind spot — scrutinise or avoid such ops.**
+  `num_near` reads *digits, not units* ("600 nm" → 600, not 6e-7), and it doesn't match scientific
+  notation at all ("1e-6"), while the round-to-6-places convention assumes O(1) answers. An op that
+  fights these — `optics.rayleigh_resolution` (θ = 1.22λ/D, a ~1e-6 radian answer with the wavelength
+  in nm but the aperture in m) — computed `7320` instead of `7.32e-6` and was DROPPED in review. The
+  `--verify` answer-cross-check could not catch it: it only fires when the query's numbers exactly
+  match a skill-table row, and here the table used meters (`6e-7`) while the query said nm (`600`), so
+  the two never matched. Contrast `acoustics.doppler` (all plain O(100) Hz/m·s⁻¹ values) — there the
+  cross-check *did* fire and caught a bad extraction. **Rule:** if an op needs unit conversion
+  (nm↔m), produces tiny/huge magnitudes, or wants scientific-notation inputs, either keep every
+  value in one consistent unit so the table and the query share literals, or don't add the op — the
+  verifier is silent on it and it needs a careful human pass (or a `places=` bump) regardless.
 
 ---
 
