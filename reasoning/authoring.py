@@ -11,6 +11,7 @@ Nothing here runs the generated code; it only writes files (new ones; never clob
 
 from __future__ import annotations
 
+import itertools
 import re
 from pathlib import Path
 
@@ -103,6 +104,124 @@ def author_domain(description: str, *, model: str = "haiku", effort: str | None 
         return {"files": {}, "raw": raw, **base,
                 "error": "could not parse any file blocks from the response"}
     return {"files": files, "raw": raw, "error": None, **base}
+
+
+_VERIFY_PREFIX = "_authoring_verify_"     # transient skill modules used only during verification
+_verify_counter = itertools.count()
+
+
+def _verify_examples(skill_src: str) -> list[str]:
+    """Import the authored skill module in-process and run its @register example tables. Returns a
+    list of human-readable failure strings (empty == all examples pass). Catches the registry's
+    import-time arity check (bare-tuple examples) as an 'import error'. Uses a UNIQUE module name per
+    call (and clears its bytecode) so successive repair rounds never load a stale `.pyc` — rewriting
+    one filename within the same second otherwise hands back round-0's cached example table."""
+    import importlib
+    import sys
+    import unittest
+    from reasoning import skills
+    from reasoning.skills.tests._helpers import check_examples
+
+    tag = f"{_VERIFY_PREFIX}{next(_verify_counter)}"
+    dest = _REPO / "reasoning" / "skills" / f"{tag}.py"
+    pycache = _REPO / "reasoning" / "skills" / "__pycache__"
+    modname = f"reasoning.skills.{tag}"
+    tc = unittest.TestCase()
+
+    def _cleanup():
+        sys.modules.pop(modname, None)
+        for k in [k for k, v in skills.SKILLS.items()
+                  if getattr(v.fn, "__module__", "").endswith(tag)]:
+            del skills.SKILLS[k]
+        dest.unlink(missing_ok=True)
+        for pyc in pycache.glob(f"{tag}.*"):
+            pyc.unlink(missing_ok=True)
+
+    fails: list[str] = []
+    try:
+        dest.write_text(skill_src)
+        importlib.invalidate_caches()
+        try:
+            importlib.import_module(modname)           # @register runs here (arity check included)
+        except Exception as e:
+            return [f"import error: {type(e).__name__}: {e}"]
+        checked = 0
+        for name, sk in list(skills.SKILLS.items()):
+            if getattr(sk.fn, "__module__", "").endswith(tag):
+                checked += 1
+                try:
+                    check_examples(tc, sk)
+                except Exception as e:                  # AssertionError or a raising fn
+                    fails.append(f"{name}: {e}")
+        if checked == 0:
+            fails.append("no skills were registered — check the @register names and file body")
+    finally:
+        _cleanup()
+    return fails
+
+
+def _repair_prompt(skill_path: str, skill_src: str, fails: list[str]) -> str:
+    """A focused, single-file repair prompt. Example verification only touches the skill module, so
+    we ask the model to re-emit JUST that file — a small, reliable payload (re-emitting every file
+    risks the model mangling the multi-block format) and cheaper."""
+    return (
+        "The skill module you wrote has FAILING example-table checks. In nearly every case the "
+        "FORMULA is correct and only the EXPECTED VALUE in an @register example table is wrong — or a "
+        "single-argument example wasn't wrapped as a 1-tuple (write `((0.5,), expected)`, not "
+        "`((0.5), expected)`). For each failure below, mentally RUN the function on its example args "
+        "and replace the expected value with the real computed output, rounded exactly as the function "
+        "rounds it. Never re-guess a float; compute it. Do not change a formula unless the failure is a "
+        "genuine logic error.\n\n"
+        "FAILURES:\n" + "\n".join(f"  - {f}" for f in fails) +
+        f"\n\nRe-emit ONLY this one file, corrected, in EXACTLY this delimiter format and nothing "
+        f"else:\n\n<<<FILE {skill_path}>>>\n<the corrected file body>\n<<<END>>>\n\n"
+        f"Current {skill_path}:\n\n<<<FILE {skill_path}>>>\n{skill_src}\n<<<END>>>")
+
+
+def author_domain_verified(description: str, *, model: str = "haiku", effort: str | None = None,
+                           timeout: int = 600, max_rounds: int = 3, context: str | None = None,
+                           asker=None) -> dict:
+    """author_domain + an author→test→repair loop over the SKILL example tables (§5). After the
+    first draft, the authored skill module is imported and its example tables are run; any failures
+    (wrong expected value, un-tupled single arg, import/arity error) are fed back to the model, which
+    re-emits corrected files. Repeats up to `max_rounds`. Returns the author_domain result plus
+    `verified` (bool) and `rounds` (per-round failure lists). NOTE: this verifies skills only — it does
+    NOT exercise bind gating or routing (those need full registration + generated probe queries; that
+    is the next layer). `asker` is injectable for testing."""
+    spent = {"cost_usd": None}
+    if asker is None:
+        from . import teachers
+
+        def asker(p):
+            r = teachers.ask_claude_usage(p, model=model, timeout=timeout, effort=effort)
+            if r["cost_usd"] is not None:
+                spent["cost_usd"] = (spent["cost_usd"] or 0.0) + r["cost_usd"]
+            return r["text"]
+
+    raw = asker(build_prompt(description, context))
+    files = parse_files(raw) if raw else {}
+    rounds: list[dict] = []
+    if not files:
+        return {"files": {}, "raw": raw, "error": "no parseable file blocks from the response",
+                "cost_usd": spent["cost_usd"], "verified": False, "rounds": rounds}
+    skill_path = next((p for p in files if p.startswith("reasoning/skills/")), None)
+    for i in range(max_rounds + 1):
+        fails = _verify_examples(files[skill_path]) if skill_path else ["no skill file was emitted"]
+        rounds.append({"round": i, "fails": fails})
+        if not fails:
+            return {"files": files, "raw": raw, "error": None,
+                    "cost_usd": spent["cost_usd"], "verified": True, "rounds": rounds}
+        if i == max_rounds or not skill_path:
+            break
+        fix = asker(_repair_prompt(skill_path, files[skill_path], fails))
+        new = parse_files(fix) if fix else {}
+        if skill_path not in new:                      # repair didn't come back in the right format
+            rounds[-1]["repair_unparseable"] = True
+            break
+        files[skill_path] = new[skill_path]            # splice the corrected skill file back in
+    return {"files": files, "raw": raw,
+            "error": f"example checks still failing after {len(rounds) - 1} repair round(s)",
+            "cost_usd": spent["cost_usd"], "verified": False, "rounds": rounds}
 
 
 def write_files(files: dict, *, dry_run: bool = False) -> tuple[list, list]:

@@ -243,8 +243,20 @@ def cmd_author_domain(args):
     description = " ".join(args.args)
     if not description:
         sys.exit('describe the domain, e.g. author-domain "Thermodynamics: entropy, enthalpy, …"')
-    print(f"[authoring '{description[:60]}…' via {args.model} — this calls the model and may take a minute]\n")
-    res = authoring.author_domain(description, model=args.model, effort=args.effort)
+    mode = "author+verify loop" if args.verify else "author"
+    print(f"[{mode}: '{description[:55]}…' via {args.model} — this calls the model and may take a minute]\n")
+    if args.verify:
+        res = authoring.author_domain_verified(description, model=args.model, effort=args.effort,
+                                               max_rounds=args.max_rounds)
+        for rd in res.get("rounds", []):
+            tag = "draft" if rd["round"] == 0 else f"repair {rd['round']}"
+            status = "✓ examples pass" if not rd["fails"] else f"{len(rd['fails'])} failing:"
+            print(f"  [{tag}] {status}")
+            for f in rd["fails"]:
+                print(f"      - {f}")
+        print(f"  → {'VERIFIED' if res.get('verified') else 'NOT verified'}\n")
+    else:
+        res = authoring.author_domain(description, model=args.model, effort=args.effort)
     u, cost = res.get("usage"), res.get("cost_usd")
     if u or cost is not None:
         # input_tokens is only the *uncached* remainder; the bulk of the prompt (playbook +
@@ -352,6 +364,10 @@ def main():
                          "use --model opus for harder or less-specified domains)")
     ad.add_argument("--effort", choices=["low", "medium", "high", "xhigh", "max"],
                     help="reasoning effort level (default: the CLI default)")
+    ad.add_argument("--verify", action="store_true",
+                    help="run the author→test→repair loop: check the skill example tables and feed "
+                         "failures back to the model until they pass (or --max-rounds is hit)")
+    ad.add_argument("--max-rounds", type=int, default=3, help="max repair rounds with --verify (default 3)")
     ad.add_argument("--dry-run", action="store_true", help="print what would be written, don't write")
     ad.set_defaults(fn=cmd_author_domain)
     hp = sub.add_parser("help", help="introspection: what can I ask? (domains / examples / search)")

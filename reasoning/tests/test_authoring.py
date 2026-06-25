@@ -46,6 +46,34 @@ class TestAuthoring(unittest.TestCase):
         self.assertNotIn("__wiring__", written)
         self.assertIn("reasoning/skills/base.py", skipped)
 
+    def test_verified_loop_repairs_a_bad_example(self):
+        good = ('<<<FILE reasoning/skills/loopdemo.py>>>\n'
+                'from .base import register\n'
+                '@register("loopdemo.double", "double x", [((3,), 6)])\n'
+                'def double(x):\n    return x * 2\n<<<END>>>')
+        bad = good.replace("(3,), 6)", "(3,), 7)")          # wrong expected value
+        calls = []
+
+        def stub(p):
+            calls.append(p)
+            return bad if len(calls) == 1 else good          # draft fails, repair fixes it
+
+        res = A.author_domain_verified("loopdemo", asker=stub, context="ctx", max_rounds=2)
+        self.assertTrue(res["verified"], res["rounds"])
+        self.assertEqual(len(calls), 2)                      # one draft + one repair
+        self.assertTrue(res["rounds"][0]["fails"])           # draft had a failure
+        self.assertFalse(res["rounds"][1]["fails"])          # repair passed
+        self.assertIn("FAILURES:", calls[1])                 # repair prompt fed the failure back
+
+    def test_verified_loop_gives_up_after_max_rounds(self):
+        bad = ('<<<FILE reasoning/skills/loopdemo2.py>>>\n'
+               'from .base import register\n'
+               '@register("loopdemo2.double", "double x", [((3,), 7)])\n'
+               'def double(x):\n    return x * 2\n<<<END>>>')
+        res = A.author_domain_verified("d", asker=lambda p: bad, context="c", max_rounds=1)
+        self.assertFalse(res["verified"])
+        self.assertEqual(len(res["rounds"]), 2)              # draft + 1 repair attempt, both fail
+
     @unittest.skipUnless(duckdb, "gather_context imports the registry (needs duckdb)")
     def test_gather_context_has_the_essentials(self):
         ctx = A.gather_context()
