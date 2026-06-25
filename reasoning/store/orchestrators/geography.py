@@ -29,17 +29,21 @@ def precondition(query):
 
 
 def _lookup(op, place, year):
-    """Curated value (display-ready) or None. Same value shapes as reference.retrieve."""
+    """(display value, year-fidelity note) from the curated set, or (None, "")."""
     if op == "population":
-        v = reference.population(place, year)
-        return str(v) if v is not None else None
+        det = reference.population_detail(place, year)
+        if not det:
+            return None, ""
+        note = (" (city population; the reference has no year-specific data for cities)"
+                if year is not None and not det["year_applied"] else "")
+        return str(det["value"]), note
     if op == "coordinates":
         c = reference.coordinates(place)
-        return f"{c[0]}, {c[1]}" if c else None
+        return (f"{c[0]}, {c[1]}" if c else None), ""
     if op == "area":
         v = reference.country_field(place, "area_km2")
-        return str(v) if v is not None else None
-    return reference.country_field(place, op)  # capital / continent
+        return (str(v) if v is not None else None), ""
+    return reference.country_field(place, op), ""  # capital / continent
 
 
 def _run_set(d):
@@ -63,7 +67,8 @@ def run(query):
     if d["op"] == "set":
         return _run_set(d)
     op, place, year = d["op"], d["place"], d.get("year")
-    val, model_calls, retrieved, cached = _lookup(op, place, year), 0, False, False
+    val, note = _lookup(op, place, year)
+    model_calls, retrieved, cached = 0, False, False
     # Not in the curated set? When retrieval is enabled (opt-in via DIFG_REFERENCE_RETRIEVAL):
     # reuse a previously-retrieved value (0 calls), else retrieve via Claude Sonnet (1 call) and
     # persist it. Either way the result is validated and flagged as model-sourced, never curated.
@@ -74,9 +79,10 @@ def run(query):
         else:
             val = reference.retrieve(op, place, year)
             retrieved, model_calls = val is not None, (1 if val is not None else 0)
+        note = ""   # a retrieved value is year-specific (the year is in the prompt)
     if val is None:
         return explain(f"no reference data for '{place}' ({op})")
-    display = f"{val} km^2" if op == "area" else val
+    display = (f"{val} km^2" if op == "area" else val) + note
     if retrieved:
         src = "previously retrieved" if cached else "retrieved via Claude Sonnet"
         display += f" — {src} (not in the curated reference set; verify)"

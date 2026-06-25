@@ -140,6 +140,31 @@ def population(place: str, year: int | None = None):
     return v if v is not None else city_population(place)
 
 
+def population_detail(place: str, year: int | None = None) -> dict | None:
+    """Population plus year-fidelity provenance, so a caller can tell when a requested year was
+    actually applied. Returns {value, year, year_applied} or None when unknown:
+      - country with that exact year      → year_applied True
+      - country, no year requested        → latest year, year_applied True
+      - city (no by-year data)            → year_applied False (a requested year is NOT honored)
+    A country with a year the seed lacks returns None (so retrieval can fetch the exact year)."""
+    if year is not None:
+        v = country_population(place, int(year))
+        if v is not None:
+            return {"value": v, "year": int(year), "year_applied": True}
+        cv = city_population(place)
+        if cv is not None:
+            return {"value": cv, "year": None, "year_applied": False}
+        return None
+    v = country_population(place, None)
+    if v is not None:
+        return {"value": v, "year": _one("SELECT max(year) FROM population WHERE place=?", (place,)),
+                "year_applied": True}
+    cv = city_population(place)
+    if cv is not None:
+        return {"value": cv, "year": None, "year_applied": False}
+    return None
+
+
 def place_names() -> dict:
     """lowercased name -> canonical name, for every country, city, and population entry (so a
     promoted population for an otherwise-unknown place still routes). For NL place matching."""
