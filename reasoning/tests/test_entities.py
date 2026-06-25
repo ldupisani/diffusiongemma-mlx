@@ -28,6 +28,16 @@ class TestEntities(unittest.TestCase):
         # words between numbers break the run → not a list
         self.assertEqual(E.numeric_list("total cost of 100 yards at $3"), [100])
 
+    def test_numeric_list_thousands_separator_not_a_list(self):
+        # "20,700" is one grouped number, not the list [20, 700] — a bare comma before exactly
+        # 3 digits is a thousands separator, so the run breaks (≤1 ⇒ a stat domain declines).
+        self.assertEqual(E.numeric_list("a total of $20,700 for 150 pieces"), [20])
+        self.assertEqual(E.numeric_list("he made $100,000 last year"), [100])
+        # a comma FOLLOWED BY A SPACE stays a list delimiter
+        self.assertEqual(E.numeric_list("the average of 4, 200, and 36"), [4, 200, 36])
+        # a compact list of small numbers (not 3-digit groups) is still a list
+        self.assertEqual(E.numeric_list("the average of 4,8,15,16"), [4, 8, 15, 16])
+
     def test_dollars(self):
         self.assertEqual(E.dollars("bought $4000 sold $5200"), [4000.0, 5200.0])
         self.assertEqual(E.only_dollar("a $50 fee and $4000 cost"), None)  # two → decline

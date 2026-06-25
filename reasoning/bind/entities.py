@@ -20,6 +20,10 @@ Num = namedtuple("Num", "value start end")
 
 _NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
 _INT = re.compile(r"-?\d+")
+# A bare comma directly before exactly 3 digits is a thousands separator ("20,700"), NOT a list
+# delimiter — used by numeric_list to avoid splitting a grouped number into [20, 700].
+_THOUSANDS_GAP = re.compile(r"^,$")
+_THREE_DIGITS = re.compile(r"^\d{3}(?:\D|$)")
 _LIST_GAP = re.compile(r"^[\s,$]*(?:and|or|&)?[\s,$]*$", re.IGNORECASE)
 _PRICE = re.compile(r"\$\s*(\d+(?:\.\d+)?)")
 _PERCENT = re.compile(r"(\d+(?:\.\d+)?)\s*(?:%|percent)", re.IGNORECASE)
@@ -66,7 +70,16 @@ def numeric_list(text: str) -> list:
     run: list = []
     for m in _NUMBER.finditer(text):
         val = _val(m.group())
-        if run and _LIST_GAP.match(text[run[-1][0]:m.start()]):
+        gap = text[run[-1][0]:m.start()] if run else ""
+        # "20,700" tokenizes as 20 then 700 with a bare-comma gap — a thousands separator, not a
+        # list. Treat it as NOT a list (break the run) so list_statistic declines instead of
+        # averaging/summing the fragments ([20, 700]) into a confident-wrong answer.
+        if run and _THOUSANDS_GAP.match(gap) and _THREE_DIGITS.match(m.group()):
+            if len(run) > len(best):
+                best = run
+            run = []
+            continue
+        if run and _LIST_GAP.match(gap):
             run.append((m.end(), val))
         else:
             if len(run) > len(best):

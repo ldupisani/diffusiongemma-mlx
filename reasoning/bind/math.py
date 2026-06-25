@@ -191,6 +191,14 @@ def bind_percent_change(query: str) -> tuple[bool, dict | None, str, int]:
 # --- set / inclusion-exclusion family -------------------------------------------------
 def bind_sets(query: str) -> tuple[bool, dict | None, str, int]:
     q = query.lower()
+    # Require a genuine two-set Venn context, not merely the word "both" + 3 numbers — which
+    # matches a huge slice of unrelated narratives ("Carl takes out 12 marbles … both …") and
+    # emits a confident-wrong inclusion-exclusion count. The distinctive signal is a population
+    # total ("group/out/class of N", "N people/students") OR explicit set language (docs §3f).
+    has_total = re.search(r"(?:group of|out of|class of)\s+\d+|\d+\s+(?:people|students|surveyed)", q)
+    has_setlang = re.search(r"\bset [ab]\b|\bunion\b|\bintersection\b", q)
+    if not (has_total or has_setlang):
+        return False, None, "code", 0
     ints = [(m.start(), int(m.group())) for m in re.finditer(r"\d+", q)]
     if len(ints) < 3:
         return False, None, "code", 0
