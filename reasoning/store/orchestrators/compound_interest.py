@@ -5,6 +5,7 @@ and any compounding frequency (annual/monthly/quarterly/...).
 """
 
 from reasoning.bind import bind_compound_interest, validate_compound
+from reasoning.bind._common import guard_residue
 from reasoning.compiled import CodeStep, Inp, Lit, Plan, Step, run_guarded
 
 META = {
@@ -38,5 +39,5 @@ def precondition(query):
 
 
 def run(query):
-    return run_guarded(bind_compound_interest(query), PLAN, validate=validate_compound,
+    return run_guarded(guard_residue(query, bind_compound_interest(query)), PLAN, validate=validate_compound,
                        parse_message="could not parse principal/rate/years from the query")

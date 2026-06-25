@@ -1,6 +1,7 @@
 """Trigonometry / angles — sin/cos/tan of degrees and degree↔radian. Coded, zero model."""
 
 from reasoning.bind import bind_geospatial, bind_trig
+from reasoning.bind._common import guard_residue
 from reasoning.compiled import dispatch
 
 META = {
@@ -25,4 +26,5 @@ def precondition(query):
 
 
 def run(query):
-    return dispatch(bind_trig(query), parse_message="could not parse the angle or operation")
+    return dispatch(guard_residue(query, bind_trig(query)),
+                    parse_message="could not parse the angle or operation")

@@ -8,6 +8,7 @@ convert -> round plan and formats with the target's display symbol.
 
 from reasoning import engine
 from reasoning.bind import bind_unit_convert
+from reasoning.bind._common import guard_residue
 from reasoning.compiled import CodeStep, Inp, Lit, Plan, Step, explain, format_number, run_guarded
 
 META = {
@@ -41,7 +42,7 @@ def precondition(query):
 
 
 def run(query):
-    ok, data, via, _ = bind_unit_convert(query)
+    ok, data, via, _ = guard_residue(query, bind_unit_convert(query))
     if not ok:
         return explain("could not parse a known unit conversion")
     plan = Plan(

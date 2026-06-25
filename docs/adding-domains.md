@@ -223,11 +223,22 @@ question. Real cases this session:
   latest figure returned unlabeled. Fix: recognize the value, then handle/flag it.
 
 Tooling: `has_unconsumed_numbers(query, used)` (in `bind/_common.py`) returns True when the query
-has a standalone magnitude the bind didn't use — call it in a fixed-arity numeric bind and decline.
-It's conservative (ignores numbers glued to a date/ratio/decimal/word), so it flags genuine extra
-values without tripping on units. **The discipline generalizes beyond numbers:** an extra place, an
-extra entity, a second operand the op ignores — all are residue. When unsure whether you handle the
-whole query, decline; a clean "no match" beats a confident wrong answer.
+has a standalone magnitude the bind didn't use; `guard_residue(query, bind(query))` wraps a bind
+result and turns it into a decline when the bound data leaves a query number unaccounted for. Wrap
+the bind call in `run()`: `dispatch(guard_residue(query, bind_x(query)), …)`. It's conservative —
+the residue regex ignores numbers glued to a date/time/ratio/word (`2024-03-03`, `9:00`, `3/4`),
+reads `$1,000`/`5%`/`12.5` as single values, and treats every numeric value in the bind's data
+(incl. numeric strings) as consumed — so it flags genuine extras without tripping on units. Applied
+to `geometry`, `trigonometry`, `unit_conversion`, `compound_interest`, `base_conversion`.
+
+> **Caveat — transform-based binds opt out.** `guard_residue` compares the *raw* query numbers to
+> the bind's stored values, so a bind that TRANSFORMS its input breaks it: `clock` stores "3 hours"
+> as `minutes=180`, and `3 ≠ 180` looks like residue → it would false-decline a valid query. Don't
+> wrap a bind that converts/normalizes a value before storing it; give it a bespoke guard (compare
+> against the pre-transform value) or rely on its own gating. **The discipline generalizes beyond
+> numbers:** an extra place, an extra entity, a second operand the op ignores — all are residue.
+> When unsure whether you handle the whole query, decline; a clean "no match" beats a confident
+> wrong answer.
 
 ---
 

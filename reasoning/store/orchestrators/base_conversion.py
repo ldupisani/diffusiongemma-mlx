@@ -6,6 +6,7 @@ dimension in the units factor table, no separate orchestrator.)
 
 from reasoning import engine
 from reasoning.bind import bind_geospatial, bind_radix
+from reasoning.bind._common import guard_residue
 from reasoning.compiled import CodeStep, Inp, Plan, run_guarded
 
 META = {
@@ -35,5 +36,5 @@ def precondition(query):
 
 
 def run(query):
-    return run_guarded(bind_radix(query), PLAN, shot=engine._no_model,
+    return run_guarded(guard_residue(query, bind_radix(query)), PLAN, shot=engine._no_model,
                        parse_message="could not identify the bases and value to convert")

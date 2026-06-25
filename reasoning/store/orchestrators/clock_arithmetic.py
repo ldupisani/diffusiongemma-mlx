@@ -25,4 +25,7 @@ def precondition(query):
 
 
 def run(query):
+    # NB: no residue guard here — bind_clock TRANSFORMS its input ("3 hours" → minutes=180), so a
+    # raw-number residue check would mismatch the stored value and false-decline. Transform-based
+    # binds need a bespoke guard, not the generic one (see §3d caveat).
     return dispatch(bind_clock(query), parse_message="could not parse the time(s) or operation")

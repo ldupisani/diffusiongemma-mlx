@@ -9,6 +9,7 @@ the Pythagorean hypotenuse.
 from reasoning import engine
 from reasoning.bind import (bind_geometry, bind_geometry_multi, bind_ndim, clarify_geometry,
                            validate_geometry)
+from reasoning.bind._common import guard_residue
 from reasoning.compiled import CodeStep, Inp, Lit, Plan, Step, clarify, explain, run_guarded
 
 META = {
@@ -49,7 +50,7 @@ clarify_probe = clarify_geometry  # routed only when nothing can ANSWER (a lower
 
 
 def run(query):
-    ok, data, via, _ = bind_geometry(query)
+    ok, data, via, _ = guard_residue(query, bind_geometry(query))
     if not ok:
         missing = clarify_geometry(query)
         if missing:
