@@ -547,6 +547,16 @@ CASES = [
     ("Check the Cauchy-Schwarz inequality for [1, 2] and [3, 4].",
      "holds: 11 ≤ 11.18034", "functional_analysis"),
     ("What is the product of 2, 3, 4?", "24", "list_statistic"),  # guard: not inner product
+    # logistics / operations research
+    ("What is the EOQ for an annual demand of 1000, order cost of 10, and holding cost of 2?",
+     "100", "logistics"),
+    ("What is the reorder point for a demand of 50 per day and a lead time of 5 days?",
+     "250", "logistics"),
+    ("What is the safety stock for z 1.65, standard deviation 20, and lead time 4?", "66", "logistics"),
+    ("What is the inventory turnover for COGS of 500000 and average inventory of 100000?",
+     "5", "logistics"),
+    ("How many trucks are needed to ship 1000 units with a capacity of 150 each?", "7", "logistics"),
+    ("What is the fuel cost for a 600 km trip at 12 km/l and $1.50 per liter?", "75", "logistics"),
 ]
 
 

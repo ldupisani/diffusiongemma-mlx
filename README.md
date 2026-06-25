@@ -310,8 +310,9 @@ only for fuzzy steps (open generation, judgement, recall) and ambiguous NL parsi
   (curvature/arc length); plus extensions — combinatorics & graph theory in `discrete.*`
   (derangements/multinomial/stars-and-bars/partitions; bipartite/Eulerian/MST), `prob.*`
   (binomial, Bayes), `stats.*` (correlation/regression/z-score), and a `funcanalysis.*` fragment
-  (vector norms, inner product, Cauchy–Schwarz) — all still 0 model calls — 360 and counting),
-  indexed in a `SKILLS` registry. Skills never import the engine (a test enforces it). Rounding goes through one
+  (vector norms, inner product, Cauchy–Schwarz); and `logistics.*` (operations research — EOQ,
+  reorder point, safety stock, inventory turnover, Little's Law, trucks needed, fuel cost) —
+  all still 0 model calls — 368 and counting), indexed in a `SKILLS` registry. Skills never import the engine (a test enforces it). Rounding goes through one
   `arith.round_to`/`round_money` chokepoint (`Decimal`+`ROUND_HALF_UP`). Concept-level skills
   (`stats.mean` over any-length list, `finance.loan_payment`, `units.f_to_c`) capture an operation as
   one named step, so a single orchestrator generalizes — vs. the teacher's brittle fixed chain of

@@ -144,6 +144,13 @@ wins. Only orchestrators whose `precondition(query)` is true are even candidates
 > on score. **Rule of thumb:** number-list / matrix domains → tier 2; notation-only domains →
 > bind-gated.
 
+> **Learning (tier-2 needs an example per op).** A tier-2 domain is selected by *lexical score
+> against its `example_queries`*, so **every operation needs at least one representative example**
+> — an op with none scores below the matcher threshold and the query silently returns `None`
+> (falls through), even though its `bind` matched. This bit `game_theory`, `numerical` (Simpson),
+> and `logistics` (Little's Law / days-of-supply were missing → `None` until added). When you add
+> an op, add an example query for it.
+
 ---
 
 ## 3. Collision management — the actual hard part
