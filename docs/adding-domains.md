@@ -240,6 +240,19 @@ to `geometry`, `trigonometry`, `unit_conversion`, `compound_interest`, `base_con
 > When unsure whether you handle the whole query, decline; a clean "no match" beats a confident
 > wrong answer.
 
+### 3e. Authoring blind spot — `author-domain` can't see sub-skills
+
+> **Learning (authored-domain collisions).** `cli author-domain` feeds the model only the existing
+> *query_type names* (`physics`, `arithmetic`, …), not their individual skills. So it cannot detect a
+> collision with a *sub-skill* of an existing domain. A Haiku-authored `dc_circuits` re-implemented
+> Ohm's law (`V=I·R`) — but `physics` already had `physics.ohms_law_voltage` and `physics.power`. The
+> authored domain happily *stole* the physics Ohm's-law query (and then failed to parse it). The model
+> can't be blamed; it never saw `physics.ohms_law_voltage`. **On review, grep existing skills for the
+> new domain's formulas before wiring** (`grep -ri "ohm\|power\|V = I" reasoning/skills/`); if an op
+> already exists elsewhere, either drop the overlapping op or drop the domain. `dc_circuits` was
+> dropped. The model's own notes even claimed "decline guards added to physics.py" — but the tool only
+> *writes new files, never edits existing ones*, so those cross-domain guards never existed.
+
 ---
 
 ## 4. Parsing gotchas (each cost a debugging cycle)
@@ -256,6 +269,13 @@ to `geometry`, `trigonometry`, `unit_conversion`, `compound_interest`, `base_con
   is far more robust than taking "the first line".
 - **`getattr(obj, attr, default)` never raises** — it returns the default for *any* object,
   including `None`. Don't "fix" a non-bug.
+- **A greedy branch gate swallows its sibling op.** An authored `optics` bind gated `image_distance`
+  on `"image distance" in q and "object distance" in q` — but the *magnification* op's own inputs are
+  an image distance and an object distance, so its query entered the `image_distance` branch, found no
+  focal length, and declined the whole bind (routing fell through to a model fallback). Gate each
+  branch on the keyword that is *distinctive to that op* (image_distance needs `"focal"`), not on input
+  names it shares with a sibling. Symptom: a forward query that should match silently routes to
+  `numeric_consensus`/clarify instead of the domain.
 
 ---
 
@@ -269,6 +289,16 @@ Example tables compare floats at `places=6`. Two safe tactics:
 - **Otherwise, run the function and paste its real rounded output.** Several Lyapunov/regression
   examples were hand-guessed wrong (`0.692147` vs the true `0.6932`; an intercept of `1.5` vs `2`).
   Compute, then hardcode.
+
+> **Learning (authored example tables slip — but the suite always catches it).** A single batch of
+> Haiku-authored domains hit this trap three distinct ways: a 1-arg example written as a bare `(0.5)`
+> instead of `(0.5,)` (caught at *import* by the registry's arity check); a 6th-decimal rounding miss
+> (`critical_angle` `48.748611` vs the function's `48.753467`); and a magnitude error (`relativistic_
+> kinetic_energy` off by 10⁷ — the model dropped `c²`'s scale). All three were caught the moment the
+> example test ran. The model wrote correct *formulas* every time; it only ever mis-transcribed the
+> *expected values*. So the fix is always the same — recompute from the function, never trust the
+> authored number — and the per-skill example test is exactly the backstop that makes authoring (at
+> any model tier) safe.
 
 ---
 

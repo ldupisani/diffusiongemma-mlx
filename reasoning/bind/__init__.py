@@ -71,3 +71,6 @@ from reasoning.bind.introspect import *   # noqa: F401,F403
 from reasoning.bind.travel import *   # noqa: F401,F403
 
 from reasoning.bind.thermo import *   # noqa: F401,F403
+
+from reasoning.bind.optics import *            # noqa: F401,F403
+from reasoning.bind.special_relativity import *  # noqa: F401,F403

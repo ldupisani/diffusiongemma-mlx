@@ -575,6 +575,19 @@ CASES = [
     ("What is the COP of a refrigerator operating between 300 K and 250 K?", "5", "thermodynamics"),
     ("What is the Shannon entropy of [0.5, 0.5]?", "1", "ml_theory"),
     ("How much work is done by a force of 20 N over a distance of 4 meters?", "80 J", "physics"),
+    # optics + special_relativity (authored via `cli author-domain --model haiku`).
+    ("What is the image distance for focal length 10 and object distance 30?", "15", "optics"),
+    ("Calculate magnification: image distance 15, object distance 30", "-0.5", "optics"),
+    ("Lens power for focal length 0.5 meters", "2", "optics"),
+    ("Using Snell's law: n1=1, angle=30 degrees, n2=1.5, find refraction angle", "19.471221", "optics"),
+    ("Critical angle for total internal reflection: n1=1.5, n2=1", "41.810315", "optics"),
+    ("What is the Lorentz factor for 0.8c?", "1.666667", "special_relativity"),
+    ("Time dilation: 2 seconds at 0.8c?", "3.333333", "special_relativity"),
+    ("Length contraction of 10 meters at 0.6c?", "8", "special_relativity"),
+    ("Relativistic kinetic energy of 0.000001 kg at 0.6c?", "22468879468.42044", "special_relativity"),
+    # reverse guards: the new domains must not steal classical-physics / trig queries.
+    ("What is the kinetic energy of a 2 kg object moving at 10 m/s?", "100 J", "physics"),
+    ("What is the sin of 30 degrees?", "0.5", "trigonometry"),
     # geography population change between two years (delta + percent); the single-year lookup must
     # NOT grab these (it would silently answer the first year only).
     ("How much did the population of London grow from 2010 to 2020?", "+900000 (+11.25%)", "geography"),

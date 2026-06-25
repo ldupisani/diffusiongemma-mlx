@@ -13,8 +13,9 @@ from . import (  # noqa: E402,F401
     funcanalysis, game, genetics, geo, geometry,
     group_theory, health, hypercomplex, hyperreal, introspect, logic, logistics, materials, ml,
     molecular, ndim,
-    number_theory, numerical, optimize, ordinals, padic, pchem, physics, probability, quantum,
-    ratio, set_theory, sets, stats, surreal, tensor, text, thermo, topology, trig, units,
+    number_theory, numerical, optics, optimize, ordinals, padic, pchem, physics, probability,
+    quantum, ratio, set_theory, sets, special_relativity, stats, surreal, tensor, text, thermo,
+    topology, trig, units,
 )
 
 __all__ = ["SKILLS", "Skill", "call", "get", "register"]
