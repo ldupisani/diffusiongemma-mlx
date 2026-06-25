@@ -128,6 +128,74 @@ def build_prompt(question: str) -> str:
     return f"{_SYSTEM}\n\n{shots}\n\nQ: {question}\n<program>\n"
 
 
+# --- programmatic query preprocessing (0 extra model calls) ----------------------------
+# Independent, toggleable transforms applied to the question BEFORE translation. Each is a pure
+# str→str function; `preprocess(q, steps)` composes a chosen subset in a fixed order so they can
+# be ablated (each alone, every pair, all) via bench.run_ablation — ship only what measures better.
+
+# Standalone small cardinals + "dozen"/"twice"/"half" only. Compounds ("two hundred", "twenty-five")
+# are intentionally excluded — naive word→digit would mangle them ("two hundred" → "2 100").
+_WORD_NUM = {
+    "one": "1", "two": "2", "three": "3", "four": "4", "five": "5", "six": "6", "seven": "7",
+    "eight": "8", "nine": "9", "ten": "10", "eleven": "11", "twelve": "12", "thirteen": "13",
+    "fourteen": "14", "fifteen": "15", "sixteen": "16", "seventeen": "17", "eighteen": "18",
+    "nineteen": "19", "twenty": "20", "dozen": "12",
+}
+_WORD_NUM_RE = re.compile(r"\b(" + "|".join(_WORD_NUM) + r")\b", re.IGNORECASE)
+_THOUSANDS = re.compile(r"(?<=\d),(?=\d{3}(?:\D|$))")
+_GIVEN_NUM = re.compile(r"\$?\d[\d,]*(?:\.\d+)?%?")
+_SENT_SPLIT = re.compile(r"(?<=[.?!])\s+")
+_ASK_CUE = re.compile(r"\s*(how many|how much|what|find|calculate|determine|how long)\b", re.IGNORECASE)
+
+
+def _normalize(q: str) -> str:
+    """Canonicalize literals: strip thousands separators, map small number-words to digits, and
+    'twice'/'half' to their factors. Conservative — avoids compound words it can't safely fold."""
+    q = _THOUSANDS.sub("", q)
+    q = re.sub(r"\btwice\b", "2 times", q, flags=re.IGNORECASE)
+    q = re.sub(r"\bhalf\b", "0.5 times", q, flags=re.IGNORECASE)
+    return _WORD_NUM_RE.sub(lambda m: _WORD_NUM[m.group(0).lower()], q)
+
+
+def _givens_scaffold(q: str) -> str:
+    """Append a 'Known quantities' checklist — every number with the few words that follow it —
+    so the model is anchored to use each given (the traced errors all dropped/misused a given)."""
+    items = []
+    for m in _GIVEN_NUM.finditer(q):
+        tail = q[m.end():]
+        cut = re.search(r"[\d,.;]", tail)         # stop the label at the next number / clause break
+        label = " ".join(re.findall(r"[a-zA-Z]+", (tail[:cut.start()] if cut else tail[:24]))[:3])
+        items.append(f"{m.group(0)} {label}".strip())
+    return q + "\nKnown quantities: " + "; ".join(items) + "." if items else q
+
+
+def _question_isolation(q: str) -> str:
+    """Append the sentence that states what's asked, so the model solves for the right unknown."""
+    sents = _SENT_SPLIT.split(q.strip())
+    asked = next((s for s in sents if "?" in s), None) \
+        or next((s for s in sents if _ASK_CUE.match(s)), None)
+    return q + "\nQuestion: " + asked.strip() if asked else q
+
+
+PREPROCESS_STEPS = {"normalize": _normalize, "givens": _givens_scaffold,
+                    "question": _question_isolation}
+PREPROCESS_ORDER = ["normalize", "givens", "question"]  # normalize first; appenders after
+
+
+def preprocess(question: str, steps) -> str:
+    """Apply the named transforms (a subset of PREPROCESS_STEPS) in canonical order. Unknown names
+    raise. `steps` empty/None → the question unchanged (the ablation baseline)."""
+    steps = set(steps or ())
+    unknown = steps - PREPROCESS_STEPS.keys()
+    if unknown:
+        raise ValueError(f"unknown preprocess step(s): {sorted(unknown)}")
+    q = question
+    for name in PREPROCESS_ORDER:
+        if name in steps:
+            q = PREPROCESS_STEPS[name](q)
+    return q
+
+
 def parse_program(raw: str) -> str:
     """Extract the program body from the model output. Tolerant of a missing opening tag (the
     prompt primes it), a closing tag only, and a MALFORMED opening tag without its '>' (small
@@ -267,20 +335,22 @@ def solve_consistent(question: str, *, k: int = 5, sampler=None, backend: str = 
 
 
 def solve(question: str, *, asker=None, model: str = "haiku", backend: str = "claude",
-          timeout: int = 60, max_tokens: int = 512) -> dict:
+          timeout: int = 60, max_tokens: int = 512, preprocess_steps=None) -> dict:
     """Translate the word problem to a program (1 model call) and execute it deterministically.
-    Returns {answer, program, model_calls, error, unused_givens}. `unused_givens` is a label-free
-    confidence signal (non-empty ⇒ a stated quantity went unused ⇒ low confidence). `asker(prompt)
-    ->str|None` is injectable for testing; otherwise `backend` picks the model path."""
+    Returns {answer, program, model_calls, error, unused_givens}. `preprocess_steps` (a subset of
+    PREPROCESS_STEPS) deterministically rewrites the question before translation (0 extra calls);
+    the unused-given check still uses the ORIGINAL question. `asker(prompt)->str|None` is injectable
+    for testing; otherwise `backend` picks the model path."""
     if asker is None:
         asker = _default_asker(backend, model=model, timeout=timeout, max_tokens=max_tokens)
 
-    raw = asker(build_prompt(question))
+    prompt_q = preprocess(question, preprocess_steps) if preprocess_steps else question
+    raw = asker(build_prompt(prompt_q))
     if not raw:
         return {"answer": None, "program": None, "model_calls": 1,
                 "error": "no response from the model", "unused_givens": []}
     program = parse_program(raw)
-    unused = unused_givens(question, program)
+    unused = unused_givens(question, program)   # original question, not the scaffolded one
     try:
         return {"answer": run_program(program), "program": program, "model_calls": 1,
                 "error": None, "unused_givens": unused}

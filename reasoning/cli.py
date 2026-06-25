@@ -153,6 +153,22 @@ def cmd_eval_all(args):
 def cmd_bench(args):
     from . import bench
 
+    if args.ablation:
+        limit = args.limit if args.limit is not None else 40
+        who = "local MLX sidecar" if args.backend == "sidecar" else f"claude/{args.model}"
+        print(f"GSM8K [{args.slice}] — preprocessing ablation via {who} (greedy; prompt is the "
+              f"only variable), {limit} questions\n")
+        results, total = bench.run_ablation(slice=args.slice, limit=limit, backend=args.backend,
+                                            model=args.model)
+        base = results.get((), 0)
+        print(f"{'preprocess config':32} {'solved':>8}  {'Δ vs none':>10}")
+        print("-" * 54)
+        for cfg, solved in sorted(results.items(), key=lambda kv: (-kv[1], len(kv[0]))):
+            label = "+".join(cfg) if cfg else "(none / baseline)"
+            delta = solved - base
+            print(f"{label:32} {solved:>3}/{total:<4}  {delta:+d} ({delta/total:+.0%})")
+        return
+
     if args.translate or args.consistency:
         limit = args.limit if args.limit is not None else 25
         who = "local MLX sidecar" if args.backend == "sidecar" else f"claude/{args.model}"
@@ -488,6 +504,8 @@ def main():
     bn.add_argument("--agree-threshold", dest="agree_threshold", type=float, default=0.8,
                     help="flag low confidence when sample agreement < this (default 0.8: best "
                          "recall/false-alarm tradeoff measured on dev — a lone dissenter is still confident)")
+    bn.add_argument("--ablation", action="store_true",
+                    help="grid-test query-preprocessing transforms (none/each/pairs/all) on the same questions")
     bn.set_defaults(fn=cmd_bench)
     sub.add_parser("list").set_defaults(fn=cmd_list)
     da = sub.add_parser("data", help="manage datasets in $DIFG_DATA_DIR")

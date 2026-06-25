@@ -163,6 +163,37 @@ def test_solve_consistent_all_unparseable():
     assert out["answer"] is None and out["agreement"] == 0.0
 
 
+# --- query preprocessing (independent, ablatable transforms) ---------------------------
+
+def test_normalize_words_and_separators():
+    assert translate._normalize("He has three apples") == "He has 3 apples"
+    assert translate._normalize("twice as many") == "2 times as many"
+    assert translate._normalize("half the money") == "0.5 times the money"
+    assert translate._normalize("made $1,000,000") == "made $1000000"
+    # compounds are intentionally NOT folded (would mangle), and substrings are safe
+    assert "someone" in translate._normalize("someone")           # \bone\b doesn't fire inside
+
+
+def test_givens_scaffold_lists_quantities():
+    out = translate._givens_scaffold("Carl has 4 pink hats and 6 green hats.")
+    assert out.startswith("Carl has 4 pink hats and 6 green hats.")
+    assert "Known quantities:" in out and "4 pink hats" in out and "6 green hats" in out
+
+
+def test_question_isolation_appends_asked_sentence():
+    out = translate._question_isolation("A long setup. How many remain in the box?")
+    assert out.endswith("Question: How many remain in the box?")
+
+
+def test_preprocess_composes_in_order_and_validates():
+    q = "He had three boxes. How many are left?"
+    both = translate.preprocess(q, ["normalize", "question"])
+    assert "3 boxes" in both and both.rstrip().endswith("How many are left?")
+    assert translate.preprocess(q, []) == q                       # baseline = unchanged
+    with pytest.raises(ValueError):
+        translate.preprocess(q, ["bogus"])
+
+
 def test_default_asker_backends():
     # both known backends build a callable without making a call; unknown raises
     assert callable(translate._default_asker("claude", model="haiku", timeout=5, max_tokens=64))

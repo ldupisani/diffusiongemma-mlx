@@ -317,6 +317,33 @@ def run_translate(slice: str = "dev", limit: int | None = 25, *, asker=None,
                            answered_wrong=answered_wrong)
 
 
+def run_ablation(slice: str = "dev", limit: int | None = 40, *, backend: str = "sidecar",
+                 model: str = "haiku", configs=None) -> tuple[dict, int]:
+    """Ablate query-preprocessing transforms: run the translator (single greedy draw, so the
+    PROMPT is the only variable) under each config on the SAME questions and count solved@1call.
+    `configs` defaults to the full power set of the three steps. Returns ({config_tuple: solved},
+    total). The local sidecar is the right backend — it has a real error population to move."""
+    from itertools import combinations
+    from . import translate
+    if slice not in _SLICE_HANDLE:
+        raise ValueError(f"slice must be one of {list(_SLICE_HANDLE)}")
+    rows = _rows(_SLICE_HANDLE[slice], limit)
+    if configs is None:
+        names = translate.PREPROCESS_ORDER
+        configs = [tuple(c) for r in range(len(names) + 1) for c in combinations(names, r)]
+
+    results: dict = {}
+    for cfg in configs:
+        solved = 0
+        for question, answer in rows:
+            out = translate.solve(question, backend=backend, model=model,
+                                  preprocess_steps=list(cfg))
+            if out["answer"] is not None and is_correct(str(out["answer"]), gold_answer(answer)):
+                solved += 1
+        results[cfg] = solved
+    return results, len(rows)
+
+
 def run_consistency(slice: str = "dev", limit: int | None = 25, *, k: int = 5,
                     threshold: float = 0.8, sampler=None, backend: str = "sidecar",
                     model: str = "haiku") -> TranslateReport:
