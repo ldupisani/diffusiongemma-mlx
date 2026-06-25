@@ -568,6 +568,13 @@ CASES = [
     ("How long would it take to travel from London to Casablanca at 60 mph?",
      "21.57 hours", "synthesized_travel"),
     ("What is the travel cost from Paris to Berlin at $0.20 per km?", "$175.49", "synthesized_travel"),
+    # thermodynamics (authored via `cli author-domain`); last two rows are reverse-direction guards.
+    ("What is the Carnot efficiency of a heat engine operating between 500 K and 300 K?", "40%", "thermodynamics"),
+    ("What is the entropy change when 1000 J of heat is added at 250 K?", "4 J/K", "thermodynamics"),
+    ("How much heat is needed to raise 2 kg of water with a specific heat of 4184 by 10 K?", "83680 J", "thermodynamics"),
+    ("What is the COP of a refrigerator operating between 300 K and 250 K?", "5", "thermodynamics"),
+    ("What is the Shannon entropy of [0.5, 0.5]?", "1", "ml_theory"),
+    ("How much work is done by a force of 20 N over a distance of 4 meters?", "80 J", "physics"),
     # geography population change between two years (delta + percent); the single-year lookup must
     # NOT grab these (it would silently answer the first year only).
     ("How much did the population of London grow from 2010 to 2020?", "+900000 (+11.25%)", "geography"),

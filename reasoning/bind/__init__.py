@@ -69,3 +69,5 @@ from reasoning.bind.geography import *   # noqa: F401,F403
 from reasoning.bind.introspect import *   # noqa: F401,F403
 
 from reasoning.bind.travel import *   # noqa: F401,F403
+
+from reasoning.bind.thermo import *   # noqa: F401,F403
