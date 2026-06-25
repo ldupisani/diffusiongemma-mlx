@@ -150,6 +150,31 @@ def cmd_eval_all(args):
           f"(every coded answer used 0 model calls)")
 
 
+def cmd_bench(args):
+    from . import bench
+
+    rep = bench.run(slice=args.slice, limit=args.limit)
+    print(f"GSM8K [{rep.slice}] — deterministic engine, code-only (0 model calls)\n")
+    print(f"questions:      {rep.total}")
+    print(f"solved @0call:  {rep.solved_0call}/{rep.total}  ({rep.accuracy:.1%})   ← headline")
+    print(f"coverage:       {rep.coverage:.1%} routed to a coded domain\n")
+    print("miss buckets (a capability work-list):")
+    for bucket in ("correct", "wrong_answer", "needs_llm", "no_route"):
+        n = rep.buckets.get(bucket, 0)
+        if n:
+            print(f"  {bucket:14} {n:>5}  ({n / rep.total:.1%})")
+    if rep.by_domain:
+        print("\ndomains claiming questions (correct / routed):")
+        for dom, routed in rep.by_domain.most_common(12):
+            print(f"  {dom:22} {rep.domain_correct.get(dom, 0):>4} / {routed:<4}")
+    if rep.misses:  # DEV only — TEST keeps none (aggregate-only firewall)
+        show = min(args.show_misses, len(rep.misses))
+        print(f"\nsample DEV misses (first {show}, for gap-mining):")
+        for q, gold, o in rep.misses[:show]:
+            tag = "no_route" if not o.matched else (o.domain or "?")
+            print(f"  [{tag}] gold={gold}  {q[:90].replace(chr(10), ' ')}")
+
+
 def cmd_list(args):
     orchs = registry.load_orchestrators()
     if not orchs:
@@ -385,6 +410,13 @@ def main():
     ea.add_argument("--teacher", choices=["diffusion", "claude"], default="claude",
                     help="teacher backend (default: claude — no sidecar needed)")
     ea.set_defaults(fn=cmd_eval_all)
+    bn = sub.add_parser("bench", help="GSM8K-style word-problem accuracy of the code-only engine")
+    bn.add_argument("--slice", choices=["dev", "test"], default="dev",
+                    help="dev=gsm8k_train (inspectable); test=gsm8k_test (aggregate-only)")
+    bn.add_argument("--limit", type=int, default=None, help="cap the number of questions")
+    bn.add_argument("--show-misses", dest="show_misses", type=int, default=20,
+                    help="how many DEV misses to print for gap-mining")
+    bn.set_defaults(fn=cmd_bench)
     sub.add_parser("list").set_defaults(fn=cmd_list)
     da = sub.add_parser("data", help="manage datasets in $DIFG_DATA_DIR")
     da.add_argument("action",
