@@ -318,7 +318,7 @@ def run_translate(slice: str = "dev", limit: int | None = 25, *, asker=None,
 
 
 def run_consistency(slice: str = "dev", limit: int | None = 25, *, k: int = 5,
-                    threshold: float = 1.0, sampler=None, backend: str = "sidecar",
+                    threshold: float = 0.8, sampler=None, backend: str = "sidecar",
                     model: str = "haiku") -> TranslateReport:
     """Self-consistency translator: draw K programs per question, majority-vote (translate
     .solve_consistent), score the vote vs gold. The confidence flag is `agreement < threshold`

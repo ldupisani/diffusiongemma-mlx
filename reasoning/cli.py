@@ -485,8 +485,9 @@ def main():
                     help="translator backend: claude CLI (default) or the local MLX sidecar")
     bn.add_argument("--consistency", type=int, default=0, metavar="K",
                     help="self-consistency: draw K programs/question and majority-vote (implies translate)")
-    bn.add_argument("--agree-threshold", dest="agree_threshold", type=float, default=1.0,
-                    help="flag low confidence when sample agreement < this (default 1.0 = non-unanimous)")
+    bn.add_argument("--agree-threshold", dest="agree_threshold", type=float, default=0.8,
+                    help="flag low confidence when sample agreement < this (default 0.8: best "
+                         "recall/false-alarm tradeoff measured on dev — a lone dissenter is still confident)")
     bn.set_defaults(fn=cmd_bench)
     sub.add_parser("list").set_defaults(fn=cmd_list)
     da = sub.add_parser("data", help="manage datasets in $DIFG_DATA_DIR")
