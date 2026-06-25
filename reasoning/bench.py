@@ -78,6 +78,41 @@ def is_correct(engine_answer: str | None, gold: float | None,
     return abs(v - gold) <= max(abs_tol, rel_tol * abs(gold))
 
 
+# GSM8K gold answers annotate every arithmetic step as a calculator marker "<<a op b=c>>".
+# Counting them reads the problem's *arithmetic depth* straight off the gold — no LLM, no
+# question-specific logic. The step-count histogram IS the reachable-ceiling curve: a perfect
+# general N-step solver caps at the fraction of problems with <= N steps.
+_STEP_RE = re.compile(r"<<([^>]*)>>")
+_OP_CHARS = set("+-*/")
+DEPTH_ORDER = ["single", "double", "multi(3-4)", "deep(5+)", "none"]
+
+
+def structure(gold_text: str) -> dict:
+    """Arithmetic structure of a GSM8K problem, read from its gold's calculator markers:
+    step count, the operator set used, and a coarse depth bucket."""
+    steps = _STEP_RE.findall(gold_text or "")
+    n = len(steps)
+    ops = set()
+    for s in steps:
+        expr = s.split("=", 1)[0]
+        ops |= {c for c in expr if c in _OP_CHARS}
+    depth = ("single" if n == 1 else "double" if n == 2 else
+             "multi(3-4)" if 3 <= n <= 4 else "deep(5+)" if n >= 5 else "none")
+    return {"steps": n, "ops": ops, "depth": depth}
+
+
+def depth_profile(slice: str = "dev", limit: int | None = None):
+    """The arithmetic-depth histogram over a slice's golds — NO routing, so it's cheap over the
+    full slice. Returns (Counter depth->count, total). This is the reachable-ceiling diagnostic:
+    intrinsic to the data, identical (modulo sampling) for dev and test."""
+    if slice not in _SLICE_HANDLE:
+        raise ValueError(f"slice must be one of {list(_SLICE_HANDLE)}")
+    hist: Counter = Counter()
+    for _q, answer in _rows(_SLICE_HANDLE[slice], limit):
+        hist[structure(answer)["depth"]] += 1
+    return hist, sum(hist.values())
+
+
 @dataclass
 class Outcome:
     matched: bool          # a coded domain (or compose) claimed the query
@@ -144,6 +179,8 @@ class Report:
     buckets: Counter            # classify() -> count
     by_domain: Counter          # domain -> count routed (any outcome)
     domain_correct: Counter     # domain -> count correct
+    no_route_depth: Counter     # depth bucket -> count among no_route misses
+    solved_depth: Counter       # depth bucket -> count among solved@0call
     misses: list                # [(question, gold, Outcome)] — populated for DEV only
 
     @property
@@ -167,11 +204,14 @@ def run(slice: str = "test", limit: int | None = None, *, keep_misses: int = 40)
     buckets: Counter = Counter()
     by_domain: Counter = Counter()
     domain_correct: Counter = Counter()
+    no_route_depth: Counter = Counter()
+    solved_depth: Counter = Counter()
     misses: list = []
     solved = 0
 
     for question, answer in rows:
         gold = gold_answer(answer)
+        depth = structure(answer)["depth"]
         o = solve(question)
         correct = o.model_calls == 0 and is_correct(o.answer, gold)
         bucket = classify(o, correct)
@@ -182,8 +222,13 @@ def run(slice: str = "test", limit: int | None = None, *, keep_misses: int = 40)
                 domain_correct[o.domain] += 1
         if correct:
             solved += 1
-        elif slice == "dev" and len(misses) < keep_misses:
-            misses.append((question, gold, o))
+            solved_depth[depth] += 1
+        else:
+            if bucket == "no_route":
+                no_route_depth[depth] += 1
+            if slice == "dev" and len(misses) < keep_misses:
+                misses.append((question, gold, o))
 
     return Report(slice=slice, total=len(rows), solved_0call=solved, buckets=buckets,
-                  by_domain=by_domain, domain_correct=domain_correct, misses=misses)
+                  by_domain=by_domain, domain_correct=domain_correct,
+                  no_route_depth=no_route_depth, solved_depth=solved_depth, misses=misses)

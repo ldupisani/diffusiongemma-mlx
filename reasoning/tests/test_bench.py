@@ -36,6 +36,19 @@ def test_classify_buckets():
     assert bench.classify(O(False, 0, None, None), correct=False) == "no_route"
 
 
+def test_structure_counts_calc_markers():
+    one = "She bakes <<16-3=13>>13.\n#### 13"
+    two = "a <<16-3-4=9>>9 then <<9*2=18>>18.\n#### 18"
+    assert bench.structure(one)["steps"] == 1
+    assert bench.structure(one)["depth"] == "single"
+    assert bench.structure(two)["steps"] == 2
+    assert bench.structure(two)["depth"] == "double"
+    assert bench.structure(two)["ops"] == {"-", "*"}
+    assert bench.structure("no markers, pure prose\n#### 5")["depth"] == "none"
+    deep = "".join(f"<<{i}+1={i+1}>>" for i in range(5)) + "\n#### 5"
+    assert bench.structure(deep)["depth"] == "deep(5+)"
+
+
 def test_solve_routes_plain_arithmetic_code_only():
     # A query the engine genuinely owns must solve at 0 model calls.
     o = bench.solve("what is 12 times 8?")

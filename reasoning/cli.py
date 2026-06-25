@@ -153,11 +153,37 @@ def cmd_eval_all(args):
 def cmd_bench(args):
     from . import bench
 
+    # Reachable-ceiling diagnostic — intrinsic to the data (gold step counts), no routing,
+    # so it runs over the FULL slice cheaply. The cumulative curve is the max accuracy a
+    # perfect general N-step arithmetic solver could ever reach.
+    hist, htot = bench.depth_profile(slice=args.slice)
+    print(f"GSM8K [{args.slice}] — arithmetic-depth ceiling (full slice, {htot} questions)\n")
+    cum = 0
+    cum_label = {"single": "≤1 step", "double": "≤2 steps",
+                 "multi(3-4)": "≤4 steps", "deep(5+)": "any depth"}
+    for d in bench.DEPTH_ORDER:
+        n = hist.get(d, 0)
+        if d == "none":
+            if n:
+                print(f"  {d:12} {n:>5}  ({n / htot:.1%})  — no calc markers (pure-NL / table)")
+            continue
+        cum += n
+        print(f"  {d:12} {n:>5}  ({n / htot:5.1%})   cumulative ceiling {cum / htot:5.1%}"
+              f"  ({cum_label[d]})")
+    print()
+
     rep = bench.run(slice=args.slice, limit=args.limit)
-    print(f"GSM8K [{rep.slice}] — deterministic engine, code-only (0 model calls)\n")
-    print(f"questions:      {rep.total}")
+    scope = f"{rep.total}" + (f" (--limit)" if args.limit else "")
+    print(f"--- code-only engine on {scope} routed questions ---")
     print(f"solved @0call:  {rep.solved_0call}/{rep.total}  ({rep.accuracy:.1%})   ← headline")
     print(f"coverage:       {rep.coverage:.1%} routed to a coded domain\n")
+    if rep.no_route_depth:
+        print("no_route misses by arithmetic depth (is even the shallow tail unreached?):")
+        for d in bench.DEPTH_ORDER:
+            n = rep.no_route_depth.get(d, 0)
+            if n:
+                print(f"  {d:12} {n:>5}")
+        print()
     print("miss buckets (a capability work-list):")
     for bucket in ("correct", "wrong_answer", "needs_llm", "no_route"):
         n = rep.buckets.get(bucket, 0)
