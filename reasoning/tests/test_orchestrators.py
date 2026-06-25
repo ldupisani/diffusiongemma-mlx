@@ -608,6 +608,15 @@ CASES = [
     # reverse guards: must not steal plain arithmetic or the quantum_mechanics single-qubit domain.
     ("What is 2 to the power of 5?", "32", "arithmetic"),
     ("Normalize the qubit state 3, 4", "0.6, 0.8", "quantum_mechanics"),
+    # acoustics (authored via Haiku --verify; bind uses num_near for unit-phrased inputs — one
+    # within-domain branch-order fix by hand: a "wave speed" query was hitting the wavelength branch).
+    ("What is the wave speed for a frequency of 440 Hz and wavelength of 0.78 m?", "343.2", "acoustics"),
+    ("What is the wavelength for a wave speed of 343 m/s and frequency of 440 Hz?", "0.779545", "acoustics"),
+    ("What is the period for a frequency of 440 Hz?", "0.002273", "acoustics"),
+    ("What is the wave number for a wavelength of 0.78 m?", "8.055366", "acoustics"),
+    ("What is the 3rd harmonic frequency of a string with wave speed 343 m/s and length 0.5 m?", "1029", "acoustics"),
+    # reverse guard: must not steal genetics' "allele frequency".
+    ("What is the allele frequency of 35 out of 50 alleles?", "0.7", "genetics"),
     # geography population change between two years (delta + percent); the single-year lookup must
     # NOT grab these (it would silently answer the first year only).
     ("How much did the population of London grow from 2010 to 2020?", "+900000 (+11.25%)", "geography"),

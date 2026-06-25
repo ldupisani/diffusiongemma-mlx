@@ -8,7 +8,8 @@ from .base import SKILLS, Skill, call, get, register
 
 # Import families for their registration side effects (must come after base import).
 from . import (  # noqa: E402,F401
-    algebra, applied_math, arithmetic, bases, biochem, calculus, cardinals, chemistry, clock,
+    acoustics, algebra, applied_math, arithmetic, bases, biochem, calculus, cardinals, chemistry,
+    clock,
     complex_calc, complex_math, coord, crypto, dates, diffgeo, discrete, dynamics, expr, finance,
     funcanalysis, game, genetics, geo, geometry,
     group_theory, health, hypercomplex, hyperreal, introspect, logic, logistics, materials, ml,
