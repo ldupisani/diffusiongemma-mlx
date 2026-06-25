@@ -310,7 +310,9 @@ another's input, still at 0 model calls. Shipped cross-domain syntheses: `synthe
 (area → fencing/flooring **cost**, i.e. geometry → finance), `synthesized_physics` (distance/speed
 → travel **cost/time**, physics → geo/finance), `synthesized_geo` (distance → flight time/price),
 `synthesized_logistics` (trucks needed → shipping **cost**, logistics → finance),
-`synthesized_chemistry`, `synthesized_materials`.
+`synthesized_travel` (two named places → geography name→coords → geo haversine → travel
+time/cost — a 3-domain chain over a shared *place* entity), `synthesized_chemistry`,
+`synthesized_materials`.
 
 When you add a domain, scan its neighbours for a natural hand-off:
 

@@ -563,6 +563,11 @@ CASES = [
      "$3500", "synthesized_logistics"),
     ("How much to ship 1000 units, trucks hold 150 each at $500 per truck, split between 2 warehouses?",
      "$1750 each", "synthesized_logistics"),
+    # synthesis: travel between NAMED places — geography (name→coords) → geo (haversine) → time/cost
+    ("How far is London from Casablanca?", "2083.15 km", "synthesized_travel"),
+    ("How long would it take to travel from London to Casablanca at 60 mph?",
+     "21.57 hours", "synthesized_travel"),
+    ("What is the travel cost from Paris to Berlin at $0.20 per km?", "$175.49", "synthesized_travel"),
 ]
 
 
