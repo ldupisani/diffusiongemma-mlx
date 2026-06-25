@@ -76,3 +76,5 @@ from reasoning.bind.optics import *            # noqa: F401,F403
 from reasoning.bind.special_relativity import *  # noqa: F401,F403
 
 from reasoning.bind.supply_chain import *      # noqa: F401,F403
+
+from reasoning.bind.quantum_information import *  # noqa: F401,F403

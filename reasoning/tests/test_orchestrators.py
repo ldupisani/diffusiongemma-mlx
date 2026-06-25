@@ -598,6 +598,16 @@ CASES = [
     ("What is the takt time for 480 minutes available and 60 customer units demanded?", "8 min/unit", "supply_chain"),
     # reverse guard: EPQ must not steal logistics' EOQ.
     ("What is the EOQ for demand 1000, order cost 50, holding cost 4?", "158.113883", "logistics"),
+    # quantum_information (authored via `cli author-domain --model haiku --verify` — fully autonomous,
+    # routing self-repaired, no hand fixes). Complements the quantum_mechanics single-qubit domain.
+    ("What is the Hilbert space dimension of a 3-qubit system?", "8", "quantum_information"),
+    ("How many qubits are needed to represent 256 classical states?", "8", "quantum_information"),
+    ("How many iterations does Grover's algorithm require for a database of 100 items?", "7", "quantum_information"),
+    ("What is the fidelity between states (1, 0) and (0.7071, 0.7071)?", "0.49999", "quantum_information"),
+    ("What is the dimension of the combined system of two subsystems with dimensions 2 and 4?", "8", "quantum_information"),
+    # reverse guards: must not steal plain arithmetic or the quantum_mechanics single-qubit domain.
+    ("What is 2 to the power of 5?", "32", "arithmetic"),
+    ("Normalize the qubit state 3, 4", "0.6, 0.8", "quantum_mechanics"),
     # geography population change between two years (delta + percent); the single-year lookup must
     # NOT grab these (it would silently answer the first year only).
     ("How much did the population of London grow from 2010 to 2020?", "+900000 (+11.25%)", "geography"),
