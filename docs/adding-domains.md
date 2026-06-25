@@ -208,6 +208,27 @@ tier before any domain. Don't bind those; either (a) leave the two-operand op as
 unbound skill (like `cplx.multiply`, `hyper.q_multiply`), or (b) use a phrasing without "and"
 ("is A greater than B"). Document the unbound op so it's a choice, not a gap.
 
+### 3d. Decline on unexplained residue — the anti-silent-wrong rule
+
+**A bind must account for every salient value in the query. If the query carries a number,
+year, or entity the skill doesn't consume, that's a RED FLAG — decline, don't answer from a
+subset.** Partial matches are the top source of confident-wrong answers: the bind extracts what it
+knows and silently ignores the rest, producing a plausible number that answers a *different*
+question. Real cases this session:
+
+- *"population of London in 2010 **and 2020**"* — the single-year lookup grabbed `2010` and
+  silently dropped `2020`. Fix: a single-year op declines when ≥2 years are present (it can't
+  represent two); the *change* op handles "from Y1 to Y2".
+- *"population of London in **4001**"* — the year was outside the regex, so it was dropped and the
+  latest figure returned unlabeled. Fix: recognize the value, then handle/flag it.
+
+Tooling: `has_unconsumed_numbers(query, used)` (in `bind/_common.py`) returns True when the query
+has a standalone magnitude the bind didn't use — call it in a fixed-arity numeric bind and decline.
+It's conservative (ignores numbers glued to a date/ratio/decimal/word), so it flags genuine extra
+values without tripping on units. **The discipline generalizes beyond numbers:** an extra place, an
+extra entity, a second operand the op ignores — all are residue. When unsure whether you handle the
+whole query, decline; a clean "no match" beats a confident wrong answer.
+
 ---
 
 ## 4. Parsing gotchas (each cost a debugging cycle)
@@ -337,6 +358,7 @@ collision discipline as §5.
 - [ ] `bind_<name>` with a **conservative gate**; registered in `bind/__init__.py`.
 - [ ] Orchestrator `META`/`precondition`/`run`; `bind_gated` chosen per §2 (number-list/matrix → tier 2).
 - [ ] Forward routing ✓ at 0 model calls; **reverse** routing of neighbours ✓ (decline-guards added).
+- [ ] **No unexplained residue?** the bind consumes every salient value, or declines (§3d) — a partial match that drops a number/year/entity is a silent-wrong answer.
 - [ ] `CASES` rows incl. a collision guard; full suite green.
 - [ ] **Seed datasets?** generator in `datagen.py` if it yields rows/series, or a reference seed if it has constant facts (§8).
 - [ ] **Synthesize?** scan neighbours for a chained question → a `synthesized_<x>` orchestrator, routing tested both ways (§9).

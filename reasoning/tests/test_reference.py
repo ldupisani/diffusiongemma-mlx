@@ -105,6 +105,22 @@ class TestReference(unittest.TestCase):
         ch = self.ref.population_change("London", 2010, 2020)
         self.assertEqual((ch["delta"], ch["pct"], ch["estimated"]), (900000, 11.25, False))
 
+    def test_residue_guard_declines_partial_match(self):
+        from reasoning import router
+        from reasoning.bind._common import has_unconsumed_numbers, query_numbers
+        # a single-year lookup must NOT silently answer one of two years it can't represent
+        m = router.recognize("What is the population of London in 2010 and 2020?")
+        self.assertTrue(m is None or m.orchestrator.id != "geography")
+        # legitimate single-year and change queries still route
+        self.assertEqual(router.recognize("What is the population of London in 2010?").orchestrator.id,
+                         "geography")
+        self.assertEqual(router.recognize("How much did London grow from 2010 to 2020?").orchestrator.id,
+                         "geography")
+        # the reusable guard: flags an extra standalone value, ignores dates/consumed values
+        self.assertTrue(has_unconsumed_numbers("in 2010 and 2020", [2010]))
+        self.assertFalse(has_unconsumed_numbers("radius 5", [5]))
+        self.assertEqual(query_numbers("between 2024-03-03 and 2024-07-15"), set())
+
     def test_population_comparison(self):
         from reasoning import router
         from reasoning.compiled import model_calls

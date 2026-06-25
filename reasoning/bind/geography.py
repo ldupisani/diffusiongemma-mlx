@@ -114,5 +114,9 @@ def bind_geography(query: str) -> tuple[bool, dict | None, str, int]:
     if "coordinate" in q or "latitude" in q or "longitude" in q or "where is" in q:
         return ok("coordinates", place)
     if "population" in q:
+        # red flag: a single-year lookup can't represent two years (or any extra value the query
+        # carries) — decline rather than silently answer using only the first (see §residue).
+        if len(years) > 1 or has_unconsumed_numbers(query, years[:1]):
+            return False, None, "code", 0
         return ok("population", place, year=years[0] if years else None)
     return False, None, "code", 0
