@@ -1,5 +1,6 @@
-"""Optics — thin-lens imaging, magnification, lens power, refraction, and total internal reflection.
-All operations are deterministic; inputs/outputs in SI units (meters, degrees)."""
+"""Optics — thin-lens imaging, magnification, lens power, refraction, total internal reflection,
+f-number, and angular resolution. All operations are deterministic; inputs/outputs in SI units
+(meters, degrees, radians)."""
 from __future__ import annotations
 
 import math
@@ -61,3 +62,12 @@ def critical_angle(n1: float, n2: float) -> float:
     theta_c_rad = math.asin(ratio)
     theta_c_deg = math.degrees(theta_c_rad)
     return round(theta_c_deg, 6)
+
+
+@register("optics.f_number",
+          "f-number (focal ratio) N = focal length / aperture diameter, dimensionless",
+          [((50, 12.5), 4.0), ((100, 20), 5.0)])
+def f_number(focal_length: float, aperture_diameter: float) -> float:
+    """Focal ratio; f/4 means N=4. A smaller f-number indicates a larger aperture."""
+    n = focal_length / aperture_diameter
+    return round(n, 6)

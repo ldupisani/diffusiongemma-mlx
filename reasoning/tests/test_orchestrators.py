@@ -581,6 +581,8 @@ CASES = [
     ("Lens power for focal length 0.5 meters", "2", "optics"),
     ("Using Snell's law: n1=1, angle=30 degrees, n2=1.5, find refraction angle", "19.471221", "optics"),
     ("Critical angle for total internal reflection: n1=1.5, n2=1", "41.810315", "optics"),
+    # f-number added later via extend-domain (rayleigh op was dropped in review — units didn't fit).
+    ("What is the f-number of a lens with focal length 50 mm and aperture diameter 12.5 mm?", "4", "optics"),
     ("What is the Lorentz factor for 0.8c?", "1.666667", "special_relativity"),
     ("Time dilation: 2 seconds at 0.8c?", "3.333333", "special_relativity"),
     ("Length contraction of 10 meters at 0.6c?", "8", "special_relativity"),
@@ -615,6 +617,9 @@ CASES = [
     ("What is the period for a frequency of 440 Hz?", "0.002273", "acoustics"),
     ("What is the wave number for a wavelength of 0.78 m?", "8.055366", "acoustics"),
     ("What is the 3rd harmonic frequency of a string with wave speed 343 m/s and length 0.5 m?", "1029", "acoustics"),
+    # beat frequency + Doppler added later via extend-domain (Doppler needed a vs-anchor hand fix).
+    ("What is the beat frequency of 440 Hz and 445 Hz?", "5", "acoustics"),
+    ("What is the Doppler shift for a source at 500 Hz approaching at 20 m/s with sound speed 343 m/s?", "530.959752", "acoustics"),
     # reverse guard: must not steal genetics' "allele frequency".
     ("What is the allele frequency of 35 out of 50 alleles?", "0.7", "genetics"),
     # photometry (authored via Haiku --verify; the two-illuminance ambiguity routed correctly on

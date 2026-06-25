@@ -1,8 +1,10 @@
 """bind layer — acoustics / waves. Gated on distinctive wave/acoustics keywords
-(wavelength, Hz, hertz, wave, harmonic, oscillation, sound, string, vibrating).
+(wavelength, Hz, hertz, wave, harmonic, oscillation, sound, string, vibrating, beat, doppler).
 Extracts numeric arguments with num_near for bidirectional unit parsing."""
 
 from __future__ import annotations
+
+import re
 
 from reasoning.bind._common import *  # noqa: F401,F403
 
@@ -17,7 +19,7 @@ def bind_acoustics(query: str) -> tuple[bool, dict | None, str, int]:
     # Gate: must have distinctive wave/acoustics context
     has_wave = any(x in q for x in [
         "wavelength", "hz", "hertz", "wave", "harmonic", "oscillat", "sound",
-        "string", "vibrating", "period"
+        "string", "vibrating", "period", "beat", "doppler", "observed"
     ])
     if not has_wave:
         return False, None, "code", 0
@@ -59,5 +61,33 @@ def bind_acoustics(query: str) -> tuple[bool, dict | None, str, int]:
         return ok("acoustics.wavelength", ["wave_speed", "frequency"],
                   [num_near(query, "wave speed", "speed", "velocity", "m/s"),
                    num_near(query, "frequency", "hz", "hertz")], round=True, places=6)
+
+    # Op 6: Beat frequency — requires both "beat" and "frequency" keywords
+    if "beat" in q and "frequency" in q:
+        # Extract all numbers in the query and take the first two
+        numbers = []
+        for m in re.finditer(r'-?\d+(?:\.\d+)?', query):
+            numbers.append(float(m.group()))
+        if len(numbers) >= 2:
+            return ok("acoustics.beat_frequency", ["frequency_1", "frequency_2"],
+                      [numbers[0], numbers[1]], round=True, places=6)
+        return False, None, "code", 0
+
+    # Op 7: Doppler shift — detect on "doppler" keyword OR "observed frequency" + motion keywords
+    doppler_match = "doppler" in q or ("observed" in q and any(x in q for x in ["moving", "approach", "toward"]))
+    if doppler_match:
+        f = num_near(query, "hz", "hertz", "frequency")
+        # Sound speed: use distinctive "sound" keyword to avoid confusion with source speed
+        v = num_near(query, "sound speed", "sound", "m/s")
+        # Default to 343 m/s (speed of sound in air) if not explicitly provided
+        if v is None:
+            v = 343
+        # Source speed: anchor on the FULL motion phrase ("approaching at 20") so the speed that
+        # follows wins; a bare "approach" anchor sits closer to the preceding frequency ("500 Hz
+        # approaching") and grabs it instead.
+        vs = num_near(query, "approaching at", "moving at", "travelling at", "traveling at",
+                      "source speed", "approach", "moving")
+        return ok("acoustics.doppler_frequency", ["frequency", "sound_speed", "source_speed"],
+                  [f, v, vs], round=True, places=6)
 
     return False, None, "code", 0

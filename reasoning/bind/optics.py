@@ -1,5 +1,6 @@
 """Bind layer — optics. Gated on optics-specific keywords (lens, focal, magnification,
-Snell, critical angle, refraction, refractive index, diopter). Extracts numeric arguments."""
+Snell, critical angle, refraction, refractive index, diopter, f-number, focal ratio, aperture).
+Extracts numeric arguments."""
 from __future__ import annotations
 
 import re
@@ -73,5 +74,14 @@ def bind_optics(query: str) -> tuple[bool, dict | None, str, int]:
         if n1 is None or n2 is None:
             return False, None, "code", 0
         return ok("optics.critical_angle", ["n1", "n2"], [n1, n2], round=True, places=6)
+
+    # f_number: "f-number", "focal ratio", or "f/" notation — gate distinctive to this op.
+    # Do NOT trigger on "focal length" alone (that's image_distance).
+    if "f-number" in q or "focal ratio" in q or "f/" in q:
+        f = num_near(q, "focal length")
+        d = num_near(q, "aperture diameter", "aperture", "diameter")
+        if f is None or d is None:
+            return False, None, "code", 0
+        return ok("optics.f_number", ["focal_length", "aperture_diameter"], [f, d], round=True, places=6)
 
     return False, None, "code", 0
