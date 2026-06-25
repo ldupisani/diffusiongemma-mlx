@@ -270,6 +270,29 @@ to `geometry`, `trigonometry`, `unit_conversion`, `compound_interest`, `base_con
 > answer. When `--verify` reports forward mis-routes that aren't extraction problems, audit the
 > gate's allow-list and any blanket collision-decline for over-reach in BOTH directions.
 
+### 3g. The GSM8K bench is an automated §3f-violation detector — audit *precision*, not coverage
+
+> **Learning.** `python -m reasoning.cli bench --slice dev` routes a held-out word-problem set
+> (GSM8K, in the gitignored data dir — never committed) code-only and reports a **miss taxonomy
+> ordered by harm**. The metric that matters for a deterministic engine is **precision**: *when the
+> engine commits to a number, how often is it right?* A baseline run scored **3.7%** — i.e. the live
+> `ask` tool was returning confident-wrong numbers on multi-step narratives. Every `wrong_answer`
+> cluster, grouped by domain, is a gate keying on a shared word instead of the whole distinctive
+> signal (§3f). Three things this taught:
+> - **Separate `declined` from `wrong_answer`.** A `(no result: …)` is an *honest* bail (low harm,
+>   same end-state as no_route); a committed wrong *number* is the real bug. The harness treats any
+>   answer starting with `(` as a non-answer, mirroring `decompose._solve_clause`. Don't let an
+>   over-broad precondition that ultimately declines distract from the domains emitting bad numbers.
+> - **Tune on `dev`, confirm on `test`.** Fixes made against `dev` generalised to the untouched
+>   `test` slice — but `test` also surfaced `set_problems` (17 wrong) which `dev` under-sampled.
+>   Reading individual `test` items to chase a fix is overfitting; the aggregate count is the guide.
+> - **The fixes are pure §3f.** `ratio.scale` grabbed any "cost"+"how much"+"$"+two number-words →
+>   now needs the textbook form (opens with "if", a repeated item-noun, one price); `priced_cost`
+>   ignored overtime/percentage complications; `bind_sets` fired on the bare word "both" → now needs
+>   a population total or set language. Net: confident-wrong on the held-out test 52 → 33. Run the
+>   bench after adding a domain that touches a common word ("cost", "total", "both", "average") —
+>   it will tell you if your gate leaks onto narrative prose.
+
 ---
 
 ## 4. Parsing gotchas (each cost a debugging cycle)
@@ -323,6 +346,15 @@ to `geometry`, `trigonometry`, `unit_conversion`, `compound_interest`, `base_con
   (nm↔m), produces tiny/huge magnitudes, or wants scientific-notation inputs, either keep every
   value in one consistent unit so the table and the query share literals, or don't add the op — the
   verifier is silent on it and it needs a careful human pass (or a `places=` bump) regardless.
+- **The thousands-separator comma masquerades as a list delimiter.** `entities._NUMBER` (`-?\d+…`)
+  doesn't span grouping, so "$20,700" tokenizes as `20` then `700`, and `numeric_list`'s comma-gap
+  rule joined them into the list `[20, 700]` — `list_statistic` then averaged/summed the fragments
+  into a confident-wrong number ("$100,000" → `[100, 0]`, "4,200 times" → `[4, 200]`). Fix kept LOCAL
+  to `numeric_list`: a bare comma directly before **exactly 3 digits** is a thousands separator and
+  breaks the run (so the stat domain declines), while "4, 200" (comma+**space**) and "4,8,15" (small
+  groups) stay lists. Do **not** "fix" this by teaching the global `_NUMBER` to eat commas — several
+  binds `float(m.group())` the match directly (e.g. `bind_unit_convert`) and choke on "80,000"; the
+  full suite won't catch it (no test exercises that path) but real word-problem data will.
 
 ---
 

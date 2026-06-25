@@ -65,6 +65,16 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   review the result before committing (the loop checks routing + example math, not every edge case).
   CLI: `python -m reasoning.cli author-domain "<name + ops>" [--model opus] [--effort high] [--verify]
   [--max-rounds N] [--dry-run]`.
+- **`reasoning/bench.py`** — word-problem benchmark harness (GSM8K and the like): routes a held-out
+  set CODE-ONLY (mirrors `mcp_server.ask`; an offline guard blocks model calls at `engine._post` so a
+  "model_free" bind that leaks to the LLM is bucketed honestly) and scores against the gold. The
+  dataset lives in the gitignored data dir (handles `gsm8k_train`/`gsm8k_test`) — questions never
+  enter version control. Firewall against overfitting: DEV (=train) is inspectable for gap-mining,
+  TEST (=test) is aggregate-only. Reports a harm-ordered miss taxonomy (`wrong_answer` = confident
+  wrong number; `declined` = honest "(no result)"; `no_route`), **precision** (when it commits to a
+  number, how often right — the routing-safety metric), per-domain confident-wrong (the §3f-hardening
+  target list), and an arithmetic-depth *reachable-ceiling* curve read from the gold's `<<…>>` calc
+  markers. CLI: `python -m reasoning.cli bench --slice dev|test [--limit N]`. 0 model calls.
 - **`backend.py`** — pluggable inference backend (see below).
 - **`reasoning/mcp_server.py`** — exposes the reasoning project as an MCP service (FastMCP, stdio):
   `ask` (route → coded answer + domain + model-call count; 0-call compound split; non-coded types
@@ -123,6 +133,7 @@ DIFG_MODEL=mlx-community/diffusiongemma-26B-A4B-it-4bit ./run.sh   # diffusion i
 python chat_stream.py                     # Python REPL (optional arg: model id)
 python -m pytest reasoning/tests -q       # 76 tests (use system python; .venv lacks pytest)
 python -m reasoning.cli eval-all          # fidelity of every coded orchestrator vs teacher
+python -m reasoning.cli bench --slice dev # GSM8K word-problem accuracy of the code-only engine
 ```
 
 Env: `DIFG_PORT` (8088), `DIFG_MODEL`, `DIFG_BACKEND`, `DIFG_PYTHON` (`.venv/bin/python`).
