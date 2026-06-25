@@ -359,7 +359,13 @@ def bind_priced_cost(query: str) -> tuple[bool, dict | None, str, int]:
         goal = "energy_cost"
     else:
         rate = _HRATE.search(q)
-        if rate and hrs:            # labour: hours × $/hour
+        # labour: hours × $/hour — but ONLY a flat single-rate job. A multi-step pay narrative
+        # (overtime threshold, a percentage adjustment, or several rates / several hours figures)
+        # is NOT hours×rate; computing it anyway emits a confident-wrong cost. Decline those
+        # (docs §3f — the simple-job signal must be the WHOLE signal, not just "$/hr + hours").
+        complex_pay = ("overtime" in q or "more than" in q or "%" in q or "percent" in q
+                       or len(_HRATE.findall(q)) >= 2 or len(_HOURS.findall(q)) >= 2)
+        if rate and hrs and not complex_pay:
             knowns = {"hours": float(hrs[1]), "hourly_rate": float(rate[1])}
             goal = "labor_cost"
     if goal is None:

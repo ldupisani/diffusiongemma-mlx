@@ -313,15 +313,25 @@ def bind_ratio(query: str) -> tuple[bool, dict | None, str, int]:
             return True, {"skill": "ratio.scale", "dims": ["base", "from_n", "to_n"],
                           "places": 2, "suffix": " cups", "base": float(cups[1]),
                           "from_n": float(servs[0]), "to_n": float(servs[1])}, "code", 0
-    elif "cost" in q and "how much" in q and "per" not in q:
-        # item-scaling ("3 apples cost $2, how much for 12 apples?") — never has "per". A
-        # "per <unit>" makes it a rate query this branch would mis-scale ⇒ decline.
-        amt = re.search(r"\$\s*(\d+(?:\.\d+)?)", query)
-        items = re.findall(r"(\d+)\s+[a-z]+", q)  # "3 apples", "12 apples"
-        if amt and len(items) >= 2:
+    elif q.lstrip().startswith("if ") and "cost" in q and "how much" in q and "per" not in q:
+        # item-scaling ("If 3 apples cost $2, how much for 12 apples?") — a conditional textbook
+        # proportion. Three AND-ed signals, all required (docs §3f), because "cost"/"how much"/"$"
+        # alone matches a huge slice of multi-step money word problems and force-scales them into
+        # confident-wrong numbers (the single biggest GSM8K mis-route source):
+        #   (1) the query OPENS with "if …"  — the conditional-proportion form, not a narrative;
+        #   (2) the SAME item-noun appears with two counts ("3 apples … 12 apples"), not a
+        #       coincidental shared counter ("5 pairs of shorts … 2 pairs of shoes");
+        #   (3) exactly ONE price anchor.
+        amt = re.findall(r"\$\s*(\d+(?:\.\d+)?)", query)
+        noun_counts: dict[str, list[str]] = {}
+        for cnt, noun in re.findall(r"(\d+)\s+([a-z]+)", q):  # (count, item-noun)
+            noun_counts.setdefault(noun, []).append(cnt)
+        repeated = [n for n, cs in noun_counts.items() if len(cs) >= 2]
+        if len(amt) == 1 and repeated:
+            cs = noun_counts[repeated[0]]
             return True, {"skill": "ratio.scale", "dims": ["base", "from_n", "to_n"],
-                          "places": 2, "base": float(amt[1]), "from_n": float(items[0]),
-                          "to_n": float(items[1])}, "code", 0
+                          "places": 2, "base": float(amt[0]), "from_n": float(cs[0]),
+                          "to_n": float(cs[1])}, "code", 0
     return False, None, "code", 0
 
 

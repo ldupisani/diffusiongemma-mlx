@@ -113,9 +113,12 @@ def bind_unit_convert(query: str) -> tuple[bool, dict | None, str, int]:
             if s and t:
                 source, target = s, t
 
-    if source and target and _units_compatible(source, target):
+    if source and target and source != target and _units_compatible(source, target):
         return True, {"value": value, "from": source, "to": target,
                       "to_sym": _units.SUFFIX.get(target, f" {target}")}, "code", 0
+    # source == target is an identity "conversion" (no target requested) — e.g. a bare
+    # "10 kilograms of butter to make cookies" splits on "to" with a mass unit on each side.
+    # Echoing "10 kg" is a confident non-answer; decline so a unit word in prose isn't claimed.
     return False, None, "code", 0
 
 
