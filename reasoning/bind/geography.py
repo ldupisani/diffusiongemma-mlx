@@ -21,11 +21,35 @@ def _find_place(query: str):
     return best[1] if best else None
 
 
+_SET_NOUN = (r"cit(?:y|ies)|towns?|capitals?|countr(?:y|ies)|villages?|rivers?|mountains?|"
+             r"lakes?|states?|provinces?|islands?|regions?")
+
+
+def _set_intent(q: str) -> bool:
+    """A request for MANY data points: 'all cities in France', 'largest cities in Germany',
+    'list the countries in Africa', or 'populations of France, Germany and Italy'."""
+    if re.search(r"\b(all|list|every|largest|biggest|major|top|name the|name all)\b", q) \
+            and re.search(rf"\b(?:{_SET_NOUN})\b", q):
+        return True
+    return bool(re.search(r"\b(population|coordinate|capital|area)s?\b", q)
+                and re.search(r",.*\band\b", q))           # explicit comma+and list
+
+
+def _slug(query: str) -> str:
+    s = re.sub(r"[^a-z0-9]+", "_", query.lower()).strip("_")
+    return s[:40].rstrip("_") or "retrieved_set"
+
+
 def bind_geography(query: str) -> tuple[bool, dict | None, str, int]:
     q = query.lower()
 
-    def ok(op, place, **extra):
+    def ok(op, place=None, **extra):
         return True, {"op": op, "place": place, **extra}, "code", 0
+
+    from reasoning import reference
+    # batch retrieval (model-sourced dataset) — only when retrieval is enabled
+    if reference.retrieval_enabled() and _set_intent(q):
+        return ok("set", request=query.strip(), save_as=_slug(query))
 
     if not _GATE.search(query):
         return False, None, "code", 0
@@ -33,7 +57,6 @@ def bind_geography(query: str) -> tuple[bool, dict | None, str, int]:
     if not place:
         # only claim an UNKNOWN place when model retrieval is enabled (else let it fall through);
         # require a proper-noun candidate after of/in/for/is so non-geography queries are ignored.
-        from reasoning import reference
         if reference.retrieval_enabled():
             m = re.search(r"\b(?:of|in|for|is)\s+(?:the\s+)?"
                           r"([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+)*)", query)

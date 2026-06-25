@@ -26,7 +26,10 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   queryable handles. Lookups + `import_csv` (replace/extend with an authoritative source);
   reached via the `geography` orchestrator (NL) and `reasoning.cli reference`. A MISS (unknown
   place / missing year) can fall back to a validated, provenance-flagged Claude Sonnet retrieval
-  — opt-in via `DIFG_REFERENCE_RETRIEVAL=1` (off by default; records `model_calls=1`).
+  — opt-in via `DIFG_REFERENCE_RETRIEVAL=1` (off by default; records `model_calls=1`). Retrieved
+  values are persisted to a `retrieved` log table (repeat query → 0 calls, "previously
+  retrieved"); batch requests ("all cities in France", "populations of A, B and C") go through
+  `retrieve_set` → a CSV from the model saved as a model-sourced dataset handle.
 - **`reasoning/datagen.py`** — domain dataset generators (primes/Fibonacci, random samples,
   logistic trajectories, projectile motion, amortization, …) that produce rows (reusing pure
   skills + numpy/SymPy) and save via `datasets.save_rows`. Registry `GENERATORS`; reached via

@@ -399,7 +399,15 @@ the seed lacks) can be **retrieved via a Claude Sonnet call**, opt-in with
 value is **validated** (a population must be a positive integer; coordinates must be in range)
 and returned **flagged as model-sourced** — *"3170000 — retrieved via Claude Sonnet (not in the
 curated reference set; verify)"* — with `model_calls=1` recorded, so it's never silently mixed
-with verified reference data.
+with verified reference data. Retrieved values are **persisted** to a separate `retrieved` log
+table (queryable: `data query "SELECT * FROM retrieved"`); a repeat of the same query is served
+from the log at **0 model calls** (*"… — previously retrieved"*), and the log is the audit trail
+for later review/promotion into the curated seed.
+
+**Batch retrieval** — *"List all cities in France."* or *"What are the populations of France,
+Germany and Italy?"* asks Claude for a **CSV table**, validates it, and saves it as a
+model-sourced **dataset handle** (e.g. `list_all_cities_in_france`) — queryable like any other
+(`data query`, `aggregate`). Also opt-in via `DIFG_REFERENCE_RETRIEVAL`.
 
 ## Model variants (mlx-community)
 `-4bit` (default, ~13 GB) · `-5bit` · `-6bit` · `-8bit` (~26 GB) · `-bf16`.

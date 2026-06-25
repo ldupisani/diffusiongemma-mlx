@@ -9,9 +9,12 @@ authoritative source. Reads a DB (I/O), so it's a layer of its own, not a pure s
 
 from __future__ import annotations
 
+import csv
+import io
 import os
 import re
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .store.reference import seed
@@ -52,6 +55,11 @@ def ensure_db() -> Path:
     p = db_path()
     if not p.exists():
         build_db(p)
+    con = sqlite3.connect(p)          # the retrieved-values log (model-sourced; kept separate)
+    con.execute("CREATE TABLE IF NOT EXISTS retrieved "
+                "(op TEXT, place TEXT, year INTEGER, value TEXT, source TEXT, retrieved_at TEXT)")
+    con.commit()
+    con.close()
     return p
 
 
@@ -160,9 +168,31 @@ def _validate(op: str, raw: str) -> str | None:
     return line if re.fullmatch(r"[A-Za-z .'\-]{2,40}", line) else None
 
 
+def cached_value(op: str, place: str, year: int | None = None):
+    """A value previously retrieved (and persisted) for this exact point, or None. Lets a repeat
+    query reuse the model-sourced answer with 0 model calls."""
+    where = "op=? AND place=? AND " + ("year IS NULL" if year is None else "year=?")
+    params = (op, place) if year is None else (op, place, int(year))
+    return _one(f"SELECT value FROM retrieved WHERE {where} ORDER BY retrieved_at DESC LIMIT 1",
+                params)
+
+
+def _record(op: str, place: str, year, value: str, source: str) -> None:
+    con = _con()
+    try:
+        con.execute("INSERT INTO retrieved (op, place, year, value, source, retrieved_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (op, place, None if year is None else int(year), value, source,
+                     datetime.now(timezone.utc).isoformat(timespec="seconds")))
+        con.commit()
+    finally:
+        con.close()
+
+
 def retrieve(op: str, place: str, year: int | None = None, *, asker=None, model: str = "sonnet"):
     """Attempt to retrieve a missing data point via a model (Claude Sonnet by default), returning
-    a validated value string or None. `asker(prompt) -> str|None` is injectable for testing."""
+    a validated value string or None. On success the value is PERSISTED to the `retrieved` log.
+    `asker(prompt) -> str|None` is injectable for testing."""
     if op not in _PROMPTS:
         return None
     if asker is None:
@@ -170,7 +200,47 @@ def retrieve(op: str, place: str, year: int | None = None, *, asker=None, model:
         asker = lambda p: teachers.ask_claude(p, model=model)  # noqa: E731
     when = f" in {int(year)}" if year and op == "population" else ""
     raw = asker(_PROMPTS[op].format(place=place, when=when))
-    return _validate(op, raw) if raw else None
+    val = _validate(op, raw) if raw else None
+    if val is not None:
+        _record(op, place, year, val, f"claude:{model}")
+    return val
+
+
+_SET_PROMPT = (
+    "List the data for the request below as CSV: a header row, then one row per item. Use "
+    "lowercase column names; always include 'name', and add population / latitude / longitude "
+    "columns where they apply. Output ONLY the CSV — no prose, no markdown, no code fences.\n\n"
+    "Request: {req}")
+
+
+def _csv_rows(raw: str) -> list[list[str]]:
+    text = re.sub(r"```[a-zA-Z]*", "", raw).strip()        # strip any code fences
+    rows = [r for r in csv.reader(io.StringIO(text)) if any(c.strip() for c in r)]
+    if not rows:
+        return []
+    ncol = len(rows[0])                                    # keep only rows matching the header width
+    return [r for r in rows if len(r) == ncol]
+
+
+def retrieve_set(request: str, save_as: str, *, asker=None, model: str = "sonnet"):
+    """Batch retrieval: ask a model (Claude Sonnet) for a CSV table answering an open-ended or
+    list request ('all cities in France', 'populations of France, Germany and Italy'), save it as
+    a dataset handle, and return the number of data rows (None on failure). The saved dataset is
+    the persisted, queryable, model-sourced artifact."""
+    if asker is None:
+        from . import teachers
+        asker = lambda p: teachers.ask_claude(p, model=model)  # noqa: E731
+    raw = asker(_SET_PROMPT.format(req=request))
+    if not raw:
+        return None
+    rows = _csv_rows(raw)
+    if len(rows) < 2 or not rows[0]:                       # need a header + ≥1 data row
+        return None
+    from . import datasets
+    buf = io.StringIO()
+    csv.writer(buf).writerows(rows)
+    (datasets.data_dir() / f"{save_as}.csv").write_text(buf.getvalue())
+    return len(rows) - 1
 
 
 def import_csv(src: str, table: str, name: str = DB) -> str:

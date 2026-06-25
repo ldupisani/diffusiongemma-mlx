@@ -86,7 +86,15 @@ class TestReferenceRetrieval(unittest.TestCase):
         import reasoning.teachers as teachers
         self._teachers = teachers
         self._orig = teachers.ask_claude
-        teachers.ask_claude = lambda prompt, model="sonnet", timeout=60: "3170000"
+        self.calls = {"n": 0}
+
+        def stub(prompt, model="sonnet", timeout=60):
+            self.calls["n"] += 1
+            if "CSV" in prompt:                              # batch (retrieve_set) request
+                return "```csv\nname,population\nParis,2100000\nLyon,510000\n```"
+            return "3170000"                                 # single point
+
+        teachers.ask_claude = stub
         from reasoning import reference, router
         self.router, self.reference = router, reference
 
@@ -128,6 +136,26 @@ class TestReferenceRetrieval(unittest.TestCase):
                          "64.1466, -21.9426")
         self.assertIsNone(r.retrieve("coordinates", "X", asker=lambda p: "999, 999"))  # out of range
         self.assertEqual(r.retrieve("population", "X", asker=lambda p: "3.0 million"), "3000000")
+
+    def test_persist_and_cache(self):
+        q = "What is the population of Mongolia in 2015?"
+        self.assertEqual(self._run(q)[2], 1)                 # first time: a model call
+        rid, ans, mc = self._run(q)                          # second time: served from the log
+        self.assertEqual(mc, 0)
+        self.assertIn("previously retrieved", ans)
+        self.assertEqual(self.calls["n"], 1)                 # the model was asked only once
+        self.assertEqual(self.reference.cached_value("population", "Mongolia", 2015), "3170000")
+        from reasoning import datasets
+        self.assertIn("Mongolia", datasets.query("SELECT place FROM retrieved"))  # queryable log
+
+    def test_batch_set_retrieval(self):
+        rid, ans, mc = self._run("List all cities in France.")
+        self.assertEqual(rid, "geography")
+        self.assertEqual(mc, 1)
+        self.assertIn("model-sourced", ans)
+        from reasoning import datasets
+        self.assertEqual(datasets.count_rows("list_all_cities_in_france"), "2")
+        self.assertEqual(datasets.aggregate("list_all_cities_in_france", "population", "max"), "2100000")
 
 
 @unittest.skipUnless(duckdb, "duckdb not installed")

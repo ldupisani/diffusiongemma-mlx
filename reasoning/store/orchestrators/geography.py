@@ -42,23 +42,45 @@ def _lookup(op, place, year):
     return reference.country_field(place, op)  # capital / continent
 
 
+def _run_set(d):
+    """Batch retrieval: a list/open-ended request → a model-sourced dataset handle."""
+    n = reference.retrieve_set(d["request"], d["save_as"])
+    if not n:
+        return explain("could not retrieve the requested set")
+    from reasoning import datasets
+    info = datasets.describe(d["save_as"])
+    return PatternResult(
+        answer=f"{info}\nretrieved {n} rows via Claude Sonnet → dataset '{d['save_as']}' "
+               f"(model-sourced, not curated; verify before relying on it)",
+        trace=[{"step": "reference.retrieve_set", "via": "model", "request": d["request"]},
+               {"step": "summary", "model_calls": 1}])
+
+
 def run(query):
     ok, d, _, _ = bind_geography(query)
     if not ok:
         return explain("could not parse the geography query")
+    if d["op"] == "set":
+        return _run_set(d)
     op, place, year = d["op"], d["place"], d.get("year")
-    val, model_calls, retrieved = _lookup(op, place, year), 0, False
-    # Fallback: a data point not in the curated set is RETRIEVED via Claude Sonnet (opt-in via
-    # DIFG_REFERENCE_RETRIEVAL), validated for shape/range, and flagged as model-sourced.
+    val, model_calls, retrieved, cached = _lookup(op, place, year), 0, False, False
+    # Not in the curated set? When retrieval is enabled (opt-in via DIFG_REFERENCE_RETRIEVAL):
+    # reuse a previously-retrieved value (0 calls), else retrieve via Claude Sonnet (1 call) and
+    # persist it. Either way the result is validated and flagged as model-sourced, never curated.
     if val is None and reference.retrieval_enabled():
-        val = reference.retrieve(op, place, year)
-        retrieved, model_calls = val is not None, (1 if val is not None else 0)
+        val = reference.cached_value(op, place, year)
+        if val is not None:
+            retrieved, cached = True, True
+        else:
+            val = reference.retrieve(op, place, year)
+            retrieved, model_calls = val is not None, (1 if val is not None else 0)
     if val is None:
         return explain(f"no reference data for '{place}' ({op})")
     display = f"{val} km^2" if op == "area" else val
     if retrieved:
-        display += " — retrieved via Claude Sonnet (not in the curated reference set; verify)"
+        src = "previously retrieved" if cached else "retrieved via Claude Sonnet"
+        display += f" — {src} (not in the curated reference set; verify)"
     return PatternResult(answer=display,
                          trace=[{"step": f"reference.{op}", "place": place,
-                                 "via": "model" if retrieved else "code"},
+                                 "via": "code" if not retrieved else ("cache" if cached else "model")},
                                 {"step": "summary", "model_calls": model_calls}])
