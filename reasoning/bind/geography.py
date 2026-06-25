@@ -73,6 +73,11 @@ def bind_geography(query: str) -> tuple[bool, dict | None, str, int]:
     if "coordinate" in q or "latitude" in q or "longitude" in q or "where is" in q:
         return ok("coordinates", place)
     if "population" in q:
-        ym = re.search(r"\b(\d{4})\b", q)   # any 4-digit year (a far year declines projection)
-        return ok("population", place, year=int(ym[1]) if ym else None)
+        years = [int(y) for y in re.findall(r"\b(\d{4})\b", q)]
+        # "how much did X grow/change/increase from Y1 to Y2" → a two-year delta, not a lookup
+        change = re.search(r"\b(grow|grew|growth|increas|decreas|declin|change|chang|rise|rose|"
+                           r"fall|fell|gain|drop|differ)\w*", q)
+        if change and len(years) >= 2:
+            return ok("change", place, year_from=years[0], year_to=years[1])
+        return ok("population", place, year=years[0] if years else None)
     return False, None, "code", 0

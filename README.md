@@ -445,7 +445,10 @@ answers plainly; a year *not* in the seed gets a deterministic **trend estimate*
 by-year series (interpolated within range, extrapolated by CAGR beyond it) — *0 model calls*,
 clearly labeled: *"What is the projected population for London in 2030?"* → `9422865 (projected
 from the 1990–2023 trend; estimate, not curated)`. It never silently presents an estimate as a
-fact, and never fabricates beyond a place's own trend.
+fact, and never fabricates beyond a place's own trend. A two-year **change** query —
+*"how much did the population of London grow from 2010 to 2020?"* → `+900000 (+11.25%)` — returns
+the delta and percent (and the single-year lookup steps aside so it can't silently answer just the
+first year).
 
 **Batch retrieval** — *"List all cities in France."* or *"What are the populations of France,
 Germany and Italy?"* asks Claude for a **CSV table**, validates it, and saves it as a

@@ -83,6 +83,24 @@ class TestReference(unittest.TestCase):
         self.assertFalse(self.ref.population_detail("London", 2024)["year_applied"])
         self.assertIsNone(self.ref.population_detail("France", 1995))  # year absent → no fabrication
 
+    def test_population_change(self):
+        from reasoning import router
+
+        def ans(q):
+            return router.recognize(q).orchestrator.run(q).answer
+
+        self.assertEqual(ans("How much did the population of London grow from 2010 to 2020?"),
+                         "+900000 (+11.25%)")
+        self.assertEqual(ans("How much did the population of Seoul change from 2010 to 2020?"),
+                         "-600000 (-5.83%)")              # a decline → negative
+        # a change with a projected endpoint is flagged an estimate
+        self.assertIn("estimate", ans("How did London's population change from 2015 to 2025?"))
+        # guard: a single-year lookup is NOT treated as a change
+        self.assertEqual(ans("What is the population of London in 2010?"), "8000000")
+        # API
+        ch = self.ref.population_change("London", 2010, 2020)
+        self.assertEqual((ch["delta"], ch["pct"], ch["estimated"]), (900000, 11.25, False))
+
     def test_population_projection(self):
         from reasoning import router
 

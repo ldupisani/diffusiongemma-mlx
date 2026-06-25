@@ -64,6 +64,16 @@ def run(query):
         return explain("could not parse the geography query")
     if d["op"] == "set":
         return _run_set(d)
+    if d["op"] == "change":
+        ch = reference.population_change(d["place"], d["year_from"], d["year_to"])
+        if ch is None:
+            return explain(f"could not resolve a population change for '{d['place']}'")
+        sign = "+" if ch["delta"] >= 0 else ""
+        ans = f"{sign}{ch['delta']} ({sign}{ch['pct']}%)" + (" (estimate)" if ch["estimated"] else "")
+        return PatternResult(answer=ans,
+                             trace=[{"step": "reference.population_change", "place": d["place"],
+                                     "from": ch["from_year"], "to": ch["to_year"], "via": "code"},
+                                    {"step": "summary", "model_calls": 0}])
     op, place, year = d["op"], d["place"], d.get("year")
     val, note = _lookup(op, place, year)
     model_calls, via = 0, "code"

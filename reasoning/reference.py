@@ -205,6 +205,26 @@ def project_population(place: str, year: int):
     return {"value": int(round(est)), "basis": f"projected from the {span} trend", "span": span}
 
 
+def population_change(place: str, year_from: int, year_to: int) -> dict | None:
+    """Absolute and percent population change between two years. Each endpoint is the exact seed
+    figure if available, else a within-horizon trend estimate; None if the place or an endpoint
+    can't be resolved (so the caller declines rather than guess)."""
+    def at(y):
+        v = country_population(place, int(y))          # the by-year table (countries AND cities)
+        if v is not None:
+            return v, True
+        p = project_population(place, int(y))
+        return (p["value"], False) if p else (None, None)
+
+    v1, e1 = at(year_from)
+    v2, e2 = at(year_to)
+    if v1 is None or v2 is None or v1 == 0:
+        return None
+    delta = v2 - v1
+    return {"from_year": int(year_from), "to_year": int(year_to), "from": v1, "to": v2,
+            "delta": delta, "pct": round(delta / v1 * 100, 2), "estimated": not (e1 and e2)}
+
+
 def nearest_population(place: str, year: int) -> dict | None:
     """The population from the available year CLOSEST to `year` — the beyond-horizon fallback when
     a projection would be irresponsible. Returns {value, year} (year None if only a flat figure
