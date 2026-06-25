@@ -32,11 +32,11 @@ class TestReference(unittest.TestCase):
         self.assertEqual(self.ref.country_population("France", 2000), 61000000)
         self.assertEqual(self.ref.coordinates("Paris"), (48.8566, 2.3522))
         self.assertEqual(self.ref.coordinates("Japan"), (35.6762, 139.6503))  # capital coords
-        self.assertEqual(self.ref.city_population("Tokyo"), 13960000)
+        self.assertEqual(self.ref.city_population("Tokyo"), 14010000)          # latest (2023)
 
     def test_sql_queryable_via_dataset_engine(self):
         self.assertEqual(self.ds.aggregate("countries", "name", "count"), "30")
-        self.assertEqual(self.ds.count_rows("cities"), "40")
+        self.assertEqual(self.ds.count_rows("cities"), "60")
         self.assertEqual(
             self.ds.query("SELECT count(*) FROM population WHERE year=2020 AND population>100000000"),
             "10")
@@ -72,18 +72,19 @@ class TestReference(unittest.TestCase):
         def ans(q):
             return router.recognize(q).orchestrator.run(q).answer
 
-        # city + a SEED year → honored exactly, no caveat
+        # city + a SEED year → honored exactly, no caveat (seed years now span 1990–2023)
         self.assertEqual(ans("What is the population of London in 2010?"), "8000000")
+        self.assertEqual(ans("What is the population of London in 2023?"), "8900000")
         # city + a NON-seed year → flagged with the year actually shown
-        london23 = ans("What is the population of London in 2023?")
-        self.assertIn("8900000", london23)
-        self.assertIn("no 2023 figure", london23)
+        london24 = ans("What is the population of London in 2024?")
+        self.assertIn("8900000", london24)
+        self.assertIn("no 2024 figure", london24)
         # country exact seed year, and city with no year (latest) → plain, no caveat
         self.assertEqual(ans("What is the population of France in 2020?"), "67000000")
-        self.assertEqual(ans("What is the population of Tokyo?"), "13960000")
+        self.assertEqual(ans("What is the population of Tokyo?"), "14010000")
         # provenance flags
-        self.assertTrue(self.ref.population_detail("London", 2010)["year_applied"])
-        self.assertFalse(self.ref.population_detail("London", 2023)["year_applied"])
+        self.assertTrue(self.ref.population_detail("London", 2023)["year_applied"])
+        self.assertFalse(self.ref.population_detail("London", 2024)["year_applied"])
         self.assertIsNone(self.ref.population_detail("France", 1995))  # year absent → no fabrication
 
     def test_user_dataset_shadows_reference(self):
