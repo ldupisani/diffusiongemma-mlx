@@ -105,6 +105,13 @@ class TestReference(unittest.TestCase):
         self.assertEqual(self.ref.project_population("France", 2015)["value"], 66000000)
         self.assertIsNone(self.ref.project_population("London", 2023))   # exact year
         self.assertIsNone(self.ref.project_population("Atlantis", 2030))  # unknown place
+        # an absurd far-horizon year is recognized but NOT extrapolated — declines to latest+note
+        far, mc = run("What is the projected population for London in 4001?")
+        self.assertIn("8900000", far)
+        self.assertIn("4001", far)
+        self.assertNotIn("projected", far)
+        self.assertEqual(mc, 0)
+        self.assertIsNone(self.ref.project_population("London", 4001))
 
     def test_user_dataset_shadows_reference(self):
         # a user dataset named like a reference table takes precedence

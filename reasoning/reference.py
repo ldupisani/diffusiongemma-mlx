@@ -166,11 +166,15 @@ def population_detail(place: str, year: int | None = None) -> dict | None:
     return None
 
 
+_MAX_PROJECTION_YEARS = 50   # don't extrapolate a short series more than this far beyond its ends
+
+
 def project_population(place: str, year: int):
     """A deterministic TREND estimate for a population year NOT in the seed, from the place's
     by-year series: interpolated between the bracketing years, or extrapolated beyond the series
     via its full-span CAGR. Returns {value, basis, span} or None (an exact-year hit, an unknown
-    place, or fewer than 2 data points → can't project). 0 model calls — a computed estimate."""
+    place, fewer than 2 data points, or a year more than _MAX_PROJECTION_YEARS beyond the series →
+    can't responsibly project). 0 model calls — a computed estimate."""
     con = _con()
     try:
         rows = con.execute("SELECT year, population FROM population WHERE place=? ORDER BY year",
@@ -193,8 +197,10 @@ def project_population(place: str, year: int):
                 "span": span}
     if val[lo_y] <= 0 or val[hi_y] <= 0:
         return None
-    cagr = (val[hi_y] / val[lo_y]) ** (1 / (hi_y - lo_y)) - 1   # extrapolate along the trend
     anchor = hi_y if year > hi_y else lo_y
+    if abs(year - anchor) > _MAX_PROJECTION_YEARS:     # refuse absurd far-horizon extrapolation
+        return None
+    cagr = (val[hi_y] / val[lo_y]) ** (1 / (hi_y - lo_y)) - 1   # extrapolate along the trend
     est = val[anchor] * (1 + cagr) ** (year - anchor)
     return {"value": int(round(est)), "basis": f"projected from the {span} trend", "span": span}
 

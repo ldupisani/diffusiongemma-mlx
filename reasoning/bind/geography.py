@@ -73,6 +73,6 @@ def bind_geography(query: str) -> tuple[bool, dict | None, str, int]:
     if "coordinate" in q or "latitude" in q or "longitude" in q or "where is" in q:
         return ok("coordinates", place)
     if "population" in q:
-        ym = re.search(r"\b(19\d{2}|20\d{2})\b", q)
+        ym = re.search(r"\b(\d{4})\b", q)   # any 4-digit year (a far year declines projection)
         return ok("population", place, year=int(ym[1]) if ym else None)
     return False, None, "code", 0
