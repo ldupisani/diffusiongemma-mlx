@@ -309,6 +309,7 @@ The engine composes orchestrators via `SubStep(..., orchestrator="<id>")` in a `
 another's input, still at 0 model calls. Shipped cross-domain syntheses: `synthesized_geometry`
 (area → fencing/flooring **cost**, i.e. geometry → finance), `synthesized_physics` (distance/speed
 → travel **cost/time**, physics → geo/finance), `synthesized_geo` (distance → flight time/price),
+`synthesized_logistics` (trucks needed → shipping **cost**, logistics → finance),
 `synthesized_chemistry`, `synthesized_materials`.
 
 When you add a domain, scan its neighbours for a natural hand-off:

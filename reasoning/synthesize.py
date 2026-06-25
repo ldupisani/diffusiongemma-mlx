@@ -177,6 +177,13 @@ def coercion_ops() -> list:
 COERCION_OPS = coercion_ops()
 WEIGHT_OPS = [Op("physics.weight", ("mass",), "weight")]  # mass in kg (chem grams coerce in)
 
+# logistics → finance. A logistics quantity (trucks needed = ceil(units / capacity)) priced by a
+# per-truck cost → shipping_cost, which funnels into `cost` for split/tax (logistics → finance).
+LOGISTICS_OPS = [
+    Op("logistics.trucks_needed", ("units", "capacity"), "trucks"),
+    Op("arith.multiply", ("trucks", "truck_cost"), "shipping_cost"),
+]
+
 # geospatial → finance / motion. haversine yields KM; the bind normalizes the price to $/km and
 # the speed to km/h (any input unit), so only the km-native ops are needed here.
 GEO_OPS = [
@@ -200,14 +207,15 @@ CROSS_OPS = [
     Op("arith.identity", ("fill_cost",), "cost"),         # geometry: concrete / mulch
     Op("arith.multiply", ("mass_g", "price_per_gram"), "reagent_cost"),  # chemistry → $ (per gram)
     Op("arith.identity", ("reagent_cost",), "cost"),
+    Op("arith.identity", ("shipping_cost",), "cost"),     # logistics: trucks × per-truck cost
     Op("arith.divide", ("cost", "people"), "cost_per_person"),         # split
     Op("arith.apply_tax", ("cost", "tax_pct"), "cost_with_tax"),       # + tax
     Op("arith.apply_discount", ("cost", "discount_pct"), "cost_after_discount"),  # − discount
 ]
 
 ALL_OPS = (FINANCE_OPS + INTEREST_OPS + MOTION_OPS + PHYSICS_OPS + GEOMETRY_COST_OPS
-           + CHEM_OPS + MOLECULAR_OPS + MATERIALS_OPS + PCHEM_OPS + PRICED_OPS + GEO_OPS
-           + WEIGHT_OPS + COERCION_OPS + CROSS_OPS)
+           + CHEM_OPS + MOLECULAR_OPS + MATERIALS_OPS + PCHEM_OPS + PRICED_OPS + LOGISTICS_OPS
+           + GEO_OPS + WEIGHT_OPS + COERCION_OPS + CROSS_OPS)
 
 _MEMO: dict = {}
 _searches = 0  # BFS runs actually executed (cache misses) — for tests/telemetry

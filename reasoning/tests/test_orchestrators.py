@@ -557,6 +557,12 @@ CASES = [
      "5", "logistics"),
     ("How many trucks are needed to ship 1000 units with a capacity of 150 each?", "7", "logistics"),
     ("What is the fuel cost for a 600 km trip at 12 km/l and $1.50 per liter?", "75", "logistics"),
+    # synthesis: logistics quantity → finance cost (trucks_needed × per-truck cost). The plain
+    # "how many trucks" case above is the reverse guard (stays with `logistics`).
+    ("How much does it cost to ship 1000 units if each truck holds 150 units and costs $500 per truck?",
+     "$3500", "synthesized_logistics"),
+    ("How much to ship 1000 units, trucks hold 150 each at $500 per truck, split between 2 warehouses?",
+     "$1750 each", "synthesized_logistics"),
 ]
 
 

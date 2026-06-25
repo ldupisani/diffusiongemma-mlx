@@ -77,3 +77,55 @@ def bind_logistics(query: str) -> tuple[bool, dict | None, str, int]:
                    _after(q, r"\$", "price", "per liter", "per gallon", "per gal")], round=True, places=6)
 
     return False, None, "code", 0
+
+
+# --- synthesis: logistics quantity → finance cost (trucks needed × per-truck cost) -----------
+
+def _truck_cost(q: str):
+    m = re.search(r"\$?(\d+(?:\.\d+)?)\s*(?:per|/|a|each)\s*(?:truck|container|vehicle|lorry)", q, re.I)
+    if m:
+        return float(m.group(1))
+    m = re.search(r"(?:truck|container|vehicle|lorry)s?\b.{0,30}?(?:costs?|at|for)\s*\$?(\d+(?:\.\d+)?)", q, re.I)
+    return float(m.group(1)) if m else None
+
+
+def _ship_units(q: str):
+    m = (re.search(r"(?:ship|deliver|move|transport|send)\s+(\d+)", q, re.I)
+         or re.search(r"(\d+)\s*(?:units|items|pallets|boxes|packages)", q, re.I))
+    return float(m.group(1)) if m else None
+
+
+def _capacity(q: str):
+    m = (re.search(r"(?:holds?|capacity of|fits?|carries?)\s+(\d+)", q, re.I)
+         or re.search(r"(\d+)\s*(?:units|items)?\s*per\s*(?:truck|container|vehicle)", q, re.I))
+    return float(m.group(1)) if m else None
+
+
+def bind_synthesis_logistics(query: str) -> tuple[bool, dict | None, str, int]:
+    """'How much to ship 1000 units if each truck holds 150 and costs $500 per truck?' →
+    trucks_needed (logistics) × per-truck cost (finance) → shipping_cost, optionally split/taxed."""
+    q = query.lower()
+    truck_cost = _truck_cost(q)
+    units, capacity = _ship_units(q), _capacity(q)
+    # require all three AND a cost framing, so the plain "how many trucks" query stays with the
+    # logistics orchestrator (no per-truck cost there → declines here).
+    if truck_cost is None or units is None or capacity is None:
+        return False, None, "code", 0
+    if not ("cost" in q or "how much" in q or "$" in query or "total" in q):
+        return False, None, "code", 0
+
+    knowns = {"units": units, "capacity": capacity, "truck_cost": truck_cost}
+    goal, unique, suffix = "shipping_cost", False, ""
+    people = _after(q, "split between", "split among", "shared between", "between", "among")
+    tax = re.search(r"(\d+(?:\.\d+)?)\s*(?:%|percent)\s*(?:sales\s*)?(?:tax|vat)", q)
+    if people and people > 0 and any(w in q for w in ("split", "shared", "among", "between")):
+        knowns["people"], goal, unique, suffix = people, "cost_per_person", True, " each"
+    elif tax:
+        knowns["tax_pct"], goal, unique = float(tax.group(1)), "cost_with_tax", True
+
+    from reasoning.synthesize import CROSS_OPS, LOGISTICS_OPS, synthesize
+    pool = LOGISTICS_OPS + CROSS_OPS
+    if synthesize(set(knowns), goal, pool, unique=unique) is None:
+        return False, None, "code", 0
+    return True, {"knowns": knowns, "goal": goal, "prefix": "$", "suffix": suffix,
+                  "unique": unique}, "code", 0
