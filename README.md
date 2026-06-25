@@ -393,6 +393,14 @@ user dataset of the same name shadows it. NL routes through the `geography` orch
 sanity-checkable approximations; `python -m reasoning.cli reference import <csv> <table>` (or
 `reference.import_csv`) replaces/extends them with an authoritative source (GeoNames, World Bank).
 
+**Retrieval fallback** — a data point *not* in the curated set (an unknown country, or a year
+the seed lacks) can be **retrieved via a Claude Sonnet call**, opt-in with
+`DIFG_REFERENCE_RETRIEVAL=1` (off by default, so the engine stays 0-model-call). The retrieved
+value is **validated** (a population must be a positive integer; coordinates must be in range)
+and returned **flagged as model-sourced** — *"3170000 — retrieved via Claude Sonnet (not in the
+curated reference set; verify)"* — with `model_calls=1` recorded, so it's never silently mixed
+with verified reference data.
+
 ## Model variants (mlx-community)
 `-4bit` (default, ~13 GB) · `-5bit` · `-6bit` · `-8bit` (~26 GB) · `-bf16`.
 On 36 GB, 4-bit is the safe default; 6-bit fits with headroom; 8-bit is tight.

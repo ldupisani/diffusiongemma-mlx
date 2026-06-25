@@ -74,6 +74,23 @@ def _result_obj(data) -> dict:
     raise RuntimeError("could not find a result object in claude CLI output")
 
 
+def ask_claude(prompt: str, model: str = "sonnet", timeout: int = 60) -> str | None:
+    """One-shot Claude CLI call returning the raw answer text (no REASONING/ANSWER split).
+    Returns None if the `claude` CLI is absent or the call errors — callers treat that as
+    'retrieval unavailable'. Used by the reference-retrieval fallback."""
+    if shutil.which("claude") is None:
+        return None
+    cmd = ["claude", "-p", prompt, "--output-format", "json", "--model", model]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        if proc.returncode != 0:
+            return None
+        result = _result_obj(json.loads(proc.stdout))
+    except (subprocess.SubprocessError, ValueError, RuntimeError):
+        return None
+    return None if result.get("is_error") else (result.get("result") or "").strip()
+
+
 def _split_reasoning_answer(text: str) -> tuple[str, str]:
     """Split Claude's structured output into (reasoning, answer). Prefer the LAST ANSWER:
     marker; if the model ignored the format, fall back to the final non-empty line (the

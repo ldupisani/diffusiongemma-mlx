@@ -31,7 +31,15 @@ def bind_geography(query: str) -> tuple[bool, dict | None, str, int]:
         return False, None, "code", 0
     place = _find_place(query)
     if not place:
-        return False, None, "code", 0
+        # only claim an UNKNOWN place when model retrieval is enabled (else let it fall through);
+        # require a proper-noun candidate after of/in/for/is so non-geography queries are ignored.
+        from reasoning import reference
+        if reference.retrieval_enabled():
+            m = re.search(r"\b(?:of|in|for|is)\s+(?:the\s+)?"
+                          r"([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+)*)", query)
+            place = m[1].strip() if m else None
+        if not place:
+            return False, None, "code", 0
 
     if "capital" in q:
         return ok("capital", place)

@@ -10,6 +10,7 @@ authoritative source. Reads a DB (I/O), so it's a layer of its own, not a pure s
 from __future__ import annotations
 
 import os
+import re
 import sqlite3
 from pathlib import Path
 
@@ -117,6 +118,59 @@ def tables(name: str = DB) -> list[str]:
         return [r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")]
     finally:
         con.close()
+
+
+# --- model retrieval fallback (for data points NOT in the curated set) -----
+
+def retrieval_enabled() -> bool:
+    """Off by default (keeps the engine 0-model-call). Enable with DIFG_REFERENCE_RETRIEVAL=1."""
+    return os.environ.get("DIFG_REFERENCE_RETRIEVAL", "").lower() in {"1", "true", "on", "claude", "sonnet"}
+
+
+_PROMPTS = {
+    "population": "What was the population of {place}{when}? Respond with ONLY the population as a "
+                  "plain integer — digits only, no commas, words, or explanation.",
+    "coordinates": "What are the latitude and longitude of {place}? Respond with ONLY "
+                   "'<lat>, <lon>' in decimal degrees and nothing else.",
+    "capital": "What is the capital city of {place}? Respond with ONLY the city name.",
+    "continent": "Which continent is {place} on? Respond with ONLY the continent name.",
+    "area": "What is the total area of {place} in square kilometres? Respond with ONLY the "
+            "number — digits only, no commas or units.",
+}
+
+
+def _validate(op: str, raw: str) -> str | None:
+    """Extract and range-check the value (the 'verifiable' step). None if it doesn't pass."""
+    raw = raw.strip()
+    if op in ("population", "area"):
+        m = re.search(r"-?\d[\d,]*(?:\.\d+)?", raw)
+        if not m:
+            return None
+        v = float(m.group().replace(",", ""))
+        low = raw.lower()                                  # handle "3.0 million" style answers
+        v *= 1e9 if "billion" in low else 1e6 if "million" in low else 1e3 if "thousand" in low else 1
+        return str(int(v)) if v > 0 else None
+    if op == "coordinates":
+        nums = re.findall(r"-?\d+(?:\.\d+)?", raw)
+        if len(nums) < 2:
+            return None
+        lat, lon = float(nums[0]), float(nums[1])
+        return f"{lat}, {lon}" if -90 <= lat <= 90 and -180 <= lon <= 180 else None
+    line = raw.splitlines()[0].strip().strip(".")          # capital / continent: a short name
+    return line if re.fullmatch(r"[A-Za-z .'\-]{2,40}", line) else None
+
+
+def retrieve(op: str, place: str, year: int | None = None, *, asker=None, model: str = "sonnet"):
+    """Attempt to retrieve a missing data point via a model (Claude Sonnet by default), returning
+    a validated value string or None. `asker(prompt) -> str|None` is injectable for testing."""
+    if op not in _PROMPTS:
+        return None
+    if asker is None:
+        from . import teachers
+        asker = lambda p: teachers.ask_claude(p, model=model)  # noqa: E731
+    when = f" in {int(year)}" if year and op == "population" else ""
+    raw = asker(_PROMPTS[op].format(place=place, when=when))
+    return _validate(op, raw) if raw else None
 
 
 def import_csv(src: str, table: str, name: str = DB) -> str:

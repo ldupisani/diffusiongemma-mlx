@@ -73,5 +73,83 @@ class TestReference(unittest.TestCase):
         self.assertEqual(self.ds.count_rows("countries"), "2")
 
 
+@unittest.skipUnless(duckdb, "duckdb not installed")
+class TestReferenceRetrieval(unittest.TestCase):
+    """Missing data point → retrieved via a (stubbed) Claude Sonnet call, validated and flagged."""
+
+    def setUp(self):
+        self.data = tempfile.TemporaryDirectory()
+        self.refdir = tempfile.TemporaryDirectory()
+        os.environ["DIFG_DATA_DIR"] = self.data.name
+        os.environ["DIFG_REFERENCE_DIR"] = self.refdir.name
+        os.environ["DIFG_REFERENCE_RETRIEVAL"] = "1"
+        import reasoning.teachers as teachers
+        self._teachers = teachers
+        self._orig = teachers.ask_claude
+        teachers.ask_claude = lambda prompt, model="sonnet", timeout=60: "3170000"
+        from reasoning import reference, router
+        self.router, self.reference = router, reference
+
+    def tearDown(self):
+        self._teachers.ask_claude = self._orig
+        for k in ("DIFG_DATA_DIR", "DIFG_REFERENCE_DIR", "DIFG_REFERENCE_RETRIEVAL"):
+            os.environ.pop(k, None)
+        self.data.cleanup()
+        self.refdir.cleanup()
+
+    def _run(self, q):
+        from reasoning.compiled import model_calls
+        m = self.router.recognize(q)
+        if not m:
+            return (None, None, None)
+        r = m.orchestrator.run(q)
+        return (m.orchestrator.id, r.answer, model_calls(r))
+
+    def test_unknown_place_retrieved_and_flagged(self):
+        rid, ans, mc = self._run("What is the population of Mongolia in 2015?")
+        self.assertEqual(rid, "geography")
+        self.assertIn("3170000", ans)
+        self.assertIn("Claude", ans)           # provenance flagged
+        self.assertEqual(mc, 1)                 # the model call is recorded
+
+    def test_curated_lookup_stays_zero_calls(self):
+        self.assertEqual(self._run("What is the population of France in 2020?"),
+                         ("geography", "67000000", 0))
+
+    def test_validation_rejects_implausible(self):
+        self._teachers.ask_claude = lambda *a, **k: "not a number"
+        _, ans, mc = self._run("What is the population of Mongolia in 2015?")
+        self.assertTrue(ans is None or ans.startswith("(no result"))   # failed verification → decline
+        self.assertEqual(mc or 0, 0)
+
+    def test_retrieve_validates_shape_and_range(self):
+        r = self.reference
+        self.assertEqual(r.retrieve("coordinates", "Reykjavik", asker=lambda p: "64.1466, -21.9426"),
+                         "64.1466, -21.9426")
+        self.assertIsNone(r.retrieve("coordinates", "X", asker=lambda p: "999, 999"))  # out of range
+        self.assertEqual(r.retrieve("population", "X", asker=lambda p: "3.0 million"), "3000000")
+
+
+@unittest.skipUnless(duckdb, "duckdb not installed")
+class TestRetrievalDisabledByDefault(unittest.TestCase):
+    def setUp(self):
+        self.data = tempfile.TemporaryDirectory()
+        self.refdir = tempfile.TemporaryDirectory()
+        os.environ["DIFG_DATA_DIR"] = self.data.name
+        os.environ["DIFG_REFERENCE_DIR"] = self.refdir.name
+        os.environ.pop("DIFG_REFERENCE_RETRIEVAL", None)
+
+    def tearDown(self):
+        for k in ("DIFG_DATA_DIR", "DIFG_REFERENCE_DIR"):
+            os.environ.pop(k, None)
+        self.data.cleanup()
+        self.refdir.cleanup()
+
+    def test_unknown_place_not_claimed_when_disabled(self):
+        from reasoning import router
+        m = router.recognize("What is the population of Mongolia in 2015?")
+        self.assertTrue(m is None or m.orchestrator.id != "geography")  # no model call by default
+
+
 if __name__ == "__main__":
     unittest.main()

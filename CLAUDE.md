@@ -24,7 +24,9 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   (diffable Python) builds lazily into a SQLite DB (gitignored artifact; `$DIFG_REFERENCE_DIR`
   overrides location), auto-registered read-only into the dataset engine so reference tables are
   queryable handles. Lookups + `import_csv` (replace/extend with an authoritative source);
-  reached via the `geography` orchestrator (NL) and `reasoning.cli reference`.
+  reached via the `geography` orchestrator (NL) and `reasoning.cli reference`. A MISS (unknown
+  place / missing year) can fall back to a validated, provenance-flagged Claude Sonnet retrieval
+  — opt-in via `DIFG_REFERENCE_RETRIEVAL=1` (off by default; records `model_calls=1`).
 - **`reasoning/datagen.py`** — domain dataset generators (primes/Fibonacci, random samples,
   logistic trajectories, projectile motion, amortization, …) that produce rows (reusing pure
   skills + numpy/SymPy) and save via `datasets.save_rows`. Registry `GENERATORS`; reached via
