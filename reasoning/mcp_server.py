@@ -1,0 +1,141 @@
+"""MCP server exposing the reasoning project as a service.
+
+Surfaces the deterministic engine (route → orchestrator → answer) plus its introspection,
+dataset, and reference capabilities as MCP tools over stdio. It answers from CODE ONLY — every
+tool here runs at 0 model calls and never contacts the sidecar/teacher — so the service is
+self-contained: `ask` routes to a model-free orchestrator (or a 0-call compound split) and
+reports the domain and call count; a query that would need the LLM is reported as such rather
+than silently invoking it.
+
+Run:        python -m reasoning.mcp_server
+Register:   point an MCP client at the command above (stdio transport).
+"""
+
+from __future__ import annotations
+
+from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP("difg-reasoning")
+
+
+def ask(query: str) -> dict:
+    """Answer a question with the deterministic reasoning engine (0 model calls).
+
+    Routes the query to a coded domain (arithmetic, dates, geometry, physics, finance, logic,
+    statistics, geography, …) and runs it. Returns the answer, which domain handled it, and the
+    model-call count. If the query needs more information, returns the clarifying question(s); if
+    nothing coded matches, returns matched=False with a hint to call `capabilities`.
+    """
+    from . import router
+    from .compiled import model_calls, needs_input
+    from .decompose import decompose_code_first
+    m = router.recognize(query)
+    if m and m.orchestrator.model_free and not m.orchestrator.fallback:
+        r = m.orchestrator.run(query)
+        missing = needs_input(r)
+        if missing:
+            return {"matched": True, "domain": m.orchestrator.id, "answer": None,
+                    "needs_input": {f: q for f, (q, _t) in missing.items()}}
+        return {"matched": True, "answer": r.answer, "domain": m.orchestrator.id,
+                "query_type": m.orchestrator.query_type, "model_calls": model_calls(r)}
+    # no model-free single match → try the 0-call compound split ("X and Y")
+    composed = decompose_code_first(query)
+    if composed is not None:
+        return {"matched": True, "answer": composed.answer, "domain": "compose",
+                "model_calls": model_calls(composed)}
+    if m:  # matched a type that needs the LLM (e.g. a fallback) — reported, never invoked
+        return {"matched": True, "domain": m.orchestrator.id, "answer": None,
+                "note": "this query type needs the LLM backend; this service answers code-only "
+                        "(0-call) queries"}
+    return {"matched": False, "answer": None,
+            "hint": "No coded domain matched. Call capabilities() or search_capabilities(term) "
+                    "to see what can be asked."}
+
+
+def capabilities() -> dict:
+    """List what the system can do: headline counts plus every reasoning domain and its
+    one-line description. Start here to discover available query types."""
+    from . import introspect
+    return {"summary": introspect.summary(),
+            "domains": [{"id": d["id"], "description": d["description"]}
+                        for d in introspect.domains()]}
+
+
+def describe_domain(domain: str) -> dict:
+    """Show a domain's example queries and keywords — i.e. what to ask it. `domain` is an id or
+    query_type from `capabilities`."""
+    from . import introspect
+    d = introspect.domain(domain)
+    return d or {"error": f"no domain '{domain}'", "hint": "call capabilities() for the list"}
+
+
+def search_capabilities(term: str) -> dict:
+    """Find domains, skills, and dataset generators whose name/description/examples mention a
+    term (e.g. 'prime', 'cost', 'distance')."""
+    from . import introspect
+    return introspect.search(term)
+
+
+def list_generators() -> dict:
+    """List the dataset generators grouped by domain (what datasets can be created)."""
+    from . import datagen
+    return {dom: [{"generator": n, "doc": doc} for n, doc in gens]
+            for dom, gens in datagen.list_domains().items()}
+
+
+def generate_dataset(request: str) -> str:
+    """Generate a dataset from natural language (e.g. 'generate the first 1000 prime numbers',
+    'generate 500 normal samples') and save it as a queryable handle; returns its schema + head."""
+    from . import datagen
+    from .bind import bind_dataset
+    text = request if any(w in request.lower() for w in ("generate", "synthesize")) else f"generate {request}"
+    ok, d, _, _ = bind_dataset(text)
+    if ok and d.get("op") == "generate":
+        return datagen.generate(d["gen"], d["save_as"], **d["params"])
+    return f"could not parse a generator from {request!r}; call list_generators() to see options"
+
+
+def list_datasets() -> dict:
+    """List available dataset handles: user/generated datasets and the bundled reference tables."""
+    from . import datasets
+    return {"datasets": datasets.list_datasets(),
+            "reference_tables": sorted(datasets._reference_tables())}
+
+
+def dataset_info(name: str) -> dict:
+    """Describe a dataset handle (row count, column schema) and how to query it."""
+    from . import datasets
+    try:
+        sch = datasets.schema(name)
+    except FileNotFoundError as e:
+        return {"error": str(e)}
+    nums = [c for c, t in sch if any(k in t.upper() for k in ("INT", "DOUBLE", "DEC", "FLOAT", "REAL"))]
+    info = {"name": name, "columns": [{"name": c, "type": t} for c, t in sch],
+            "example_sql": f"SELECT * FROM {name} LIMIT 5"}
+    if nums:
+        info["example_aggregate"] = f"SELECT avg({nums[0]}) FROM {name}"
+    return info
+
+
+def query_dataset(sql: str) -> str:
+    """Run read-only SQL over the dataset/reference handles (DuckDB). Returns a scalar or a small
+    table; a large result is saved to a new handle and previewed."""
+    from . import datasets
+    try:
+        return datasets.query(sql)
+    except Exception as e:  # bad SQL / unknown handle → a readable error, not a crash
+        return f"query failed: {type(e).__name__}: {e}"
+
+
+# Register every tool (plain functions stay directly callable — for tests and reuse).
+for _fn in (ask, capabilities, describe_domain, search_capabilities, list_generators,
+            generate_dataset, list_datasets, dataset_info, query_dataset):
+    mcp.tool()(_fn)
+
+
+def main():
+    mcp.run()  # stdio transport
+
+
+if __name__ == "__main__":
+    main()

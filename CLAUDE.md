@@ -49,6 +49,11 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   `introspect.*` skills (`domain_exists`/`skill_exists`/`generator_exists`/`can_answer`) for
   higher-level reasoning to probe availability before acting.
 - **`backend.py`** — pluggable inference backend (see below).
+- **`reasoning/mcp_server.py`** — exposes the reasoning project as an MCP service (FastMCP, stdio):
+  `ask` (route → coded answer + domain + model-call count; 0-call compound split; non-coded types
+  reported, never invoked) plus introspection (`capabilities`/`describe_domain`/`search_capabilities`)
+  and dataset/reference tools (`list_generators`/`generate_dataset`/`list_datasets`/`dataset_info`/
+  `query_dataset`). Code-only (0 model calls) so it needs no sidecar. Run: `python -m reasoning.mcp_server`.
 - **`infer_server.py`** — tiny HTTP sidecar (`/info`, `/generate` NDJSON) wrapping the active
   backend. Single-threaded on purpose (MLX's GPU stream is thread-local).
 - **`chat_stream.py`** (Python REPL), **`mcp_agent.py`** (one-shot agent), **`chat.py`**

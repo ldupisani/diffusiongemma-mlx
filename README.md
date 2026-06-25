@@ -355,6 +355,16 @@ The `introspect` orchestrator answers meta-questions in-engine, and pure `intros
 (`domain_exists`, `skill_exists`, `generator_exists`, `can_answer`) let higher-level reasoning
 probe what's available before acting — all reading the same `reasoning/introspect.py` API over the
 orchestrator, skill, and generator registries.
+
+**As an MCP service.** `reasoning/mcp_server.py` exposes the engine over the Model Context
+Protocol (stdio) — **code-only, 0 model calls**, so it never needs the sidecar. Run it directly
+or register the command `python -m reasoning.mcp_server` with any MCP client. Tools: `ask` (route
+→ coded answer + domain + model-call count; compound queries split at 0 calls; unmatched returns
+a hint), `capabilities` / `describe_domain` / `search_capabilities` (introspection), and
+`list_generators` / `generate_dataset` / `list_datasets` / `dataset_info` / `query_dataset` (the
+dataset + bundled-reference layer). A query that would need the LLM is *reported as such*, never
+silently invoked.
+
 `derive` now grows the library: it maps each atomic line of a teacher trace onto a skill where one
 matches (`--mode steps`), leaving unmatched lines as model steps and reporting coverage
 (`matched 3/4 atomic steps to skills`). Each remaining model step is a candidate for the next skill —
