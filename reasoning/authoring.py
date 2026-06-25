@@ -145,11 +145,18 @@ def _verify_examples(skill_src: str) -> list[str]:
     modname = f"reasoning.skills.{tag}"
     tc = unittest.TestCase()
 
+    # When EXTENDING a domain, the skill source re-registers names already in SKILLS (the live
+    # module). register() raises on duplicates, so displace those entries first and restore them
+    # afterwards — the temp module re-registers them fresh (existing ops + the new ones) for the run.
+    names = re.findall(r'@register\(\s*"([^"]+)"', skill_src)
+    displaced = {n: skills.SKILLS.pop(n) for n in names if n in skills.SKILLS}
+
     def _cleanup():
         sys.modules.pop(modname, None)
         for k in [k for k, v in skills.SKILLS.items()
                   if getattr(v.fn, "__module__", "").endswith(tag)]:
             del skills.SKILLS[k]
+        skills.SKILLS.update(displaced)              # restore the live entries we displaced
         dest.unlink(missing_ok=True)
         for pyc in pycache.glob(f"{tag}.*"):
             pyc.unlink(missing_ok=True)
@@ -374,6 +381,59 @@ def _routing_repair_prompt(files: dict, fails: list[str]) -> str:
         "format and nothing else:\n\n" + reemit + skill_ref)
 
 
+def _verify_and_repair(files: dict, asker, *, max_rounds: int, verify_routing: bool = True):
+    """The two-phase author→test→repair loop over `files` (mutated in place with repaired versions).
+    Phase 1: skill example tables (single-file skill re-emit on failure). Phase 2: worktree-isolated
+    routing (bind+orchestrator re-emit on mis-route/theft/wrong-answer). Returns
+    (verified: bool, ok_routing: True|False|None-skipped, rounds: list)."""
+    skill_path = next((p for p in files if p.startswith("reasoning/skills/")), None)
+    bind_path = next((p for p in files if p.startswith("reasoning/bind/")), None)
+    orch_path = next((p for p in files if p.startswith("reasoning/store/orchestrators/")), None)
+    rounds: list[dict] = []
+
+    ok_examples = False
+    for i in range(max_rounds + 1):
+        fails = _verify_examples(files[skill_path]) if skill_path else ["no skill file was emitted"]
+        rounds.append({"phase": "examples", "round": i, "fails": fails})
+        if not fails:
+            ok_examples = True
+            break
+        if i == max_rounds or not skill_path:
+            break
+        new = parse_files(asker(_repair_prompt(skill_path, files[skill_path], fails)) or "")
+        if skill_path not in new:
+            rounds[-1]["repair_unparseable"] = True
+            break
+        files[skill_path] = new[skill_path]
+    if not ok_examples:
+        return False, None, rounds
+
+    ok_routing = None
+    if verify_routing:
+        for i in range(max_rounds + 1):
+            rfails = _verify_routing(files)
+            if rfails is None:
+                rounds.append({"phase": "routing", "round": i, "skipped": True})
+                break
+            rounds.append({"phase": "routing", "round": i, "fails": rfails})
+            if not rfails:
+                ok_routing = True
+                break
+            if i == max_rounds:
+                ok_routing = False
+                break
+            new = parse_files(asker(_routing_repair_prompt(files, rfails)) or "")
+            spliced = [p for p in (bind_path, orch_path) if p and p in new]
+            if not spliced:
+                rounds[-1]["repair_unparseable"] = True
+                ok_routing = False
+                break
+            for p in spliced:
+                files[p] = new[p]
+
+    return ok_examples and ok_routing in (True, None), ok_routing, rounds
+
+
 def author_domain_verified(description: str, *, model: str = "haiku", effort: str | None = None,
                            timeout: int = 600, max_rounds: int = 3, context: str | None = None,
                            asker=None, verify_routing: bool = True) -> dict:
@@ -410,68 +470,132 @@ def author_domain_verified(description: str, *, model: str = "haiku", effort: st
                     "use the required format. Emit ONLY the <<<FILE path>>> … <<<END>>> blocks "
                     "specified above — no markdown code fences, no prose before or after.")
         files = parse_files(raw) if raw else {}
-    rounds: list[dict] = []
     if not files:
-        return result(False, None, rounds, "no parseable file blocks from the response (after retry)")
-    skill_path = next((p for p in files if p.startswith("reasoning/skills/")), None)
-    bind_path = next((p for p in files if p.startswith("reasoning/bind/")), None)
-    orch_path = next((p for p in files if p.startswith("reasoning/store/orchestrators/")), None)
-
-    # Phase 1 — skill example tables
-    ok_examples = False
-    for i in range(max_rounds + 1):
-        fails = _verify_examples(files[skill_path]) if skill_path else ["no skill file was emitted"]
-        rounds.append({"phase": "examples", "round": i, "fails": fails})
-        if not fails:
-            ok_examples = True
-            break
-        if i == max_rounds or not skill_path:
-            break
-        new = parse_files(asker(_repair_prompt(skill_path, files[skill_path], fails)) or "")
-        if skill_path not in new:
-            rounds[-1]["repair_unparseable"] = True
-            break
-        files[skill_path] = new[skill_path]
-    if not ok_examples:
-        return result(False, None, rounds, f"example checks still failing after {max_rounds} round(s)")
-
-    # Phase 2 — bind gating + routing (worktree-isolated)
-    ok_routing = None
-    if verify_routing:
-        for i in range(max_rounds + 1):
-            rfails = _verify_routing(files)
-            if rfails is None:
-                rounds.append({"phase": "routing", "round": i, "skipped": True})
-                break
-            rounds.append({"phase": "routing", "round": i, "fails": rfails})
-            if not rfails:
-                ok_routing = True
-                break
-            if i == max_rounds:
-                ok_routing = False
-                break
-            new = parse_files(asker(_routing_repair_prompt(files, rfails)) or "")
-            spliced = [p for p in (bind_path, orch_path) if p and p in new]
-            if not spliced:
-                rounds[-1]["repair_unparseable"] = True
-                ok_routing = False
-                break
-            for p in spliced:
-                files[p] = new[p]
-
-    verified = ok_examples and ok_routing in (True, None)
-    err = None if verified else "routing checks still failing"
+        return result(False, None, [], "no parseable file blocks from the response (after retry)")
+    verified, ok_routing, rounds = _verify_and_repair(files, asker, max_rounds=max_rounds,
+                                                       verify_routing=verify_routing)
+    err = None if verified else ("example checks still failing" if ok_routing is None
+                                 else "routing checks still failing")
     return result(verified, ok_routing, rounds, err)
 
 
-def write_files(files: dict, *, dry_run: bool = False) -> tuple[list, list]:
-    """Write the real (non-meta) files. Never clobbers an existing file. Returns (written, skipped)."""
+def gather_domain_files(domain: str) -> dict | None:
+    """{path: source} for an existing domain's skill + bind + orchestrator, located by file stem
+    == `domain`. The orchestrator stem can differ from the skill/bind stem (e.g. thermo vs
+    thermodynamics), so if `<domain>.py` isn't in store/orchestrators it's found by scanning for the
+    file that imports `bind_<domain>`. Returns None if skill, bind, or orchestrator can't be found."""
+    skill = _REPO / "reasoning/skills" / f"{domain}.py"
+    bind = _REPO / "reasoning/bind" / f"{domain}.py"
+    if not (skill.exists() and bind.exists()):
+        return None
+    orch = _REPO / "reasoning/store/orchestrators" / f"{domain}.py"
+    if not orch.exists():
+        for p in sorted((_REPO / "reasoning/store/orchestrators").glob("*.py")):
+            if f"bind_{domain}" in p.read_text():
+                orch = p
+                break
+    if not orch.exists():
+        return None
+    return {str(p.relative_to(_REPO)): p.read_text() for p in (skill, bind, orch)}
+
+
+_EXTEND_FORMAT = """\
+OUTPUT FORMAT — re-emit the THREE existing files IN FULL (same paths), each delimited EXACTLY like
+this, with your additions folded in and every existing op preserved verbatim:
+
+<<<FILE reasoning/skills/<domain>.py>>>
+<full updated skill file>
+<<<END>>>
+<<<FILE reasoning/bind/<domain>.py>>>
+<full updated bind file>
+<<<END>>>
+<<<FILE reasoning/store/orchestrators/<domain>.py>>>
+<full updated orchestrator file>
+<<<END>>>
+
+Then a <<<FILE __wiring__>>> block with 1–2 new CASES tuples (query, expected, "<orch_id>") covering
+the NEW ops only. <<<END>>>"""
+
+
+def build_extend_prompt(domain: str, description: str, files: dict, context: str | None = None) -> str:
+    ctx = gather_context() if context is None else context
+    existing = "\n\n".join(f"<<<FILE {p}>>>\n{c}\n<<<END>>>" for p, c in files.items())
+    return (
+        "You are ADDING new operation(s) to an EXISTING domain in a deterministic, model-free "
+        "reasoning engine. RE-EMIT the three existing files below IN FULL with your additions folded "
+        "in: one new @register skill per op (EXACT example table — compute every value, never guess), "
+        "a matching bind branch per op (extract args with num_near; gate on a phrase distinctive to "
+        "the NEW op so it collides with neither the domain's EXISTING ops nor other domains), and the "
+        "orchestrator META extended with each new op's example_query + keyword. GATE CALIBRATION "
+        "(§3f): the context allow-list must admit every new op's keyword. PRESERVE every existing op "
+        "EXACTLY — do not remove, rename, or change any existing skill, example value, or bind "
+        "branch.\n\n"
+        f"DOMAIN: {domain}\nNEW OPERATION(S) TO ADD:\n{description}\n\n{_EXTEND_FORMAT}\n\n"
+        f"=== THE EXISTING DOMAIN FILES (re-emit all three, with your additions) ===\n{existing}\n\n"
+        f"---\n\n{ctx}")
+
+
+def extend_domain(domain: str, description: str, *, model: str = "haiku", effort: str | None = None,
+                  timeout: int = 600, max_rounds: int = 3, context: str | None = None,
+                  asker=None, verify: bool = True) -> dict:
+    """Add one or more skills to an EXISTING domain: feed the model the domain's three files, have it
+    re-emit them with the new ops folded in, then (with verify) run the same example+routing loop —
+    which also guards that the additions don't break the domain's existing ops or steal neighbours.
+    Returns {files, verified, verified_routing, rounds, cost_usd, error, domain_paths}; the caller
+    OVERWRITES the domain_paths (these files already exist). `asker` is injectable for testing."""
+    files0 = gather_domain_files(domain)
+    if files0 is None:
+        return {"files": {}, "raw": None, "verified": False, "verified_routing": None, "rounds": [],
+                "cost_usd": None, "domain_paths": [],
+                "error": f"domain {domain!r} not found — need reasoning/skills/{domain}.py + bind + "
+                         f"an orchestrator (by stem or importing bind_{domain})"}
+    domain_paths = list(files0)
+    spent = {"cost_usd": None}
+    if asker is None:
+        from . import teachers
+
+        def asker(p):
+            r = teachers.ask_claude_usage(p, model=model, timeout=timeout, effort=effort)
+            if r["cost_usd"] is not None:
+                spent["cost_usd"] = (spent["cost_usd"] or 0.0) + r["cost_usd"]
+            return r["text"]
+
+    prompt = build_extend_prompt(domain, description, files0, context)
+    raw = asker(prompt)
+    files = parse_files(raw) if raw else {}
+    if not files and raw:
+        raw = asker(prompt + "\n\nIMPORTANT: re-emit ONLY the <<<FILE …>>> … <<<END>>> blocks, no "
+                    "markdown fences, no prose.")
+        files = parse_files(raw) if raw else {}
+
+    def result(verified, ok_routing, rounds, error):
+        return {"files": files, "raw": raw, "verified": verified, "verified_routing": ok_routing,
+                "rounds": rounds, "cost_usd": spent["cost_usd"], "domain_paths": domain_paths,
+                "error": error}
+
+    if not files:
+        return result(False, None, [], "no parseable file blocks from the response (after retry)")
+    missing = [p for p in domain_paths if p not in files]
+    if missing:                                   # incomplete re-emit — refuse to apply a partial domain
+        return result(False, None, [], f"re-emit is missing required files: {missing}")
+    if not verify:
+        return result(False, None, [], None)
+    verified, ok_routing, rounds = _verify_and_repair(files, asker, max_rounds=max_rounds)
+    err = None if verified else ("example checks still failing" if ok_routing is None
+                                 else "routing checks still failing")
+    return result(verified, ok_routing, rounds, err)
+
+
+def write_files(files: dict, *, dry_run: bool = False, overwrite: bool = False) -> tuple[list, list]:
+    """Write the real (non-meta) files. By default never clobbers an existing file (new-domain
+    authoring); pass overwrite=True to write existing files too (extending a domain). Returns
+    (written, skipped)."""
     written, skipped = [], []
     for path, content in files.items():
         if path.startswith("__"):              # __wiring__ / __notes__ are not files
             continue
         dest = _REPO / path
-        if dest.exists():
+        if dest.exists() and not overwrite:
             skipped.append(path)               # refuse to overwrite existing code
             continue
         if not dry_run:

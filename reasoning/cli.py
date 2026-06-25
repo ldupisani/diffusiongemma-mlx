@@ -236,6 +236,34 @@ def cmd_reference(args):
         print(reference.promote(a[0], a[1], year))
 
 
+def _print_verify_rounds(res):
+    """Render the per-round trace of the author→test→repair loop + the final verdict."""
+    for rd in res.get("rounds", []):
+        phase = rd.get("phase", "examples")
+        tag = "draft" if rd["round"] == 0 else f"repair {rd['round']}"
+        if rd.get("skipped"):
+            print(f"  [{phase}/{tag}] skipped (not a git repo / no orchestrator)")
+            continue
+        fails = rd.get("fails") or []
+        print(f"  [{phase}/{tag}] " + (f"✓ {phase} pass" if not fails else f"{len(fails)} failing:"))
+        for f in fails:
+            print(f"      - {f}")
+    rtag = {True: "routing✓", False: "routing✗", None: "routing skipped"}[res.get("verified_routing")]
+    print(f"  → {'VERIFIED' if res.get('verified') else 'NOT verified'} ({rtag})\n")
+
+
+def _print_cost(res, model):
+    u, cost = res.get("usage"), res.get("cost_usd")
+    if not (u or cost is not None):
+        return
+    # input_tokens is only the *uncached* remainder; the bulk of the prompt is billed as cache, so
+    # sum all three for a true prompt-size figure (usage is absent on the extend path → cost only).
+    prompt_toks = sum(u.get(k, 0) for k in ("input_tokens", "cache_creation_input_tokens",
+                                            "cache_read_input_tokens")) if u else 0
+    toks = f" — {prompt_toks} in / {u.get('output_tokens', 0)} out tokens" if u else ""
+    print(f"[{model}: {'$%.4f' % cost if cost is not None else 'cost n/a'}{toks}]\n")
+
+
 def cmd_author_domain(args):
     """Call Claude (high-reasoning) to implement a new domain per the playbook, pre-loaded with
     context. Writes the new module files (never clobbers); wiring + CASES are printed to apply."""
@@ -248,31 +276,10 @@ def cmd_author_domain(args):
     if args.verify:
         res = authoring.author_domain_verified(description, model=args.model, effort=args.effort,
                                                max_rounds=args.max_rounds)
-        for rd in res.get("rounds", []):
-            phase = rd.get("phase", "examples")
-            tag = "draft" if rd["round"] == 0 else f"repair {rd['round']}"
-            if rd.get("skipped"):
-                print(f"  [{phase}/{tag}] skipped (not a git repo / no orchestrator)")
-                continue
-            fails = rd.get("fails") or []
-            status = f"✓ {phase} pass" if not fails else f"{len(fails)} failing:"
-            print(f"  [{phase}/{tag}] {status}")
-            for f in fails:
-                print(f"      - {f}")
-        routing = res.get("verified_routing")
-        rtag = {True: "routing✓", False: "routing✗", None: "routing skipped"}[routing]
-        print(f"  → {'VERIFIED' if res.get('verified') else 'NOT verified'} ({rtag})\n")
+        _print_verify_rounds(res)
     else:
         res = authoring.author_domain(description, model=args.model, effort=args.effort)
-    u, cost = res.get("usage"), res.get("cost_usd")
-    if u or cost is not None:
-        # input_tokens is only the *uncached* remainder; the bulk of the prompt (playbook +
-        # exemplar) is billed as cache, so sum all three for a true prompt-size figure.
-        prompt_toks = sum(u.get(k, 0) for k in ("input_tokens", "cache_creation_input_tokens",
-                                                "cache_read_input_tokens")) if u else 0
-        toks = f"{prompt_toks} in / {u.get('output_tokens', 0)} out tokens" if u else ""
-        dollars = f"${cost:.4f}" if cost is not None else "cost n/a"
-        print(f"[{args.model}: {dollars}{(' — ' + toks) if toks else ''}]\n")
+    _print_cost(res, args.model)
     files = res["files"]
     if not files:                                  # hard failure — nothing to write
         sys.exit(res["error"] or "no files were produced")
@@ -290,6 +297,35 @@ def cmd_author_domain(args):
     print("\nNext: review the files, apply the wiring + CASES, then run "
           "`python -m pytest reasoning/tests reasoning/skills/tests -q` and "
           "`python -m reasoning.cli eval-all`. The model wrote this — verify before committing.")
+
+
+def cmd_extend_domain(args):
+    """Add new skill(s) to an EXISTING domain via Claude: re-emit the domain's three files with the
+    new ops folded in, verify (examples + routing — also guards the existing ops), and overwrite."""
+    from . import authoring
+    description = " ".join(args.args)
+    if not description:
+        sys.exit('describe the new ops, e.g. extend-domain fluid_mechanics "buoyant force = rho*g*V"')
+    verb_mode = "extend" if args.no_verify else "extend+verify loop"
+    print(f"[{verb_mode}: {args.domain} += '{description[:45]}…' via {args.model} — calls the model]\n")
+    res = authoring.extend_domain(args.domain, description, model=args.model, effort=args.effort,
+                                  max_rounds=args.max_rounds, verify=not args.no_verify)
+    if res.get("rounds"):
+        _print_verify_rounds(res)
+    _print_cost(res, args.model)
+    files, paths = res["files"], res.get("domain_paths", [])
+    if not files or not paths or any(p not in files for p in paths):
+        sys.exit(res["error"] or "extend produced no usable files")
+    if res.get("error"):
+        print(f"⚠ {res['error']} — writing the best-effort update anyway; review `git diff` and fix "
+              f"by hand before committing.\n")
+    written, _ = authoring.write_files({p: files[p] for p in paths},   # overwrite ONLY the domain's files
+                                       dry_run=args.dry_run, overwrite=True)
+    print(f"{'would update' if args.dry_run else 'updated'}: {', '.join(written)}")
+    if "__wiring__" in files:
+        print(f"\n--- new CASES (add to reasoning/tests/test_orchestrators.py) ---\n{files['__wiring__'].strip()}")
+    print("\nNext: review `git diff` (the existing ops must be unchanged), add the new CASES, then run "
+          "`python -m pytest reasoning/tests reasoning/skills/tests -q`. The model wrote this — verify.")
 
 
 def cmd_help(args):
@@ -380,6 +416,18 @@ def main():
     ad.add_argument("--max-rounds", type=int, default=3, help="max repair rounds with --verify (default 3)")
     ad.add_argument("--dry-run", action="store_true", help="print what would be written, don't write")
     ad.set_defaults(fn=cmd_author_domain)
+    ed = sub.add_parser("extend-domain", help="add new skill(s) to an existing domain via Claude")
+    ed.add_argument("domain", help="the existing domain's module stem (e.g. fluid_mechanics)")
+    ed.add_argument("args", nargs="+", help="description of the new operation(s) to add")
+    ed.add_argument("--model", default="haiku", help="Claude model alias/id (default: haiku)")
+    ed.add_argument("--effort", choices=["low", "medium", "high", "xhigh", "max"],
+                    help="reasoning effort level (default: the CLI default)")
+    ed.add_argument("--max-rounds", type=int, default=3, help="max repair rounds (default 3)")
+    ed.add_argument("--no-verify", action="store_true",
+                    help="skip the author→test→repair loop (NOT recommended — it guards that the "
+                         "additions don't break the domain's existing ops)")
+    ed.add_argument("--dry-run", action="store_true", help="print what would change, don't write")
+    ed.set_defaults(fn=cmd_extend_domain)
     hp = sub.add_parser("help", help="introspection: what can I ask? (domains / examples / search)")
     hp.add_argument("domain", nargs="?", help="a domain id to show example queries for")
     hp.add_argument("--search", help="find domains/skills/generators mentioning a term")

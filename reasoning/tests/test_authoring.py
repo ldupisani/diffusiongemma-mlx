@@ -90,6 +90,50 @@ class TestAuthoring(unittest.TestCase):
         self.assertIsNone(A._answer_mismatch("999", "area of radius 5", rows))
         self.assertIsNone(A._answer_mismatch("not numeric", "foo 2 and 3", rows))  # no answer number
 
+    def test_gather_domain_files_locates_existing_domain(self):
+        # thermo: skill/bind are thermo.py, but the orchestrator file is thermodynamics.py — found
+        # by the "imports bind_thermo" scan, exercising the stem-mismatch fallback.
+        files = A.gather_domain_files("thermo")
+        self.assertIsNotNone(files)
+        self.assertIn("reasoning/skills/thermo.py", files)
+        self.assertIn("reasoning/bind/thermo.py", files)
+        self.assertTrue(any("orchestrators/thermodynamics.py" in p for p in files))
+
+    def test_gather_domain_files_missing_returns_none(self):
+        self.assertIsNone(A.gather_domain_files("no_such_domain_xyz"))
+
+    def test_build_extend_prompt_embeds_files_and_desc(self):
+        files = {"reasoning/skills/x.py": "SKILLSRC", "reasoning/bind/x.py": "BINDSRC",
+                 "reasoning/store/orchestrators/x.py": "ORCHSRC"}
+        p = A.build_extend_prompt("x", "add op foo", files, context="CTX")
+        for marker in ("add op foo", "SKILLSRC", "CTX", "PRESERVE every existing op"):
+            self.assertIn(marker, p)
+
+    def test_extend_domain_requires_full_reemit(self):
+        files0 = A.gather_domain_files("thermo")
+        skill_path = next(p for p in files0 if "skills/" in p)
+        stub = lambda prompt: f"<<<FILE {skill_path}>>>\nX=1\n<<<END>>>"   # only the skill, no bind/orch
+        res = A.extend_domain("thermo", "add op", asker=stub, context="(ctx)", verify=False)
+        self.assertIn("missing required files", res["error"])
+
+    def test_extend_domain_stub_no_verify(self):
+        files0 = A.gather_domain_files("thermo")
+        stub = lambda prompt: "\n".join(f"<<<FILE {p}>>>\n# updated\n<<<END>>>" for p in files0)
+        res = A.extend_domain("thermo", "add op", asker=stub, context="(ctx)", verify=False)
+        self.assertIsNone(res["error"])
+        self.assertEqual(set(res["domain_paths"]), set(files0))
+
+    def test_extend_domain_unknown_domain(self):
+        res = A.extend_domain("no_such_domain_xyz", "add op", asker=lambda p: "", context="(ctx)")
+        self.assertIn("not found", res["error"])
+
+    def test_write_files_overwrite_mode(self):
+        files = {"reasoning/skills/base.py": "X"}                # exists
+        self.assertIn("reasoning/skills/base.py",
+                      A.write_files(files, dry_run=True, overwrite=True)[0])    # overwrite → written
+        self.assertIn("reasoning/skills/base.py",
+                      A.write_files(files, dry_run=True)[1])                    # default → skipped
+
     def test_routing_failures_formatting(self):
         data = {"oid": "widgets",
                 "forward": [{"q": "make a widget", "routed": "widgets", "ok": True},
