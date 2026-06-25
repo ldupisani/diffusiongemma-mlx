@@ -15,6 +15,8 @@ class TestAuthoring(unittest.TestCase):
         self.assertIn("Widgets: foo, bar", p)
         self.assertIn("(PLAYBOOK CONTEXT)", p)
         self.assertIn("<<<FILE", p)            # the output-format spec is present
+        self.assertIn("num_near", p)           # extraction steering
+        self.assertIn("GATE CALIBRATION", p)   # §3f gate-logic steering (allow-list + AND-guard)
 
     def test_parse_files_roundtrip(self):
         text = ("<<<FILE reasoning/skills/w.py>>>\nX = 1\nY = 2\n<<<END>>>\n"

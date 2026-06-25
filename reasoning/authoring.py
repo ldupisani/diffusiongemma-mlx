@@ -40,7 +40,17 @@ Produce these blocks in order:
                                       NOT hand-roll forward-only regex (the logistics exemplar predates
                                       this helper; prefer num_near). List the most specific anchor
                                       first. For fixed-arity numeric ops, wrap with guard_residue /
-                                      decline on unexplained residue (§3d).
+                                      decline on unexplained residue (§3d). GATE CALIBRATION (§3f),
+                                      the #1 source of mis-routes: (a) the domain's top-level context
+                                      allow-list MUST contain a trigger word for EVERY op — if an op
+                                      only branches on "continuity"/"grover", that word must admit the
+                                      domain, or the op is declined before its branch runs; (b) a
+                                      collision-decline guard against a neighbour must require ALL of
+                                      the neighbour's distinctive signal with AND, never a single
+                                      shared word with OR — e.g. to decline physics "force/area
+                                      pressure" use `"force" in q and "area" in q`, NOT `or`, because
+                                      "area" alone is a legitimate input to your own flow/continuity
+                                      ops and an OR-guard would decline them.
  3. reasoning/store/orchestrators/<name>.py — META / precondition / run; choose bind_gated per §2.
  4. <<<FILE __wiring__>>>           — the exact line to add to reasoning/skills/__init__.py, the line
                                       for reasoning/bind/__init__.py, and 3–6 CASES tuples
