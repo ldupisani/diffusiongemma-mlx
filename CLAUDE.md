@@ -53,7 +53,9 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   `ask` (route → coded answer + domain + model-call count; 0-call compound split; non-coded types
   reported, never invoked) plus introspection (`capabilities`/`describe_domain`/`search_capabilities`)
   and dataset/reference tools (`list_generators`/`generate_dataset`/`list_datasets`/`dataset_info`/
-  `query_dataset`). Code-only (0 model calls) so it needs no sidecar. Run: `python -m reasoning.mcp_server`.
+  `query_dataset`). Also exposes user-invokable **prompts** (slash commands in clients):
+  `ask`/`capabilities`/`query`. Code-only (0 model calls) so it needs no sidecar.
+  Run: `python -m reasoning.mcp_server`.
 - **`infer_server.py`** — tiny HTTP sidecar (`/info`, `/generate` NDJSON) wrapping the active
   backend. Single-threaded on purpose (MLX's GPU stream is thread-local).
 - **`chat_stream.py`** (Python REPL), **`mcp_agent.py`** (one-shot agent), **`chat.py`**

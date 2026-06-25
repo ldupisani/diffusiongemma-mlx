@@ -65,6 +65,14 @@ class TestMCPServer(unittest.TestCase):
                   "query_dataset"):
             self.assertIn(t, names)
 
+    def test_prompts_registered_and_render(self):
+        prompts = {p.name for p in asyncio.run(self.M.mcp.list_prompts())}
+        self.assertEqual(prompts, {"ask", "capabilities", "query"})
+        r = asyncio.run(self.M.mcp.get_prompt("ask", {"query": "What is 2+2?"}))
+        self.assertIn("What is 2+2?", r.messages[0].content.text)
+        # the prompt names must not have shadowed the directly-callable tool functions
+        self.assertEqual(self.M.ask("What is 2 + 2?")["answer"], "4")
+
 
 if __name__ == "__main__":
     unittest.main()

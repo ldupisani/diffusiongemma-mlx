@@ -133,6 +133,33 @@ for _fn in (ask, capabilities, describe_domain, search_capabilities, list_genera
     mcp.tool()(_fn)
 
 
+# Prompts — user-invokable templates that surface as slash commands in MCP clients
+# (/mcp__difg-reasoning__ask, …__capabilities, …__query). Distinct function names avoid shadowing
+# the tool functions above; the slash-command name is set explicitly via `name=`. Each returns a
+# message that directs the assistant to call the matching tool, so the user gets a one-step entry
+# point into the engine.
+
+@mcp.prompt(name="ask", title="Ask the reasoning engine",
+            description="Answer a question with the difg-reasoning engine (deterministic, 0 model calls).")
+def ask_prompt(query: str) -> str:
+    return (f"Use the difg-reasoning `ask` tool to answer the following, then report the answer, "
+            f"the domain that handled it, and the model-call count:\n\n{query}")
+
+
+@mcp.prompt(name="capabilities", title="Reasoning capabilities",
+            description="Summarize what the reasoning engine can do.")
+def capabilities_prompt() -> str:
+    return ("Call the difg-reasoning `capabilities` tool and give a concise overview: the domain "
+            "count and a sampling of the notable topics I can ask about.")
+
+
+@mcp.prompt(name="query", title="Query datasets with SQL",
+            description="Run SQL over the dataset and bundled reference handles.")
+def query_prompt(sql: str) -> str:
+    return (f"Run this SQL over the difg-reasoning datasets and reference tables using the "
+            f"`query_dataset` tool, and show the result:\n\n{sql}")
+
+
 def main():
     mcp.run()  # stdio transport
 
