@@ -60,6 +60,20 @@ class TestMCPServer(unittest.TestCase):
         self.assertEqual((r["matched"], r["answer"], r["domain"], r["model_calls"]),
                          (True, "72", "translate", 1))
         self.assertIn("answer=a+a/2", r["program"])
+        self.assertNotIn("low_confidence", r)   # all givens used → no flag
+
+    def test_ask_translate_flags_low_confidence_on_unused_given(self):
+        from reasoning import translate
+        orig = translate.solve
+        translate.solve = lambda q, **kw: {"answer": 49, "program": "answer = 26+15+24-16",
+                                           "model_calls": 1, "error": None, "unused_givens": [6.0]}
+        try:
+            r = self.M.ask("…26…15…24…4…6…", translate=True)
+        finally:
+            translate.solve = orig
+        self.assertTrue(r["low_confidence"])
+        self.assertEqual(r["unused_givens"], [6.0])
+        self.assertIn("may be wrong", r["warning"])
 
     def test_ask_unmatched_is_graceful(self):
         r = self.M.ask("Write me a poem about the sea.")

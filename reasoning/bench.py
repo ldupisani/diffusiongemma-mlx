@@ -251,10 +251,24 @@ class TranslateReport:
     solved_1call: int           # correct after the LLM→program→execute path (1 model call)
     buckets: Counter            # solved / wrong_value / program_error / no_response
     misses: list                # [(question, gold, out)] sample (dev only)
+    # unused-given confidence signal vs gold-derived correctness (over answered questions)
+    flag_caught: int = 0        # answered-WRONG and flagged (true positive)
+    flag_falsealarm: int = 0    # answered-CORRECT but flagged (false positive)
+    answered_wrong: int = 0     # produced a number that was wrong (the denominator for recall)
 
     @property
     def accuracy(self) -> float:
         return self.solved_1call / self.total if self.total else 0.0
+
+    @property
+    def flag_recall(self) -> float:
+        """Of answered-wrong cases, the fraction the unused-given flag caught."""
+        return self.flag_caught / self.answered_wrong if self.answered_wrong else 0.0
+
+    @property
+    def flag_false_alarm(self) -> float:
+        """Of answered-correct cases, the fraction the flag wrongly tripped on."""
+        return self.flag_falsealarm / self.solved_1call if self.solved_1call else 0.0
 
 
 def run_translate(slice: str = "dev", limit: int | None = 25, *, asker=None,
@@ -272,15 +286,18 @@ def run_translate(slice: str = "dev", limit: int | None = 25, *, asker=None,
 
     buckets: Counter = Counter()
     misses: list = []
-    solved = 0
+    solved = flag_caught = flag_falsealarm = answered_wrong = 0
     for question, answer in rows:
         gold = gold_answer(answer)
         out = translate.solve(question, asker=asker, model=model, backend=backend)
         ans = out["answer"]
+        flagged = bool(out.get("unused_givens"))
         correct = ans is not None and is_correct(str(ans), gold)
         if correct:
             solved += 1
             buckets["solved"] += 1
+            if flagged:
+                flag_falsealarm += 1               # correct answer the flag wrongly tripped on
         else:
             if out["error"] == "no response from the model":
                 bucket = "no_response"
@@ -288,12 +305,16 @@ def run_translate(slice: str = "dev", limit: int | None = 25, *, asker=None,
                 bucket = "program_error"   # program was malformed/unsafe/undefined
             else:
                 bucket = "wrong_value"     # program ran, but the translation was wrong
+                answered_wrong += 1                # a confident-wrong NUMBER (the silent-wrong risk)
+                if flagged:
+                    flag_caught += 1
             buckets[bucket] += 1
             if slice == "dev" and len(misses) < keep_misses:
                 misses.append((question, gold, out))
 
-    return TranslateReport(slice=slice, total=len(rows), solved_1call=solved,
-                           buckets=buckets, misses=misses)
+    return TranslateReport(slice=slice, total=len(rows), solved_1call=solved, buckets=buckets,
+                           misses=misses, flag_caught=flag_caught, flag_falsealarm=flag_falsealarm,
+                           answered_wrong=answered_wrong)
 
 
 def run(slice: str = "test", limit: int | None = None, *, keep_misses: int = 40) -> Report:

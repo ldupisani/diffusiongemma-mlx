@@ -166,6 +166,13 @@ def cmd_bench(args):
             n = rep.buckets.get(b, 0)
             if n:
                 print(f"  {b:14} {n:>4}  ({n / rep.total:.1%})")
+        # the unused-given confidence signal vs gold-derived correctness
+        if rep.answered_wrong or rep.solved_1call:
+            print("\nunused-given flag (label-free confidence signal) vs gold:")
+            print(f"  caught     {rep.flag_caught}/{rep.answered_wrong} wrong answers "
+                  f"(recall {rep.flag_recall:.0%})")
+            print(f"  false alarm {rep.flag_falsealarm}/{rep.solved_1call} correct answers "
+                  f"({rep.flag_false_alarm:.0%})")
         if rep.misses:
             print(f"\nsample DEV misses (first {min(args.show_misses, len(rep.misses))}):")
             for q, gold, out in rep.misses[:args.show_misses]:

@@ -87,8 +87,15 @@ def _translate_fallback(query: str) -> dict | None:
     val = out["answer"]
     if isinstance(val, float) and val.is_integer():
         val = int(val)
-    return {"matched": True, "answer": str(val), "domain": "translate",
-            "model_calls": out.get("model_calls", 1), "program": out.get("program")}
+    result = {"matched": True, "answer": str(val), "domain": "translate",
+              "model_calls": out.get("model_calls", 1), "program": out.get("program")}
+    unused = out.get("unused_givens") or []
+    if unused:   # a stated quantity went unused → the translation may be wrong (label-free signal)
+        result["low_confidence"] = True
+        result["unused_givens"] = unused
+        result["warning"] = (f"the program ignored {len(unused)} number(s) given in the question "
+                             f"({', '.join(str(u) for u in unused)}) — the answer may be wrong")
+    return result
 
 
 def ask(query: str, translate: bool | None = None) -> dict:

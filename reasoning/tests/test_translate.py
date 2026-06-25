@@ -100,6 +100,40 @@ def test_solve_handles_no_response():
     assert out["answer"] is None and out["model_calls"] == 1
 
 
+# --- unused-given check ---------------------------------------------------------------
+
+def test_program_numbers_from_ast_not_var_names():
+    # 60 (constant) is counted; the 2 in the variable name `item2` is NOT
+    nums = translate.program_numbers("item2 = 50\nanswer = item2 * 60")
+    assert nums == {50.0, 60.0}
+
+
+def test_unused_givens_flags_the_hardhats_error():
+    # the real wrong answer from the trace: the model dropped John's literal "6" and invented *2
+    q = ("In a truck there are 26 pink, 15 green, and 24 yellow hard hats. Carl takes 4 pink, and "
+         "John takes 6 pink and twice as many green as the pink he removed. How many remain?")
+    program = ("pink = 26 - 4 - 4 * 2\ngreen = 15 - (4 * 2) / 2\nyellow = 24\n"
+               "answer = pink + green + yellow")
+    assert translate.unused_givens(q, program) == [6.0]   # "6" is stated but never used
+
+
+def test_unused_givens_empty_when_all_used():
+    q = "Natalia sold 48 clips, then half as many. How many altogether?"
+    program = "april = 48\nmay = april / 2\nanswer = april + may"
+    assert translate.unused_givens(q, program) == []      # 48 used; "/2" is program-introduced
+
+
+def test_unused_givens_ignores_thousands_separator():
+    q = "He made $100,000 and spent $40,000. How much is left?"
+    assert translate.unused_givens(q, "answer = 100000 - 40000") == []
+
+
+def test_solve_reports_unused_givens():
+    asker = lambda _p: "<program>\nx = 5\nanswer = x\n</program>"
+    out = translate.solve("a value of 5 and an unused 99", asker=asker)
+    assert out["unused_givens"] == [99.0]
+
+
 def test_default_asker_backends():
     # both known backends build a callable without making a call; unknown raises
     assert callable(translate._default_asker("claude", model="haiku", timeout=5, max_tokens=64))

@@ -158,21 +158,75 @@ def _default_asker(backend: str, *, model: str, timeout: int, max_tokens: int):
     raise ValueError(f"unknown translator backend {backend!r} (use 'claude' or 'sidecar')")
 
 
+# --- the unused-given check (a label-free confidence signal) --------------------------
+
+_QNUM = re.compile(r"-?\d[\d,]*(?:\.\d+)?")
+
+
+def _values(text: str) -> set:
+    out = set()
+    for m in _QNUM.finditer(text or ""):
+        try:
+            out.add(round(float(m.group().replace(",", "")), 6))
+        except ValueError:
+            pass
+    return out
+
+
+def question_numbers(question: str) -> set:
+    """The digit-literal quantities stated in the question (thousands separators stripped)."""
+    return _values(question)
+
+
+def program_numbers(program: str) -> set:
+    """The numeric literals actually USED in the program — collected from the AST (ast.Constant),
+    so digits inside variable names (`item2`) are never counted, only real constants."""
+    nums: set = set()
+    for raw in (program or "").splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if not line or _TAG.match(line):
+            continue
+        m = _ASSIGN.match(line)
+        if not m:
+            continue
+        try:
+            tree = ast.parse(m.group(3), mode="eval")
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Constant) and not isinstance(node.value, bool) \
+                    and isinstance(node.value, (int, float)):
+                nums.add(round(float(node.value), 6))
+    return nums
+
+
+def unused_givens(question: str, program: str) -> list:
+    """Question quantities that never appear as a literal in the program — a label-free smell
+    that the translation ignored a given (or invented a relationship in its place). We check
+    only question→program: program-introduced constants (60 for minutes→hours, 100 for percent,
+    2 for halving) are expected and never flagged. A non-empty result ⇒ low confidence."""
+    p = program_numbers(program)
+    return sorted(v for v in question_numbers(question) if v not in p)
+
+
 def solve(question: str, *, asker=None, model: str = "haiku", backend: str = "claude",
           timeout: int = 60, max_tokens: int = 512) -> dict:
     """Translate the word problem to a program (1 model call) and execute it deterministically.
-    Returns {answer, program, model_calls, error}. `asker(prompt)->str|None` is injectable for
-    testing; otherwise `backend` picks the model path ('claude' CLI or local 'sidecar')."""
+    Returns {answer, program, model_calls, error, unused_givens}. `unused_givens` is a label-free
+    confidence signal (non-empty ⇒ a stated quantity went unused ⇒ low confidence). `asker(prompt)
+    ->str|None` is injectable for testing; otherwise `backend` picks the model path."""
     if asker is None:
         asker = _default_asker(backend, model=model, timeout=timeout, max_tokens=max_tokens)
 
     raw = asker(build_prompt(question))
     if not raw:
         return {"answer": None, "program": None, "model_calls": 1,
-                "error": "no response from the model"}
+                "error": "no response from the model", "unused_givens": []}
     program = parse_program(raw)
+    unused = unused_givens(question, program)
     try:
         return {"answer": run_program(program), "program": program, "model_calls": 1,
-                "error": None}
+                "error": None, "unused_givens": unused}
     except (ProgramError, ZeroDivisionError, ArithmeticError, ValueError) as e:
-        return {"answer": None, "program": program, "model_calls": 1, "error": str(e)}
+        return {"answer": None, "program": program, "model_calls": 1, "error": str(e),
+                "unused_givens": unused}
