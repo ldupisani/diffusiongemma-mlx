@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "difg-reasoning": {
+      "command": "/Users/louis/Development/experiments/difg/.venv/bin/python",
+      "args": ["-m", "reasoning.mcp_server"],
+      "env": {
+        "PYTHONPATH": "/Users/louis/Development/experiments/difg"
+      }
+    }
+  }
+}
