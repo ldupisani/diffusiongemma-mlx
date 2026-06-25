@@ -278,20 +278,52 @@ tends to surface its own collision, and per-domain commits make each fix reviewa
 
 ---
 
-## 8. Add a dataset generator when appropriate
+## 8. Look for opportunities to seed new datasets
 
-**After a domain is in, ask: does it naturally produce a *sequence, sample, series, or schedule*?**
-If so, add a generator to `reasoning/datagen.py` (registered in `GENERATORS`) that builds rows —
-reusing the domain's pure skills + numpy/SymPy — and saves via `datasets.save_rows`, returning a
-handle + preview (never a text dump). Wire it into NL via the `dataset` orchestrator's `_generate`
-(and add a generation `example_query` so it routes — see the tier-2 learning in §2). Make random
-generators take a reproducible `seed`. Examples already shipped: primes/Fibonacci (number theory),
-normal/uniform samples (probability), logistic trajectory/projectile (dynamics/physics),
-amortization (finance), EOQ cost curve / inventory simulation (logistics).
+**Every new domain — ask: does it naturally produce a *sequence, sample, series, or schedule*?**
+This is not an afterthought; make it a deliberate check. Two kinds of "seeding":
 
-**Skip** generators for domains that don't yield tabular/large data (single-value computations:
-complex/quaternion, ordinals/cardinals/surreals, p-adic, crypto, plain geometry). "Appropriate" =
-the answer is *many rows*, not one number.
+- **Generator** (computed rows) — add one to `reasoning/datagen.py` (registered in `GENERATORS`,
+  grouped under a `DOMAINS` key) that builds rows reusing the domain's pure skills + numpy/SymPy
+  and saves via `datasets.save_rows`, returning a handle + preview (never a text dump). Wire it
+  into NL via the `dataset` orchestrator's `_generate` (and add a generation `example_query` so it
+  routes — see the tier-2 learning in §2). Random generators take a reproducible `seed`. Shipped
+  examples: primes/Fibonacci (number theory), normal/uniform samples (probability), logistic
+  trajectory/projectile (dynamics/physics), amortization (finance), EOQ curve (logistics), truth
+  tables (logic), Cayley tables (group theory), polygon tables (geometry).
+- **Reference seed** (constant, verifiable rows) — if the domain has bundled facts worth shipping
+  (like geography's countries/cities), add them to `reasoning/store/reference/seed.py`; they build
+  into the read-only reference DB and become queryable handles. See the geography subsystem.
+
+**Skip** when the answer is one number, not many rows (complex/quaternion, ordinals/cardinals/
+surreals, p-adic, crypto). "Appropriate" = *many rows*. Verify the generator with `data domains`
+and a spot-checked value, and add it to the introspection surface for free (it's auto-listed).
+
+---
+
+## 9. Look for opportunities to synthesize with other domains
+
+**A new domain rarely lives alone — ask: what real question chains it with an existing domain?**
+The engine composes orchestrators via `SubStep(..., orchestrator="<id>")` in a `Plan` (see
+`compiled.py`), NOT via metadata; a `synthesized_*` orchestrator runs one domain's output into
+another's input, still at 0 model calls. Shipped cross-domain syntheses: `synthesized_geometry`
+(area → fencing/flooring **cost**, i.e. geometry → finance), `synthesized_physics` (distance/speed
+→ travel **cost/time**, physics → geo/finance), `synthesized_geo` (distance → flight time/price),
+`synthesized_chemistry`, `synthesized_materials`.
+
+When you add a domain, scan its neighbours for a natural hand-off:
+
+- **a quantity it produces that another domain prices/converts/times** — area→cost, distance→time,
+  mass→price, moles→mass;
+- **a unit it emits that another domain consumes** — coerce at the seam (dimension-aware unit
+  coercion auto-inserts `convert` ops at bind time), don't hardcode the conversion;
+- **a shared entity** — a place (geography), a shape (geometry), a substance (chemistry) that two
+  domains both reason about.
+
+Build the synthesis only when the chained question is one a user would actually ask; add it as a
+new `synthesized_<x>` orchestrator with its own `example_queries` and `CASES`, and **test routing
+both directions** so the composite doesn't steal the atomic queries (and vice-versa) — the same
+collision discipline as §5.
 
 ---
 
@@ -303,5 +335,6 @@ the answer is *many rows*, not one number.
 - [ ] Orchestrator `META`/`precondition`/`run`; `bind_gated` chosen per §2 (number-list/matrix → tier 2).
 - [ ] Forward routing ✓ at 0 model calls; **reverse** routing of neighbours ✓ (decline-guards added).
 - [ ] `CASES` rows incl. a collision guard; full suite green.
-- [ ] **Dataset generator** in `datagen.py` if the domain yields rows/series/schedules (§8).
+- [ ] **Seed datasets?** generator in `datagen.py` if it yields rows/series, or a reference seed if it has constant facts (§8).
+- [ ] **Synthesize?** scan neighbours for a chained question → a `synthesized_<x>` orchestrator, routing tested both ways (§9).
 - [ ] One commit per domain → `main`.
