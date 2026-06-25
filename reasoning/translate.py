@@ -128,6 +128,47 @@ def build_prompt(question: str) -> str:
     return f"{_SYSTEM}\n\n{shots}\n\nQ: {question}\n<program>\n"
 
 
+# Structured-analysis style: the model first lays out facts, relationships, and the expected
+# answer type, THEN writes the program. The analysis is demonstrated IN the exemplars (so the
+# format is consistent — the lesson from the deterministic-scaffold ablation), and one example
+# explicitly resolves a "N times as many X as the Y *he* removed" relationship (the traced error).
+_ANALYZE_SYSTEM = (
+    "You solve a math word problem in two parts.\n"
+    "First ANALYSE it:\n"
+    "  Facts: each known quantity and what it refers to.\n"
+    "  Relations: how the quantities combine, in words (mind WHO/WHICH each refers to).\n"
+    "  Answer type: what kind of value is asked (a count, an amount of money, hours, …).\n"
+    "Then write a PROGRAM that computes it:\n"
+    "  - one assignment per line, name = expression; only numbers, names defined above, the\n"
+    "    operators + - * / // % ** and parentheses, and min/max/abs/round;\n"
+    "  - do NOT compute results yourself; the LAST line must assign `answer`;\n"
+    "  - wrap ONLY the program in <program> and </program>."
+)
+
+_ANALYZE_EXAMPLES = [
+    ("A box has 20 red and 30 blue marbles. Tom removes 5 red, and Jon removes 4 red and three "
+     "times as many blue as the red he removed. How many marbles are left?",
+     "Facts:\n- red = 20, blue = 30\n- Tom removes 5 red\n- Jon removes 4 red\n"
+     "- Jon removes blue = 3 times the red JON removed = 3 * 4\n"
+     "Relations:\n- red_left = 20 - 5 - 4\n- blue_left = 30 - 3*4\n- answer = red_left + blue_left\n"
+     "Answer type: a count of marbles\n"
+     "<program>\nred = 20\nblue = 30\ntom_red = 5\njon_red = 4\njon_blue = 3 * jon_red\n"
+     "red_left = red - tom_red - jon_red\nblue_left = blue - jon_blue\n"
+     "answer = red_left + blue_left\n</program>"),
+    ("Weng earns $12 an hour for babysitting. Yesterday she did 50 minutes of babysitting. How "
+     "much did she earn?",
+     "Facts:\n- rate = $12 per hour\n- time = 50 minutes\n"
+     "Relations:\n- 50 minutes = 50/60 hour; earned = rate * hours\n"
+     "Answer type: an amount of money\n"
+     "<program>\nrate_per_hour = 12\nminutes = 50\nanswer = rate_per_hour * minutes / 60\n</program>"),
+]
+
+
+def build_analysis_prompt(question: str) -> str:
+    shots = "\n\n".join(f"Q: {q}\n{a}" for q, a in _ANALYZE_EXAMPLES)
+    return f"{_ANALYZE_SYSTEM}\n\n{shots}\n\nQ: {question}\n"
+
+
 # --- programmatic query preprocessing (0 extra model calls) ----------------------------
 # Independent, toggleable transforms applied to the question BEFORE translation. Each is a pure
 # str→str function; `preprocess(q, steps)` composes a chosen subset in a fixed order so they can
@@ -335,17 +376,21 @@ def solve_consistent(question: str, *, k: int = 5, sampler=None, backend: str = 
 
 
 def solve(question: str, *, asker=None, model: str = "haiku", backend: str = "claude",
-          timeout: int = 60, max_tokens: int = 512, preprocess_steps=None) -> dict:
+          timeout: int = 60, max_tokens: int | None = None, preprocess_steps=None,
+          style: str = "program") -> dict:
     """Translate the word problem to a program (1 model call) and execute it deterministically.
-    Returns {answer, program, model_calls, error, unused_givens}. `preprocess_steps` (a subset of
-    PREPROCESS_STEPS) deterministically rewrites the question before translation (0 extra calls);
-    the unused-given check still uses the ORIGINAL question. `asker(prompt)->str|None` is injectable
-    for testing; otherwise `backend` picks the model path."""
+    Returns {answer, program, model_calls, error, unused_givens}. `style`: "program" (direct) or
+    "analyze" (the model first lays out facts/relations/answer-type, then the program — 1 longer
+    call). `preprocess_steps` deterministically rewrites the question first (0 extra calls); the
+    unused-given check still uses the ORIGINAL question. `asker(prompt)->str|None` is injectable."""
+    builder = build_analysis_prompt if style == "analyze" else build_prompt
+    if max_tokens is None:
+        max_tokens = 768 if style == "analyze" else 512   # analysis output is longer
     if asker is None:
         asker = _default_asker(backend, model=model, timeout=timeout, max_tokens=max_tokens)
 
     prompt_q = preprocess(question, preprocess_steps) if preprocess_steps else question
-    raw = asker(build_prompt(prompt_q))
+    raw = asker(builder(prompt_q))
     if not raw:
         return {"answer": None, "program": None, "model_calls": 1,
                 "error": "no response from the model", "unused_givens": []}

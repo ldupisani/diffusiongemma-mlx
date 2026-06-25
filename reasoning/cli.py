@@ -183,8 +183,9 @@ def cmd_bench(args):
             print(f"GSM8K [{args.slice}] — hybrid LLM-as-translator via {who} (1 model call: "
                   f"prose→program, executed deterministically)\n")
             rep = bench.run_translate(slice=args.slice, limit=limit, model=args.model,
-                                      backend=args.backend)
-            head, signal = "solved @1call", "unused-given flag"
+                                      backend=args.backend, style=args.style)
+            head = f"solved @1call ({args.style})"
+            signal = "unused-given flag"
         print(f"{head}:  {rep.solved_1call}/{rep.total}  ({rep.accuracy:.1%})   ← headline")
         print("\noutcome buckets:")
         for b in ("solved", "wrong_value", "program_error", "no_answer", "no_response"):
@@ -506,6 +507,8 @@ def main():
                          "recall/false-alarm tradeoff measured on dev — a lone dissenter is still confident)")
     bn.add_argument("--ablation", action="store_true",
                     help="grid-test query-preprocessing transforms (none/each/pairs/all) on the same questions")
+    bn.add_argument("--style", choices=["program", "analyze"], default="program",
+                    help="translation prompt: direct 'program' (default) or 'analyze' (facts/relations/type first)")
     bn.set_defaults(fn=cmd_bench)
     sub.add_parser("list").set_defaults(fn=cmd_list)
     da = sub.add_parser("data", help="manage datasets in $DIFG_DATA_DIR")

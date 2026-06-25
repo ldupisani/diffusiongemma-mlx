@@ -185,6 +185,19 @@ def test_question_isolation_appends_asked_sentence():
     assert out.endswith("Question: How many remain in the box?")
 
 
+def test_analysis_prompt_demonstrates_structure_and_parses_program():
+    p = translate.build_analysis_prompt("How many are left?")
+    # the analysis structure is shown IN the exemplars (consistent format), and a coreference
+    # relation ("the red JON removed") is demonstrated to target the traced error class
+    assert "Facts:" in p and "Relations:" in p and "Answer type:" in p
+    assert "JON removed" in p
+    # the program parser still extracts the program from an analyze-style (prose-then-program) reply
+    reply = "Facts:\n- a = 6\nRelations:\n- answer = a*7\nAnswer type: a count\n" \
+            "<program>\na = 6\nanswer = a * 7\n</program>"
+    out = translate.solve("q", asker=lambda _p: reply, style="analyze")
+    assert out["answer"] == 42
+
+
 def test_preprocess_composes_in_order_and_validates():
     q = "He had three boxes. How many are left?"
     both = translate.preprocess(q, ["normalize", "question"])
