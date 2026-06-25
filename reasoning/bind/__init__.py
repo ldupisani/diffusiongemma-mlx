@@ -84,3 +84,5 @@ from reasoning.bind.acoustics import *         # noqa: F401,F403
 from reasoning.bind.photometry import *        # noqa: F401,F403
 
 from reasoning.bind.fluid_mechanics import *   # noqa: F401,F403
+
+from reasoning.bind.heat_transfer import *     # noqa: F401,F403

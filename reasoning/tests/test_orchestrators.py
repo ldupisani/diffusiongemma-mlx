@@ -637,6 +637,17 @@ CASES = [
     # reverse guards: must not steal physics pressure (force/area) or density (mass/volume).
     ("What is the pressure of a 50 N force over an area of 10 square meters?", "5 Pa", "physics"),
     ("What is the density of an object with mass 300 g and volume 100 cm^3?", "3 g/cm³", "physics"),
+    # heat_transfer (authored via Haiku --verify — ZERO-TOUCH: VERIFIED with no hand fixes; the
+    # conduction/convection ambiguity AND the thermo collision were handled autonomously, confirming
+    # the §3f gate-calibration prompt steering).
+    ("What is the conduction heat rate for thermal conductivity 50 W/m·K, area 2 m², temperature difference 20 K, and thickness 0.1 m?", "20000", "heat_transfer"),
+    ("Calculate the convection heat rate for h = 25 W/m²·K, area 2 m², and ΔT = 30 K", "1500", "heat_transfer"),
+    ("What is the radiation heat rate for emissivity 0.9, area 1 m², and absolute temperature 300 K?", "413.343", "heat_transfer"),
+    ("Find the thermal resistance for thickness 0.1 m, conductivity 50 W/m·K, and area 2 m²", "0.001", "heat_transfer"),
+    ("What is the heat flux if the heat rate is 20000 W and area is 2 m²?", "10000", "heat_transfer"),
+    # reverse guards: must not steal thermodynamics' sensible heat (m·c·ΔT) or entropy.
+    ("How much heat is needed to raise 2 kg of water with a specific heat of 4184 by 10 K?", "83680 J", "thermodynamics"),
+    ("What is the entropy change when 1000 J of heat is added at 250 K?", "4 J/K", "thermodynamics"),
     # geography population change between two years (delta + percent); the single-year lookup must
     # NOT grab these (it would silently answer the first year only).
     ("How much did the population of London grow from 2010 to 2020?", "+900000 (+11.25%)", "geography"),
