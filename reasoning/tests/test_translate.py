@@ -82,3 +82,11 @@ def test_solve_reports_error_on_bad_program_without_crashing():
 def test_solve_handles_no_response():
     out = translate.solve("q", asker=lambda _p: None)
     assert out["answer"] is None and out["model_calls"] == 1
+
+
+def test_default_asker_backends():
+    # both known backends build a callable without making a call; unknown raises
+    assert callable(translate._default_asker("claude", model="haiku", timeout=5, max_tokens=64))
+    assert callable(translate._default_asker("sidecar", model="x", timeout=5, max_tokens=64))
+    with pytest.raises(ValueError):
+        translate._default_asker("bogus", model="x", timeout=5, max_tokens=64)

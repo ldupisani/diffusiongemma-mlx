@@ -129,15 +129,32 @@ def parse_program(raw: str) -> str:
     return text.strip()
 
 
-def solve(question: str, *, asker=None, model: str = "haiku", timeout: int = 60) -> dict:
+def _default_asker(backend: str, *, model: str, timeout: int, max_tokens: int):
+    """Build the model-call function for a backend. `claude` → the Claude CLI (offline of the
+    sidecar); `sidecar` → the local MLX model via engine.one_shot (the project's own small LLM —
+    the truest 'engine + small LLM fallback'). Both return str|None and never raise."""
+    if backend == "sidecar":
+        from . import engine
+
+        def asker(prompt):
+            try:                                  # greedy + fixed seed → reproducible programs
+                return engine.one_shot(prompt, max_tokens=max_tokens, temperature=0.0, seed=0).text
+            except Exception:
+                return None
+        return asker
+    if backend == "claude":
+        from . import teachers
+        return lambda p: teachers.ask_claude(p, model=model, timeout=timeout)
+    raise ValueError(f"unknown translator backend {backend!r} (use 'claude' or 'sidecar')")
+
+
+def solve(question: str, *, asker=None, model: str = "haiku", backend: str = "claude",
+          timeout: int = 60, max_tokens: int = 512) -> dict:
     """Translate the word problem to a program (1 model call) and execute it deterministically.
     Returns {answer, program, model_calls, error}. `asker(prompt)->str|None` is injectable for
-    testing; the default calls Claude via the `claude` CLI (offline of the sidecar)."""
+    testing; otherwise `backend` picks the model path ('claude' CLI or local 'sidecar')."""
     if asker is None:
-        from . import teachers
-
-        def asker(p):
-            return teachers.ask_claude(p, model=model, timeout=timeout)
+        asker = _default_asker(backend, model=model, timeout=timeout, max_tokens=max_tokens)
 
     raw = asker(build_prompt(question))
     if not raw:

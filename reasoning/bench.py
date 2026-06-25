@@ -258,7 +258,8 @@ class TranslateReport:
 
 
 def run_translate(slice: str = "dev", limit: int | None = 25, *, asker=None,
-                  model: str = "haiku", keep_misses: int = 25) -> TranslateReport:
+                  model: str = "haiku", backend: str = "claude",
+                  keep_misses: int = 25) -> TranslateReport:
     """Hybrid LLM-as-translator over a slice: 1 model call per question turns prose into an
     arithmetic program, executed deterministically (translate.solve). Reports solved@1call.
 
@@ -274,7 +275,7 @@ def run_translate(slice: str = "dev", limit: int | None = 25, *, asker=None,
     solved = 0
     for question, answer in rows:
         gold = gold_answer(answer)
-        out = translate.solve(question, asker=asker, model=model)
+        out = translate.solve(question, asker=asker, model=model, backend=backend)
         ans = out["answer"]
         correct = ans is not None and is_correct(str(ans), gold)
         if correct:

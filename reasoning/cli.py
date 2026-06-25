@@ -155,9 +155,11 @@ def cmd_bench(args):
 
     if args.translate:
         limit = args.limit if args.limit is not None else 25
-        print(f"GSM8K [{args.slice}] — hybrid LLM-as-translator (1 model call: prose→program, "
-              f"executed deterministically)\n")
-        rep = bench.run_translate(slice=args.slice, limit=limit, model=args.model)
+        who = "local MLX sidecar" if args.backend == "sidecar" else f"claude/{args.model}"
+        print(f"GSM8K [{args.slice}] — hybrid LLM-as-translator via {who} (1 model call: "
+              f"prose→program, executed deterministically)\n")
+        rep = bench.run_translate(slice=args.slice, limit=limit, model=args.model,
+                                  backend=args.backend)
         print(f"solved @1call:  {rep.solved_1call}/{rep.total}  ({rep.accuracy:.1%})   ← headline")
         print("\noutcome buckets:")
         for b in ("solved", "wrong_value", "program_error", "no_response"):
@@ -464,6 +466,8 @@ def main():
     bn.add_argument("--translate", action="store_true",
                     help="hybrid LLM-as-translator (1 model call → program → deterministic execute)")
     bn.add_argument("--model", default="haiku", help="translator model (default: haiku)")
+    bn.add_argument("--backend", choices=["claude", "sidecar"], default="claude",
+                    help="translator backend: claude CLI (default) or the local MLX sidecar")
     bn.set_defaults(fn=cmd_bench)
     sub.add_parser("list").set_defaults(fn=cmd_list)
     da = sub.add_parser("data", help="manage datasets in $DIFG_DATA_DIR")
