@@ -55,13 +55,16 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   default is **Haiku** (cheapest/fastest — empirically authored a correct draft of a fresh
   well-specified domain, modulo a one-line example-rounding fix the suite flags; use `--model opus`
   for harder or under-specified domains). Code-gen only — writes new module files (never clobbers),
-  prints the wiring + CASES to apply, and tells you to review + run the tests. `--verify` adds an
-  author→test→repair loop: it imports the authored skill module, runs its @register example tables,
-  and feeds any failures (wrong expected value, un-tupled single arg, arity/import error) back to the
-  model for a single-file re-emit, up to `--max-rounds` (default 3). This self-heals the §5
-  example-table slips that are the bulk of authoring errors (it does NOT yet verify bind gating or
-  routing — review those by hand). CLI: `python -m reasoning.cli author-domain "<name + ops>"
-  [--model opus] [--effort high] [--verify] [--dry-run]`.
+  prints the wiring + CASES to apply, and tells you to review + run the tests. `--verify` adds a
+  two-phase author→test→repair loop (each phase loops up to `--max-rounds`, default 3): **(1) examples**
+  — import the authored skill module, run its @register tables, feed failures (wrong value, un-tupled
+  single arg, arity/import error) back for a single-file re-emit; **(2) routing** — wire the domain
+  into a throwaway git worktree and route-test it (the orchestrator's example_queries must hit the new
+  domain; the existing test CASES must not be stolen), feeding mis-routes/thefts back for a bind+orch
+  re-emit. The live tree is never touched; routing is skipped (not failed) outside a git repo. Still
+  review the result before committing (the loop checks routing + example math, not every edge case).
+  CLI: `python -m reasoning.cli author-domain "<name + ops>" [--model opus] [--effort high] [--verify]
+  [--max-rounds N] [--dry-run]`.
 - **`backend.py`** — pluggable inference backend (see below).
 - **`reasoning/mcp_server.py`** — exposes the reasoning project as an MCP service (FastMCP, stdio):
   `ask` (route → coded answer + domain + model-call count; 0-call compound split; non-coded types

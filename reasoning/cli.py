@@ -249,12 +249,19 @@ def cmd_author_domain(args):
         res = authoring.author_domain_verified(description, model=args.model, effort=args.effort,
                                                max_rounds=args.max_rounds)
         for rd in res.get("rounds", []):
+            phase = rd.get("phase", "examples")
             tag = "draft" if rd["round"] == 0 else f"repair {rd['round']}"
-            status = "✓ examples pass" if not rd["fails"] else f"{len(rd['fails'])} failing:"
-            print(f"  [{tag}] {status}")
-            for f in rd["fails"]:
+            if rd.get("skipped"):
+                print(f"  [{phase}/{tag}] skipped (not a git repo / no orchestrator)")
+                continue
+            fails = rd.get("fails") or []
+            status = f"✓ {phase} pass" if not fails else f"{len(fails)} failing:"
+            print(f"  [{phase}/{tag}] {status}")
+            for f in fails:
                 print(f"      - {f}")
-        print(f"  → {'VERIFIED' if res.get('verified') else 'NOT verified'}\n")
+        routing = res.get("verified_routing")
+        rtag = {True: "routing✓", False: "routing✗", None: "routing skipped"}[routing]
+        print(f"  → {'VERIFIED' if res.get('verified') else 'NOT verified'} ({rtag})\n")
     else:
         res = authoring.author_domain(description, model=args.model, effort=args.effort)
     u, cost = res.get("usage"), res.get("cost_usd")

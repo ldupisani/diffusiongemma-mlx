@@ -74,6 +74,20 @@ class TestAuthoring(unittest.TestCase):
         self.assertFalse(res["verified"])
         self.assertEqual(len(res["rounds"]), 2)              # draft + 1 repair attempt, both fail
 
+    def test_routing_failures_formatting(self):
+        data = {"oid": "widgets",
+                "forward": [{"q": "make a widget", "routed": "widgets", "ok": True},
+                            {"q": "spin a widget", "routed": "gadgets", "ok": False}],
+                "stolen": [{"q": "what is 2+2", "expected": "arithmetic"}]}
+        fails = A._routing_failures(data)
+        self.assertEqual(len(fails), 2)                       # 1 mis-route + 1 theft (not the ok one)
+        self.assertTrue(any("instead of widgets" in f for f in fails))
+        self.assertTrue(any("STOLE" in f or "CLAIMS" in f for f in fails))
+
+    def test_verify_routing_skips_without_orchestrator(self):
+        # only a skill file (no orchestrator) → routing can't run → None ('skipped'), no git touched
+        self.assertIsNone(A._verify_routing({"reasoning/skills/x.py": "X=1"}))
+
     @unittest.skipUnless(duckdb, "gather_context imports the registry (needs duckdb)")
     def test_gather_context_has_the_essentials(self):
         ctx = A.gather_context()
