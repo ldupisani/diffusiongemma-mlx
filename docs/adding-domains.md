@@ -288,13 +288,12 @@ to `geometry`, `trigonometry`, `unit_conversion`, `compound_interest`, `base_con
   **Use `num_near(query, "<label>", …)` from `reasoning.bind._common`** — it returns the number
   *nearest* an anchor on either side (handles "demand 800", "480 minutes", and "0.000001 kg" alike),
   so new binds shouldn't hand-roll this; the `author-domain` prompt now steers the model to it.
-  *Anchor on the word STEM, not a fixed plural:* `num_near(q, "lumens", …)` silently misses "800
-  lumen lamp" (singular); use `"lumen"` (it matches both). Pluralization and alternate phrasings
-  ("what is it **at** 5 meters" for a second distance) are the residual anchor-coverage gaps the
-  routing-repair loop does NOT reliably fix on its own — they still need a human pass even when the
-  harder sub-skill arbitration is now handled autonomously (photometry: the two-illuminance
-  ambiguity routed correctly unaided; only a `lumen`/`lumens` anchor and an `at <d>` form needed
-  fixing).
+  *Plural/singular is handled for you:* `num_near` auto-stems plain word anchors, so `"lumens"` and
+  `"lumen"` both match "lumen" and "lumens" (likewise watt(s), meter(s), …). The residual gap is
+  alternate *phrasings* — e.g. a second distance written "what is it **at** 5 meters" needs an
+  explicit `\bat\b` anchor — which the routing-repair loop does NOT reliably self-heal; that still
+  needs a human pass, even though the harder sub-skill arbitration now happens autonomously
+  (photometry: the two-illuminance ambiguity routed correctly unaided).
 
 ---
 

@@ -32,6 +32,16 @@ class TestNumNear(unittest.TestCase):
         self.assertIsNone(num_near("no numbers here", "demand"))
         self.assertIsNone(num_near("demand is 800", "capacity"))   # anchor absent
 
+    def test_plural_singular_anchor_stemming(self):
+        # a plural anchor matches the singular and vice versa (auto-stemmed to the root)
+        self.assertEqual(num_near("an 800 lumen lamp", "lumens"), 800.0)   # plural anchor, singular text
+        self.assertEqual(num_near("over 5 lumens", "lumen"), 5.0)          # singular anchor, plural text
+        self.assertEqual(num_near("using 10 watts", "watt"), 10.0)
+        self.assertEqual(num_near("at 5 meters", "meter"), 5.0)
+        # 'ss' words and regex/multi-word anchors are left alone
+        self.assertEqual(num_near("a mass of 2 kg", "mass"), 2.0)
+        self.assertEqual(num_near("what is it at 5 m", r"\bat\b"), 5.0)
+
 
 def _answer(q):
     m = router.recognize(q)

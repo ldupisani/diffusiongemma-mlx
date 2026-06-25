@@ -18,6 +18,17 @@ __all__ = ["_parse_list", "_parse_int", "_try_json", "_NUMBER", "one_shot",
 _NEAR_NUM = r"(-?\d+(?:\.\d+)?)"
 
 
+def _stem_anchor(a: str) -> str:
+    """Drop a trailing plural 's' from a plain single-word anchor so it matches both forms — the
+    stem substring-matches the plural ('lumen' is inside 'lumens'), which the bare plural can't do
+    in reverse. Only touches pure-letter words longer than 3 chars and not ending in 'ss' (so
+    'lumens'/'watts'/'meters' → 'lumen'/'watt'/'meter', but 'mass'/'loss' and regex/multi-word
+    anchors like r'\\bat\\b' or 'order cost' pass through untouched)."""
+    if a.isalpha() and len(a) > 3 and a.endswith("s") and not a.endswith("ss"):
+        return a[:-1]
+    return a
+
+
 def num_near(text: str, *anchors: str, window: int = 24):
     """The number NEAREST to any of the given anchor words/phrases, looking BOTH directions — after
     the anchor ('demand 800', 'capacity is 1000', 'n1=1.5') and before it ('480 minutes',
@@ -36,7 +47,7 @@ def num_near(text: str, *anchors: str, window: int = 24):
         return None
     for a in anchors:
         best = None
-        for am in re.finditer(a, text, re.IGNORECASE):
+        for am in re.finditer(_stem_anchor(a), text, re.IGNORECASE):
             for ns, ne, val in nums:
                 if ns >= am.end():                       # number after the anchor
                     gap, dist = text[am.end():ns], ns - am.end()
