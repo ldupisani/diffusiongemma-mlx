@@ -74,13 +74,16 @@ def _result_obj(data) -> dict:
     raise RuntimeError("could not find a result object in claude CLI output")
 
 
-def ask_claude(prompt: str, model: str = "sonnet", timeout: int = 60) -> str | None:
+def ask_claude(prompt: str, model: str = "sonnet", timeout: int = 60,
+               effort: str | None = None) -> str | None:
     """One-shot Claude CLI call returning the raw answer text (no REASONING/ANSWER split).
-    Returns None if the `claude` CLI is absent or the call errors — callers treat that as
-    'retrieval unavailable'. Used by the reference-retrieval fallback."""
+    `effort` is the reasoning level (low/medium/high/xhigh/max; None → the CLI default). Returns
+    None if the `claude` CLI is absent or the call errors — callers treat that as 'unavailable'."""
     if shutil.which("claude") is None:
         return None
     cmd = ["claude", "-p", prompt, "--output-format", "json", "--model", model]
+    if effort:
+        cmd += ["--effort", effort]
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
         if proc.returncode != 0:

@@ -75,13 +75,14 @@ def parse_files(text: str) -> dict:
             for m in re.finditer(r"<<<FILE (.+?)>>>\n(.*?)\n<<<END>>>", text, re.DOTALL)}
 
 
-def author_domain(description: str, *, model: str = "opus", timeout: int = 600,
-                  context: str | None = None, asker=None) -> dict:
-    """Call Claude to implement the domain; return {files, raw, error}. `asker(prompt)->str|None`
-    is injectable for testing (defaults to the Claude CLI at high reasoning)."""
+def author_domain(description: str, *, model: str = "opus", effort: str | None = None,
+                  timeout: int = 600, context: str | None = None, asker=None) -> dict:
+    """Call Claude to implement the domain; return {files, raw, error}. `model`/`effort` pick the
+    Claude model and reasoning level (effort: low/medium/high/xhigh/max, None → CLI default).
+    `asker(prompt)->str|None` is injectable for testing."""
     if asker is None:
         from . import teachers
-        asker = lambda p: teachers.ask_claude(p, model=model, timeout=timeout)  # noqa: E731
+        asker = lambda p: teachers.ask_claude(p, model=model, timeout=timeout, effort=effort)  # noqa: E731
     raw = asker(build_prompt(description, context))
     if not raw:
         return {"files": {}, "raw": None,

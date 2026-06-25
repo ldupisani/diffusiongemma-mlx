@@ -244,7 +244,7 @@ def cmd_author_domain(args):
     if not description:
         sys.exit('describe the domain, e.g. author-domain "Thermodynamics: entropy, enthalpy, …"')
     print(f"[authoring '{description[:60]}…' via {args.model} — this calls the model and may take a minute]\n")
-    res = authoring.author_domain(description, model=args.model)
+    res = authoring.author_domain(description, model=args.model, effort=args.effort)
     if res["error"]:
         sys.exit(res["error"])
     files = res["files"]
@@ -338,7 +338,9 @@ def main():
     ad = sub.add_parser("author-domain",
                         help="implement a new domain via Claude (high-reasoning), per the playbook")
     ad.add_argument("args", nargs="+", help="the domain description (name + the operations it covers)")
-    ad.add_argument("--model", default="opus", help="Claude model (default: opus — high reasoning)")
+    ad.add_argument("--model", default="opus", help="Claude model alias/id (default: opus)")
+    ad.add_argument("--effort", choices=["low", "medium", "high", "xhigh", "max"],
+                    help="reasoning effort level (default: the CLI default)")
     ad.add_argument("--dry-run", action="store_true", help="print what would be written, don't write")
     ad.set_defaults(fn=cmd_author_domain)
     hp = sub.add_parser("help", help="introspection: what can I ask? (domains / examples / search)")
