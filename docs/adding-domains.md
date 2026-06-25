@@ -144,6 +144,15 @@ wins. Only orchestrators whose `precondition(query)` is true are even candidates
 > on score. **Rule of thumb:** number-list / matrix domains → tier 2; notation-only domains →
 > bind-gated.
 
+> **Learning (entity-gated domains can be bind-gated).** The usual rule is "keyword-rich →
+> tier 2", but a domain whose bind only fires when a **known entity** is present (e.g. `geography`
+> matches only a geography keyword *plus* a country/city name from the reference data) is a strong
+> `bind_gated` candidate: the entity check makes it conservative enough not to over-claim, and
+> dispositive routing then handles *all* phrasings ("Where is New Delhi?") without needing an
+> example per phrasing. Tier-2 domains still win their own queries first, so geometry's "area of a
+> circle" isn't stolen by geography's "area". Reach for this when phrasing variance is high but the
+> bind is tightly gated on a closed vocabulary.
+
 > **Learning (tier-2 needs an example per op).** A tier-2 domain is selected by *lexical score
 > against its `example_queries`*, so **every operation needs at least one representative example**
 > — an op with none scores below the matcher threshold and the query silently returns `None`
