@@ -19,6 +19,12 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   ops are SQL. Results stay small (scalar / ≤20-row table / new handle + preview). Reached via the
   `dataset` orchestrator (NL) and `python -m reasoning.cli data …` (import/list/describe/query/
   generate/convert). 0 model calls.
+- **`reasoning/reference.py`** + **`reasoning/store/reference/seed.py`** — bundled, constant,
+  version-controlled reference data (geography: countries/population-by-year/cities). The seed
+  (diffable Python) builds lazily into a SQLite DB (gitignored artifact; `$DIFG_REFERENCE_DIR`
+  overrides location), auto-registered read-only into the dataset engine so reference tables are
+  queryable handles. Lookups + `import_csv` (replace/extend with an authoritative source);
+  reached via the `geography` orchestrator (NL) and `reasoning.cli reference`.
 - **`reasoning/datagen.py`** — domain dataset generators (primes/Fibonacci, random samples,
   logistic trajectories, projectile motion, amortization, …) that produce rows (reusing pure
   skills + numpy/SymPy) and save via `datasets.save_rows`. Registry `GENERATORS`; reached via

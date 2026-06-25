@@ -93,6 +93,32 @@ def country_field(name: str, field: str):
     return _one(f'SELECT "{field}" FROM countries WHERE name=?', (name,))
 
 
+def population(place: str, year: int | None = None):
+    """Population of a country (by year) or, failing that, a city (single figure)."""
+    v = country_population(place, year)
+    return v if v is not None else city_population(place)
+
+
+def place_names() -> dict:
+    """lowercased name -> canonical name, for every country and city (for NL place matching)."""
+    con = _con()
+    try:
+        names = {n.lower(): n for (n,) in con.execute("SELECT name FROM countries")}
+        for (n,) in con.execute("SELECT name FROM cities"):
+            names.setdefault(n.lower(), n)
+        return names
+    finally:
+        con.close()
+
+
+def tables(name: str = DB) -> list[str]:
+    con = sqlite3.connect(ensure_db() if name == DB else db_path(name))
+    try:
+        return [r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+    finally:
+        con.close()
+
+
 def import_csv(src: str, table: str, name: str = DB) -> str:
     """Load a CSV into a reference table (the path to authoritative data). Replaces the table."""
     import csv

@@ -183,6 +183,15 @@ def cmd_data(args):
         print(datagen.generate(a[0], a[1], **params))
 
 
+def cmd_reference(args):
+    """Manage bundled reference data: list tables, or import a CSV as a reference table."""
+    from . import reference
+    if args.action == "list":
+        print("\n".join(reference.tables()))
+    elif args.action == "import":
+        print(reference.import_csv(args.args[0], args.args[1]))
+
+
 def main():
     p = argparse.ArgumentParser(prog="reasoning")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -217,6 +226,10 @@ def main():
     da.add_argument("--save-as", dest="save_as", help="save a query result as a new dataset")
     da.add_argument("--select", help="SQL projection for generate (over range(n) t(i))")
     da.set_defaults(fn=cmd_data)
+    rf = sub.add_parser("reference", help="manage bundled reference data")
+    rf.add_argument("action", choices=["list", "import"])
+    rf.add_argument("args", nargs="*", help="for import: <csv path> <table name>")
+    rf.set_defaults(fn=cmd_reference)
 
     args = p.parse_args()
     args.fn(args)

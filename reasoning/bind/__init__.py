@@ -63,3 +63,5 @@ from reasoning.bind.funcanalysis import *  # noqa: F401,F403
 from reasoning.bind.dataset import *     # noqa: F401,F403
 
 from reasoning.bind.logistics import *   # noqa: F401,F403
+
+from reasoning.bind.geography import *   # noqa: F401,F403

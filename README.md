@@ -382,6 +382,17 @@ price column in sales?"* → `20`; *"How many rows in sales where status = 'acti
 *"Describe the dataset sales."* It's gated on an explicit dataset reference, so a plain
 *"average of 10, 20, 30"* still goes to the stats domain. Needs `duckdb` (in `requirements.txt`).
 
+**Reference data** (`reasoning/reference.py`, seed in `store/reference/seed.py`) — bundled,
+constant, version-controlled datasets. A curated geography seed (countries with capital/
+continent/area/coordinates, population by year, and major cities) builds lazily into a SQLite DB
+that's auto-registered **read-only** into the dataset engine — so reference tables are queryable
+like any handle (`data query "SELECT name FROM cities ORDER BY population DESC LIMIT 5"`), and a
+user dataset of the same name shadows it. NL routes through the `geography` orchestrator:
+*"What is the population of France in 2020?"* → `67000000`, *"coordinates of Paris"* → `48.8566,
+2.3522`, *"capital of Japan"* → `Tokyo`, *"Where is New Delhi?"*. Seed numbers are round,
+sanity-checkable approximations; `python -m reasoning.cli reference import <csv> <table>` (or
+`reference.import_csv`) replaces/extends them with an authoritative source (GeoNames, World Bank).
+
 ## Model variants (mlx-community)
 `-4bit` (default, ~13 GB) · `-5bit` · `-6bit` · `-8bit` (~26 GB) · `-bf16`.
 On 36 GB, 4-bit is the safe default; 6-bit fits with headroom; 8-bit is tight.

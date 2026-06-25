@@ -50,6 +50,22 @@ class TestReference(unittest.TestCase):
         self.ref.import_csv(src, "rivers")
         self.assertEqual(self.ds.query("SELECT max(length_km) FROM rivers"), "6650")
 
+    def test_nl_geography_routing(self):
+        from reasoning import router
+
+        def route(q):
+            m = router.recognize(q)
+            return (m.orchestrator.id, m.orchestrator.run(q).answer) if m else (None, None)
+
+        self.assertEqual(route("What is the population of France in 2020?"), ("geography", "67000000"))
+        self.assertEqual(route("What is the capital of Japan?"), ("geography", "Tokyo"))
+        self.assertEqual(route("What are the coordinates of Paris?"), ("geography", "48.8566, 2.3522"))
+        self.assertEqual(route("What continent is Nigeria in?"), ("geography", "Africa"))
+        self.assertEqual(route("Where is New Delhi?"), ("geography", "28.6139, 77.209"))
+        # guard: geometry's "area of a circle" is NOT stolen by geography's "area" keyword
+        self.assertEqual(
+            router.recognize("What is the area of a circle with radius 5?").orchestrator.id, "geometry")
+
     def test_user_dataset_shadows_reference(self):
         # a user dataset named like a reference table takes precedence
         with open(os.path.join(self.data.name, "countries.csv"), "w") as f:
