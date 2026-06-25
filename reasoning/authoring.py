@@ -197,7 +197,11 @@ for q in examples:
     rid = route(q); rec = {"q": q, "routed": rid, "ok": rid == oid}
     if rid == oid:
         try:
-            rec["answer"] = router.recognize(q).orchestrator.run(q).answer
+            ans = router.recognize(q).orchestrator.run(q).answer
+            rec["answer"] = ans
+            # routed here but the bind declined (residue/parse miss) — a non-answer, not a pass
+            if ans is None or (isinstance(ans, str) and ("no result" in ans or "could not parse" in ans)):
+                rec["ok"] = False; rec["error"] = "routed correctly but run() declined: %r" % ans
         except Exception as e:
             rec["ok"] = False; rec["error"] = "%s: %s" % (type(e).__name__, e)
     forward.append(rec)

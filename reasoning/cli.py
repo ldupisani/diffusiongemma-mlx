@@ -273,9 +273,12 @@ def cmd_author_domain(args):
         toks = f"{prompt_toks} in / {u.get('output_tokens', 0)} out tokens" if u else ""
         dollars = f"${cost:.4f}" if cost is not None else "cost n/a"
         print(f"[{args.model}: {dollars}{(' — ' + toks) if toks else ''}]\n")
-    if res["error"]:
-        sys.exit(res["error"])
     files = res["files"]
+    if not files:                                  # hard failure — nothing to write
+        sys.exit(res["error"] or "no files were produced")
+    if res.get("error"):                           # near-miss (e.g. --verify didn't fully pass)
+        print(f"⚠ {res['error']} — writing the best-effort draft anyway; fix the unresolved "
+              f"failures shown above by hand before committing.\n")
     written, skipped = authoring.write_files(files, dry_run=args.dry_run)
     verb = "would write" if args.dry_run else "wrote"
     print(f"{verb}: {', '.join(written) or '(none)'}")

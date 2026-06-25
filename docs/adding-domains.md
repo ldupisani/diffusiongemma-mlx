@@ -276,6 +276,15 @@ to `geometry`, `trigonometry`, `unit_conversion`, `compound_interest`, `base_con
   branch on the keyword that is *distinctive to that op* (image_distance needs `"focal"`), not on input
   names it shares with a sibling. Symptom: a forward query that should match silently routes to
   `numeric_consensus`/clarify instead of the domain.
+- **Forward-only keyword extraction misses "N unit" phrasings.** An `_after(keyword)`-style helper
+  (find the number *after* an anchor) silently grabs the wrong number when the value is written
+  *before* the anchor: `special_relativity` read mass from after "kg" (catching the speed in
+  "0.000001 kg at 0.6c"); `supply_chain` takt read demand from after "demand" but the query said
+  "480 minutes available and 60 customer units" (numbers before the units), and capacity-utilization's
+  `_after("capacity")` matched "capacity **utilization**" and grabbed the demand value. Fixes: add a
+  `_before(unit)` companion and try both directions; anchor on the labelled occurrence with a negative
+  lookahead (`capacity(?!\s*utiliz)`). `guard_residue` turns these into a clean decline rather than a
+  wrong answer — which is why the symptom is "routes correctly but run() declines", not a bad number.
 
 ---
 
