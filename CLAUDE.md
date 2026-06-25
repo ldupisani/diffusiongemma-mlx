@@ -87,7 +87,11 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
 - **`backend.py`** — pluggable inference backend (see below).
 - **`reasoning/mcp_server.py`** — exposes the reasoning project as an MCP service (FastMCP, stdio):
   `ask` (route → coded answer + domain + model-call count; 0-call compound split; non-coded types
-  reported, never invoked) plus introspection (`capabilities`/`describe_domain`/`search_capabilities`)
+  reported, never invoked — UNLESS the opt-in **translator fallback** is on: `ask(query,
+  translate=True)` or env `DIFG_TRANSLATE_FALLBACK=1` routes an otherwise-unanswered word problem
+  through `translate.solve` (1 model call, `domain="translate"`, the audited `program` returned;
+  default OFF so `ask` stays 0-call) plus introspection
+  (`capabilities`/`describe_domain`/`search_capabilities`)
   and dataset/reference tools (`list_generators`/`generate_dataset`/`list_datasets`/`dataset_info`/
   `query_dataset`). Also exposes user-invokable **prompts** (slash commands in clients):
   `ask`/`capabilities`/`query`. Code-only (0 model calls) so it needs no sidecar. Hot-reloads

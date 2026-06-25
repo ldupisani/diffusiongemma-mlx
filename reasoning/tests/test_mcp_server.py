@@ -39,6 +39,28 @@ class TestMCPServer(unittest.TestCase):
         self.assertEqual(r["model_calls"], 0)
         self.assertIn("Tokyo", r["answer"])
 
+    def test_ask_word_problem_no_translation_by_default(self):
+        # translator fallback OFF by default → an un-coded word problem yields no answer and is
+        # never handled by the translator (no model call)
+        r = self.M.ask("Natalia sold 48 clips, then half as many. How many altogether?")
+        self.assertIsNone(r["answer"])
+        self.assertNotEqual(r.get("domain"), "translate")
+
+    def test_ask_translate_fallback_opt_in(self):
+        # with translate=True and a stubbed translator, ask answers via the program path
+        from reasoning import translate
+        orig = translate.solve
+        translate.solve = lambda q, **kw: {"answer": 72.0, "program": "a=48\nanswer=a+a/2",
+                                           "model_calls": 1, "error": None}
+        try:
+            r = self.M.ask("Natalia sold 48 clips, then half as many. How many altogether?",
+                           translate=True)
+        finally:
+            translate.solve = orig
+        self.assertEqual((r["matched"], r["answer"], r["domain"], r["model_calls"]),
+                         (True, "72", "translate", 1))
+        self.assertIn("answer=a+a/2", r["program"])
+
     def test_ask_unmatched_is_graceful(self):
         r = self.M.ask("Write me a poem about the sea.")
         self.assertFalse(r["matched"])

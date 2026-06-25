@@ -14,6 +14,7 @@ Register:   point an MCP client at the command above (stdio transport).
 from __future__ import annotations
 
 import functools
+import os
 import sys
 from pathlib import Path
 
@@ -67,13 +68,40 @@ def _live(fn):
     return wrapper
 
 
-def ask(query: str) -> dict:
-    """Answer a question with the deterministic reasoning engine (0 model calls).
+def _translate_enabled(translate) -> bool:
+    """Opt-in gate for the LLM-as-translator fallback. Explicit `translate=` wins; otherwise the
+    env var DIFG_TRANSLATE_FALLBACK (1/true/yes/on). Default OFF — `ask` stays 0-call by default."""
+    if translate is not None:
+        return bool(translate)
+    return os.environ.get("DIFG_TRANSLATE_FALLBACK", "").lower() in ("1", "true", "yes", "on")
+
+
+def _translate_fallback(query: str) -> dict | None:
+    """Last-resort: 1 model call translates the prose into an arithmetic program, executed
+    deterministically (translate.solve). Returns a result dict (with the program, for audit) or
+    None if it produced no answer. The arithmetic stays code — only the parse is the model's."""
+    from .translate import solve as translate_solve
+    out = translate_solve(query)
+    if out.get("answer") is None:
+        return None
+    val = out["answer"]
+    if isinstance(val, float) and val.is_integer():
+        val = int(val)
+    return {"matched": True, "answer": str(val), "domain": "translate",
+            "model_calls": out.get("model_calls", 1), "program": out.get("program")}
+
+
+def ask(query: str, translate: bool | None = None) -> dict:
+    """Answer a question with the deterministic reasoning engine (0 model calls by default).
 
     Routes the query to a coded domain (arithmetic, dates, geometry, physics, finance, logic,
     statistics, geography, …) and runs it. Returns the answer, which domain handled it, and the
-    model-call count. If the query needs more information, returns the clarifying question(s); if
-    nothing coded matches, returns matched=False with a hint to call `capabilities`.
+    model-call count. If the query needs more information, returns the clarifying question(s).
+
+    If nothing coded matches AND the LLM-as-translator fallback is enabled (`translate=True`, or
+    env DIFG_TRANSLATE_FALLBACK=1), one model call turns the prose into an arithmetic program that
+    is executed deterministically — `domain="translate"`, `model_calls=1`, and the audited
+    `program` is included. Otherwise returns matched=False with a hint to call `capabilities`.
     """
     from . import router
     from .compiled import model_calls, needs_input
@@ -92,13 +120,18 @@ def ask(query: str) -> dict:
     if composed is not None:
         return {"matched": True, "answer": composed.answer, "domain": "compose",
                 "model_calls": model_calls(composed)}
+    # no coded answer → opt-in LLM-as-translator (1 call; arithmetic still done by code)
+    if _translate_enabled(translate):
+        translated = _translate_fallback(query)
+        if translated is not None:
+            return translated
     if m:  # matched a type that needs the LLM (e.g. a fallback) — reported, never invoked
         return {"matched": True, "domain": m.orchestrator.id, "answer": None,
-                "note": "this query type needs the LLM backend; this service answers code-only "
-                        "(0-call) queries"}
+                "note": "this query type needs the LLM backend; enable the translator fallback "
+                        "(translate=True or DIFG_TRANSLATE_FALLBACK=1) to answer it"}
     return {"matched": False, "answer": None,
-            "hint": "No coded domain matched. Call capabilities() or search_capabilities(term) "
-                    "to see what can be asked."}
+            "hint": "No coded domain matched. Call capabilities() or search_capabilities(term), "
+                    "or enable the translator fallback (translate=True) for word problems."}
 
 
 def capabilities() -> dict:
