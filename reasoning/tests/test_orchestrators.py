@@ -588,6 +588,16 @@ CASES = [
     # reverse guards: the new domains must not steal classical-physics / trig queries.
     ("What is the kinetic energy of a 2 kg object moving at 10 m/s?", "100 J", "physics"),
     ("What is the sin of 30 degrees?", "0.5", "trigonometry"),
+    # supply_chain (authored via `cli author-domain --model haiku --verify`); complements logistics.
+    ("What is the total annual inventory cost for demand 1000, order quantity 100, order cost 10, holding cost 2?",
+     "200", "supply_chain"),
+    ("What is the EPQ for demand 5000, order cost 50, holding cost 5, production rate 1000, demand rate 200?",
+     "353.553391", "supply_chain"),
+    ("What is the newsvendor critical ratio for shortage cost 20 and excess cost 10?", "0.666667", "supply_chain"),
+    ("What is the capacity utilization if demand is 800 and capacity is 1000?", "80%", "supply_chain"),
+    ("What is the takt time for 480 minutes available and 60 customer units demanded?", "8 min/unit", "supply_chain"),
+    # reverse guard: EPQ must not steal logistics' EOQ.
+    ("What is the EOQ for demand 1000, order cost 50, holding cost 4?", "158.113883", "logistics"),
     # geography population change between two years (delta + percent); the single-year lookup must
     # NOT grab these (it would silently answer the first year only).
     ("How much did the population of London grow from 2010 to 2020?", "+900000 (+11.25%)", "geography"),
