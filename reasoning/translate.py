@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import ast
 import operator
+import re
 
 # --- the deterministic executor (0 model calls) ---------------------------------------
 
@@ -56,23 +57,31 @@ def _eval(node, env):
     raise ProgramError(f"unsupported expression: {type(node).__name__}")
 
 
+# name = expr, or an augmented assignment (name += expr). Compound ops ordered so ** / // match
+# before * / /. A leftover <program>/</program> tag line is tolerated (small models re-emit them).
+_ASSIGN = re.compile(r"^([A-Za-z_]\w*)\s*(\*\*|//|[+\-*/%])?=\s*(.+)$")
+_TAG = re.compile(r"^</?program>?$")
+
+
 def run_program(text: str) -> float:
     """Execute an arithmetic program (one `name = expression` per line) and return `answer`
     (or the last assigned variable). Safe: whitelisted AST nodes only, never eval/exec.
-    Raises ProgramError on anything unsafe/malformed/undefined; arithmetic errors
-    (ZeroDivisionError) propagate to the caller."""
+    Tolerates augmented assignments (`x += e`) and stray <program> tag lines. Raises
+    ProgramError on anything unsafe/malformed/undefined; arithmetic errors propagate."""
     env: dict[str, float] = {}
     last = None
     for raw in (text or "").splitlines():
         line = raw.split("#", 1)[0].strip()
-        if not line:
+        if not line or _TAG.match(line):
             continue
-        if "=" not in line:
+        m = _ASSIGN.match(line)
+        if not m:
             raise ProgramError(f"not an assignment: {line!r}")
-        name, expr = line.split("=", 1)
-        name = name.strip()
-        if not name.isidentifier():
-            raise ProgramError(f"invalid variable name {name!r}")
+        name, op, expr = m.group(1), m.group(2), m.group(3)
+        if op:  # augmented: x += e  ->  x = x + (e)
+            if name not in env:
+                raise ProgramError(f"augmented assignment to undefined {name!r}")
+            expr = f"{name} {op} ({expr})"
         try:
             tree = ast.parse(expr.strip(), mode="eval")
         except SyntaxError as e:
@@ -119,13 +128,14 @@ def build_prompt(question: str) -> str:
 
 
 def parse_program(raw: str) -> str:
-    """Extract the program body from the model output (between <program> tags; tolerant of a
-    missing opening tag since the prompt primes it, and of a closing tag only)."""
+    """Extract the program body from the model output. Tolerant of a missing opening tag (the
+    prompt primes it), a closing tag only, and a MALFORMED opening tag without its '>' (small
+    models emit '<program\\n…')."""
     text = raw or ""
-    if "<program>" in text:
-        text = text.split("<program>", 1)[1]
-    if "</program>" in text:
-        text = text.split("</program>", 1)[0]
+    m = re.search(r"<program>?", text)        # opening tag, '>' optional
+    if m:
+        text = text[m.end():]
+    text = re.split(r"</program>?", text, 1)[0]  # closing tag (and anything after), '>' optional
     return text.strip()
 
 

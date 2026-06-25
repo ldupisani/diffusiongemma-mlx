@@ -32,6 +32,22 @@ def test_run_program_ignores_comments_and_blanks():
     assert translate.run_program("# plan\na = 4\n\nanswer = a * 2  # double\n") == 8
 
 
+def test_run_program_augmented_assignment():
+    prog = "total = 0\ntotal += 5\ntotal += 3\nanswer = total"
+    assert translate.run_program(prog) == 8
+    assert translate.run_program("x = 10\nx *= 3\nanswer = x") == 30
+
+
+def test_run_program_augmented_to_undefined_rejected():
+    with pytest.raises(translate.ProgramError):
+        translate.run_program("answer += 5")
+
+
+def test_run_program_tolerates_stray_tag_lines():
+    # small models re-emit a (sometimes malformed) <program tag inside the body
+    assert translate.run_program("<program\na = 3\nanswer = a * 2\n</program>") == 6
+
+
 # --- executor: safety boundary --------------------------------------------------------
 
 @pytest.mark.parametrize("prog", [
