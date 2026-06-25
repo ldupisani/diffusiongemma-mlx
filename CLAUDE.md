@@ -54,8 +54,10 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   reported, never invoked) plus introspection (`capabilities`/`describe_domain`/`search_capabilities`)
   and dataset/reference tools (`list_generators`/`generate_dataset`/`list_datasets`/`dataset_info`/
   `query_dataset`). Also exposes user-invokable **prompts** (slash commands in clients):
-  `ask`/`capabilities`/`query`. Code-only (0 model calls) so it needs no sidecar.
-  Run: `python -m reasoning.mcp_server`.
+  `ask`/`capabilities`/`query`. Code-only (0 model calls) so it needs no sidecar. Hot-reloads
+  changed `reasoning/*.py` per call (drops cached modules — incl. the parent package, else the
+  stale submodule attribute defeats it), so engine edits land without a client reconnect; only
+  edits to `mcp_server.py` itself need a restart. Run: `python -m reasoning.mcp_server`.
 - **`infer_server.py`** — tiny HTTP sidecar (`/info`, `/generate` NDJSON) wrapping the active
   backend. Single-threaded on purpose (MLX's GPU stream is thread-local).
 - **`chat_stream.py`** (Python REPL), **`mcp_agent.py`** (one-shot agent), **`chat.py`**

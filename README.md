@@ -363,7 +363,9 @@ or register the command `python -m reasoning.mcp_server` with any MCP client. To
 a hint), `capabilities` / `describe_domain` / `search_capabilities` (introspection), and
 `list_generators` / `generate_dataset` / `list_datasets` / `dataset_info` / `query_dataset` (the
 dataset + bundled-reference layer). A query that would need the LLM is *reported as such*, never
-silently invoked. It also exposes **prompts** — user-invokable slash commands in the client:
+silently invoked. The server **hot-reloads** on each call: if any `reasoning/*.py` changed since
+the last call it drops the cached modules and re-imports, so engine edits show up **without a
+client reconnect** (only changes to `mcp_server.py` itself need a restart). It also exposes **prompts** — user-invokable slash commands in the client:
 `/mcp__difg-reasoning__ask <query>`, `…__capabilities`, and `…__query <sql>` — a one-step entry
 point that routes straight to the matching tool.
 

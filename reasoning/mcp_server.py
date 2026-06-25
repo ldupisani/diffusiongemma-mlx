@@ -13,9 +13,58 @@ Register:   point an MCP client at the command above (stdio transport).
 
 from __future__ import annotations
 
+import functools
+import sys
+from pathlib import Path
+
 from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("difg-reasoning")
+
+# --- live reload -------------------------------------------------------------
+# The stdio server is long-lived and imports reasoning.* once, so engine edits wouldn't show up
+# without a client reconnect. Instead, before each tool runs we drop cached reasoning.* modules
+# IF any source file changed; the tools' lazy imports then re-read the current code. Net effect:
+# edit a file, call a tool, see the change — no reconnect. (Editing THIS server file still needs a
+# reconnect, since it's the running process.) Unchanged → nothing dropped → calls stay fast.
+_PKG_DIR = Path(__file__).resolve().parent
+_loaded_mtime = 0.0
+
+
+def _source_mtime() -> float:
+    latest = 0.0
+    for p in _PKG_DIR.rglob("*.py"):
+        try:
+            latest = max(latest, p.stat().st_mtime)
+        except OSError:
+            pass
+    return latest
+
+
+def _refresh_if_changed() -> None:
+    global _loaded_mtime
+    mt = _source_mtime()
+    if mt <= _loaded_mtime:
+        return
+    first = _loaded_mtime != 0.0
+    # Drop the package AND its submodules (except this running server). Dropping the parent
+    # `reasoning` too is essential: otherwise `from reasoning import X` returns the stale submodule
+    # still cached as an attribute on the package object, silently skipping the re-import.
+    for name in [n for n in list(sys.modules)
+                 if (n == "reasoning" or n.startswith("reasoning.")) and n != __name__]:
+        del sys.modules[name]                  # next lazy import in a tool re-reads from disk
+    _loaded_mtime = mt
+    if first:
+        print("[difg-reasoning] source changed — reloaded engine modules", file=sys.stderr)
+
+
+def _live(fn):
+    """Wrap a tool so it reloads changed engine modules before running."""
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        _refresh_if_changed()
+        return fn(*args, **kwargs)
+    return wrapper
 
 
 def ask(query: str) -> dict:
@@ -127,10 +176,11 @@ def query_dataset(sql: str) -> str:
         return f"query failed: {type(e).__name__}: {e}"
 
 
-# Register every tool (plain functions stay directly callable — for tests and reuse).
+# Register every tool, wrapped so it picks up engine edits without a reconnect (the module-level
+# functions stay unwrapped and directly callable — for tests and reuse).
 for _fn in (ask, capabilities, describe_domain, search_capabilities, list_generators,
             generate_dataset, list_datasets, dataset_info, query_dataset):
-    mcp.tool()(_fn)
+    mcp.tool()(_live(_fn))
 
 
 # Prompts — user-invokable templates that surface as slash commands in MCP clients
