@@ -161,6 +161,27 @@ class TestDatasets(unittest.TestCase):
         datagen.generate(d["gen"], d["save_as"], **d["params"])
         self.assertEqual(self.ds.count_rows("primes"), "1000")
 
+    def test_quick_win_generators(self):
+        from reasoning import datagen
+        for name in datagen.GENERATORS:                # every generator runs at its defaults
+            datagen.generate(name, f"_smoke_{name}")
+        datagen.generate("truth_table", "tt", expr="A and B")
+        self.assertEqual(self.ds.count_rows("tt"), "4")
+        datagen.generate("cayley_table", "cay", n="6")
+        self.assertEqual(self.ds.query("SELECT sum_mod_n FROM cay WHERE a=3 AND b=4"), "1")
+        datagen.generate("binomial_pmf", "bp", n="20", p="0.5")
+        self.assertEqual(self.ds.query("SELECT round(probability,3) FROM bp WHERE k=10"), "0.176")
+        datagen.generate("combinatorial_sequences", "cs", n="6")
+        self.assertEqual(self.ds.query("SELECT catalan FROM cs WHERE n=5"), "42")
+        datagen.generate("polygon_table", "pg", max_sides="6")
+        self.assertEqual(self.ds.query("SELECT interior_angle FROM pg WHERE sides=6"), "120")
+        datagen.generate("bmi_table", "bt", height_m="2.0", w_min="100", w_max="100")
+        self.assertEqual(self.ds.query("SELECT bmi FROM bt WHERE weight_kg=100"), "25")  # 100/2^2
+        # NL routing reaches the new generators
+        from reasoning.bind import bind_dataset
+        ok, d, _, _ = bind_dataset("generate a truth table for A and B or C")
+        self.assertEqual((d["op"], d["gen"]), ("generate", "truth_table"))
+
     def test_import_file(self):
         src = os.path.join(self.tmp.name, "external.csv")
         with open(src, "w") as f:

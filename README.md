@@ -377,12 +377,15 @@ python -m reasoning.cli data info primes                    # schema + how to qu
 "<phrase>"` runs one from natural language (*"generate first 1000 prime numbers"*); `data list` +
 `data info <handle>` show what exists and print copy-paste SQL/NL queries for it.
 **Domain generators** (`reasoning/datagen.py`) produce a domain-relevant dataset and save it as
-a handle: number theory & combinatorics (primes, Fibonacci, factorials, partitions), statistics
-& probability (uniform/normal samples, coin/dice rolls, synthetic regression/classification),
-dynamical/numerical/physics (logistic trajectory, bifurcation, `f(x)` over `[a,b]`, Euler ODE
-path, projectile motion), finance (amortization schedule, compound growth), and logistics (EOQ
-cost curve, inventory simulation). Each reuses the
-pure domain skills + numpy/SymPy and returns a handle + preview; random ones take a `seed`.
+a handle — **29 generators across 14 domains**: number theory (primes, Fibonacci, factorials,
+partitions), statistics & probability (uniform/normal samples, coin/dice rolls, synthetic
+regression/classification, binomial PMF), dynamical/numerical/physics (logistic trajectory,
+bifurcation, `f(x)` over `[a,b]`, Euler ODE path, projectile motion), finance (amortization,
+compound growth), logistics (EOQ curve, inventory simulation), logic (truth tables), trigonometry
+(sin/cos/tan tables), group theory (Cayley tables), discrete math (catalan/bell/derangement
+sequences), calculus (`f, f', f''` tables), health (BMI tables), chemistry (pH dilution series),
+geometry (regular-polygon tables), and geospatial (great-circle waypoints). Each reuses the pure
+domain skills + numpy/SymPy and returns a handle + preview; random ones take a `seed`.
 NL also routes through the engine via the `dataset` orchestrator: *"What is the average of the
 price column in sales?"* → `20`; *"How many rows in sales where status = 'active'?"* → `2`;
 *"Describe the dataset sales."* It's gated on an explicit dataset reference, so a plain

@@ -238,6 +238,122 @@ def gen_inventory_simulation(save_as, periods=52, demand_rate=20, reorder_point=
                         rows)
 
 
+# --- additional domains (reuse pure skills; a row per item) -----------------
+
+def gen_truth_table(save_as, expr="A and B", **_):
+    import itertools
+    from .skills.logic import _vars, compile_expr, evaluate
+    expr = str(expr)
+    vs = sorted(_vars(compile_expr(expr)))
+    rows = [tuple(list(combo) + [int(bool(evaluate(expr, dict(zip(vs, map(bool, combo))))))])
+            for combo in itertools.product([0, 1], repeat=len(vs))]
+    return ds.save_rows(save_as, vs + ["result"], rows)
+
+
+def gen_trig_table(save_as, start=0, stop=360, step=15, **_):
+    from .skills.trig import cos_deg, sin_deg, tan_deg
+    a, b, s = _f(start, 0), _f(stop, 360), _f(step, 15)
+    rows, x = [], a
+    while x <= b + 1e-9:
+        c = cos_deg(x)
+        rows.append((round(x, 4), round(sin_deg(x), 6), round(c, 6),
+                     None if abs(c) < 1e-9 else round(tan_deg(x), 6)))
+        x += s
+    return ds.save_rows(save_as, ["angle_deg", "sin", "cos", "tan"], rows)
+
+
+def gen_cayley_table(save_as, n=6, **_):
+    from .skills.group_theory import zn_add
+    n = _i(n, 6)
+    rows = [(a, b, zn_add(a, b, n)) for a in range(n) for b in range(n)]
+    return ds.save_rows(save_as, ["a", "b", "sum_mod_n"], rows)
+
+
+def gen_binomial_pmf(save_as, n=20, p=0.5, **_):
+    from .skills.probability import binomial
+    n, p = _i(n, 20), _f(p, 0.5)
+    return ds.save_rows(save_as, ["k", "probability"], [(k, binomial(n, k, p)) for k in range(n + 1)])
+
+
+def gen_combinatorial_sequences(save_as, n=15, **_):
+    from .skills.discrete import bell, catalan, derangement, integer_partitions
+    n = _i(n, 15)
+    rows = [(k, catalan(k), bell(k), derangement(k), integer_partitions(k)) for k in range(n + 1)]
+    for col in (1, 2, 3, 4):
+        rows = _fit_int64(rows, col)
+    return ds.save_rows(save_as, ["n", "catalan", "bell", "derangement", "partitions"], rows)
+
+
+def gen_bmi_table(save_as, height_m=1.75, w_min=50, w_max=120, step=5, **_):
+    from .skills.health import bmi
+    h, lo, hi, s = _f(height_m, 1.75), _f(w_min, 50), _f(w_max, 120), _f(step, 5)
+
+    def category(b):
+        return ("underweight" if b < 18.5 else "normal" if b < 25
+                else "overweight" if b < 30 else "obese")
+    rows, w = [], lo
+    while w <= hi + 1e-9:
+        b = round(bmi(w, h), 2)
+        rows.append((round(w, 2), b, category(b)))
+        w += s
+    return ds.save_rows(save_as, ["weight_kg", "bmi", "category"], rows)
+
+
+def gen_derivative_table(save_as, expr="sin(x)", a=0, b=6.283185, n=100, **_):
+    import sympy as sp
+    from sympy.parsing.sympy_parser import (implicit_multiplication_application,
+                                            parse_expr, standard_transformations)
+    x = sp.Symbol("x")
+    f = parse_expr(str(expr).replace("^", "**"), local_dict={"x": x},
+                   transformations=standard_transformations + (implicit_multiplication_application,))
+    fl = sp.lambdify(x, f, "math")
+    f1 = sp.lambdify(x, sp.diff(f, x), "math")
+    f2 = sp.lambdify(x, sp.diff(f, x, 2), "math")
+    a, b, n = _f(a, 0), _f(b, 6.283185), _i(n, 100)
+    rows = []
+    for i in range(n):
+        xi = a + (b - a) * i / max(n - 1, 1)
+        rows.append((round(xi, 6), round(float(fl(xi)), 6), round(float(f1(xi)), 6),
+                     round(float(f2(xi)), 6)))
+    return ds.save_rows(save_as, ["x", "f", "f_prime", "f_double_prime"], rows)
+
+
+def gen_ph_dilution_series(save_as, concentration=0.1, steps=10, factor=2, **_):
+    from .skills.chemistry import ph
+    c, steps, fac = _f(concentration, 0.1), _i(steps, 10), _f(factor, 2)
+    rows = [(k, round(c / fac ** k, 10), round(ph(c / fac ** k), 4)) for k in range(steps + 1)]
+    return ds.save_rows(save_as, ["step", "concentration", "pH"], rows)
+
+
+def gen_polygon_table(save_as, max_sides=12, side=1.0, **_):
+    m, s = _i(max_sides, 12), _f(side, 1.0)
+    rows = [(n, round((n - 2) * 180 / n, 4), round(360 / n, 4), round(n * s, 4),
+             round(0.25 * n * s * s / math.tan(math.pi / n), 6)) for n in range(3, m + 1)]
+    return ds.save_rows(save_as, ["sides", "interior_angle", "exterior_angle", "perimeter", "area"], rows)
+
+
+def gen_great_circle_waypoints(save_as, lat1=51.5074, lon1=-0.1278, lat2=40.7128, lon2=-74.0060,
+                               n=20, **_):
+    la1, lo1, la2, lo2 = (math.radians(_f(v, d)) for v, d in
+                          ((lat1, 51.5074), (lon1, -0.1278), (lat2, 40.7128), (lon2, -74.0060)))
+    n = _i(n, 20)
+    d = 2 * math.asin(math.sqrt(math.sin((la2 - la1) / 2) ** 2
+                                + math.cos(la1) * math.cos(la2) * math.sin((lo2 - lo1) / 2) ** 2))
+    rows = []
+    for i in range(n + 1):
+        f = i / n if n else 0.0
+        if d == 0:
+            la, lo = la1, lo1
+        else:
+            A, B = math.sin((1 - f) * d) / math.sin(d), math.sin(f * d) / math.sin(d)
+            xx = A * math.cos(la1) * math.cos(lo1) + B * math.cos(la2) * math.cos(lo2)
+            yy = A * math.cos(la1) * math.sin(lo1) + B * math.cos(la2) * math.sin(lo2)
+            zz = A * math.sin(la1) + B * math.sin(la2)
+            la, lo = math.atan2(zz, math.hypot(xx, yy)), math.atan2(yy, xx)
+        rows.append((i, round(math.degrees(la), 6), round(math.degrees(lo), 6)))
+    return ds.save_rows(save_as, ["step", "lat", "lon"], rows)
+
+
 GENERATORS = {
     "primes": (gen_primes, "first n primes (--n)"),
     "fibonacci": (gen_fibonacci, "first n Fibonacci numbers (--n)"),
@@ -259,6 +375,18 @@ GENERATORS = {
     "eoq_curve": (gen_eoq_curve, "EOQ total-cost curve (--demand --order_cost --holding_cost --q_max --points)"),
     "inventory_simulation": (gen_inventory_simulation,
                              "(Q,R) inventory simulation (--periods --demand_rate --reorder_point --order_qty --initial)"),
+    "truth_table": (gen_truth_table, "truth table for a boolean expression (--expr)"),
+    "trig_table": (gen_trig_table, "sin/cos/tan over an angle range (--start --stop --step)"),
+    "cayley_table": (gen_cayley_table, "Z_n addition (Cayley) table (--n)"),
+    "binomial_pmf": (gen_binomial_pmf, "binomial PMF P(k) for k=0..n (--n --p)"),
+    "combinatorial_sequences": (gen_combinatorial_sequences,
+                                "catalan/bell/derangement/partition numbers for n=0..N (--n)"),
+    "bmi_table": (gen_bmi_table, "BMI + category over a weight range (--height_m --w_min --w_max --step)"),
+    "derivative_table": (gen_derivative_table, "f, f', f'' sampled over [a,b] (--expr --a --b --n)"),
+    "ph_dilution_series": (gen_ph_dilution_series, "pH over a serial dilution (--concentration --steps --factor)"),
+    "polygon_table": (gen_polygon_table, "regular polygon angles/area/perimeter (--max_sides --side)"),
+    "great_circle_waypoints": (gen_great_circle_waypoints,
+                               "great-circle route waypoints (--lat1 --lon1 --lat2 --lon2 --n)"),
 }
 
 
@@ -267,11 +395,20 @@ GENERATORS = {
 DOMAINS = {
     "number-theory": ["primes", "fibonacci", "factorials", "partitions"],
     "statistics-probability": ["normal_sample", "uniform_sample", "coin_flips", "dice_rolls",
-                               "regression", "classification"],
+                               "regression", "classification", "binomial_pmf"],
     "dynamics-numerical-physics": ["logistic_trajectory", "bifurcation", "sample_function",
                                    "euler_trajectory", "projectile"],
     "finance": ["amortization", "compound_growth"],
     "logistics": ["eoq_curve", "inventory_simulation"],
+    "logic": ["truth_table"],
+    "trigonometry": ["trig_table"],
+    "group-theory": ["cayley_table"],
+    "discrete-math": ["combinatorial_sequences"],
+    "calculus": ["derivative_table"],
+    "health": ["bmi_table"],
+    "chemistry": ["ph_dilution_series"],
+    "geometry": ["polygon_table"],
+    "geospatial": ["great_circle_waypoints"],
 }
 
 

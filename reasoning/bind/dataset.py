@@ -122,4 +122,30 @@ def _generate(query: str, q: str):
                  periods=num(r"(\d+)\s*(?:periods|weeks|months|days)"),
                  demand_rate=num(r"demand\D+(\d+)"), reorder_point=num(r"reorder point\D+(\d+)"),
                  order_qty=num(r"order(?:ing)? quantity\D+(\d+)"))
+    if "truth table" in q:
+        em = re.search(r"truth table (?:for|of)\s+(.+?)[?.]?$", query, re.I)
+        return g("truth_table", "truth_table", expr=em[1].strip() if em else None)
+    if "trig" in q or re.search(r"\b(sine|sin/cos|trigonometric)\b", q):
+        return g("trig_table", "trig_table", start=num(r"from\s+(-?\d+)"),
+                 stop=num(r"to\s+(\d+)"), step=num(r"step\s+(\d+)"))
+    if "cayley" in q or "multiplication table" in q or "group table" in q:
+        return g("cayley_table", "cayley_table",
+                 n=num(r"z_?(\d+)") or num(r"mod\s*(\d+)") or num(r"order\s*(\d+)") or n)
+    if "binomial" in q and ("distribution" in q or "pmf" in q or "probabilit" in q):
+        return g("binomial_pmf", "binomial_pmf", n=num(r"n\s*=\s*(\d+)") or n,
+                 p=num(r"p\s*=\s*(\d*\.?\d+)"))
+    if "combinatorial" in q or "catalan" in q or "bell number" in q or "derangement" in q:
+        return g("combinatorial_sequences", "combinatorial_sequences", n=n)
+    if "bmi" in q:
+        return g("bmi_table", "bmi_table", height_m=num(r"(\d+\.\d+)\s*m"))
+    if "derivative" in q:
+        em = re.search(r"derivatives?\s+(?:table\s+)?(?:for|of)\s+(.+?)[?.]?$", query, re.I)
+        return g("derivative_table", "derivative_table", expr=em[1].strip() if em else None)
+    if "dilution" in q or "titration" in q or ("ph" in q and "series" in q):
+        return g("ph_dilution_series", "ph_dilution_series",
+                 concentration=num(r"(\d*\.?\d+)\s*m\b"), steps=num(r"(\d+)\s*steps"))
+    if "polygon" in q:
+        return g("polygon_table", "polygon_table", max_sides=num(r"up to\s*(\d+)") or n)
+    if "great circle" in q or "waypoints" in q or "route between" in q:
+        return g("great_circle_waypoints", "great_circle_waypoints", n=num(r"(\d+)\s*(?:waypoints|points|steps)"))
     return None
