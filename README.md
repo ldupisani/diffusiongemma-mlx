@@ -448,7 +448,9 @@ from the 1990–2023 trend; estimate, not curated)`. It never silently presents 
 fact, and never fabricates beyond a place's own trend. A two-year **change** query —
 *"how much did the population of London grow from 2010 to 2020?"* → `+900000 (+11.25%)` — returns
 the delta and percent (and the single-year lookup steps aside so it can't silently answer just the
-first year).
+first year). Two places can be **compared** — *"compare the growth of Lagos and Nigeria"* →
+`1990–2023: Lagos +10600000 (+220.83%); Nigeria +129000000 (+135.79%); Lagos grew faster by
+percentage` (0 calls; a generic comparison with no known places still falls to the model).
 
 **Batch retrieval** — *"List all cities in France."* or *"What are the populations of France,
 Germany and Italy?"* asks Claude for a **CSV table**, validates it, and saves it as a

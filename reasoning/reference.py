@@ -225,6 +225,16 @@ def population_change(place: str, year_from: int, year_to: int) -> dict | None:
             "delta": delta, "pct": round(delta / v1 * 100, 2), "estimated": not (e1 and e2)}
 
 
+def population_span(place: str) -> tuple[int, int] | None:
+    """(earliest, latest) year with population data for a place, or None."""
+    con = _con()
+    try:
+        row = con.execute("SELECT min(year), max(year) FROM population WHERE place=?", (place,)).fetchone()
+    finally:
+        con.close()
+    return (int(row[0]), int(row[1])) if row and row[0] is not None else None
+
+
 def nearest_population(place: str, year: int) -> dict | None:
     """The population from the available year CLOSEST to `year` — the beyond-horizon fallback when
     a projection would be irresponsible. Returns {value, year} (year None if only a flat figure

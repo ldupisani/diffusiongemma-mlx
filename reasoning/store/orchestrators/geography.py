@@ -64,6 +64,30 @@ def run(query):
         return explain("could not parse the geography query")
     if d["op"] == "set":
         return _run_set(d)
+    if d["op"] == "compare":
+        a, b = d["places"]
+        yf, yt = d.get("year_from"), d.get("year_to")
+        if yf is None or yt is None:                  # default to the overlapping curated span
+            sa, sb = reference.population_span(a), reference.population_span(b)
+            if not sa or not sb:
+                return explain(f"no population data for both '{a}' and '{b}'")
+            yf, yt = max(sa[0], sb[0]), min(sa[1], sb[1])
+        ca, cb = reference.population_change(a, yf, yt), reference.population_change(b, yf, yt)
+        if not ca or not cb:
+            return explain("could not compute the change for both places")
+
+        def _f(p, c):
+            s = "+" if c["delta"] >= 0 else ""
+            return f"{p} {s}{c['delta']} ({s}{c['pct']}%)"
+
+        verdict = ("comparable growth" if ca["pct"] == cb["pct"]
+                   else f"{a if ca['pct'] > cb['pct'] else b} grew faster by percentage")
+        est = " (estimate)" if ca["estimated"] or cb["estimated"] else ""
+        ans = f"{yf}–{yt}: {_f(a, ca)}; {_f(b, cb)}; {verdict}{est}"
+        return PatternResult(answer=ans,
+                             trace=[{"step": "reference.population_change", "places": [a, b],
+                                     "from": yf, "to": yt, "via": "code"},
+                                    {"step": "summary", "model_calls": 0}])
     if d["op"] == "change":
         ch = reference.population_change(d["place"], d["year_from"], d["year_to"])
         if ch is None:

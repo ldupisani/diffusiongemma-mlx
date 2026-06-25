@@ -47,6 +47,27 @@ def _slug(query: str) -> str:
     return s[:40].rstrip("_") or "retrieved_set"
 
 
+def _all_places(query: str) -> list[str]:
+    """Every known reference place named in the query, in order of appearance."""
+    from reasoning import reference
+    q = query.lower()
+    hits = []
+    for low, canon in reference.place_names().items():
+        m = re.search(r"\b" + re.escape(low) + r"\b", q)
+        if m:
+            hits.append((m.start(), -len(low), canon))
+    hits.sort()
+    seen, out = set(), []
+    for _s, _n, canon in hits:
+        if canon not in seen:
+            seen.add(canon)
+            out.append(canon)
+    return out
+
+
+_COMPARE = re.compile(r"\bcompare\b|\bversus\b|\bvs\.?\b|compared (?:to|with)", re.IGNORECASE)
+
+
 def bind_geography(query: str) -> tuple[bool, dict | None, str, int]:
     q = query.lower()
 
@@ -71,9 +92,16 @@ def bind_geography(query: str) -> tuple[bool, dict | None, str, int]:
         if not place:
             return False, None, "code", 0
 
+    years = [int(y) for y in re.findall(r"\b(\d{4})\b", q)]
+    # compare two places' population growth ("compare the growth of Lagos and Nigeria")
+    if _COMPARE.search(q) and _CHANGE_VERB.search(q) and not _OTHER_METRIC.search(q):
+        ps = _all_places(query)
+        if len(ps) >= 2:
+            return ok("compare", places=ps[:2],
+                      year_from=years[0] if len(years) >= 2 else None,
+                      year_to=years[1] if len(years) >= 2 else None)
     # population change between two years (with or without the word "population"), unless another
     # metric is named (so "China's GDP grew …" isn't answered as population)
-    years = [int(y) for y in re.findall(r"\b(\d{4})\b", q)]
     if _CHANGE_VERB.search(q) and len(years) >= 2 and not _OTHER_METRIC.search(q):
         return ok("change", place, year_from=years[0], year_to=years[1])
 

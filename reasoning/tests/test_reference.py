@@ -105,6 +105,24 @@ class TestReference(unittest.TestCase):
         ch = self.ref.population_change("London", 2010, 2020)
         self.assertEqual((ch["delta"], ch["pct"], ch["estimated"]), (900000, 11.25, False))
 
+    def test_population_comparison(self):
+        from reasoning import router
+        from reasoning.compiled import model_calls
+        q = "Compare the growth of Lagos and Nigeria"
+        m = router.recognize(q)
+        self.assertEqual(m.orchestrator.id, "geography")     # bind-gated beats the model fallback
+        r = m.orchestrator.run(q)
+        self.assertEqual(model_calls(r), 0)
+        for sub in ("Lagos", "Nigeria", "+10600000", "+129000000", "grew faster"):
+            self.assertIn(sub, r.answer)
+        # explicit years are honored
+        self.assertIn("+9200000",
+                      router.recognize("Compare the growth of Lagos and Nigeria from 1990 to 2020")
+                      .orchestrator.run("Compare the growth of Lagos and Nigeria from 1990 to 2020").answer)
+        # a generic comparison (no known places) is NOT claimed by geography → model fallback
+        self.assertEqual(router.recognize("Compare the iPhone and the Pixel on camera").orchestrator.id,
+                         "multi_part_comparison")
+
     def test_population_projection(self):
         from reasoning import router
 
