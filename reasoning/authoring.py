@@ -185,14 +185,61 @@ def _repair_prompt(skill_path: str, skill_src: str, fails: list[str]) -> str:
         f"Current {skill_path}:\n\n<<<FILE {skill_path}>>>\n{skill_src}\n<<<END>>>")
 
 
+_FLOAT_RE = re.compile(r"-?\d+(?:\.\d+)?")
+
+
+def _floats(s) -> list[float]:
+    return [float(x) for x in _FLOAT_RE.findall(str(s))]
+
+
+def _skill_example_rows(stem: str) -> list[tuple]:
+    """For every @register example of the domain's skills (those whose fn lives in module `stem`),
+    a (frozenset-of-arg-numbers, expected-first-number) row. Used to cross-check that an NL example
+    query whose numbers match a row actually produces that row's value (else a wrong sub-skill ran)."""
+    from reasoning import skills
+    rows = []
+    for _name, sk in skills.SKILLS.items():
+        if not getattr(sk.fn, "__module__", "").endswith("." + stem):
+            continue
+        for ex in getattr(sk, "examples", None) or []:
+            if not (isinstance(ex, (tuple, list)) and len(ex) >= 2):
+                continue
+            argnums, expnums = _floats(ex[0]), _floats(ex[1])
+            if argnums and expnums:
+                rows.append((frozenset(round(a, 6) for a in argnums), expnums[0]))
+    return rows
+
+
+def _answer_mismatch(answer, query: str, rows: list[tuple]) -> str | None:
+    """When the query's number-set EXACTLY matches a skill example row, the answer must equal that
+    row's value (within tolerance). Returns an error string when it matches a row but the answer
+    doesn't — the signal that the wrong sub-skill ran (acoustics' 'wave speed … 440 Hz … 0.78 m'
+    → 1, the wavelength op, when the table says (440,0.78)→343.2). Returns None when nothing matches
+    (can't verify) or the answer is consistent. Exact-set match keeps false positives low: a query
+    that doesn't reuse a row's exact numbers is simply skipped, never flagged."""
+    qset = frozenset(round(x, 6) for x in _floats(query))
+    expected = [exp for argset, exp in rows if argset == qset]
+    anums = _floats(answer)
+    if not expected or not anums:
+        return None
+    a = anums[0]
+    if any(abs(a - exp) <= 1e-3 * max(1.0, abs(exp)) for exp in expected):
+        return None
+    return (f"answer {answer!r} doesn't match the skill example for inputs {sorted(qset)} "
+            f"(expected {sorted(set(expected))}) — the wrong sub-skill likely ran")
+
+
 # Probe script run inside the throwaway worktree: route the new orchestrator's example_queries
-# (must hit it) and the existing test CASES (must NOT be stolen). Emits one JSON line.
+# (must hit it AND produce the skill-table answer) and the existing test CASES (must NOT be stolen).
+# Emits one JSON line. argv: [orchestrator_path, skill_module_stem].
 _ROUTING_PROBE = r'''
 import json, sys, importlib.util
 from reasoning import router
+from reasoning.authoring import _skill_example_rows, _answer_mismatch
 spec = importlib.util.spec_from_file_location("_newrch", sys.argv[1])
 mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
 meta = getattr(mod, "META", {}); oid = meta.get("id"); examples = meta.get("example_queries", [])
+rows = _skill_example_rows(sys.argv[2]) if len(sys.argv) > 2 else []
 def route(q):
     try:
         m = router.recognize(q)
@@ -209,6 +256,10 @@ for q in examples:
             # routed here but the bind declined (residue/parse miss) — a non-answer, not a pass
             if ans is None or (isinstance(ans, str) and ("no result" in ans or "could not parse" in ans)):
                 rec["ok"] = False; rec["error"] = "routed correctly but run() declined: %r" % ans
+            else:
+                mismatch = _answer_mismatch(ans, q, rows)   # wrong sub-skill / wrong NL answer
+                if mismatch:
+                    rec["ok"] = False; rec["error"] = mismatch
         except Exception as e:
             rec["ok"] = False; rec["error"] = "%s: %s" % (type(e).__name__, e)
     forward.append(rec)
@@ -234,7 +285,7 @@ def _routing_failures(data: dict) -> list[str]:
         if rec.get("ok"):
             continue
         if rec.get("error"):
-            fails.append(f"example query {rec['q']!r} routes to {oid} but run() errored: {rec['error']}")
+            fails.append(f"example query {rec['q']!r} routed to {oid} but did NOT verify: {rec['error']}")
         else:
             fails.append(f"example query {rec['q']!r} routed to {rec.get('routed')} instead of {oid} "
                          f"— the bind didn't claim it, or another domain outscored it on keywords")
@@ -282,7 +333,7 @@ def _verify_routing(files: dict) -> list[str] | None:
         probe = wtp / "_routing_probe.py"
         probe.write_text(_ROUTING_PROBE)
         env = {**os.environ, "PYTHONPATH": wt}
-        pr = subprocess.run([sys.executable, str(probe), str(wtp / orch_path)],
+        pr = subprocess.run([sys.executable, str(probe), str(wtp / orch_path), Path(skill_path).stem],
                             cwd=wt, env=env, capture_output=True, text=True, timeout=180)
         if pr.returncode != 0 or not pr.stdout.strip():
             return [f"routing probe failed to run: {(pr.stderr or '').strip()[-300:]}"]

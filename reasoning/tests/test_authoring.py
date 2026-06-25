@@ -74,6 +74,20 @@ class TestAuthoring(unittest.TestCase):
         self.assertFalse(res["verified"])
         self.assertEqual(len(res["rounds"]), 2)              # draft + 1 repair attempt, both fail
 
+    def test_answer_mismatch_catches_wrong_subskill(self):
+        # the acoustics case: query numbers {440, 0.78} match the wave_speed row → must be 343.2
+        rows = [(frozenset({440.0, 0.78}), 343.2), (frozenset({343.0, 440.0}), 0.779545)]
+        q = "What is the wave speed for a frequency of 440 Hz and wavelength of 0.78 m?"
+        self.assertIsNotNone(A._answer_mismatch("1", q, rows))        # wrong sub-skill → flagged
+        self.assertIsNone(A._answer_mismatch("343.2", q, rows))       # correct → not flagged
+        self.assertIsNone(A._answer_mismatch("343.20001", q, rows))   # within tolerance
+
+    def test_answer_mismatch_skips_when_no_row_matches(self):
+        rows = [(frozenset({2.0, 3.0}), 6.0)]
+        # query numbers don't exactly match any row → can't verify → no false positive
+        self.assertIsNone(A._answer_mismatch("999", "area of radius 5", rows))
+        self.assertIsNone(A._answer_mismatch("not numeric", "foo 2 and 3", rows))  # no answer number
+
     def test_routing_failures_formatting(self):
         data = {"oid": "widgets",
                 "forward": [{"q": "make a widget", "routed": "widgets", "ok": True},
