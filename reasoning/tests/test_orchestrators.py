@@ -634,6 +634,8 @@ CASES = [
     ("What is the volumetric flow rate with a cross-sectional area of 0.5 m² and velocity 2 m/s?", "1 m³/s", "fluid_mechanics"),
     ("Find the Reynolds number for a fluid with density 1000 kg/m³, velocity 2 m/s, diameter 0.05 m, and viscosity 0.001 Pa·s.", "100000", "fluid_mechanics"),
     ("What is the outlet velocity using the continuity equation for inlet area 0.2 m², inlet velocity 3 m/s, and outlet area 0.1 m²?", "6 m/s", "fluid_mechanics"),
+    # buoyant force added later via `cli extend-domain fluid_mechanics …` (existing ops preserved).
+    ("What is the buoyant force for a fluid with density 1000 kg/m³ and displaced volume 0.5 m³?", "4905 N", "fluid_mechanics"),
     # reverse guards: must not steal physics pressure (force/area) or density (mass/volume).
     ("What is the pressure of a 50 N force over an area of 10 square meters?", "5 Pa", "physics"),
     ("What is the density of an object with mass 300 g and volume 100 cm^3?", "3 g/cm³", "physics"),

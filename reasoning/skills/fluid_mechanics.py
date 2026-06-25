@@ -1,8 +1,8 @@
-"""Fluid mechanics — hydrostatic pressure, dynamic pressure, flow rate, Reynolds number, and continuity equation. Zero model calls.
+"""Fluid mechanics — hydrostatic pressure, dynamic pressure, flow rate, Reynolds number, continuity equation, and buoyant force. Zero model calls.
 
 Covers the computable pieces: hydrostatic pressure (P = ρ·g·h), dynamic pressure (q = 0.5·ρ·v²),
-volumetric flow rate (Q = A·v), Reynolds number (Re = ρ·v·D/μ), and continuity equation outlet
-velocity (v₂ = A₁·v₁/A₂). All inputs carry explicit units (kg/m³, m, m/s, Pa·s, m²).
+volumetric flow rate (Q = A·v), Reynolds number (Re = ρ·v·D/μ), continuity equation outlet
+velocity (v₂ = A₁·v₁/A₂), and buoyant force (F = ρ·g·V). All inputs carry explicit units (kg/m³, m, m/s, Pa·s, m²).
 """
 
 from __future__ import annotations
@@ -42,3 +42,10 @@ def reynolds_number(density: float, velocity: float, diameter: float, dynamic_vi
           [((0.2, 3, 0.1), 6.0), ((0.5, 1, 0.25), 2.0), ((0.1, 4, 0.08), 5.0)])
 def continuity_equation(inlet_area: float, inlet_velocity: float, outlet_area: float) -> float:
     return round(inlet_area * inlet_velocity / outlet_area, 6)
+
+
+@register("fluid_mechanics.buoyant_force", "buoyant force F = ρ·g·V (N); g = 9.81 m/s²",
+          [((1000, 0.5), 4905.0), ((1025, 2), 20110.5), ((800, 1.5), 11772.0)])
+def buoyant_force(density: float, volume: float) -> float:
+    g = 9.81
+    return round(density * g * volume, 6)

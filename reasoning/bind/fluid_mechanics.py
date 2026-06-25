@@ -1,5 +1,5 @@
 """bind layer — fluid mechanics. Gated strictly on fluid-specific context keywords
-(fluid, density, hydrostatic, dynamic pressure, flow rate, Reynolds, viscosity, depth).
+(fluid, density, hydrostatic, dynamic pressure, flow rate, Reynolds, viscosity, depth, buoyant, archimedes).
 Each operation is gated on its specific numeric inputs via num_near for bidirectional extraction.
 Declines on unexplained residue to avoid silent-wrong answers."""
 
@@ -16,7 +16,8 @@ def bind_fluid_mechanics(query: str) -> tuple[bool, dict | None, str, int]:
     has_fluid_context = any(x in q for x in [
         "fluid", "density", "hydrostatic", "dynamic pressure", "flow rate", "flow",
         "reynolds", "viscosity", "depth", "pressure in water", "underwater",
-        "fluid flow", "streamline", "laminar", "turbulent", "continuity", "inlet", "outlet"
+        "fluid flow", "streamline", "laminar", "turbulent", "continuity", "inlet", "outlet",
+        "buoyant", "buoyancy", "archimedes", "displaced volume"
     ])
     if not has_fluid_context:
         return False, None, "code", 0
@@ -73,6 +74,14 @@ def bind_fluid_mechanics(query: str) -> tuple[bool, dict | None, str, int]:
         A2 = num_near(query, "outlet area", "outlet", "a2", "m²")
         result = ok("fluid_mechanics.continuity_equation", ["inlet_area", "inlet_velocity", "outlet_area"],
                     [A1, v1, A2], round=True, places=6, suffix=" m/s")
+        return guard_residue(query, result)
+
+    # Op 6: Buoyant force F = ρ·g·V. Gate strictly on buoyant/archimedes context.
+    if "buoyant" in q or "buoyancy" in q or "archimedes" in q or "displaced volume" in q:
+        rho = num_near(query, "density", "ρ", "kg/m³")
+        V = num_near(query, "volume", "displaced volume", "v =", "m³")
+        result = ok("fluid_mechanics.buoyant_force", ["density", "volume"],
+                    [rho, V], round=True, places=6, suffix=" N")
         return guard_residue(query, result)
 
     return False, None, "code", 0
