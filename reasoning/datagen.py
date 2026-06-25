@@ -203,6 +203,41 @@ def gen_classification(save_as, n=200, seed=0, **_):
     return ds.save_rows(save_as, ["x1", "x2", "label"], rows)
 
 
+# --- logistics --------------------------------------------------------------
+
+def gen_eoq_curve(save_as, demand=1000, order_cost=10, holding_cost=2, q_max=None, points=50, **_):
+    """EOQ total-cost curve: ordering cost D/Q·S, holding cost Q/2·H, and their sum over a range
+    of order quantities Q — the U-shaped total minimized at Q = sqrt(2·D·S/H)."""
+    D, S, H = _f(demand, 1000), _f(order_cost, 10), _f(holding_cost, 2)
+    eoq = math.sqrt(2 * D * S / H)
+    qmax = _f(q_max, round(3 * eoq))
+    pts = _i(points, 50)
+    rows = []
+    for i in range(1, pts + 1):
+        q = qmax * i / pts
+        order, hold = D / q * S, q / 2 * H
+        rows.append((round(q, 4), round(order, 4), round(hold, 4), round(order + hold, 4)))
+    return ds.save_rows(save_as, ["order_quantity", "ordering_cost", "holding_cost", "total_cost"],
+                        rows)
+
+
+def gen_inventory_simulation(save_as, periods=52, demand_rate=20, reorder_point=100,
+                             order_qty=200, initial=200, **_):
+    """Multi-period (Q,R) inventory sim: each period consumes demand, and reorders a fixed
+    quantity when stock falls to/below the reorder point."""
+    d, rop = _f(demand_rate, 20), _f(reorder_point, 100)
+    oq, stock = _f(order_qty, 200), _f(initial, 200)
+    rows = []
+    for p in range(1, _i(periods, 52) + 1):
+        start = stock
+        stock = max(stock - d, 0.0)
+        ordered = oq if stock <= rop else 0.0
+        stock += ordered
+        rows.append((p, round(start, 2), round(d, 2), round(ordered, 2), round(stock, 2)))
+    return ds.save_rows(save_as, ["period", "starting_stock", "demand", "ordered", "ending_stock"],
+                        rows)
+
+
 GENERATORS = {
     "primes": (gen_primes, "first n primes (--n)"),
     "fibonacci": (gen_fibonacci, "first n Fibonacci numbers (--n)"),
@@ -221,6 +256,9 @@ GENERATORS = {
     "amortization": (gen_amortization, "loan amortization schedule (--principal --annual_rate --years)"),
     "compound_growth": (gen_compound_growth, "compound growth series (--principal --rate --years)"),
     "classification": (gen_classification, "two-blob classification dataset (--n --seed)"),
+    "eoq_curve": (gen_eoq_curve, "EOQ total-cost curve (--demand --order_cost --holding_cost --q_max --points)"),
+    "inventory_simulation": (gen_inventory_simulation,
+                             "(Q,R) inventory simulation (--periods --demand_rate --reorder_point --order_qty --initial)"),
 }
 
 

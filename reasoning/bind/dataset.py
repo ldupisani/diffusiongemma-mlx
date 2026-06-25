@@ -113,4 +113,13 @@ def _generate(query: str, q: str):
         return g("regression", "regression", n=n)
     if "classification" in q:
         return g("classification", "classification", n=n)
+    if "eoq" in q:
+        return g("eoq_curve", "eoq_curve", demand=num(r"demand\D+(\d+)"),
+                 order_cost=num(r"order(?:ing)? cost\D+(\d+)"),
+                 holding_cost=num(r"holding cost\D+(\d+)"))
+    if "inventory simulation" in q or ("inventory" in q and "simulat" in q):
+        return g("inventory_simulation", "inventory_simulation",
+                 periods=num(r"(\d+)\s*(?:periods|weeks|months|days)"),
+                 demand_rate=num(r"demand\D+(\d+)"), reorder_point=num(r"reorder point\D+(\d+)"),
+                 order_qty=num(r"order(?:ing)? quantity\D+(\d+)"))
     return None

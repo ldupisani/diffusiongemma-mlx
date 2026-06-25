@@ -374,7 +374,8 @@ python -m reasoning.cli data gen primes myprimes n=1000     # domain generator �
 a handle: number theory & combinatorics (primes, Fibonacci, factorials, partitions), statistics
 & probability (uniform/normal samples, coin/dice rolls, synthetic regression/classification),
 dynamical/numerical/physics (logistic trajectory, bifurcation, `f(x)` over `[a,b]`, Euler ODE
-path, projectile motion), and finance (amortization schedule, compound growth). Each reuses the
+path, projectile motion), finance (amortization schedule, compound growth), and logistics (EOQ
+cost curve, inventory simulation). Each reuses the
 pure domain skills + numpy/SymPy and returns a handle + preview; random ones take a `seed`.
 NL also routes through the engine via the `dataset` orchestrator: *"What is the average of the
 price column in sales?"* → `20`; *"How many rows in sales where status = 'active'?"* → `2`;

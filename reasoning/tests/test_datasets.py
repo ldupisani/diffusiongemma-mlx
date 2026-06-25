@@ -119,6 +119,12 @@ class TestDatasets(unittest.TestCase):
         self.assertEqual(self.ds.count_rows("am"), "360")
         datagen.generate("logistic_trajectory", "lt", r="3.9", x0="0.5", n="300")
         self.assertEqual(self.ds.count_rows("lt"), "300")
+        # logistics: EOQ cost curve (min total cost ≈ sqrt(2·D·S·H) = 200) and inventory sim
+        datagen.generate("eoq_curve", "eoq", demand="1000", order_cost="10", holding_cost="2")
+        self.assertEqual(self.ds.count_rows("eoq"), "50")
+        self.assertTrue(195 < float(self.ds.query("SELECT min(total_cost) FROM eoq")) < 210)
+        datagen.generate("inventory_simulation", "inv", periods="52")
+        self.assertEqual(self.ds.count_rows("inv"), "52")
 
     def test_nl_generation_routing(self):
         from reasoning import router

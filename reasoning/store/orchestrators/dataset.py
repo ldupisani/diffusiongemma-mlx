@@ -20,6 +20,7 @@ META = {
         "Generate 500 normal samples with mean 10 and std 2.",
         "Generate an amortization schedule for a $100000 loan at 6% over 30 years.",
         "Generate a synthetic regression dataset of 200 points.",
+        "Generate an EOQ cost curve for demand 1000, order cost 10, holding cost 2.",
     ],
     "keywords": ["dataset", "column", "rows in", "describe the dataset", "sql", "generate"],
     "model_free": True,

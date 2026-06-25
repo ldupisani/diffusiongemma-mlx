@@ -269,6 +269,23 @@ tends to surface its own collision, and per-domain commits make each fix reviewa
 
 ---
 
+## 8. Add a dataset generator when appropriate
+
+**After a domain is in, ask: does it naturally produce a *sequence, sample, series, or schedule*?**
+If so, add a generator to `reasoning/datagen.py` (registered in `GENERATORS`) that builds rows —
+reusing the domain's pure skills + numpy/SymPy — and saves via `datasets.save_rows`, returning a
+handle + preview (never a text dump). Wire it into NL via the `dataset` orchestrator's `_generate`
+(and add a generation `example_query` so it routes — see the tier-2 learning in §2). Make random
+generators take a reproducible `seed`. Examples already shipped: primes/Fibonacci (number theory),
+normal/uniform samples (probability), logistic trajectory/projectile (dynamics/physics),
+amortization (finance), EOQ cost curve / inventory simulation (logistics).
+
+**Skip** generators for domains that don't yield tabular/large data (single-value computations:
+complex/quaternion, ordinals/cardinals/surreals, p-adic, crypto, plain geometry). "Appropriate" =
+the answer is *many rows*, not one number.
+
+---
+
 ## TL;DR checklist
 
 - [ ] Computable, not conceptual? Not already covered?
@@ -277,4 +294,5 @@ tends to surface its own collision, and per-domain commits make each fix reviewa
 - [ ] Orchestrator `META`/`precondition`/`run`; `bind_gated` chosen per §2 (number-list/matrix → tier 2).
 - [ ] Forward routing ✓ at 0 model calls; **reverse** routing of neighbours ✓ (decline-guards added).
 - [ ] `CASES` rows incl. a collision guard; full suite green.
+- [ ] **Dataset generator** in `datagen.py` if the domain yields rows/series/schedules (§8).
 - [ ] One commit per domain → `main`.
