@@ -236,6 +236,31 @@ def cmd_reference(args):
         print(reference.promote(a[0], a[1], year))
 
 
+def cmd_author_domain(args):
+    """Call Claude (high-reasoning) to implement a new domain per the playbook, pre-loaded with
+    context. Writes the new module files (never clobbers); wiring + CASES are printed to apply."""
+    from . import authoring
+    description = " ".join(args.args)
+    if not description:
+        sys.exit('describe the domain, e.g. author-domain "Thermodynamics: entropy, enthalpy, …"')
+    print(f"[authoring '{description[:60]}…' via {args.model} — this calls the model and may take a minute]\n")
+    res = authoring.author_domain(description, model=args.model)
+    if res["error"]:
+        sys.exit(res["error"])
+    files = res["files"]
+    written, skipped = authoring.write_files(files, dry_run=args.dry_run)
+    verb = "would write" if args.dry_run else "wrote"
+    print(f"{verb}: {', '.join(written) or '(none)'}")
+    if skipped:
+        print(f"skipped (already exist — review the generated version manually): {', '.join(skipped)}")
+    for meta in ("__wiring__", "__notes__"):
+        if meta in files:
+            print(f"\n--- {meta.strip('_')} (apply manually) ---\n{files[meta].strip()}")
+    print("\nNext: review the files, apply the wiring + CASES, then run "
+          "`python -m pytest reasoning/tests reasoning/skills/tests -q` and "
+          "`python -m reasoning.cli eval-all`. The model wrote this — verify before committing.")
+
+
 def cmd_help(args):
     """Introspection: what can I ask? — overview, per-domain examples, or a capability search."""
     from . import introspect
@@ -310,6 +335,12 @@ def main():
     rf.add_argument("args", nargs="*",
                     help="import: <csv> <table>; promote: <op> <place> [year]")
     rf.set_defaults(fn=cmd_reference)
+    ad = sub.add_parser("author-domain",
+                        help="implement a new domain via Claude (high-reasoning), per the playbook")
+    ad.add_argument("args", nargs="+", help="the domain description (name + the operations it covers)")
+    ad.add_argument("--model", default="opus", help="Claude model (default: opus — high reasoning)")
+    ad.add_argument("--dry-run", action="store_true", help="print what would be written, don't write")
+    ad.set_defaults(fn=cmd_author_domain)
     hp = sub.add_parser("help", help="introspection: what can I ask? (domains / examples / search)")
     hp.add_argument("domain", nargs="?", help="a domain id to show example queries for")
     hp.add_argument("--search", help="find domains/skills/generators mentioning a term")

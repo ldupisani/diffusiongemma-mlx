@@ -376,6 +376,12 @@ add it to `skills/`, re-derive, and coded coverage climbs. `eval` reports fideli
 count, with an exact numeric backstop that catches rounding regressions the fuzzy judge would miss.
 Skill tests: `python -m unittest discover -s reasoning -p "test_*.py" -t .` (no sidecar, no network).
 
+**Author a whole domain with Claude.** `python -m reasoning.cli author-domain "Thermodynamics:
+entropy change, ideal-gas work, Carnot efficiency"` calls Opus (high reasoning) pre-loaded with the
+full playbook (`docs/adding-domains.md`), the skill-registry contract, and a worked exemplar, and
+writes the new skill/bind/orchestrator files plus the wiring and `CASES` to apply. It's code
+generation — review the output, then run the tests and `cli eval-all` before committing.
+
 ## Datasets — larger-than-text data (`reasoning/datasets.py`)
 For inputs, scratch storage, or outputs too big to inline as text. A **separate I/O subsystem**
 (the `skills/` library stays pure): **DuckDB is the single engine** over CSV/TSV, Parquet,

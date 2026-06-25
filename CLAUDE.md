@@ -48,6 +48,12 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   computational query), the CLI (`reasoning.cli help [domain] [--search term]`), and pure
   `introspect.*` skills (`domain_exists`/`skill_exists`/`generator_exists`/`can_answer`) for
   higher-level reasoning to probe availability before acting.
+- **`reasoning/authoring.py`** — "author a domain" tool: builds a context-rich prompt (the full
+  playbook + the skill-registry contract + a worked exemplar (`logistics`) + the existing
+  query_types) and calls Claude at high reasoning (Opus) to implement a NEW domain, parsing the
+  returned files from a `<<<FILE …>>>` delimiter format. Code-gen only — writes new module files
+  (never clobbers), prints the wiring + CASES to apply, and tells you to review + run the tests.
+  CLI: `python -m reasoning.cli author-domain "<name + ops>" [--model opus] [--dry-run]`.
 - **`backend.py`** — pluggable inference backend (see below).
 - **`reasoning/mcp_server.py`** — exposes the reasoning project as an MCP service (FastMCP, stdio):
   `ask` (route → coded answer + domain + model-call count; 0-call compound split; non-coded types
@@ -112,7 +118,9 @@ Env: `DIFG_PORT` (8088), `DIFG_MODEL`, `DIFG_BACKEND`, `DIFG_PYTHON` (`.venv/bin
 
 ## Conventions
 
-- Adding a domain: follow `docs/adding-domains.md` — skill module + bind + orchestrator, gate
+- Adding a domain: either hand-write it or scaffold it with `reasoning.cli author-domain "<spec>"`
+  (calls Opus, pre-loaded with the playbook + exemplar; review + test its output). Follow
+  `docs/adding-domains.md` — skill module + bind + orchestrator, gate
   conservatively, and test routing in BOTH directions (a new domain must not steal or be stolen
   from). New module in `reasoning/store/orchestrators/`; keep it model-free. Run `eval-all` after.
 - After finishing a set of domains, update `docs/adding-domains.md` if the work taught something
