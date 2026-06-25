@@ -64,6 +64,25 @@ def list_datasets() -> list[str]:
                   if p.is_file() and p.suffix.lower() in SUPPORTED)
 
 
+def _reference_tables() -> set[str]:
+    try:
+        import sqlite3
+
+        from reasoning import reference
+        con = sqlite3.connect(reference.ensure_db())
+        try:
+            return {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        finally:
+            con.close()
+    except (ImportError, OSError):
+        return set()
+
+
+def _exists(name: str) -> bool:
+    """A handle exists if it's a file in the data dir or a bundled reference table."""
+    return _path(name) is not None or name in _reference_tables()
+
+
 def _read_sql(path: Path) -> str:
     """A DuckDB FROM-source expression for a file-format dataset."""
     fmt = _FILE_FORMATS[path.suffix.lower()]
@@ -89,8 +108,25 @@ def _py_table(path: Path):
     return pa.table({f"c{i}": a[:, i] for i in range(a.shape[1])})
 
 
+def _register_reference(con: duckdb.DuckDBPyConnection) -> None:
+    """Attach the bundled read-only reference DB (countries/population/cities) as views, so
+    constant reference data is queryable as handles. User datasets of the same name shadow it
+    (they are registered afterwards with CREATE OR REPLACE)."""
+    try:
+        from reasoning import reference
+        con.execute(f"ATTACH IF NOT EXISTS '{_q(reference.ensure_db())}' AS _ref "
+                    f"(TYPE sqlite, READ_ONLY)")
+        tables = con.execute("SELECT table_name FROM information_schema.tables "
+                             "WHERE table_catalog = '_ref'").fetchall()
+        for (t,) in tables:
+            con.execute(f'CREATE OR REPLACE VIEW "{t}" AS SELECT * FROM "_ref"."{t}"')
+    except (duckdb.Error, ImportError, OSError):
+        pass
+
+
 def _register(con: duckdb.DuckDBPyConnection) -> None:
     """Register every dataset in the data dir as a view (or attached DB) named by its handle."""
+    _register_reference(con)   # bundled reference first; user data dir can shadow it
     for path in data_dir().iterdir():
         if not path.is_file():
             continue
@@ -183,7 +219,7 @@ def import_file(src: str, name: str | None = None) -> str:
 
 
 def describe(name: str) -> str:
-    if _path(name) is None:
+    if not _exists(name):
         raise FileNotFoundError(f"no dataset '{name}' (have: {list_datasets()})")
     con = _con()
     schema = con.execute(f'DESCRIBE SELECT * FROM "{name}"').fetchall()
@@ -214,7 +250,7 @@ def query(sql: str, *, save_as: str | None = None) -> str:
 
 
 def aggregate(name: str, column: str, op: str, where: str | None = None) -> str:
-    if _path(name) is None:
+    if not _exists(name):
         raise FileNotFoundError(f"no dataset '{name}'")
     op = {"average": "avg", "mean": "avg", "total": "sum", "maximum": "max",
           "minimum": "min", "count": "count", "stddev": "stddev"}.get(op.lower(), op.lower())
@@ -223,14 +259,14 @@ def aggregate(name: str, column: str, op: str, where: str | None = None) -> str:
 
 
 def count_rows(name: str, where: str | None = None) -> str:
-    if _path(name) is None:
+    if not _exists(name):
         raise FileNotFoundError(f"no dataset '{name}'")
     clause = f" WHERE {where}" if where else ""
     return query(f'SELECT count(*) FROM "{name}"{clause}')
 
 
 def convert(name: str, out_name: str, fmt: str) -> str:
-    if _path(name) is None:
+    if not _exists(name):
         raise FileNotFoundError(f"no dataset '{name}'")
     con = _con()
     _write(con, f'SELECT * FROM "{name}"', out_name, fmt=fmt)

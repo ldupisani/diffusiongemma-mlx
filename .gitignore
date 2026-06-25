@@ -17,3 +17,6 @@ node_modules/
 
 # Claude plan files live outside the repo; ignore any local copies
 .claude/
+
+# built reference DB artifacts (source of truth is store/reference/seed.py)
+reasoning/store/reference/*.sqlite
