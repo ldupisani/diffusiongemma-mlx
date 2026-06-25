@@ -244,6 +244,57 @@ class Report:
         return claimed / self.total if self.total else 0.0
 
 
+@dataclass
+class TranslateReport:
+    slice: str
+    total: int
+    solved_1call: int           # correct after the LLM→program→execute path (1 model call)
+    buckets: Counter            # solved / wrong_value / program_error / no_response
+    misses: list                # [(question, gold, out)] sample (dev only)
+
+    @property
+    def accuracy(self) -> float:
+        return self.solved_1call / self.total if self.total else 0.0
+
+
+def run_translate(slice: str = "dev", limit: int | None = 25, *, asker=None,
+                  model: str = "haiku", keep_misses: int = 25) -> TranslateReport:
+    """Hybrid LLM-as-translator over a slice: 1 model call per question turns prose into an
+    arithmetic program, executed deterministically (translate.solve). Reports solved@1call.
+
+    Makes REAL model calls unless `asker` is injected — keep `limit` small (cost). DEV only keeps
+    a miss sample; TEST stays aggregate-only (firewall)."""
+    from . import translate
+    if slice not in _SLICE_HANDLE:
+        raise ValueError(f"slice must be one of {list(_SLICE_HANDLE)}")
+    rows = _rows(_SLICE_HANDLE[slice], limit)
+
+    buckets: Counter = Counter()
+    misses: list = []
+    solved = 0
+    for question, answer in rows:
+        gold = gold_answer(answer)
+        out = translate.solve(question, asker=asker, model=model)
+        ans = out["answer"]
+        correct = ans is not None and is_correct(str(ans), gold)
+        if correct:
+            solved += 1
+            buckets["solved"] += 1
+        else:
+            if out["error"] == "no response from the model":
+                bucket = "no_response"
+            elif out["error"]:
+                bucket = "program_error"   # program was malformed/unsafe/undefined
+            else:
+                bucket = "wrong_value"     # program ran, but the translation was wrong
+            buckets[bucket] += 1
+            if slice == "dev" and len(misses) < keep_misses:
+                misses.append((question, gold, out))
+
+    return TranslateReport(slice=slice, total=len(rows), solved_1call=solved,
+                           buckets=buckets, misses=misses)
+
+
 def run(slice: str = "test", limit: int | None = None, *, keep_misses: int = 40) -> Report:
     """Route every question in the slice code-only and score it against the gold.
 

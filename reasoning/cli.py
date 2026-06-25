@@ -153,6 +153,24 @@ def cmd_eval_all(args):
 def cmd_bench(args):
     from . import bench
 
+    if args.translate:
+        limit = args.limit if args.limit is not None else 25
+        print(f"GSM8K [{args.slice}] — hybrid LLM-as-translator (1 model call: prose→program, "
+              f"executed deterministically)\n")
+        rep = bench.run_translate(slice=args.slice, limit=limit, model=args.model)
+        print(f"solved @1call:  {rep.solved_1call}/{rep.total}  ({rep.accuracy:.1%})   ← headline")
+        print("\noutcome buckets:")
+        for b in ("solved", "wrong_value", "program_error", "no_response"):
+            n = rep.buckets.get(b, 0)
+            if n:
+                print(f"  {b:14} {n:>4}  ({n / rep.total:.1%})")
+        if rep.misses:
+            print(f"\nsample DEV misses (first {min(args.show_misses, len(rep.misses))}):")
+            for q, gold, out in rep.misses[:args.show_misses]:
+                tag = out["error"] or f"got {out['answer']}"
+                print(f"  [gold={gold} | {tag[:32]}] {q[:80]}")
+        return
+
     # Reachable-ceiling diagnostic — intrinsic to the data (gold step counts), no routing,
     # so it runs over the FULL slice cheaply. The cumulative curve is the max accuracy a
     # perfect general N-step arithmetic solver could ever reach.
@@ -443,6 +461,9 @@ def main():
     bn.add_argument("--limit", type=int, default=None, help="cap the number of questions")
     bn.add_argument("--show-misses", dest="show_misses", type=int, default=20,
                     help="how many DEV misses to print for gap-mining")
+    bn.add_argument("--translate", action="store_true",
+                    help="hybrid LLM-as-translator (1 model call → program → deterministic execute)")
+    bn.add_argument("--model", default="haiku", help="translator model (default: haiku)")
     bn.set_defaults(fn=cmd_bench)
     sub.add_parser("list").set_defaults(fn=cmd_list)
     da = sub.add_parser("data", help="manage datasets in $DIFG_DATA_DIR")
