@@ -166,6 +166,39 @@ def population_detail(place: str, year: int | None = None) -> dict | None:
     return None
 
 
+def project_population(place: str, year: int):
+    """A deterministic TREND estimate for a population year NOT in the seed, from the place's
+    by-year series: interpolated between the bracketing years, or extrapolated beyond the series
+    via its full-span CAGR. Returns {value, basis, span} or None (an exact-year hit, an unknown
+    place, or fewer than 2 data points → can't project). 0 model calls — a computed estimate."""
+    con = _con()
+    try:
+        rows = con.execute("SELECT year, population FROM population WHERE place=? ORDER BY year",
+                           (place,)).fetchall()
+    finally:
+        con.close()
+    pts = [(int(y), float(p)) for y, p in rows]
+    if len(pts) < 2:
+        return None
+    year, years, val = int(year), [y for y, _ in pts], dict(pts)
+    if year in val:
+        return None                                    # exact year → not a projection
+    lo_y, hi_y = years[0], years[-1]
+    span = f"{lo_y}–{hi_y}"
+    if lo_y < year < hi_y:                             # interpolate within the series
+        below = max(y for y in years if y < year)
+        above = min(y for y in years if y > year)
+        est = val[below] + (year - below) / (above - below) * (val[above] - val[below])
+        return {"value": int(round(est)), "basis": f"interpolated between {below} and {above}",
+                "span": span}
+    if val[lo_y] <= 0 or val[hi_y] <= 0:
+        return None
+    cagr = (val[hi_y] / val[lo_y]) ** (1 / (hi_y - lo_y)) - 1   # extrapolate along the trend
+    anchor = hi_y if year > hi_y else lo_y
+    est = val[anchor] * (1 + cagr) ** (year - anchor)
+    return {"value": int(round(est)), "basis": f"projected from the {span} trend", "span": span}
+
+
 def place_names() -> dict:
     """lowercased name -> canonical name, for every country, city, and population entry (so a
     promoted population for an otherwise-unknown place still routes). For NL place matching."""

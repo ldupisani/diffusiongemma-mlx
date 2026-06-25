@@ -75,10 +75,6 @@ class TestReference(unittest.TestCase):
         # city + a SEED year → honored exactly, no caveat (seed years now span 1990–2023)
         self.assertEqual(ans("What is the population of London in 2010?"), "8000000")
         self.assertEqual(ans("What is the population of London in 2023?"), "8900000")
-        # city + a NON-seed year → flagged with the year actually shown
-        london24 = ans("What is the population of London in 2024?")
-        self.assertIn("8900000", london24)
-        self.assertIn("no 2024 figure", london24)
         # country exact seed year, and city with no year (latest) → plain, no caveat
         self.assertEqual(ans("What is the population of France in 2020?"), "67000000")
         self.assertEqual(ans("What is the population of Tokyo?"), "14010000")
@@ -86,6 +82,29 @@ class TestReference(unittest.TestCase):
         self.assertTrue(self.ref.population_detail("London", 2023)["year_applied"])
         self.assertFalse(self.ref.population_detail("London", 2024)["year_applied"])
         self.assertIsNone(self.ref.population_detail("France", 1995))  # year absent → no fabrication
+
+    def test_population_projection(self):
+        from reasoning import router
+
+        def run(q):
+            m = router.recognize(q)
+            r = m.orchestrator.run(q)
+            from reasoning.compiled import model_calls
+            return r.answer, model_calls(r)
+
+        # a FUTURE year → trend extrapolation, flagged an estimate, still 0 model calls
+        ans, mc = run("What is the projected population for London in 2030?")
+        self.assertIn("projected", ans)
+        self.assertIn("not curated", ans)
+        self.assertEqual(mc, 0)
+        # an in-range gap year → interpolation between the bracketing seed years
+        self.assertIn("interpolated", run("What is the population of France in 2015?")[0])
+        # API: exact year and unknown place don't project
+        p = self.ref.project_population("London", 2030)
+        self.assertTrue(p["value"] > 8000000 and "trend" in p["basis"])
+        self.assertEqual(self.ref.project_population("France", 2015)["value"], 66000000)
+        self.assertIsNone(self.ref.project_population("London", 2023))   # exact year
+        self.assertIsNone(self.ref.project_population("Atlantis", 2030))  # unknown place
 
     def test_user_dataset_shadows_reference(self):
         # a user dataset named like a reference table takes precedence

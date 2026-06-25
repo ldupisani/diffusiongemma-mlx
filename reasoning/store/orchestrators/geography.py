@@ -32,14 +32,9 @@ def _lookup(op, place, year):
     """(display value, year-fidelity note) from the curated set, or (None, "")."""
     if op == "population":
         det = reference.population_detail(place, year)
-        if not det:
-            return None, ""
-        note = ""
-        if year is not None and not det["year_applied"]:
-            note = (f" (no {year} figure in the reference; this is the {det['year']} figure)"
-                    if det["year"] else
-                    f" (the reference has no year-specific population for '{place}')")
-        return str(det["value"]), note
+        if det and (det["year_applied"] or year is None):
+            return str(det["value"]), ""        # exact curated year, or latest when no year asked
+        return None, ""                          # missing year → run() tries retrieval/projection
     if op == "coordinates":
         c = reference.coordinates(place)
         return (f"{c[0]}, {c[1]}" if c else None), ""
@@ -71,25 +66,31 @@ def run(query):
         return _run_set(d)
     op, place, year = d["op"], d["place"], d.get("year")
     val, note = _lookup(op, place, year)
-    model_calls, retrieved, cached = 0, False, False
-    # Not in the curated set? When retrieval is enabled (opt-in via DIFG_REFERENCE_RETRIEVAL):
-    # reuse a previously-retrieved value (0 calls), else retrieve via Claude Sonnet (1 call) and
-    # persist it. Either way the result is validated and flagged as model-sourced, never curated.
+    model_calls, via = 0, "code"
+    # A year/place not in the curated set, tried cheapest-meaningful-first:
+    #  (1) retrieval (opt-in DIFG_REFERENCE_RETRIEVAL) — a real/cached value, flagged model-sourced;
+    #  (2) for population, a deterministic TREND projection from the by-year series (0 calls),
+    #      flagged an estimate; (3) the latest curated figure with a year note.
     if val is None and reference.retrieval_enabled():
-        val = reference.cached_value(op, place, year)
-        if val is not None:
-            retrieved, cached = True, True
+        cv = reference.cached_value(op, place, year)
+        if cv is not None:
+            val, via, note = cv, "cache", " — previously retrieved (not in the curated reference set; verify)"
         else:
-            val = reference.retrieve(op, place, year)
-            retrieved, model_calls = val is not None, (1 if val is not None else 0)
-        note = ""   # a retrieved value is year-specific (the year is in the prompt)
+            rv = reference.retrieve(op, place, year)
+            if rv is not None:
+                val, via, model_calls = rv, "model", 1
+                note = " — retrieved via Claude Sonnet (not in the curated reference set; verify)"
+    if val is None and op == "population":
+        proj = reference.project_population(place, year)
+        if proj is not None:
+            val, via, note = str(proj["value"]), "projection", f" ({proj['basis']}; estimate, not curated)"
+        else:
+            det = reference.population_detail(place, year)   # single-point place → latest + note
+            if det:
+                val, note = str(det["value"]), f" (no {year} figure; this is the {det['year']} figure)"
     if val is None:
         return explain(f"no reference data for '{place}' ({op})")
     display = (f"{val} km^2" if op == "area" else val) + note
-    if retrieved:
-        src = "previously retrieved" if cached else "retrieved via Claude Sonnet"
-        display += f" — {src} (not in the curated reference set; verify)"
     return PatternResult(answer=display,
-                         trace=[{"step": f"reference.{op}", "place": place,
-                                 "via": "code" if not retrieved else ("cache" if cached else "model")},
+                         trace=[{"step": f"reference.{op}", "place": place, "via": via},
                                 {"step": "summary", "model_calls": model_calls}])
