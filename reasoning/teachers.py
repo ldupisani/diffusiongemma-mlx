@@ -74,24 +74,44 @@ def _result_obj(data) -> dict:
     raise RuntimeError("could not find a result object in claude CLI output")
 
 
-def ask_claude(prompt: str, model: str = "sonnet", timeout: int = 60,
-               effort: str | None = None) -> str | None:
-    """One-shot Claude CLI call returning the raw answer text (no REASONING/ANSWER split).
-    `effort` is the reasoning level (low/medium/high/xhigh/max; None → the CLI default). Returns
-    None if the `claude` CLI is absent or the call errors — callers treat that as 'unavailable'."""
+_USAGE_KEYS = ("input_tokens", "output_tokens",
+               "cache_creation_input_tokens", "cache_read_input_tokens")
+
+
+def ask_claude_usage(prompt: str, model: str = "sonnet", timeout: int = 60,
+                     effort: str | None = None) -> dict:
+    """One-shot Claude CLI call, returning {text, usage, cost_usd, error}. `text` is None on any
+    failure (CLI absent / non-zero exit / error result), with `error` describing it. `usage` is a
+    trimmed token dict ({input/output/cache_* _tokens}) and `cost_usd` the CLI-computed dollar cost
+    (`total_cost_usd`) — both populated whenever the CLI returned a result object, even on error."""
     if shutil.which("claude") is None:
-        return None
+        return {"text": None, "usage": None, "cost_usd": None, "error": "`claude` CLI not found"}
     cmd = ["claude", "-p", prompt, "--output-format", "json", "--model", model]
     if effort:
         cmd += ["--effort", effort]
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
         if proc.returncode != 0:
-            return None
+            return {"text": None, "usage": None, "cost_usd": None,
+                    "error": f"claude CLI exited {proc.returncode}"}
         result = _result_obj(json.loads(proc.stdout))
-    except (subprocess.SubprocessError, ValueError, RuntimeError):
-        return None
-    return None if result.get("is_error") else (result.get("result") or "").strip()
+    except (subprocess.SubprocessError, ValueError, RuntimeError) as e:
+        return {"text": None, "usage": None, "cost_usd": None, "error": str(e)}
+    raw_usage = result.get("usage") or {}
+    usage = {k: raw_usage[k] for k in _USAGE_KEYS if k in raw_usage} or None
+    cost = result.get("total_cost_usd")
+    text = None if result.get("is_error") else (result.get("result") or "").strip()
+    return {"text": text, "usage": usage, "cost_usd": cost,
+            "error": "error result from claude CLI" if result.get("is_error") else None}
+
+
+def ask_claude(prompt: str, model: str = "sonnet", timeout: int = 60,
+               effort: str | None = None) -> str | None:
+    """One-shot Claude CLI call returning the raw answer text (no REASONING/ANSWER split).
+    `effort` is the reasoning level (low/medium/high/xhigh/max; None → the CLI default). Returns
+    None if the `claude` CLI is absent or the call errors — callers treat that as 'unavailable'.
+    Use `ask_claude_usage` when you also need token counts / dollar cost."""
+    return ask_claude_usage(prompt, model=model, timeout=timeout, effort=effort)["text"]
 
 
 def _split_reasoning_answer(text: str) -> tuple[str, str]:

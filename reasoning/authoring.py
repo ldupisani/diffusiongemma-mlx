@@ -82,19 +82,27 @@ def author_domain(description: str, *, model: str = "haiku", effort: str | None 
     Claude model and reasoning level (effort: low/medium/high/xhigh/max, None → CLI default).
     Default `model` is haiku — it authored a correct draft of a fresh test domain (modulo a
     one-line example-rounding fix the test suite flags), at ~5x lower cost than opus; bump to
-    `model="opus"` for harder or under-specified domains. `asker(prompt)->str|None` is injectable
-    for testing."""
+    `model="opus"` for harder or under-specified domains. The result also carries `usage` (token
+    counts) and `cost_usd` (the CLI-computed dollar cost), populated on the real model path (None
+    when a stub `asker` is injected). `asker(prompt)->str|None` is injectable for testing."""
+    meter = {}
     if asker is None:
         from . import teachers
-        asker = lambda p: teachers.ask_claude(p, model=model, timeout=timeout, effort=effort)  # noqa: E731
+
+        def asker(p):
+            r = teachers.ask_claude_usage(p, model=model, timeout=timeout, effort=effort)
+            meter.update(usage=r["usage"], cost_usd=r["cost_usd"])
+            return r["text"]
     raw = asker(build_prompt(description, context))
+    base = {"usage": meter.get("usage"), "cost_usd": meter.get("cost_usd")}
     if not raw:
-        return {"files": {}, "raw": None,
+        return {"files": {}, "raw": None, **base,
                 "error": "no response from the model (is the `claude` CLI installed and authed?)"}
     files = parse_files(raw)
     if not files:
-        return {"files": {}, "raw": raw, "error": "could not parse any file blocks from the response"}
-    return {"files": files, "raw": raw, "error": None}
+        return {"files": {}, "raw": raw, **base,
+                "error": "could not parse any file blocks from the response"}
+    return {"files": files, "raw": raw, "error": None, **base}
 
 
 def write_files(files: dict, *, dry_run: bool = False) -> tuple[list, list]:

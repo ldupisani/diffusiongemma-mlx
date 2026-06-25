@@ -28,6 +28,10 @@ class TestAuthoring(unittest.TestCase):
         res = A.author_domain("w", asker=lambda p: stub, context="ctx")
         self.assertIsNone(res["error"])
         self.assertIn("reasoning/skills/w.py", res["files"])
+        # usage/cost keys are always present (None on the stub path — no real model call)
+        self.assertIn("usage", res)
+        self.assertIn("cost_usd", res)
+        self.assertIsNone(res["cost_usd"])
 
     def test_errors_on_empty_or_unparseable(self):
         self.assertIsNotNone(A.author_domain("w", asker=lambda p: None, context="c")["error"])

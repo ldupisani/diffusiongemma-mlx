@@ -245,6 +245,15 @@ def cmd_author_domain(args):
         sys.exit('describe the domain, e.g. author-domain "Thermodynamics: entropy, enthalpy, …"')
     print(f"[authoring '{description[:60]}…' via {args.model} — this calls the model and may take a minute]\n")
     res = authoring.author_domain(description, model=args.model, effort=args.effort)
+    u, cost = res.get("usage"), res.get("cost_usd")
+    if u or cost is not None:
+        # input_tokens is only the *uncached* remainder; the bulk of the prompt (playbook +
+        # exemplar) is billed as cache, so sum all three for a true prompt-size figure.
+        prompt_toks = sum(u.get(k, 0) for k in ("input_tokens", "cache_creation_input_tokens",
+                                                "cache_read_input_tokens")) if u else 0
+        toks = f"{prompt_toks} in / {u.get('output_tokens', 0)} out tokens" if u else ""
+        dollars = f"${cost:.4f}" if cost is not None else "cost n/a"
+        print(f"[{args.model}: {dollars}{(' — ' + toks) if toks else ''}]\n")
     if res["error"]:
         sys.exit(res["error"])
     files = res["files"]
