@@ -141,6 +141,28 @@ def test_solve_reports_unused_givens():
     assert out["unused_givens"] == [99.0]
 
 
+# --- self-consistency -----------------------------------------------------------------
+
+def test_solve_consistent_majority_vote():
+    # 3 of 5 samples say 10, 2 say 12 → majority 10, agreement 3/5, k model calls
+    progs = ["answer = 10", "answer = 10", "answer = 12", "answer = 10", "answer = 12"]
+    out = translate.solve_consistent("q", k=5, sampler=lambda _p, i: progs[i])
+    assert out["answer"] == 10.0
+    assert out["agreement"] == 0.6
+    assert out["model_calls"] == 5
+    assert out["votes"] == {10.0: 3, 12.0: 2}
+
+
+def test_solve_consistent_unanimous_is_high_agreement():
+    out = translate.solve_consistent("q", k=4, sampler=lambda _p, _i: "answer = 7")
+    assert out["answer"] == 7.0 and out["agreement"] == 1.0
+
+
+def test_solve_consistent_all_unparseable():
+    out = translate.solve_consistent("q", k=3, sampler=lambda _p, _i: "not a program")
+    assert out["answer"] is None and out["agreement"] == 0.0
+
+
 def test_default_asker_backends():
     # both known backends build a callable without making a call; unknown raises
     assert callable(translate._default_asker("claude", model="haiku", timeout=5, max_tokens=64))

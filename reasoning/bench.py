@@ -317,6 +317,48 @@ def run_translate(slice: str = "dev", limit: int | None = 25, *, asker=None,
                            answered_wrong=answered_wrong)
 
 
+def run_consistency(slice: str = "dev", limit: int | None = 25, *, k: int = 5,
+                    threshold: float = 1.0, sampler=None, backend: str = "sidecar",
+                    model: str = "haiku") -> TranslateReport:
+    """Self-consistency translator: draw K programs per question, majority-vote (translate
+    .solve_consistent), score the vote vs gold. The confidence flag is `agreement < threshold`
+    (default 1.0 ⇒ flag any non-unanimous answer); reports its recall / false-alarm vs gold,
+    exactly like the unused-given check. Costs K model calls per question."""
+    from . import translate
+    if slice not in _SLICE_HANDLE:
+        raise ValueError(f"slice must be one of {list(_SLICE_HANDLE)}")
+    rows = _rows(_SLICE_HANDLE[slice], limit)
+
+    buckets: Counter = Counter()
+    misses: list = []
+    solved = flag_caught = flag_falsealarm = answered_wrong = 0
+    for question, answer in rows:
+        gold = gold_answer(answer)
+        out = translate.solve_consistent(question, k=k, sampler=sampler, backend=backend,
+                                         model=model)
+        ans = out["answer"]
+        flagged = out["agreement"] < threshold        # not enough of the K draws agreed
+        correct = ans is not None and is_correct(str(ans), gold)
+        if correct:
+            solved += 1
+            buckets["solved"] += 1
+            if flagged:
+                flag_falsealarm += 1
+        elif ans is None:
+            buckets["no_answer"] += 1                 # all K draws failed to produce a program
+        else:
+            buckets["wrong_value"] += 1
+            answered_wrong += 1
+            if flagged:
+                flag_caught += 1
+            if slice == "dev" and len(misses) < 25:
+                misses.append((question, gold, out))
+
+    return TranslateReport(slice=slice, total=len(rows), solved_1call=solved, buckets=buckets,
+                           misses=misses, flag_caught=flag_caught, flag_falsealarm=flag_falsealarm,
+                           answered_wrong=answered_wrong)
+
+
 def run(slice: str = "test", limit: int | None = None, *, keep_misses: int = 40) -> Report:
     """Route every question in the slice code-only and score it against the gold.
 

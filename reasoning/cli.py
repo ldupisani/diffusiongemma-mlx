@@ -153,22 +153,30 @@ def cmd_eval_all(args):
 def cmd_bench(args):
     from . import bench
 
-    if args.translate:
+    if args.translate or args.consistency:
         limit = args.limit if args.limit is not None else 25
         who = "local MLX sidecar" if args.backend == "sidecar" else f"claude/{args.model}"
-        print(f"GSM8K [{args.slice}] — hybrid LLM-as-translator via {who} (1 model call: "
-              f"prose→program, executed deterministically)\n")
-        rep = bench.run_translate(slice=args.slice, limit=limit, model=args.model,
-                                  backend=args.backend)
-        print(f"solved @1call:  {rep.solved_1call}/{rep.total}  ({rep.accuracy:.1%})   ← headline")
+        if args.consistency:
+            k = args.consistency
+            print(f"GSM8K [{args.slice}] — self-consistency translator via {who} "
+                  f"({k} draws/question, majority vote)\n")
+            rep = bench.run_consistency(slice=args.slice, limit=limit, k=k, backend=args.backend,
+                                        model=args.model, threshold=args.agree_threshold)
+            head, signal = f"solved @{k}call (majority vote)", f"agreement < {args.agree_threshold:g} flag"
+        else:
+            print(f"GSM8K [{args.slice}] — hybrid LLM-as-translator via {who} (1 model call: "
+                  f"prose→program, executed deterministically)\n")
+            rep = bench.run_translate(slice=args.slice, limit=limit, model=args.model,
+                                      backend=args.backend)
+            head, signal = "solved @1call", "unused-given flag"
+        print(f"{head}:  {rep.solved_1call}/{rep.total}  ({rep.accuracy:.1%})   ← headline")
         print("\noutcome buckets:")
-        for b in ("solved", "wrong_value", "program_error", "no_response"):
+        for b in ("solved", "wrong_value", "program_error", "no_answer", "no_response"):
             n = rep.buckets.get(b, 0)
             if n:
                 print(f"  {b:14} {n:>4}  ({n / rep.total:.1%})")
-        # the unused-given confidence signal vs gold-derived correctness
         if rep.answered_wrong or rep.solved_1call:
-            print("\nunused-given flag (label-free confidence signal) vs gold:")
+            print(f"\n{signal} (label-free confidence signal) vs gold:")
             print(f"  caught     {rep.flag_caught}/{rep.answered_wrong} wrong answers "
                   f"(recall {rep.flag_recall:.0%})")
             print(f"  false alarm {rep.flag_falsealarm}/{rep.solved_1call} correct answers "
@@ -475,6 +483,10 @@ def main():
     bn.add_argument("--model", default="haiku", help="translator model (default: haiku)")
     bn.add_argument("--backend", choices=["claude", "sidecar"], default="claude",
                     help="translator backend: claude CLI (default) or the local MLX sidecar")
+    bn.add_argument("--consistency", type=int, default=0, metavar="K",
+                    help="self-consistency: draw K programs/question and majority-vote (implies translate)")
+    bn.add_argument("--agree-threshold", dest="agree_threshold", type=float, default=1.0,
+                    help="flag low confidence when sample agreement < this (default 1.0 = non-unanimous)")
     bn.set_defaults(fn=cmd_bench)
     sub.add_parser("list").set_defaults(fn=cmd_list)
     da = sub.add_parser("data", help="manage datasets in $DIFG_DATA_DIR")

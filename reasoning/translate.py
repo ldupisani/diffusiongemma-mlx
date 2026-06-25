@@ -15,6 +15,7 @@ from __future__ import annotations
 import ast
 import operator
 import re
+from collections import Counter
 
 # --- the deterministic executor (0 model calls) ---------------------------------------
 
@@ -213,6 +214,56 @@ def unused_givens(question: str, program: str) -> list:
     2 for halving) are expected and never flagged. A non-empty result ⇒ low confidence."""
     p = program_numbers(program)
     return sorted(v for v in question_numbers(question) if v not in p)
+
+
+# --- self-consistency (a semantic confidence signal) ----------------------------------
+
+def _sampler(backend: str, *, model: str, timeout: int, max_tokens: int, temperature: float):
+    """A diverse program sampler `(prompt, i) -> str|None`. The sidecar varies the seed per draw
+    (greedy would give identical samples); claude relies on its own sampling per call."""
+    if backend == "sidecar":
+        from . import engine
+
+        def sample(prompt, i):
+            try:
+                return engine.one_shot(prompt, max_tokens=max_tokens,
+                                       temperature=temperature, seed=i).text
+            except Exception:
+                return None
+        return sample
+    if backend == "claude":
+        from . import teachers
+        return lambda prompt, _i: teachers.ask_claude(prompt, model=model, timeout=timeout)
+    raise ValueError(f"unknown translator backend {backend!r} (use 'claude' or 'sidecar')")
+
+
+def solve_consistent(question: str, *, k: int = 5, sampler=None, backend: str = "sidecar",
+                     model: str = "haiku", timeout: int = 60, max_tokens: int = 512,
+                     temperature: float = 0.7) -> dict:
+    """Self-consistency: draw K programs, execute each, and MAJORITY-VOTE the answer. Returns
+    {answer, program, model_calls, agreement, votes, k}. `agreement` ∈ [0,1] is the fraction of
+    the K draws that produced the winning value — a label-free confidence signal (low agreement ⇒
+    the model is unsure ⇒ the answer may be wrong). The majority vote also tends to beat a single
+    greedy draw. `sampler(prompt, i)->str|None` is injectable for testing."""
+    if sampler is None:
+        sampler = _sampler(backend, model=model, timeout=timeout, max_tokens=max_tokens,
+                           temperature=temperature)
+    prompt = build_prompt(question)
+    samples = []  # (value|None, program)
+    for i in range(k):
+        program = parse_program(sampler(prompt, i) or "")
+        try:
+            samples.append((round(float(run_program(program)), 6), program))
+        except (ProgramError, ZeroDivisionError, ArithmeticError, ValueError):
+            samples.append((None, program))
+    counts = Counter(v for v, _ in samples if v is not None)
+    if not counts:
+        return {"answer": None, "program": samples[0][1] if samples else None,
+                "model_calls": k, "agreement": 0.0, "votes": {}, "k": k}
+    top_val, top_n = counts.most_common(1)[0]
+    program = next(p for v, p in samples if v == top_val)
+    return {"answer": top_val, "program": program, "model_calls": k,
+            "agreement": top_n / k, "votes": dict(counts), "k": k}
 
 
 def solve(question: str, *, asker=None, model: str = "haiku", backend: str = "claude",
