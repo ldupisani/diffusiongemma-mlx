@@ -285,6 +285,9 @@ to `geometry`, `trigonometry`, `unit_conversion`, `compound_interest`, `base_con
   `_before(unit)` companion and try both directions; anchor on the labelled occurrence with a negative
   lookahead (`capacity(?!\s*utiliz)`). `guard_residue` turns these into a clean decline rather than a
   wrong answer — which is why the symptom is "routes correctly but run() declines", not a bad number.
+  **Use `num_near(query, "<label>", …)` from `reasoning.bind._common`** — it returns the number
+  *nearest* an anchor on either side (handles "demand 800", "480 minutes", and "0.000001 kg" alike),
+  so new binds shouldn't hand-roll this; the `author-domain` prompt now steers the model to it.
 
 ---
 

@@ -32,8 +32,15 @@ OUTPUT FORMAT — emit ONLY blocks delimited EXACTLY like this (no surrounding m
 Produce these blocks in order:
  1. reasoning/skills/<name>.py     — pure @register'd skills, each with an EXACT example table
                                       (compute every value; never guess a float).
- 2. reasoning/bind/<name>.py        — bind_<name> with a CONSERVATIVE gate; for fixed-arity numeric
-                                      ops, wrap with guard_residue / decline on unexplained residue (§3d).
+ 2. reasoning/bind/<name>.py        — bind_<name> with a CONSERVATIVE gate. Pull each numeric
+                                      argument with num_near(query, "<label>", "<synonym>", …) from
+                                      reasoning.bind._common (already wildcard-imported): it returns
+                                      the number NEAREST an anchor on EITHER side, so it reads both
+                                      "demand 800" and "480 minutes" / "0.000001 kg" correctly — do
+                                      NOT hand-roll forward-only regex (the logistics exemplar predates
+                                      this helper; prefer num_near). List the most specific anchor
+                                      first. For fixed-arity numeric ops, wrap with guard_residue /
+                                      decline on unexplained residue (§3d).
  3. reasoning/store/orchestrators/<name>.py — META / precondition / run; choose bind_gated per §2.
  4. <<<FILE __wiring__>>>           — the exact line to add to reasoning/skills/__init__.py, the line
                                       for reasoning/bind/__init__.py, and 3–6 CASES tuples

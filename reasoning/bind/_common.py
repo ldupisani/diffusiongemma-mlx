@@ -8,7 +8,48 @@ from reasoning.bind.entities import _NUMBER  # noqa: F401  (single source; re-ex
 from reasoning.engine import one_shot  # noqa: F401  (re-exported: finance default arg)
 
 __all__ = ["_parse_list", "_parse_int", "_try_json", "_NUMBER", "one_shot",
-           "query_numbers", "has_unconsumed_numbers", "guard_residue"]
+           "query_numbers", "has_unconsumed_numbers", "guard_residue", "num_near"]
+
+# --- bidirectional keyword-anchored number extraction --------------------------------
+# Authored binds repeatedly hand-rolled FORWARD-only extraction ("the number after the keyword")
+# and then mis-read natural phrasings where the value comes BEFORE the anchor: "480 minutes",
+# "60 customer units", a mass in "0.000001 kg" (forward grabbed the speed that followed). num_near
+# checks both sides, nearest-first, without jumping across another number.
+_NEAR_NUM = r"(-?\d+(?:\.\d+)?)"
+
+
+def num_near(text: str, *anchors: str, window: int = 24):
+    """The number NEAREST to any of the given anchor words/phrases, looking BOTH directions — after
+    the anchor ('demand 800', 'capacity is 1000', 'n1=1.5') and before it ('480 minutes',
+    '60 customer units', a mass in '0.000001 kg'). For each anchor (tried in order), returns the
+    closest number on either side whose gap to the anchor carries no other digit and is <= `window`
+    chars — so it never skips across an intervening value, and a unit that follows its number
+    ('480 minutes') reads correctly without the caller choosing a direction. Returns a float or None.
+
+    Anchors are regex fragments (plain words are fine). For synonyms of one value pass them together
+    (`num_near(q, "order cost", "setup cost", "ordering cost")`); the first anchor that finds a
+    number wins. When a bare word also appears inside a longer phrase, nearest-wins usually still
+    picks correctly ('capacity is 1000' beats the distant demand value), but listing the specific
+    form first (`"capacity is", "capacity"`) is the robust choice."""
+    nums = [(m.start(), m.end(), float(m.group(1))) for m in re.finditer(_NEAR_NUM, text)]
+    if not nums:
+        return None
+    for a in anchors:
+        best = None
+        for am in re.finditer(a, text, re.IGNORECASE):
+            for ns, ne, val in nums:
+                if ns >= am.end():                       # number after the anchor
+                    gap, dist = text[am.end():ns], ns - am.end()
+                elif ne <= am.start():                   # number before the anchor
+                    gap, dist = text[ne:am.start()], am.start() - ne
+                else:
+                    continue                             # number overlaps the anchor
+                if dist <= window and not any(c.isdigit() for c in gap):
+                    if best is None or dist < best[0]:
+                        best = (dist, val)
+        if best is not None:
+            return best[1]
+    return None
 
 # --- red-flag guard: a query value the skill didn't consume ----------------------------
 # Partial matches are the top source of confident-wrong answers: a bind extracts what it knows

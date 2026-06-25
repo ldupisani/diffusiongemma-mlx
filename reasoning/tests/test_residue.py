@@ -5,9 +5,32 @@ import importlib
 import unittest
 
 from reasoning import router
-from reasoning.bind._common import has_unconsumed_numbers, query_numbers
+from reasoning.bind._common import has_unconsumed_numbers, num_near, query_numbers
 
 duckdb = importlib.util.find_spec("duckdb")
+
+
+class TestNumNear(unittest.TestCase):
+    """Bidirectional keyword-anchored extraction — the cases that previously needed hand fixes."""
+
+    def test_number_after_anchor(self):
+        self.assertEqual(num_near("demand is 800 and capacity", "demand"), 800.0)
+        self.assertEqual(num_near("order cost 50, holding cost 5", "holding cost", "carrying cost"), 5.0)
+        self.assertEqual(num_near("n1=1.5, angle=30", "n1"), 1.5)
+
+    def test_number_before_anchor(self):
+        self.assertEqual(num_near("0.000001 kg at 0.6c", "kg", "mass"), 0.000001)       # relativity mass
+        self.assertEqual(num_near("480 minutes available", "minute", "available"), 480.0)  # takt time
+        self.assertEqual(num_near("a 3-qubit system", "qubit"), 3.0)
+
+    def test_nearest_wins_when_anchor_repeats(self):
+        q = "capacity utilization if demand is 800 and capacity is 1000"
+        self.assertEqual(num_near(q, "capacity"), 1000.0)    # not the distant demand value
+        self.assertEqual(num_near(q, "demand"), 800.0)
+
+    def test_no_match_returns_none(self):
+        self.assertIsNone(num_near("no numbers here", "demand"))
+        self.assertIsNone(num_near("demand is 800", "capacity"))   # anchor absent
 
 
 def _answer(q):
