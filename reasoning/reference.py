@@ -152,8 +152,9 @@ def population_detail(place: str, year: int | None = None) -> dict | None:
         if v is not None:
             return {"value": v, "year": int(year), "year_applied": True}
         cv = city_population(place)
-        if cv is not None:
-            return {"value": cv, "year": None, "year_applied": False}
+        if cv is not None:                  # have the place, not that year → fall to latest
+            latest = _one("SELECT max(year) FROM population WHERE place=?", (place,))
+            return {"value": cv, "year": latest, "year_applied": False}
         return None
     v = country_population(place, None)
     if v is not None:

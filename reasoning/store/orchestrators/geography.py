@@ -34,8 +34,11 @@ def _lookup(op, place, year):
         det = reference.population_detail(place, year)
         if not det:
             return None, ""
-        note = (" (city population; the reference has no year-specific data for cities)"
-                if year is not None and not det["year_applied"] else "")
+        note = ""
+        if year is not None and not det["year_applied"]:
+            note = (f" (no {year} figure in the reference; this is the {det['year']} figure)"
+                    if det["year"] else
+                    f" (the reference has no year-specific population for '{place}')")
         return str(det["value"]), note
     if op == "coordinates":
         c = reference.coordinates(place)

@@ -72,16 +72,18 @@ class TestReference(unittest.TestCase):
         def ans(q):
             return router.recognize(q).orchestrator.run(q).answer
 
-        # city + a requested year → value flagged as not year-specific
-        london = ans("What is the population of London in 2023?")
-        self.assertIn("8900000", london)
-        self.assertIn("city population", london)
-        # country with an exact seed year, and city with no year → plain, no caveat
+        # city + a SEED year → honored exactly, no caveat
+        self.assertEqual(ans("What is the population of London in 2010?"), "8000000")
+        # city + a NON-seed year → flagged with the year actually shown
+        london23 = ans("What is the population of London in 2023?")
+        self.assertIn("8900000", london23)
+        self.assertIn("no 2023 figure", london23)
+        # country exact seed year, and city with no year (latest) → plain, no caveat
         self.assertEqual(ans("What is the population of France in 2020?"), "67000000")
         self.assertEqual(ans("What is the population of Tokyo?"), "13960000")
         # provenance flags
+        self.assertTrue(self.ref.population_detail("London", 2010)["year_applied"])
         self.assertFalse(self.ref.population_detail("London", 2023)["year_applied"])
-        self.assertTrue(self.ref.population_detail("France", 2020)["year_applied"])
         self.assertIsNone(self.ref.population_detail("France", 1995))  # year absent → no fabrication
 
     def test_user_dataset_shadows_reference(self):
