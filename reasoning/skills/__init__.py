@@ -14,7 +14,8 @@ from . import (  # noqa: E402,F401
     funcanalysis, game, genetics, geo, geometry,
     group_theory, health, hypercomplex, hyperreal, introspect, logic, logistics, materials, ml,
     molecular, ndim,
-    number_theory, numerical, optics, optimize, ordinals, padic, pchem, physics, probability,
+    number_theory, numerical, optics, optimize, ordinals, padic, pchem, photometry, physics,
+    probability,
     quantum, quantum_information, ratio, set_theory, sets, special_relativity, stats, supply_chain,
     surreal, tensor, text, thermo, topology, trig, units,
 )

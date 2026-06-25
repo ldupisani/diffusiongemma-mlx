@@ -617,6 +617,15 @@ CASES = [
     ("What is the 3rd harmonic frequency of a string with wave speed 343 m/s and length 0.5 m?", "1029", "acoustics"),
     # reverse guard: must not steal genetics' "allele frequency".
     ("What is the allele frequency of 35 out of 50 alleles?", "0.7", "genetics"),
+    # photometry (authored via Haiku --verify; the two-illuminance ambiguity routed correctly on
+    # its own — two ops needed a hand fix: a "lumen" vs "lumens" anchor and an "at <d>" new-distance).
+    ("What is the illuminance from 800 lumens over 5 square meters?", "160", "photometry"),
+    ("What is the illuminance from a 100 candela source at 2 meters away?", "25", "photometry"),
+    ("What is the luminous efficacy of an 800 lumen lamp using 10 watts?", "80 lm/W", "photometry"),
+    ("What is the luminous intensity for 1000 lumens distributed over 5 steradians?", "200 cd", "photometry"),
+    ("The illuminance is 100 lux at an original distance of 2 meters. What is it at 5 meters?", "16 lux", "photometry"),
+    # reverse guard: efficacy's "watts" must not steal physics power.
+    ("What is the power if 100 J of work is done in 5 seconds?", "20 W", "physics"),
     # geography population change between two years (delta + percent); the single-year lookup must
     # NOT grab these (it would silently answer the first year only).
     ("How much did the population of London grow from 2010 to 2020?", "+900000 (+11.25%)", "geography"),
