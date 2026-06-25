@@ -471,6 +471,50 @@ collision discipline as §5.
 
 ---
 
+## 10. The frontier — when 0 calls isn't reachable (the LLM-as-translator)
+
+Some queries are **parse-limited, not depth-limited**: a GSM8K-style word problem can't be coded
+because turning its prose into a structured operation needs language understanding, not arithmetic
+(the bench §3g diagnostic showed even *single-step* problems go unrouted). The escape hatch keeps the
+ethos intact — `reasoning/translate.py` uses the model as a **translator, not a solver**: one call
+turns prose into a tiny arithmetic *program*, which a safe AST evaluator (`run_program` — whitelist,
+never eval/exec) EXECUTES. The model never does the math; the engine's re-execution is what's trusted,
+so the **arithmetic is correct-by-construction** (the *translation* can still be silently wrong). 1
+model call, 0 arithmetic calls. Reached as an **opt-in** `ask(…, translate=True)` fallback so the
+service stays 0-call by default. With Haiku it scores ~98% on held-out GSM8K; with the local 3B, ~54%.
+
+The lasting value here is **methodology** — these transfer to authoring, dataset work, anything you
+measure:
+
+- **Ablate components in ISOLATION, never just "all vs none."** Deterministic query-preprocessing
+  (normalize / givens-scaffold / question-isolation) measured as a bundle looked plausible; the 2³
+  ablation (`bench --ablation`, greedy so the prompt is the only variable) showed the all-three bundle
+  was **−3 vs baseline** — two of the three transforms were quietly negative and hid behind the third.
+  A net-negative component is invisible unless each is toggled alone.
+- **Confirm on a HELD-OUT sample before believing a win — a coherent "mechanism" is the most dangerous
+  overfit.** Gated structured-analysis (`style="auto"`) looked great on dev: +2 *and* a story (analyze
+  wins on relationship questions, loses elsewhere, the gate exploits the split). The held-out test/150
+  run kept the +2 (within noise) but **dissolved the mechanism** — the "loses elsewhere" gap was
+  sampling noise that didn't replicate. A result that comes with a satisfying explanation feels
+  confirmed; it isn't, until a sample you didn't look at agrees.
+- **Chain-of-thought can HURT a weak model — match the technique to capability.** The `analyze` style
+  (facts→relations→answer-type→program) *fixed* the traced relationship error (a coreference miscount)
+  but was **net-negative overall on the 3B**: more reasoning steps give a weak model more places to err,
+  and the errors propagate into the program. Gating an expensive-but-conditional technique to only the
+  inputs where it pays (here ≈ neutral) is the salvage move, not applying it everywhere.
+- **For a small model, parsing robustness beats prompt cleverness.** The single biggest lift came not
+  from any prompt idea but from tolerating what the 3B actually emits — augmented assignments (`x += e`)
+  and a malformed `<program` tag — which cut `program_error` from **84% → 6%** (12% → 54% solved). The
+  model's arithmetic was fine; we were discarding correct programs.
+- **You can estimate confidence without the gold, to a measured degree.** Two complementary label-free
+  signals: **unused-given** (a question number absent from the program — syntactic, free) and
+  **self-consistency** (K-draw majority-vote agreement — semantic, K× calls; also lifts accuracy).
+  They catch *different* errors, so OR-combining reaches higher recall than either; report each
+  signal's recall/false-alarm vs gold rather than asserting it works (`bench --translate
+  --consistency K`).
+
+---
+
 ## TL;DR checklist
 
 - [ ] Computable, not conceptual? Not already covered?
