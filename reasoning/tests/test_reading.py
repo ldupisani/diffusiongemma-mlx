@@ -531,5 +531,31 @@ class TestIncrement14CLI(unittest.TestCase):
         self.assertIn("usage", reading.run_cli([]).lower())
 
 
+class TestIncrement15ContextFromStatements(unittest.TestCase):
+    """#15 — build the context by PARSING statements, not by hand. "There are three red apples"
+    becomes three (apple,{red}) instances; answer() then queries the learned context. The reader
+    that answers questions is the same one that ingests facts."""
+
+    def test_count_statement_expands_to_instances(self):
+        ctx = reading.instances("There are three red apples")
+        self.assertEqual(len(ctx), 3)
+        self.assertEqual(ctx[0], ("apple", frozenset({"red"})))
+
+    def test_answer_over_learned_context(self):
+        ctx = (reading.instances("There are three red apples")
+               + reading.instances("There are two green apples"))
+        self.assertEqual(reading.answer("How many red apples?", ctx), 3)
+        self.assertEqual(reading.answer("How many green apples?", ctx), 2)
+        self.assertEqual(reading.answer("How many apples?", ctx), 5)   # 3 + 2 via the subset lattice
+
+    def test_unparseable_statement_learns_nothing(self):
+        # an unknown collection → we learn nothing rather than guess
+        self.assertEqual(reading.instances("There are three bananas"), [])
+
+    def test_cli_about_accepts_count_statements(self):
+        out = reading.run_cli(["How many red apples?", "--about", "There are three red apples"])
+        self.assertEqual(out.strip(), "3")
+
+
 if __name__ == "__main__":
     unittest.main()

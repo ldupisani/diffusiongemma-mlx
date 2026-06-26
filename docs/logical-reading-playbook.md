@@ -111,7 +111,11 @@ nothing asserted of it"`); empty ⇒ understood. This IS the tool's contract in 
 13. **`answer(question, context)`** — a question is a statement whose interrogative obligation we
 fulfil against parsed text. `"How many red apples?"` reads the `(apple,{red})` descriptor and counts
 matching instances via the subset lattice; an unknown word makes it ASK, not guess. The reasoning
-loop closes: same reader, same obligations, now producing an answer. 0 model calls throughout.
+loop closes: same reader, same obligations, now producing an answer. 0 model calls throughout ·
+14. **CLI** — `python -m reasoning.reading "<text>"` (analyze) / `… --about "<phrase>" …` (answer);
+logic in a testable `run_cli` · 15. **`instances(statement)`** — context is now PARSED, not
+hand-fed: `"There are three red apples"` → three `(apple,{red})` instances (a number is a quantifier
+with a VALUE). The reader that answers questions is the same one that ingests facts.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
@@ -127,6 +131,6 @@ the shape now (free); aggregation/counting is *derived later* when a question's 
   `predicate`; refine so object-nouns don't read as false fragments.
 - **More question types** beyond count: yes/no ("did the student pass?"), which/what, comparison.
   Each is another interrogative obligation fulfilled against context.
-- **Build context from full statements**, not hand-made descriptors — parse "There are 3 red apples"
-  / a list of sentences into the instance set `answer()` queries.
+- **Overlapping facts**: count statements are currently assumed disjoint (subset-matching sums
+  them). "3 red apples" + "1 rotten red apple" would double-count — needs an inclusion model.
 - **Aggregation beyond count** (sum, max, "which has the most") over collection descriptors.

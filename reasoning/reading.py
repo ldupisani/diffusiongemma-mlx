@@ -177,7 +177,15 @@ LEXICON: dict[str, list[str]] = {
     "wilted": ["verb"],
     "how": ["interrogative"],   # asks about the quantity word to its right ("how many …")
     "many": ["quantifier"],     # a quantity quantifier — ranges over a collection like any other
+    "there": ["existential"],   # existential "there are …" — introduces instances into the context
+    "are": ["verb"],
+    "is": ["verb"],
+    "one": ["number"], "two": ["number"], "three": ["number"],   # a number is a quantifier with a
+    "four": ["number"], "five": ["number"],                      # VALUE (see NUMBERS)
 }
+
+# Number words → their value, for "there are N <collection>" statements that introduce instances.
+NUMBERS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5}
 
 
 def annotate_senses(reading: Reading) -> Reading:
@@ -220,6 +228,7 @@ ROLE_OBLIGATIONS: dict[str, list[str]] = {
                                 # (Object nouns don't really need this — a later "forego when
                                 # subordinated" refinement; current examples don't hit it.)
     "interrogative": ["queries"],  # asks about the quantity word to its right ("how" → "many")
+    "number": ["collection"],      # a number ranges over the collection it counts ("three apples")
 }
 
 
@@ -483,6 +492,33 @@ def answer(question: str, context: list):
     return sum(1 for inst in context if _matches(query, inst))
 
 
+def instances(statement: str) -> list:
+    """Parse a "there are N <collection>" statement into N copies of the collection's descriptor —
+    the instance set `answer()` queries. The number word ranges over the collection (same
+    `collection` obligation as any quantifier) and carries its value via NUMBERS. Returns [] when no
+    count+collection can be read, so an unparseable statement teaches us nothing rather than a guess.
+    Concatenate over several statements to build a context."""
+    r = analyze(statement)
+    for u in r.units:
+        value = NUMBERS.get(_key(u.surface))
+        if value is None:
+            continue
+        collection = _follow(u, "collection")
+        if collection is not None:
+            return [_descriptor(collection)] * value
+    return []
+
+
+def _as_instances(phrase: str) -> list:
+    """Read a context phrase into instances: a count statement ("There are three red apples") expands
+    via `instances`; a bare collection ("red apple") counts as one instance. Empty if unreadable."""
+    learned = instances(phrase)
+    if learned:
+        return learned
+    d = collection_descriptor(analyze(phrase))
+    return [d] if d is not None else []
+
+
 # --- CLI -------------------------------------------------------------------------------------
 # A thin shell over the engine. `run_cli` returns the text to print (factored out of __main__ so it
 # is testable): with no --about it analyzes a statement and reports understood / what to clarify;
@@ -499,7 +535,7 @@ def run_cli(args: list) -> str:
     text = args[0]
     if "--about" in args:                                  # question mode
         phrases = args[args.index("--about") + 1:]
-        context = [collection_descriptor(analyze(p)) for p in phrases]
+        context = [inst for p in phrases for inst in _as_instances(p)]
         result = answer(text, context)
         if isinstance(result, list):
             return "I can't answer that:\n" + "\n".join("  - " + d.message for d in result)
