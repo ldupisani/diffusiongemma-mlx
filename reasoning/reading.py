@@ -1,0 +1,483 @@
+"""Word-by-word reading scaffolding for model-free logical reasoning. Pure stdlib, 0 model calls.
+
+The substrate every later layer grows on. We read a statement into tracked `Unit`s — one per word
+to start — and keep a full, reversible record of every decision we make about them, so the
+analysis is lossless and any choice can be backtracked or retested when a later word proves it
+wrong. No resolvers, relations, or inference yet: this module only captures words faithfully.
+
+Built piecemeal, test-first (see tests/test_reading.py). Generalizations are allowed to emerge
+from the cases rather than being designed up front, so this file grows one increment at a time.
+"""
+
+from __future__ import annotations
+
+import copy
+from dataclasses import dataclass, field
+from itertools import product
+from typing import Optional
+
+
+@dataclass
+class Word:
+    """An atom of input, exactly as written. Never mutated — it is the ground truth we can always
+    return to, however much we later normalize the unit that wraps it."""
+    surface: str
+    index: int
+
+
+@dataclass
+class Unit:
+    """A unit of meaning. Starts as a single Word; a later increment may wrap several Words into
+    one unit when they cohere. `words` is the source of truth and is never mutated.
+
+    We do not rewrite the word into a canonical form — we keep it exactly as written and *attach
+    what we discover* as `features` (e.g. {"number": "plural", "singular": "student"} says this
+    word is the plural of "student"). Findings only ever accumulate; nothing is overwritten, so
+    the surface plus the features always reconstruct the full picture.
+    """
+    words: list[Word]
+    features: dict = field(default_factory=dict)
+
+    @property
+    def surface(self) -> str:
+        """The original text of this unit, reconstructed from its words — never lossy."""
+        return " ".join(w.surface for w in self.words)
+
+
+@dataclass
+class Obligation:
+    """A demand a word's sense places on the rest of the statement — something it must find to be
+    satisfied (e.g. a quantifier must find the `collection` it ranges over). Unmet until `target`
+    points at the unit that discharges it; until then it is a standing reason the statement is
+    incomplete."""
+    need: str
+    target: object = None  # the Unit that satisfies it, once found (None = unmet)
+
+    @property
+    def met(self) -> bool:
+        return self.target is not None
+
+
+@dataclass
+class Decision:
+    """One recorded choice about the reading, with enough to backtrack or retest it. A decision is
+    a reversible state-diff on a `target` unit: its features went from `before` to `after`. `kind`
+    names the move (annotate | merge | assign-sense | bind | …); `seq` gives stable ordering.
+    Reverse it by restoring `target.features = before`."""
+    seq: int
+    kind: str
+    target: "Unit"
+    before: dict
+    after: dict
+    reason: str
+
+
+@dataclass
+class Reading:
+    """The workspace for analyzing one statement: the units read so far, the decision trail, and
+    the facts discovered. It grows as we read; nothing is discarded."""
+    units: list[Unit] = field(default_factory=list)
+    decisions: list = field(default_factory=list)
+    facts: list = field(default_factory=list)
+
+    def record(self, kind: str, target: Unit, before: str, after: str, reason: str) -> Decision:
+        """Append a Decision to the trail and return it. The single chokepoint for change, so every
+        mutation of a unit leaves a reversible footprint."""
+        d = Decision(seq=len(self.decisions), kind=kind, target=target,
+                     before=before, after=after, reason=reason)
+        self.decisions.append(d)
+        return d
+
+
+def read(text: str) -> Reading:
+    """Read text into a Reading: one Word per whitespace-separated token, each wrapped in its own
+    Unit, in order. No normalization or merging yet — those are later, decision-logged steps."""
+    words = [Word(surface=tok, index=i) for i, tok in enumerate(text.split())]
+    return Reading(units=[Unit(words=[w]) for w in words])
+
+
+# --- annotation: number ---------------------------------------------------------------------
+# We do NOT guess at plurals. A unit is plural iff it appears in this definitive, curated
+# dictionary mapping a known plural to its singular. Irregulars ("children"→"child") cost nothing
+# here — it stores facts, not patterns. Anything not listed is left UNMARKED: we make no claim
+# about its number, so "Socrates" (ends in 's') is never mistaken for a plural. The list grows
+# only by deliberate addition; meeting a real plural that isn't here yet is the roadblock that
+# tells us to extend the dictionary — not to invent a rule.
+PLURALS = {
+    "students": "student",
+    "children": "child",
+    "apples": "apple",
+}
+
+
+_PUNCT = ".,?!;:'\"()"
+
+
+def _key(surface: str) -> str:
+    """The dictionary-lookup key for a surface: lowercased, surrounding punctuation stripped. The
+    Word's surface is kept lossless; only LOOKUPS ignore punctuation, so "apples?" still reads as
+    the noun "apple" without mutating the word."""
+    return surface.lower().strip(_PUNCT)
+
+
+def _singular_of(surface: str) -> Optional[str]:
+    """The known singular of `surface` if it is a recognized plural, else None. Pure lookup."""
+    return PLURALS.get(_key(surface))
+
+
+def annotate_number(reading: Reading) -> Reading:
+    """Attach {number: plural, singular: X} to each unit that is a KNOWN plural (in PLURALS),
+    without changing the word, logging each as a reversible Decision. Unknown words are left
+    unmarked — we never guess about number."""
+    for u in reading.units:
+        singular = _singular_of(u.surface)
+        if singular is None:
+            continue  # not a known plural → make no claim, decide nothing
+        before = dict(u.features)
+        u.features["number"] = "plural"
+        u.features["singular"] = singular
+        reading.record("annotate", target=u, before=before, after=dict(u.features),
+                       reason="known plural")
+    return reading
+
+
+# --- the word-meaning dictionary (lexicon) ---------------------------------------------------
+# The definitive dictionary of word meanings — the same pattern as PLURALS, now keyed to MEANING.
+# A word maps to a LIST of senses, because a word may mean several things (the list has one entry
+# for the unambiguous function words seeded here; an ambiguous word will arrive with more). Known
+# words get their senses attached as facts; unknown words are left blank — we never invent meaning.
+# Grows only by deliberate addition.
+LEXICON: dict[str, list[str]] = {
+    "all": ["quantifier"], # quantifiers tend to refer to a collection.
+    # "each" — distributive determiner/pronoun: every one of two or more taken INDIVIDUALLY
+    # (contrast "all"/"every", which can be collective). Two structural patterns: determiner +
+    # singular count noun ("each student"); or pronoun + partitive "of" ("each of the students").
+    # Takes singular agreement. Only the quantifier sense is needed so far. (M-W / Grammarly)
+    "each": ["quantifier"],
+    "every": ["quantifier"],
+    "some": ["quantifier"],
+    "no": ["quantifier", "boolean"], # As quantifier is analogous to "none"
+    "a": ["article"], # singular, even if it is pointing to a singular collection.
+    "an": ["article"], # singular, even if it is pointing to a singular collection.
+    "the": ["article"], # singular, even if it is pointing to a singular collection.
+    # "of" — preposition, a genitive-type link with several senses: partitive / part-whole
+    # ("each OF the students" — the one we use), possession ("owner of the house"), composition
+    # ("made of wood"), origin ("people of Iceland"). The partitive ties a selector/quantity to
+    # the whole it is drawn from. One sense needed for now. (M-W / Grammarly)
+    "of": ["preposition"],
+    "student": ["noun"],    # open-class content words live here too, tagged by part of speech
+    "teacher": ["noun"],
+    "apple": ["noun"],
+    "passed": ["verb"],
+    "red": ["adjective"],   # adjectives modify a noun, contributing an attribute (a set-restriction)
+    "green": ["adjective"],
+    "rotten": ["adjective"],
+    "big": ["adjective"],
+    "rose": ["noun", "verb"],   # ambiguous: a flower (noun) or the past of "rise" (verb)
+    "wilted": ["verb"],
+    "how": ["interrogative"],   # asks about the quantity word to its right ("how many …")
+    "many": ["quantifier"],     # a quantity quantifier — ranges over a collection like any other
+}
+
+
+def annotate_senses(reading: Reading) -> Reading:
+    """Attach each KNOWN word's possible meanings (`senses`) from the LEXICON, without changing the
+    word, logging each as a reversible Decision. Unknown words are left unmarked."""
+    for u in reading.units:
+        senses = LEXICON.get(_key(u.surface))
+        if senses is None:
+            # fall back to a known singular (set earlier by annotate_number) so a plural inherits
+            # its noun sense without listing every plural form in the lexicon. Requires the number
+            # pass to run first — see analyze().
+            singular = u.features.get("singular")
+            senses = LEXICON.get(singular.lower()) if singular else None
+        if senses is None:
+            continue  # not in the dictionary → attach no meaning
+        before = dict(u.features)
+        u.features["senses"] = list(senses)
+        reading.record("annotate", target=u, before=before, after=dict(u.features),
+                       reason="lexical role")
+    return reading
+
+
+# --- obligations: what a sense must find -----------------------------------------------------
+# An obligation is definitional to a ROLE, not special to one word: a quantifier ranges over a
+# collection BY VIRTUE of being a quantifier, so "each"/"all"/"some"/"no" all inherit the same
+# demand. We attach obligations UNMET; finding what discharges them is a later step. Runs after
+# annotate_senses (it reads the senses it left).
+ROLE_OBLIGATIONS: dict[str, list[str]] = {
+    "quantifier": ["collection"],     # must find the collection it ranges over
+    "preposition": ["anchor", "object"],  # a linking preposition relates an `anchor` (the unit on
+                                          # its left it attaches to) to an `object` (the noun it
+                                          # governs, on its right). e.g. "each [anchor] of [object →
+                                          # students]". (your source/target, direction pinned)
+    "adjective": ["modifies"],  # must find the head noun it modifies — discharged by MERGE (the
+                                # adjective is absorbed into the noun as an attribute), not by binding
+    "article": ["determines"],  # determines the noun it introduces (to its right)
+    "verb": ["subject"],        # predicates a subject (the noun to its left)
+    "noun": ["predicate"],      # wants something asserted of it (a verb to its right); left UNMET
+                                # in a bare noun phrase → that is how a fragment is detected.
+                                # (Object nouns don't really need this — a later "forego when
+                                # subordinated" refinement; current examples don't hit it.)
+    "interrogative": ["queries"],  # asks about the quantity word to its right ("how" → "many")
+}
+
+
+def annotate_obligations(reading: Reading) -> Reading:
+    """For each unit, attach the (unmet) obligations its senses' roles imply, logged reversibly.
+    A unit with no obligation-bearing sense is left untouched."""
+    for u in reading.units:
+        needs = [n for role in u.features.get("senses", []) for n in ROLE_OBLIGATIONS.get(role, [])]
+        if not needs:
+            continue
+        before = dict(u.features)
+        u.features["obligations"] = [Obligation(need) for need in needs]
+        reading.record("oblige", target=u, before=before, after=dict(u.features),
+                       reason="quantifier ranges over a collection")
+    return reading
+
+
+# --- resolution: discharge an obligation ONLY when unambiguous -------------------------------
+# Each obligation has a need; `_find_target` knows how each need is satisfied. We bind ONLY when
+# the answer is unambiguous — zero or several candidates leave it unmet, a reportable deficiency
+# rather than a guess. We replace the Obligation (not mutate it) so the Decision's before/after
+# snapshots stay a clean, reversible diff. Runs after the obligations pass.
+def _find_target(need, u, i, units, nouns, verbs, pos):
+    """The unit that discharges obligation `need` on unit `u` (at position `i`), or None if it is
+    absent or ambiguous. We commit only when exactly one candidate fits in the right direction."""
+    if need == "collection":      # a quantifier ranges over the one available noun
+        cands = [n for n in nouns if n is not u]
+        return cands[0] if len(cands) == 1 else None
+    if need in ("object", "determines"):   # preposition governs / article determines the unique noun to its right
+        right = [n for n in nouns if pos[id(n)] > i]
+        return right[0] if len(right) == 1 else None
+    if need == "anchor":          # a preposition attaches to the unit on its immediate left
+        return units[i - 1] if i > 0 else None   # (PP-attachment can be ambiguous; revisit later)
+    if need == "subject":         # a verb's subject is the unique noun to its left
+        left = [n for n in nouns if pos[id(n)] < i]
+        return left[0] if len(left) == 1 else None
+    if need == "predicate":       # a noun's predicate is the unique verb to its right
+        right = [v for v in verbs if pos[id(v)] > i]
+        return right[0] if len(right) == 1 else None
+    if need == "queries":         # an interrogative asks about the unique quantifier to its right
+        quants = [q for q in units
+                  if "quantifier" in q.features.get("senses", []) and pos[id(q)] > i]
+        return quants[0] if len(quants) == 1 else None
+    return None
+
+
+def resolve(reading: Reading) -> Reading:
+    units = reading.units
+    pos = {id(u): k for k, u in enumerate(units)}
+    nouns = [u for u in units if "noun" in u.features.get("senses", [])]
+    verbs = [u for u in units if "verb" in u.features.get("senses", [])]
+    for i, u in enumerate(units):
+        obs = u.features.get("obligations")
+        if not obs:
+            continue
+        new_obs, bound = [], False
+        for o in obs:
+            target = None if o.met else _find_target(o.need, u, i, units, nouns, verbs, pos)
+            if target is not None:                             # unambiguous → bind
+                new_obs.append(Obligation(o.need, target=target))
+                bound = True
+            else:
+                new_obs.append(o)                              # else leave as-is (unmet)
+        if bound:
+            before = dict(u.features)
+            u.features["obligations"] = new_obs
+            reading.record("bind", target=u, before=before, after=dict(u.features),
+                           reason="obligations resolved")
+    return reading
+
+
+# --- condensation: merge a modifier into its head (structural, reversible) -------------------
+# Some obligations resolve by MERGING, not binding. An adjective + its head noun form ONE richer
+# concept — "red apple" is the restricted set of red apples, not all apples — so we condense them
+# into a single noun unit that keeps the head ("apple") and gains the attribute ("red") as a
+# composable set-restriction (attributes stored as a sorted set: parent/child and counts are then
+# derivable later without a refactor). A quantifier then ranges over the COMPOUND, keeping the
+# restriction. This is the first STRUCTURAL decision: it changes the units LIST (not one unit's
+# features), and records the constituents so the merge stays reversible. Multi-pass stacks modifiers.
+def _merge_adjective(reading: Reading, adj_i: int, noun_i: int) -> None:
+    units = reading.units
+    adj, noun = units[adj_i], units[noun_i]
+    attribute = adj.surface.lower()
+    head = noun.features.get("head") or noun.features.get("singular") or noun.surface.lower()
+    attributes = sorted(set(noun.features.get("attributes", [])) | {attribute})
+    merged = Unit(words=sorted(adj.words + noun.words, key=lambda w: w.index))
+    merged.features = dict(noun.features)            # keep the noun's identity (senses/obligations)
+    merged.features["head"] = head
+    merged.features["attributes"] = attributes
+    lo = min(adj_i, noun_i)
+    units[lo:lo + 2] = [merged]                      # replace the adjacent pair with the compound
+    reading.record("merge", target=merged,
+                   before={"merged_from": [adj, noun], "at": lo},  # structural diff → reversible
+                   after={"head": head, "attributes": attributes},
+                   reason=f"adjective '{attribute}' modifies '{head}'")
+
+
+def condense(reading: Reading) -> bool:
+    """One condensation step: find the first adjective immediately left of a noun and merge them.
+    Returns True if it merged (so `analyze` can loop to a fixed point), False once nothing merges."""
+    for i, u in enumerate(reading.units):
+        if "adjective" in u.features.get("senses", []) and i + 1 < len(reading.units):
+            if "noun" in reading.units[i + 1].features.get("senses", []):
+                _merge_adjective(reading, i, i + 1)
+                return True
+    return False
+
+
+# --- sense disambiguation: let coverage pick the right meaning --------------------------------
+# A word may carry several senses (from the lexicon). We SELECT one per ambiguous word — the
+# assignment whose obligations leave the FEWEST unmet across the whole statement (saturation as the
+# arbiter; no POS tagger). Each ambiguous word is tried in every sense via throwaway deep-copies;
+# the best-covering combination is committed as reversible 'assign-sense' decisions. No-op when
+# nothing is ambiguous, so unambiguous sentences pay nothing.
+def _unmet_count(reading: Reading) -> int:
+    return sum(1 for u in reading.units
+               for o in u.features.get("obligations", []) if not o.met)
+
+
+def _trial_cost(reading: Reading, multi_idx, combo) -> int:
+    """Coverage cost of a sense assignment: run obligations + condense + resolve on a COPY with the
+    chosen senses forced, and count what stays unmet. Lower is better."""
+    trial = copy.deepcopy(reading)
+    for k, sense in zip(multi_idx, combo):
+        trial.units[k].features["senses"] = [sense]
+    annotate_obligations(trial)
+    while condense(trial):
+        pass
+    resolve(trial)
+    return _unmet_count(trial)
+
+
+def disambiguate(reading: Reading) -> Reading:
+    """Pick the best-covering sense for each ambiguous word; commit it as a reversible decision."""
+    multi_idx = [k for k, u in enumerate(reading.units) if len(u.features.get("senses", [])) > 1]
+    if not multi_idx:
+        return reading                       # nothing ambiguous → no work
+    options = [reading.units[k].features["senses"] for k in multi_idx]
+    best = min(product(*options), key=lambda combo: _trial_cost(reading, multi_idx, combo))
+    for k, sense in zip(multi_idx, best):
+        u = reading.units[k]
+        before = dict(u.features)
+        u.features["senses"] = [sense]
+        reading.record("assign-sense", target=u, before=before, after=dict(u.features),
+                       reason=f"sense '{sense}' covers best")
+    return reading
+
+
+# --- the pipeline ----------------------------------------------------------------------------
+def analyze(text: str) -> Reading:
+    """Read and analyze one statement end to end. Passes run in DEPENDENCY ORDER: number before
+    senses (so a plural inherits its noun sense), then DISAMBIGUATE (select one sense per word by
+    coverage), then obligations. Then a MULTI-PASS loop: condense modifiers into their heads until
+    a fixed point, and finally resolve (bind) the remaining obligations. Every step is logged and
+    reversible; 0 model calls."""
+    r = read(text)
+    annotate_number(r)
+    annotate_senses(r)
+    disambiguate(r)          # collapse multi-sense words to the reading that covers best
+    annotate_obligations(r)
+    while condense(r):       # condense "red apple" → one noun unit; loop stacks "big red apple"
+        pass
+    resolve(r)               # then bind quantifier/preposition obligations over the condensed units
+    return r
+
+
+# --- the answer-or-ask boundary --------------------------------------------------------------
+# A reading is complete and understood iff nothing is deficient. Because every word carries an
+# obligation and unknown words stay unmarked, deficiency is FULLY characterized by two things:
+# words we don't recognize, and obligations left unmet (a stranded word surfaces as its own unmet
+# obligation — there is no third failure mode). A non-empty result is exactly what to hand back to
+# the user (human or agent) as a clarifying question, instead of guessing.
+@dataclass
+class Deficiency:
+    kind: str       # "unknown-word" | "unmet-obligation"
+    unit: "Unit"
+    message: str    # specific, human-readable: names the word and what it lacks
+
+
+_NEED_PHRASING = {
+    "collection": "has no collection to range over",
+    "object": "has no object to govern",
+    "anchor": "has nothing to attach to",
+    "subject": "has no subject",
+    "predicate": "has nothing asserted of it (missing a predicate)",
+    "determines": "has no noun to determine",
+    "modifies": "has no noun to modify",
+}
+
+
+def deficiencies(reading: Reading) -> list:
+    """Everything that stops this reading from being a complete, understood statement. Empty ⇒
+    well-formed."""
+    out = []
+    for u in reading.units:
+        if not u.features.get("senses"):
+            out.append(Deficiency("unknown-word", u, f"unrecognized word {u.surface!r}"))
+            continue
+        for o in u.features.get("obligations", []):
+            if not o.met:
+                phrase = _NEED_PHRASING.get(o.need, f"is missing its {o.need}")
+                out.append(Deficiency("unmet-obligation", u, f"{u.surface!r} {phrase}"))
+    return out
+
+
+def is_well_formed(reading: Reading) -> bool:
+    """True iff the statement is complete and fully understood (no deficiencies)."""
+    return not deficiencies(reading)
+
+
+# --- answering: fulfil a question's obligation against parsed text ----------------------------
+# A question parses like any statement; its interrogative ("how") carries a `queries` obligation
+# that binds to the quantity word, which ranges over a collection. ANSWERING = read that
+# collection's descriptor and count the matching instances in the context. It reuses the whole
+# pipeline — same reader, same obligations — and inherits the answer-or-ask contract: an
+# unrecognized word makes the question unanswerable, so we ASK rather than guess. (Questions ask,
+# they don't assert, so we follow the interrogative chain rather than require full saturation.)
+def _descriptor(unit: "Unit"):
+    """A collection descriptor (head, frozenset(attributes)) for a noun unit."""
+    head = unit.features.get("head") or unit.features.get("singular") or _key(unit.surface)
+    return (head, frozenset(unit.features.get("attributes", [])))
+
+
+def collection_descriptor(reading: Reading):
+    """The descriptor of the single noun this reading describes (a parsed instance), or None."""
+    nouns = [u for u in reading.units if "noun" in u.features.get("senses", [])]
+    return _descriptor(nouns[0]) if len(nouns) == 1 else None
+
+
+def _matches(query, instance) -> bool:
+    """A query matches an instance iff same head and the query's attributes are a SUBSET of the
+    instance's — so (apple, {red}) matches a {red, rotten} apple, and (apple, {}) matches any apple.
+    This is the sub-collection lattice: fewer attributes = bigger set."""
+    return query[0] == instance[0] and query[1] <= instance[1]
+
+
+def _follow(unit, need):
+    """The target of `unit`'s met obligation named `need`, or None."""
+    if unit is None:
+        return None
+    for o in unit.features.get("obligations", []):
+        if o.need == need and o.met:
+            return o.target
+    return None
+
+
+def answer(question: str, context: list):
+    """Answer a count question against a context of collection descriptors. Returns an int count, or
+    a list of Deficiency (what to ASK) when the question cannot be answered."""
+    r = analyze(question)
+    unknown = [d for d in deficiencies(r) if d.kind == "unknown-word"]
+    if unknown:
+        return unknown                                   # don't guess about words we don't know
+    interro = next((u for u in r.units if "interrogative" in u.features.get("senses", [])), None)
+    if interro is None:
+        return [Deficiency("not-a-question", interro, "this is not a question I can answer")]
+    collection = _follow(_follow(interro, "queries"), "collection")   # how → many → its collection
+    if collection is None:
+        return [Deficiency("unanswerable", interro, "I couldn't tell what to count")]
+    query = _descriptor(collection)
+    return sum(1 for inst in context if _matches(query, inst))
