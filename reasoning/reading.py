@@ -481,3 +481,38 @@ def answer(question: str, context: list):
         return [Deficiency("unanswerable", interro, "I couldn't tell what to count")]
     query = _descriptor(collection)
     return sum(1 for inst in context if _matches(query, inst))
+
+
+# --- CLI -------------------------------------------------------------------------------------
+# A thin shell over the engine. `run_cli` returns the text to print (factored out of __main__ so it
+# is testable): with no --about it analyzes a statement and reports understood / what to clarify;
+# with --about it treats the text as a question and answers it against the given instances.
+def _obligation_summary(unit: "Unit") -> str:
+    parts = [f"{o.need}->{o.target.surface!r}" if o.met else f"{o.need}->?"
+             for o in unit.features.get("obligations", [])]
+    return ("  " + ", ".join(parts)) if parts else ""
+
+
+def run_cli(args: list) -> str:
+    if not args:
+        return 'usage: python -m reasoning.reading "<text>" [--about "<phrase>" "<phrase>" ...]'
+    text = args[0]
+    if "--about" in args:                                  # question mode
+        phrases = args[args.index("--about") + 1:]
+        context = [collection_descriptor(analyze(p)) for p in phrases]
+        result = answer(text, context)
+        if isinstance(result, list):
+            return "I can't answer that:\n" + "\n".join("  - " + d.message for d in result)
+        return str(result)
+    r = analyze(text)                                      # statement mode
+    lines = [f"  {u.surface!r:14} {u.features.get('senses', '?')}{_obligation_summary(u)}"
+             for u in r.units]
+    defs = deficiencies(r)
+    verdict = ("understood" if not defs
+               else "needs clarification:\n" + "\n".join("  - " + d.message for d in defs))
+    return "\n".join(lines + ["", verdict])
+
+
+if __name__ == "__main__":
+    import sys
+    print(run_cli(sys.argv[1:]))

@@ -504,5 +504,32 @@ class TestIncrement13AnswerAQuestion(unittest.TestCase):
         self.assertEqual([d for d in reading.deficiencies(r) if d.kind == "unknown-word"], [])
 
 
+class TestIncrement14CLI(unittest.TestCase):
+    """#14 — a thin CLI over the engine. `run_cli(argv)` returns the text to print (factored out of
+    __main__ so it is testable): analyze a statement, or answer a question given --about context."""
+
+    def test_statement_is_reported_understood(self):
+        out = reading.run_cli(["The student passed"])
+        self.assertIn("understood", out)
+        self.assertIn("student", out)
+
+    def test_fragment_reports_clarification(self):
+        out = reading.run_cli(["Each of the students"])
+        self.assertIn("needs clarification", out)
+        self.assertIn("predicate", out)
+
+    def test_count_question_with_context(self):
+        out = reading.run_cli(["How many red apples?",
+                               "--about", "red apple", "green apple", "red apple"])
+        self.assertEqual(out.strip(), "2")
+
+    def test_unanswerable_question_asks(self):
+        out = reading.run_cli(["How many bananas?", "--about", "red apple"])
+        self.assertIn("can't answer", out.lower())
+
+    def test_no_args_shows_usage(self):
+        self.assertIn("usage", reading.run_cli([]).lower())
+
+
 if __name__ == "__main__":
     unittest.main()
