@@ -443,7 +443,17 @@ bare conjoined object "2 oranges", quantity-first/no-subject); `_supply_verb` in
 verb after the right's subject and re-analyzes. SIDE-FIX: "how much" is a MONEY question UNLESS a mass
 noun sits IMMEDIATELY after it — "how much did GRANDPARENTS give" had bound `much→collection→grandparents`
 (the subject) and asked "count grandparents"; the adjacency check routes it to money. 261 tests;
-precision 100%. The synthesis is guarded (only fires on a real elided clause), so no confident-wrongs.
+precision 100%. The synthesis is guarded (only fires on a real elided clause), so no confident-wrongs.  ·
+66. **vocabulary push + GUARD 4 (number → fact)** — added ~150 data-driven words in correct roles
+(demonstratives `that`/`this`/`those` → article; temporal `before`/`during`/`while`/`when`;
+comparatives `younger`/`faster`/`cheaper`; common verbs `decided`/`increases`/`weighs`; units
+`feet`/`inches`/`kilograms`; nouns `bank`/`weight`/`average`/…). `fully-read` rose 12→20 (4%→6.7%). But
+8 more readable problems exposed 2 confident-wrongs (Bobby's "increases by 50%" → no fact, answered from
+baseline; Colton's "three friends" → spurious instance-tuples). GUARD 4 closes it, complementing GUARD 3:
+a premise that STATES a number (value/percent/multiplier) but produces NO quantity fact dropped
+information → decline. Precision back to 100%. The safe grind: vocabulary lifts `fully-read` (the
+ceiling), structure determines `coverage`, and the four guards keep the gap always DECLINED. Side-fix
+("how much" adjacency, #65) was needed because the new subject nouns let "much" mis-bind.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

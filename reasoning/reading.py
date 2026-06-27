@@ -126,6 +126,18 @@ PLURALS = {
     "cards": "card", "coins": "coin", "bills": "bill", "goats": "goat", "roommates": "roommate",
     "stickers": "sticker", "marbles": "marble", "cars": "car", "children": "child",
     "parents": "parent", "grandparents": "grandparent",
+    "trips": "trip", "jobs": "job", "homes": "home", "parties": "party", "fields": "field",
+    "banks": "bank", "weights": "weight", "ends": "end", "feet": "foot", "inches": "inch",
+    "kilograms": "kilogram", "grams": "gram", "ounces": "ounce", "meters": "meter",
+    "centimeters": "centimeter", "liters": "liter", "distances": "distance", "speeds": "speed",
+    "ages": "age", "families": "family", "groups": "group", "members": "member", "players": "player",
+    "animals": "animal", "horses": "horse", "cows": "cow", "pigs": "pig", "chickens": "chicken",
+    "baseballs": "baseball", "basketballs": "basketball", "footballs": "football", "tables": "table",
+    "chairs": "chair", "rooms": "room", "buildings": "building", "floors": "floor", "gardens": "garden",
+    "parks": "park", "stories": "story", "chapters": "chapter", "pictures": "picture", "photos": "photo",
+    "presents": "present", "plates": "plate", "bowls": "bowl", "spoons": "spoon", "forks": "fork",
+    "pans": "pan", "pots": "pot", "dolphins": "dolphin", "steps": "step", "levels": "level",
+    "scores": "score", "grades": "grade",
 }
 
 
@@ -306,6 +318,47 @@ LEXICON: dict[str, list[str]] = {
     "sticker": ["noun"], "marble": ["noun"], "child": ["noun"], "person": ["noun"], "car": ["noun"],
     "parent": ["noun"], "grandparent": ["noun"], "friend": ["noun"],
     "washing": ["noun"], "babysitting": ["noun"],
+    # --- vocabulary push (data-driven from reading_bench): function words + units + common verbs/nouns ---
+    "that": ["article"], "this": ["article"], "these": ["article"], "those": ["article"],
+    "another": ["article"], "other": ["article"], "both": ["quantifier"], "any": ["article"],
+    "be": ["verb"],
+    "before": ["preposition"], "during": ["preposition"], "between": ["preposition"],
+    "among": ["preposition"], "within": ["preposition"], "across": ["preposition"],
+    "while": ["conjunction"], "when": ["conjunction"], "because": ["conjunction"], "since": ["conjunction"],
+    "up": ["adverb"], "out": ["adverb"], "off": ["adverb"], "away": ["adverb"], "back": ["adverb"],
+    "equally": ["adverb"], "together": ["adverb"], "instead": ["adverb"], "however": ["adverb"],
+    # comparatives (age / size / speed / price):
+    "younger": ["comparative"], "shorter": ["comparative"], "faster": ["comparative"],
+    "slower": ["comparative"], "heavier": ["comparative"], "lighter": ["comparative"],
+    "cheaper": ["comparative"], "longer": ["comparative"], "smaller": ["comparative"],
+    "larger": ["comparative"], "higher": ["comparative"], "lower": ["comparative"],
+    "wider": ["comparative"], "richer": ["comparative"], "poorer": ["comparative"],
+    # verbs:
+    "decide": ["verb"], "decides": ["verb"], "decided": ["verb"], "increase": ["verb"],
+    "increases": ["verb"], "increased": ["verb"], "decrease": ["verb"], "decreases": ["verb"],
+    "decreased": ["verb"], "finish": ["verb"], "finishes": ["verb"], "finished": ["verb"],
+    "start": ["verb"], "starts": ["verb"], "started": ["verb"], "change": ["verb"], "changes": ["verb"],
+    "changed": ["verb"], "calculate": ["verb"], "calculated": ["verb"], "divide": ["verb"],
+    "divides": ["verb"], "multiply": ["verb"], "combine": ["verb"], "combines": ["verb"],
+    "combined": ["verb"], "travel": ["verb"], "travels": ["verb"], "traveled": ["verb"],
+    "weigh": ["verb"], "weighs": ["verb"], "weighed": ["verb"], "measure": ["verb"],
+    "measures": ["verb"], "measured": ["verb"], "study": ["verb"], "studies": ["verb"],
+    "studied": ["verb"], "watch": ["verb"], "watches": ["verb"], "watched": ["verb"],
+    "play": ["verb"], "plays": ["verb"], "played": ["verb"], "ride": ["verb"], "rides": ["verb"],
+    "rode": ["verb"],
+    # nouns (units of measure + common GSM8K objects):
+    "average": ["noun"], "trip": ["noun"], "water": ["noun"], "job": ["noun"], "home": ["noun"],
+    "party": ["noun"], "field": ["noun"], "bank": ["noun"], "weight": ["noun"], "end": ["noun"],
+    "foot": ["noun"], "inch": ["noun"], "kilogram": ["noun"], "gram": ["noun"], "ounce": ["noun"],
+    "meter": ["noun"], "centimeter": ["noun"], "liter": ["noun"], "distance": ["noun"], "speed": ["noun"],
+    "age": ["noun"], "family": ["noun"], "group": ["noun"], "member": ["noun"], "player": ["noun"],
+    "animal": ["noun"], "fish": ["noun"], "horse": ["noun"], "cow": ["noun"], "pig": ["noun"],
+    "chicken": ["noun"], "baseball": ["noun"], "basketball": ["noun"], "football": ["noun"],
+    "table": ["noun"], "chair": ["noun"], "room": ["noun"], "building": ["noun"], "floor": ["noun"],
+    "garden": ["noun"], "park": ["noun"], "story": ["noun"], "chapter": ["noun"], "picture": ["noun"],
+    "photo": ["noun"], "present": ["noun"], "plate": ["noun"], "bowl": ["noun"], "spoon": ["noun"],
+    "fork": ["noun"], "pan": ["noun"], "pot": ["noun"], "dolphin": ["noun"], "step": ["noun"],
+    "level": ["noun"], "score": ["noun"], "grade": ["noun"],
     # possessive / object pronouns (recognised, and they extend coreference — "his" → its antecedent):
     "him": ["pronoun"], "his": ["pronoun"], "her": ["pronoun"], "them": ["pronoun"],
     "their": ["pronoun"], "its": ["pronoun"],
@@ -815,7 +868,15 @@ VERB_LEMMA = {"passed": "pass", "wilted": "wilt", "rose": "rise", "failed": "fai
     "builds": "build", "built": "build", "fills": "fill", "walks": "walk", "sees": "see", "saw": "see",
     "drinks": "drink", "drank": "drink", "cuts": "cut", "saves": "save", "saved": "save",
     "collects": "collect", "counts": "count", "picks": "pick", "picked": "pick", "wins": "win",
-    "won": "win", "cooks": "cook", "bakes": "bake", "washes": "wash"}
+    "won": "win", "cooks": "cook", "bakes": "bake", "washes": "wash",
+    "decides": "decide", "decided": "decide", "increases": "increase", "increased": "increase",
+    "decreases": "decrease", "decreased": "decrease", "finishes": "finish", "finished": "finish",
+    "starts": "start", "started": "start", "changes": "change", "changed": "change",
+    "calculated": "calculate", "divides": "divide", "divided": "divide", "combines": "combine",
+    "combined": "combine", "travels": "travel", "traveled": "travel", "weighs": "weigh",
+    "weighed": "weigh", "measures": "measure", "measured": "measure", "studies": "study",
+    "studied": "study", "watches": "watch", "watched": "watch", "plays": "play", "played": "play",
+    "rides": "ride", "rode": "ride"}
 
 def _lemma(surface: str) -> str:
     return VERB_LEMMA.get(_key(surface), _key(surface))
@@ -1761,6 +1822,14 @@ def solve(text: str):
         | {f.count for f in context if isinstance(f, Frequency)}
     if given - used:
         return "undetermined"
+    # GUARD 4 — a premise that STATES a number (value/percent/multiplier) but produced no quantity fact
+    # dropped information we can't model ("…increases by 50% every year"; "gave his three friends total"
+    # → spurious instances) → decline rather than answer off the part we did parse.
+    for i, rp in enumerate(readings[:len(premises)]):
+        if any(s in u.features.get("senses", []) for u in rp.units
+               for s in ("value", "percent", "multiplier")) \
+                and not any(isinstance(f, (Quantity, Rate, Frequency)) for f in (facts_of[i] or [])):
+            return "undetermined"
     return answer(question, context)
 
 
