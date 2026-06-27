@@ -245,10 +245,13 @@ class TestIncrement6ResolveCollectionUnambiguous(unittest.TestCase):
         ob = self._unit(r, "Each").features["obligations"][0]
         self.assertFalse(ob.met)
 
-    def test_unmet_when_ambiguous_two_nouns(self):
-        r = self._prep("Each student teacher")  # two nouns → which collection? don't guess
+    def test_quantifier_binds_its_nearest_noun(self):
+        # a quantifier governs its HEAD noun (the nearest to its right); a later noun is not a
+        # competing collection — it plays another role (here "teacher" just dangles).
+        r = self._prep("Each student teacher")
         ob = self._unit(r, "Each").features["obligations"][0]
-        self.assertFalse(ob.met)
+        self.assertTrue(ob.met)
+        self.assertEqual(ob.target.surface, "student")
 
     def test_bind_is_logged_reversibly(self):
         r = self._prep("Each student passed")
@@ -975,6 +978,28 @@ class TestIncrement32UniversalPropertyInstantiation(unittest.TestCase):
     def test_direct_and_negated_property_unchanged(self):
         self.assertEqual(reading.answer("Is the apple red?", reading.learn("The apple is red")), "yes")
         self.assertEqual(reading.answer("Is the apple red?", reading.learn("The apple is not red")), "no")
+
+
+class TestIncrement33NegativeSubset(unittest.TestCase):
+    """#33 — fix probe bug F: "No X are Y" is a NEGATED Subset (disjointness). A member of X is then
+    definitely NOT a Y — a definite "no", not undetermined."""
+
+    def test_negative_subset_is_learned(self):
+        self.assertEqual(reading.learn("No students are teachers"),
+                         [reading.Subset(("student", frozenset()), ("teacher", frozenset()),
+                                         negated=True)])
+
+    def test_disjoint_membership_is_no(self):
+        ctx = reading.learn("No students are teachers") + reading.learn("Bob is a student")
+        self.assertEqual(reading.answer("Is Bob a teacher?", ctx), "no")
+
+    def test_positive_subset_still_yes(self):
+        ctx = reading.learn("Every teacher is a person") + reading.learn("Bob is a teacher")
+        self.assertEqual(reading.answer("Is Bob a person?", ctx), "yes")
+
+    def test_unrelated_collection_stays_undetermined(self):
+        ctx = reading.learn("No students are teachers") + reading.learn("Bob is a student")
+        self.assertEqual(reading.answer("Is Bob a person?", ctx), "undetermined")
 
 
 if __name__ == "__main__":

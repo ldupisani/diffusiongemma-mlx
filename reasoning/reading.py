@@ -293,9 +293,9 @@ def _find_target(need, u, i, units, pos):
     def left(*s):
         return [x for x in units if has(x, *s) and pos[id(x)] < i]
 
-    if need == "collection":      # a quantifier ranges over the one available noun
-        cands = [n for n in units if has(n, "noun") and n is not u]
-        return cands[0] if len(cands) == 1 else None
+    if need == "collection":      # a quantifier ranges over its HEAD: the nearest noun to its right
+        r = right("noun")         # (not "the unique noun anywhere" — that broke on objects/complements)
+        return r[0] if r else None
     if need in ("object", "determines"):   # preposition governs / article determines unique noun right
         r = right("noun")
         return r[0] if len(r) == 1 else None
@@ -640,20 +640,23 @@ def _membership(reading: Reading):
 
 @dataclass(frozen=True)
 class Subset:
-    """A universal-membership fact "Every X is a Y": collection `sub` is contained in `sup`, so
-    every member of `sub` is a member of `sup`. e.g. "Every teacher is a person"."""
+    """A universal relation between two collections. Positive ("Every X is a Y") → `sub` ⊆ `sup`:
+    every member of `sub` is a member of `sup`. Negated ("No X are Y") → `sub` and `sup` are
+    DISJOINT: no member of one is a member of the other."""
     sub: tuple
     sup: tuple
+    negated: bool = False
 
 
 def _subset(reading: Reading):
-    """The subset a universal copula statement asserts ("Every X is a Y"), or None — read off the
-    copula's bound subject and complement (both nouns), with a universal quantifier present."""
+    """The subset/disjointness a universal copula statement asserts, or None — read off the copula's
+    bound subject and complement (both nouns), with an all/every/no quantifier present. "Every X is a
+    Y" → Subset(X, Y); "No X are Y" → Subset(X, Y, negated=True) (disjoint)."""
     has_universal = any("quantifier" in u.features.get("senses", []) and
-                        _key(u.surface) in ("every", "all") for u in reading.units)
+                        _key(u.surface) in ("every", "all", "no") for u in reading.units)
     subj, comp = _copula_args(reading)
     if has_universal and _has_sense(subj, "noun") and _has_sense(comp, "noun"):
-        return Subset(_descriptor(subj), _descriptor(comp))
+        return Subset(_descriptor(subj), _descriptor(comp), _verb_negated(_copula_unit(reading), reading))
     return None
 
 
@@ -669,21 +672,29 @@ def _property(reading: Reading):
     return None
 
 
-def _is_member(member: str, target: tuple, context: list) -> bool:
-    """Is `member` in collection `target`? True if directly a member, or reachable from one of its
-    collections by following Subset edges (transitive). The membership-inference engine."""
+def _collections_of(member: str, context: list) -> set:
+    """Every collection `member` belongs to — directly, and transitively up POSITIVE Subset edges."""
     frontier = [m.collection for m in context
                 if isinstance(m, Membership) and m.member == member and not m.negated]
     seen = set()
     while frontier:
         c = frontier.pop()
-        if c == target:
-            return True
         if c in seen:
             continue
         seen.add(c)
-        frontier += [f.sup for f in context if isinstance(f, Subset) and f.sub == c]
-    return False
+        frontier += [f.sup for f in context if isinstance(f, Subset) and not f.negated and f.sub == c]
+    return seen
+
+
+def _is_member(member: str, target: tuple, context: list) -> bool:
+    """Is `member` in collection `target`? True iff `target` is one of its (transitive) collections."""
+    return target in _collections_of(member, context)
+
+
+def _disjoint(a: tuple, b: tuple, context: list) -> bool:
+    """Are collections `a` and `b` known disjoint? A negated Subset between them, either direction
+    ("No X are Y" makes X and Y mutually exclusive)."""
+    return any(isinstance(f, Subset) and f.negated and {f.sub, f.sup} == {a, b} for f in context)
 
 
 @dataclass(frozen=True)
@@ -794,9 +805,11 @@ def answer(question: str, context: list):
         member, target = _key(subj.surface), _descriptor(comp)
         if _is_member(member, target, context):
             return "yes"
-        if any(isinstance(m, Membership) and m.member == member
+        if any(isinstance(m, Membership) and m.member == member       # explicitly "not a Y"
                and m.collection == target and m.negated for m in context):
             return "no"
+        if any(_disjoint(c, target, context) for c in _collections_of(member, context)):
+            return "no"   # member is in C, and C is disjoint from the target ("No C are <target>")
         return "undetermined"
 
     prop = _property(r)                                  # "Is <subject> <adjective>?" property question
