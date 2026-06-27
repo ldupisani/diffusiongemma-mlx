@@ -747,19 +747,24 @@ def _follow(unit, need):
     return None
 
 
+def _verdict(yes: bool, no: bool) -> str:
+    """Fold derivable-true / derivable-false into one verdict: both → "conflict" (the premises
+    contradict), true → "yes", false → "no", neither → "undetermined" (we lack the information)."""
+    if yes and no:
+        return "conflict"
+    return "yes" if yes else "no" if no else "undetermined"
+
+
 def _predication_verdict(subject: tuple, predicate: str, context: list) -> str:
-    """The three-way verdict for "does <subject> <predicate>?": "yes" if derivable-true, "no" if
-    derivable-false, else "undetermined" (we lack the information — NOT a closed-world "no"). A
-    universal fact transfers iff the subject is a member of its collection (transitively via Subset)."""
+    """The verdict for "does <subject> <predicate>?". A universal fact transfers iff the subject is a
+    member of its collection (transitively via Subset). yes AND no both derivable → "conflict"."""
     member = subject[0]
     preds = [f for f in context if isinstance(f, Predication) and f.predicate == predicate]
-    if Predication(subject, predicate) in context \
-            or any(f.universal and not f.negated and _is_member(member, f.subject, context) for f in preds):
-        return "yes"
-    if Predication(subject, predicate, negated=True) in context \
-            or any(f.universal and f.negated and _is_member(member, f.subject, context) for f in preds):
-        return "no"
-    return "undetermined"
+    yes = Predication(subject, predicate) in context \
+        or any(f.universal and not f.negated and _is_member(member, f.subject, context) for f in preds)
+    no = Predication(subject, predicate, negated=True) in context \
+        or any(f.universal and f.negated and _is_member(member, f.subject, context) for f in preds)
+    return _verdict(yes, no)
 
 
 def answer(question: str, context: list):
@@ -796,21 +801,15 @@ def answer(question: str, context: list):
         standard = _follow(comp, "standard")
         if subj is not None and standard is not None:
             a, rel, b = _key(subj.surface), _key(comp.surface), _key(standard.surface)
-            if _related(a, rel, b, context):
-                return "yes"
-            if _related(b, rel, a, context):             # asymmetry: B>A ⇒ NOT A>B
-                return "no"
-            return "undetermined"
+            return _verdict(_related(a, rel, b, context),
+                            _related(b, rel, a, context))   # B>A ⇒ NOT A>B (asymmetry)
     if _has_sense(subj, "name") and _has_sense(comp, "noun"):    # "Is X a Y?" membership question
         member, target = _key(subj.surface), _descriptor(comp)
-        if _is_member(member, target, context):
-            return "yes"
-        if any(isinstance(m, Membership) and m.member == member       # explicitly "not a Y"
-               and m.collection == target and m.negated for m in context):
-            return "no"
-        if any(_disjoint(c, target, context) for c in _collections_of(member, context)):
-            return "no"   # member is in C, and C is disjoint from the target ("No C are <target>")
-        return "undetermined"
+        yes = _is_member(member, target, context)
+        no = any(isinstance(m, Membership) and m.member == member         # explicitly "not a Y", or
+                 and m.collection == target and m.negated for m in context) \
+            or any(_disjoint(c, target, context) for c in _collections_of(member, context))  # disjoint
+        return _verdict(yes, no)
 
     prop = _property(r)                                  # "Is <subject> <adjective>?" property question
     if prop is not None:                                 # a property is a Predication (adjective as
@@ -887,6 +886,8 @@ def explain(question: str, context: list) -> list:
                              f"{'no ' if f.negated else 'all '}{f.subject[0]} {pred}")
         if verdict == "undetermined":
             steps.append("nothing in context settles it — lack of information")
+        if verdict == "conflict":
+            steps.append("both true and false are derivable — the premises contradict")
         return steps
     interro = next((u for u in r.units if "interrogative" in u.features.get("senses", [])), None)
     if interro is not None:                              # count derivation

@@ -1002,5 +1002,28 @@ class TestIncrement33NegativeSubset(unittest.TestCase):
         self.assertEqual(reading.answer("Is Bob a person?", ctx), "undetermined")
 
 
+class TestIncrement34ContradictionDetection(unittest.TestCase):
+    """#34 — fix probe bug D: when both "yes" AND "no" are derivable for a query, the verdict is
+    "conflict" (a 4th verdict) — the premises contradict, distinct from "undetermined" (no info).
+    Detection is DERIVABLE: it counts inference (universals/subsets), not just direct facts."""
+
+    def test_direct_contradiction(self):
+        ctx = reading.learn("Bob passed") + reading.learn("Bob did not pass")
+        self.assertEqual(reading.answer("Did Bob pass?", ctx), "conflict")
+
+    def test_derivable_contradiction_via_universal(self):
+        ctx = (reading.learn("All students passed") + reading.learn("Bob did not pass")
+               + reading.learn("Bob is a student"))
+        self.assertEqual(reading.answer("Did Bob pass?", ctx), "conflict")
+
+    def test_membership_contradiction(self):
+        ctx = reading.learn("Bob is a student") + reading.learn("Bob is not a student")
+        self.assertEqual(reading.answer("Is Bob a student?", ctx), "conflict")
+
+    def test_consistent_facts_are_not_conflict(self):
+        self.assertEqual(reading.answer("Did Bob pass?", reading.learn("Bob passed")), "yes")
+        self.assertEqual(reading.answer("Did Bob pass?", reading.learn("Bob did not pass")), "no")
+
+
 if __name__ == "__main__":
     unittest.main()

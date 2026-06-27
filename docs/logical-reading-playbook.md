@@ -207,7 +207,12 @@ predicate), so `_property` carries the `universal` flag and the property questio
 (disjoint); a member of X is then definitely NOT a Y (`_disjoint` check) → a definite `no`. Surfaced
 a deeper fix: a quantifier's `collection` is now its **nearest noun to the right** (its head), not
 "the unique noun anywhere" — which had silently broken on objects/complements and mis-disambiguated
-`"No"` to `boolean`. (`_is_member` refactored via `_collections_of`.)
+`"No"` to `boolean`. (`_is_member` refactored via `_collections_of`.) ·
+34. **contradiction detection** (probe bug D) — a 4th verdict, **`"conflict"`**, when BOTH `yes` and
+`no` are derivable (`_verdict(yes, no)`). Detection is DERIVABLE: it counts inference, so `"All
+students passed. Bob did not pass. Bob is a student."` is a conflict, not just direct `P`∧`¬P`. The
+four verdicts now span the epistemic space: **yes / no / undetermined / conflict** = true / false /
+unknown / inconsistent. Applies to predication, property, membership, comparative branches.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
@@ -224,8 +229,6 @@ the shape now (free); aggregation/counting is *derived later* when a question's 
 - **Transitive verbs / objects**: `"Mary owns a dog"` currently drops the object (predication is
   subject-verb only) — model the object so `"What does Mary own?"` works.
 - **`which`-questions over instances**: `"Which apples are red?"` — enumerate matching instances.
-- **Contradiction detection** (probe bug D): a fact and its negation both present (`"Bob passed.
-  Bob did not pass."`) — currently the positive wins silently; report a conflict instead.
 - **`explain()` for property/comparative questions** — `--trace` currently says "not a question I can
   answer" for those (the answer is correct; only the derivation text is missing).
 - **Verb lemmas** are a small hand-list (`VERB_LEMMA`); grows by deliberate addition like the other
