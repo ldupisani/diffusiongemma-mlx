@@ -1066,5 +1066,23 @@ class TestIncrement36TransitiveObjects(unittest.TestCase):
         self.assertEqual(reading.answer("Does Mary own a cat?", ctx), "undetermined")
 
 
+class TestIncrement37ForegoWhenSubordinated(unittest.TestCase):
+    """#37 — a noun/adjective that FILLS another word's slot (a verb's object, a copula's complement)
+    has its own obligations foregone, so it doesn't read as a false fragment. A real noun-phrase
+    fragment (no predicate anywhere) is still flagged."""
+
+    def test_transitive_object_is_not_a_fragment(self):
+        self.assertTrue(reading.is_well_formed(reading.analyze("Mary owns a dog")))
+
+    def test_copula_complement_is_not_a_fragment(self):
+        self.assertTrue(reading.is_well_formed(reading.analyze("Bob is a student")))
+
+    def test_predicative_adjective_is_not_a_fragment(self):
+        self.assertTrue(reading.is_well_formed(reading.analyze("The apple is red")))
+
+    def test_real_noun_phrase_is_still_a_fragment(self):
+        self.assertFalse(reading.is_well_formed(reading.analyze("Each of the students")))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -218,7 +218,11 @@ unknown / inconsistent. Applies to predication, property, membership, comparativ
 37. **transitive verbs / objects** — a verb carries an OPTIONAL `dobj` obligation (binds the noun to
 its right; intransitive verbs leave it unmet without a deficiency, via `Obligation.optional`).
 `Predication` gained an `object`, so "Mary owns a dog" ≠ "owns a cat"; "Does Mary own a dog?" → yes,
-"… a cat?" → undetermined.
+"… a cat?" → undetermined ·
+38. **forego when subordinated** — a unit that FILLS another word's slot (a verb's `dobj`, a copula's
+`complement`) has its own obligations foregone in `deficiencies()`, so "Mary owns a dog" / "Bob is a
+student" / "The apple is red" are *understood*, not false fragments — while a real noun phrase
+("Each of the students", no predicate anywhere) is still flagged.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
@@ -230,8 +234,6 @@ the shape now (free); aggregation/counting is *derived later* when a question's 
 - **Give `boolean` (and other deferred senses) their obligations** — now unblocked: disambiguation
   by coverage means `no`-as-quantifier no longer wrongly inherits `boolean`'s demand. `boolean→`
   (negates a clause?) can be added and will only apply when that reading covers best.
-- **"Forego when subordinated"**: a noun used as an object shouldn't independently demand a
-  `predicate`; refine so object-nouns don't read as false fragments.
 - **wh-object / `"What does Mary own?"`**: the object slot queried by a wh-word (pairs with `which`).
 - **`which`-questions over instances**: `"Which apples are red?"` — enumerate matching instances.
 - **Verb lemmas** are a small hand-list (`VERB_LEMMA`); grows by deliberate addition like the other

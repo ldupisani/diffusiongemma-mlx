@@ -491,10 +491,17 @@ _NEED_PHRASING = {
 def deficiencies(reading: Reading) -> list:
     """Everything that stops this reading from being a complete, understood statement. Empty ⇒
     well-formed."""
+    # A unit that FILLS another word's slot (a verb's direct object, a copula's complement) is
+    # subordinated: it's discharged by being that slot-filler, so its own unmet obligations are
+    # foregone — "the dog" in "Mary owns a dog" doesn't independently demand a predicate.
+    subordinated = {id(o.target) for u in reading.units for o in u.features.get("obligations", [])
+                    if o.met and o.need in ("complement", "dobj")}
     out = []
     for u in reading.units:
         if not u.features.get("senses"):
             out.append(Deficiency("unknown-word", u, f"I have no information about {u.surface!r}"))
+            continue
+        if id(u) in subordinated:
             continue
         for o in u.features.get("obligations", []):
             if not o.met and not o.optional:             # optional args (a verb's object) may be unmet
