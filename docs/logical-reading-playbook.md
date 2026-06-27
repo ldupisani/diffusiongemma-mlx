@@ -372,7 +372,19 @@ forward refs decline). Currency words (`dollar`/`cent`/`money`) normalize to one
 / "30 dollars" / "how much money" agree. Precision guards REFINED, not just reused: unused-given exempts
 comparative/multiplier premises (their value is a consumed offset/factor, not a stored amount), and
 lost-comparison checks the amount is a VERBATIM stated value (a derived ± is fine). 237 tests; precision
-100%; the "?" the diagnosis started from was a non-issue (`_key` strips it; lossless surface is by design).
+100%; the "?" the diagnosis started from was a non-issue (`_key` strips it; lossless surface is by design).  ·
+59. **fronted-question argument binding (diagnosed from "have ['verb'] subject->?, dobj->?")** — the
+verb's subject/object weren't binding because the resolvers only knew DECLARATIVE order (subject-left,
+object-right). A fronted question rearranges it: `<aux> SUBJ <verb>` with the wh-OBJECT fronted before
+the aux. Fix: the `subject` resolver takes the noun/name/pronoun BETWEEN the auxiliary and the verb
+(disambiguating "does OLIVER have" from the fronted "money" — the very ambiguity that left it unmet);
+the `dobj` resolver, when no noun is to the right, takes the noun fronted before the auxiliary ("how
+much MONEY does Oliver have" → money, NOT "than"/William — `than` is a connective, and `more`'s
+`standard` already carries the comparison). Added `standard` to the subordination set so the comparison
+reference's predicate is foregone. "How much more money does Oliver have than William?" now fully
+SATURATES (no deficiencies). The answer was already correct — what changed is the PARSE binds via
+structure instead of a positional sidestep. 242 tests. Lesson: bind via the obligation/structure, not a
+positional shortcut in the answer (the core principle); fronting is a structural cue the resolvers can read.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

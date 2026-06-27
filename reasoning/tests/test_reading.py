@@ -1533,5 +1533,37 @@ class TestIncrement54ComparativeQuantity(unittest.TestCase):
                          "undetermined")
 
 
+class TestIncrement55FrontedQuestionBinding(unittest.TestCase):
+    """#55 - a fronted question binds its verb's arguments via STRUCTURE, not a positional sidestep:
+    in "<aux> SUBJ <verb>" the subject sits BETWEEN the auxiliary and the verb (disambiguating it from
+    a fronted noun); the wh-fronted OBJECT sits before the auxiliary. So "How much more money does
+    Oliver have than William?" now fully saturates (have->subject->Oliver, have->dobj->money), the
+    comparison carried by more->standard->William."""
+
+    def test_subject_binds_through_aux_fronting(self):
+        r = reading.analyze("How much more money does Oliver have than William?")
+        have = next(u for u in r.units if u.surface == "have")
+        self.assertEqual(reading._follow(have, "subject").surface, "Oliver")  # not "money"
+
+    def test_object_binds_the_fronted_noun(self):
+        r = reading.analyze("How much more money does Oliver have than William?")
+        have = next(u for u in r.units if u.surface == "have")
+        self.assertEqual(reading._follow(have, "dobj").surface, "money")      # not "than"/"William"
+
+    def test_the_whole_comparison_is_well_formed(self):
+        self.assertTrue(reading.is_well_formed(
+            reading.analyze("How much more money does Oliver have than William?")))
+
+    def test_aux_fronting_for_plain_quantity_question(self):
+        r = reading.analyze("How many apples does Tom have?")
+        have = next(u for u in r.units if reading._key(u.surface) == "have")  # "have?" -> key "have"
+        self.assertEqual(reading._follow(have, "subject").surface, "Tom")
+
+    def test_declarative_subject_unaffected(self):
+        r = reading.analyze("Oliver has 30 apples")
+        has = next(u for u in r.units if u.surface == "has")
+        self.assertEqual(reading._follow(has, "subject").surface, "Oliver")
+
+
 if __name__ == "__main__":
     unittest.main()

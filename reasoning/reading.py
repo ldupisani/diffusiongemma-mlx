@@ -471,11 +471,18 @@ def _find_target(need, u, i, units, pos):
         return r[0] if len(r) == 1 else None
     if need == "anchor":          # a preposition attaches to the unit on its immediate left
         return units[i - 1] if i > 0 else None   # (PP-attachment can be ambiguous; revisit later)
-    if need == "subject":         # unique noun/name/pronoun LEFT; if none (fronted question), first RIGHT
-        ll = left("noun", "name", "pronoun")
+    if need == "subject":         # a verb's subject. In a fronted question "<aux> SUBJ <verb>" the
+        auxes = [x for x in units if has(x, "auxiliary") and pos[id(x)] < i]   # subject sits BETWEEN
+        if auxes:                                                             # the auxiliary and verb
+            ax = max(auxes, key=lambda x: pos[id(x)])   # nearest aux to the left — disambiguates
+            between = [x for x in units if has(x, "noun", "name", "pronoun")  # "does OLIVER have" from
+                       and pos[id(ax)] < pos[id(x)] < i]                      # the fronted "money"
+            if len(between) == 1:
+                return between[0]
+        ll = left("noun", "name", "pronoun")            # else the unique noun/name/pronoun to the LEFT
         if len(ll) == 1:
             return ll[0]
-        if not ll:
+        if not ll:                                      # none to the left → fronted, take the first RIGHT
             r = right("noun", "name", "pronoun")
             return r[0] if r else None
         return None
@@ -491,9 +498,17 @@ def _find_target(need, u, i, units, pos):
         if than is not None:
             rns = [x for x in rns if pos[id(x)] > pos[id(than)]]
         return rns[0] if rns else None
-    if need == "dobj":            # a verb's (optional) direct object: the nearest noun to its right
-        r = right("noun")
-        return r[0] if r else None
+    if need == "dobj":            # a verb's (optional) direct object: the nearest noun to its right,
+        r = right("noun")         # OR, in a fronted wh-question, the noun fronted before the auxiliary
+        if r:                     # ("how much MONEY does Oliver have" → money, not "than"/William)
+            return r[0]
+        auxes = [x for x in units if has(x, "auxiliary") and pos[id(x)] < i]
+        if auxes:
+            ax = min(auxes, key=lambda x: pos[id(x)])
+            before = [x for x in units if has(x, "noun") and pos[id(x)] < pos[id(ax)]]
+            if before:
+                return before[-1]
+        return None
     if need == "predicate":       # a noun's predicate is the unique verb to its right
         r = right("verb")
         return r[0] if len(r) == 1 else None
@@ -691,7 +706,7 @@ def deficiencies(reading: Reading) -> list:
     # subordinated: it's discharged by being that slot-filler, so its own unmet obligations are
     # foregone — "the dog" in "Mary owns a dog" doesn't independently demand a predicate.
     subordinated = {id(o.target) for u in reading.units for o in u.features.get("obligations", [])
-                    if o.met and o.need in ("complement", "dobj", "left", "right", "unit")}
+                    if o.met and o.need in ("complement", "dobj", "left", "right", "unit", "standard")}
     out = []
     for u in reading.units:
         if not u.features.get("senses"):
