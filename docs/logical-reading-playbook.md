@@ -135,7 +135,10 @@ and the derivation behind the verdict. Surfacing the trail caught a hard-coded `
 edges (transitive), so "Every teacher is a person. Bob is a teacher. Is Bob a person?" → yes ·
 21. **negation** — `Predication.negated` polarity, set at INGESTION when a negator (`not`/`never`/
 `no`) is present, so `"Bob did not pass"` / `"No students failed"` are never learned as positives.
-The positive query then doesn't match → `"no"`, and the false-positive (the real danger) is avoided.
+The positive query then doesn't match → `"no"`, and the false-positive (the real danger) is avoided ·
+22. **predicate adjectives** — `"The apple is red"` is a property fact (predicative adjective, didn't
+merge), distinct from attributive `"red apple"`. `"Is the apple red?"` queries it; reuses
+`Predication` with the adjective as predicate.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

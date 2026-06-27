@@ -560,6 +560,18 @@ def _subset(reading: Reading):
     return None
 
 
+def _property(reading: Reading):
+    """A predicative-adjective fact ("The apple is red"), or None — a copula, one subject (noun or
+    name), and one PREDICATIVE adjective (one that didn't merge into a noun). The predicate is the
+    adjective; polarity from any negator. Distinct from attributive "red apple" (which merges)."""
+    adjs = [u for u in reading.units if "adjective" in u.features.get("senses", [])]
+    subjects = [u for u in reading.units
+                if "noun" in u.features.get("senses", []) or "name" in u.features.get("senses", [])]
+    if _has_copula(reading) and len(adjs) == 1 and len(subjects) == 1:
+        return Predication(_descriptor(subjects[0]), _key(adjs[0].surface), _negated(reading))
+    return None
+
+
 def _is_member(member: str, target: tuple, context: list) -> bool:
     """Is `member` in collection `target`? True if directly a member, or reachable from one of its
     collections by following Subset edges (transitive). The membership-inference engine."""
@@ -600,6 +612,10 @@ def answer(question: str, context: list):
     nouns = [u for u in r.units if "noun" in u.features.get("senses", [])]
     if _has_copula(r) and len(names) == 1 and len(nouns) == 1:   # "Is X a Y?" membership question
         return "yes" if _is_member(_key(names[0].surface), _descriptor(nouns[0]), context) else "no"
+
+    prop = _property(r)                                  # "Is <subject> <adjective>?" property question
+    if prop is not None:
+        return "yes" if Predication(prop.subject, prop.predicate) in context else "no"
 
     aux = next((u for u in r.units if "auxiliary" in u.features.get("senses", [])), None)
     if aux is not None:                                  # yes/no question
@@ -706,6 +722,9 @@ def learn(statement: str) -> list:
     m = _membership(r)                                   # "<name> is a <noun>" → membership?
     if m is not None:
         return [m]
+    prop = _property(r)                                  # "<subject> is <adjective>" → property?
+    if prop is not None:
+        return [prop]
     p = _predication(r)                                  # subject-verb statement?
     if p is not None:
         return [p]

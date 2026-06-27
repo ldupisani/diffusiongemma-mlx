@@ -703,5 +703,26 @@ class TestIncrement21Negation(unittest.TestCase):
         self.assertEqual(reading.run_cli(["Bob did not pass. Did Bob pass?"]).strip(), "no")
 
 
+class TestIncrement22PredicateAdjectives(unittest.TestCase):
+    """#22 — predicative adjectives: "The apple is red" is a property fact (NOT an attributive merge
+    like "red apple"); "Is the apple red?" queries it. The predicate is the adjective; polarity too."""
+
+    def test_property_fact_is_learned(self):
+        self.assertEqual(reading.learn("The apple is red"),
+                         [reading.Predication(("apple", frozenset()), "red")])
+
+    def test_property_question(self):
+        ctx = reading.learn("The apple is red")
+        self.assertEqual(reading.answer("Is the apple red?", ctx), "yes")
+        self.assertEqual(reading.answer("Is the apple green?", ctx), "no")
+
+    def test_negated_property(self):
+        self.assertEqual(reading.learn("The apple is not red"),
+                         [reading.Predication(("apple", frozenset()), "red", negated=True)])
+
+    def test_cli(self):
+        self.assertEqual(reading.run_cli(["The apple is red. Is the apple red?"]).strip(), "yes")
+
+
 if __name__ == "__main__":
     unittest.main()
