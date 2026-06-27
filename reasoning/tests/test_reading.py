@@ -573,7 +573,7 @@ class TestIncrement16YesNoQuestions(unittest.TestCase):
         self.assertEqual(reading.answer("Did the student pass?", self._context()), "yes")
 
     def test_no_when_the_fact_is_not_known(self):
-        self.assertEqual(reading.answer("Did the teacher pass?", self._context()), "no")
+        self.assertEqual(reading.answer("Did the teacher pass?", self._context()), "undetermined")
 
     def test_unknown_word_makes_it_ask(self):
         result = reading.answer("Did the wizard pass?", self._context())
@@ -600,7 +600,7 @@ class TestIncrement17SyllogisticInference(unittest.TestCase):
 
     def test_non_member_yields_no(self):
         ctx = reading.learn("All students passed") + reading.learn("Bob is a teacher")
-        self.assertEqual(reading.answer("Did Bob pass?", ctx), "no")
+        self.assertEqual(reading.answer("Did Bob pass?", ctx), "undetermined")
 
     def test_full_chain_through_the_cli(self):
         out = reading.run_cli(["Did Bob pass?",
@@ -637,8 +637,8 @@ class TestIncrement19Trace(unittest.TestCase):
         out = reading.run_cli(["All apples passed. Bob is a student. Did Bob pass?", "--trace"])
         self.assertIn("Membership", out)                 # facts learned
         self.assertIn("decisions:", out)                 # the reversible trail
-        self.assertIn("does student pass? no", out)      # the derivation (why it's no)
-        self.assertIn("ANSWER: no", out)
+        self.assertIn("lack of information", out)         # the derivation (why undetermined)
+        self.assertIn("ANSWER: undetermined", out)
 
     def test_trace_on_single_statement(self):
         out = reading.run_cli(["The student passed", "--trace"])
@@ -663,7 +663,7 @@ class TestIncrement20MembershipQuestions(unittest.TestCase):
     def test_direct_membership_question(self):
         ctx = reading.learn("Bob is a student")
         self.assertEqual(reading.answer("Is Bob a student?", ctx), "yes")
-        self.assertEqual(reading.answer("Is Bob a teacher?", ctx), "no")
+        self.assertEqual(reading.answer("Is Bob a teacher?", ctx), "undetermined")
 
     def test_barbara_syllogism(self):
         ctx = reading.learn("Every teacher is a person") + reading.learn("Bob is a teacher")
@@ -685,7 +685,7 @@ class TestIncrement21Negation(unittest.TestCase):
 
     def test_negative_universal_is_learned(self):
         self.assertEqual(reading.learn("No students failed"),
-                         [reading.Predication(("student", frozenset()), "fail", negated=True)])
+                         [reading.Predication(("student", frozenset()), "fail", negated=True, universal=True)])
 
     def test_did_not_pass_answers_no(self):
         self.assertEqual(reading.answer("Did Bob pass?", reading.learn("Bob did not pass")), "no")
@@ -714,7 +714,7 @@ class TestIncrement22PredicateAdjectives(unittest.TestCase):
     def test_property_question(self):
         ctx = reading.learn("The apple is red")
         self.assertEqual(reading.answer("Is the apple red?", ctx), "yes")
-        self.assertEqual(reading.answer("Is the apple green?", ctx), "no")
+        self.assertEqual(reading.answer("Is the apple green?", ctx), "undetermined")
 
     def test_negated_property(self):
         self.assertEqual(reading.learn("The apple is not red"),
@@ -819,7 +819,7 @@ class TestIncrement27ScopedNoNegation(unittest.TestCase):
 
     def test_no_subject_negates_its_own_predication(self):
         self.assertEqual(reading.learn("No students failed"),
-                         [reading.Predication(("student", frozenset()), "fail", negated=True)])
+                         [reading.Predication(("student", frozenset()), "fail", negated=True, universal=True)])
 
     def test_universal_without_no_stays_positive(self):
         self.assertEqual(reading.learn("All students failed"),
@@ -913,7 +913,7 @@ class TestIncrement30SomeIsNotAll(unittest.TestCase):
 
     def test_some_does_not_instantiate(self):   # bug B
         ctx = reading.learn("Some students passed") + reading.learn("Bob is a student")
-        self.assertEqual(reading.answer("Did Bob pass?", ctx), "no")
+        self.assertEqual(reading.answer("Did Bob pass?", ctx), "undetermined")
 
     def test_all_still_instantiates(self):
         ctx = reading.learn("All students passed") + reading.learn("Bob is a student")
@@ -924,6 +924,35 @@ class TestIncrement30SomeIsNotAll(unittest.TestCase):
                + reading.learn("Every person passed")
                + reading.learn("Bob is a teacher"))
         self.assertEqual(reading.answer("Did Bob pass?", ctx), "yes")
+
+
+class TestIncrement31UndeterminedVerdict(unittest.TestCase):
+    """#31 — the third verdict. A yes/no question is "yes" (derivable true), "no" (derivable FALSE —
+    an explicit/universal negative), or "undetermined" (we lack the information). No more closed-world
+    "no" for things we simply don't know."""
+
+    def test_no_information_is_undetermined(self):
+        self.assertEqual(reading.answer("Did Bob pass?", reading.learn("Bob is a student")),
+                         "undetermined")
+
+    def test_explicit_negative_is_no(self):
+        self.assertEqual(reading.answer("Did Bob pass?", reading.learn("Bob did not pass")), "no")
+
+    def test_universal_negative_is_no(self):
+        ctx = reading.learn("No students passed") + reading.learn("Bob is a student")
+        self.assertEqual(reading.answer("Did Bob pass?", ctx), "no")
+
+    def test_some_is_undetermined_not_no(self):
+        ctx = reading.learn("Some students passed") + reading.learn("Bob is a student")
+        self.assertEqual(reading.answer("Did Bob pass?", ctx), "undetermined")
+
+    def test_membership_without_evidence_is_undetermined(self):
+        self.assertEqual(reading.answer("Is Bob a teacher?", reading.learn("Bob is a student")),
+                         "undetermined")
+
+    def test_comparative_asymmetry_is_no(self):
+        ctx = reading.learn("Alice is taller than Bob")
+        self.assertEqual(reading.answer("Is Bob taller than Alice?", ctx), "no")
 
 
 if __name__ == "__main__":

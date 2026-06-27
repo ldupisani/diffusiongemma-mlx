@@ -574,14 +574,15 @@ def _verb_negated(verb, reading: Reading) -> bool:
 
 
 def _universal(verb, reading: Reading) -> bool:
-    """Is `verb`'s predication universally quantified? True iff its SUBJECT is the collection an
-    all/every quantifier bound to ("All students passed") — read from the bindings, like _verb_negated.
-    "some"/"the"/a number/a bare plural are NOT universal, so they can't be instantiated to a member."""
+    """Is `verb`'s predication universally quantified (regardless of polarity)? True iff its SUBJECT
+    is the collection an all/every/no quantifier bound to — read from the bindings, like
+    _verb_negated. "all students passed" and "no students passed" are both universal (the latter a
+    negative universal); "some"/"the"/a number/a bare plural are NOT, so they don't instantiate."""
     subject = _follow(verb, "subject")
     if subject is None:
         return False
     for u in reading.units:
-        if "quantifier" in u.features.get("senses", []) and _key(u.surface) in ("all", "every"):
+        if "quantifier" in u.features.get("senses", []) and _key(u.surface) in ("all", "every", "no"):
             if any(o.need == "collection" and o.met and o.target is subject
                    for o in u.features.get("obligations", [])):
                 return True
@@ -734,6 +735,21 @@ def _follow(unit, need):
     return None
 
 
+def _predication_verdict(subject: tuple, predicate: str, context: list) -> str:
+    """The three-way verdict for "does <subject> <predicate>?": "yes" if derivable-true, "no" if
+    derivable-false, else "undetermined" (we lack the information — NOT a closed-world "no"). A
+    universal fact transfers iff the subject is a member of its collection (transitively via Subset)."""
+    member = subject[0]
+    preds = [f for f in context if isinstance(f, Predication) and f.predicate == predicate]
+    if Predication(subject, predicate) in context \
+            or any(f.universal and not f.negated and _is_member(member, f.subject, context) for f in preds):
+        return "yes"
+    if Predication(subject, predicate, negated=True) in context \
+            or any(f.universal and f.negated and _is_member(member, f.subject, context) for f in preds):
+        return "no"
+    return "undetermined"
+
+
 def answer(question: str, context: list):
     """Answer a question against a context of facts. A yes/no question ("Did the student pass?")
     returns "yes"/"no" by checking a Predication; a count question ("How many red apples?") returns
@@ -767,33 +783,36 @@ def answer(question: str, context: list):
     if _has_sense(comp, "comparative"):                  # "Is A <comparative> than B?"
         standard = _follow(comp, "standard")
         if subj is not None and standard is not None:
-            return "yes" if _related(_key(subj.surface), _key(comp.surface),
-                                     _key(standard.surface), context) else "no"
+            a, rel, b = _key(subj.surface), _key(comp.surface), _key(standard.surface)
+            if _related(a, rel, b, context):
+                return "yes"
+            if _related(b, rel, a, context):             # asymmetry: B>A ⇒ NOT A>B
+                return "no"
+            return "undetermined"
     if _has_sense(subj, "name") and _has_sense(comp, "noun"):    # "Is X a Y?" membership question
-        return "yes" if _is_member(_key(subj.surface), _descriptor(comp), context) else "no"
+        member, target = _key(subj.surface), _descriptor(comp)
+        if _is_member(member, target, context):
+            return "yes"
+        if any(isinstance(m, Membership) and m.member == member
+               and m.collection == target and m.negated for m in context):
+            return "no"
+        return "undetermined"
 
     prop = _property(r)                                  # "Is <subject> <adjective>?" property question
     if prop is not None:
-        return "yes" if Predication(prop.subject, prop.predicate) in context else "no"
+        if Predication(prop.subject, prop.predicate) in context:
+            return "yes"
+        if Predication(prop.subject, prop.predicate, negated=True) in context:
+            return "no"
+        return "undetermined"
 
     aux = next((u for u in r.units if "auxiliary" in u.features.get("senses", [])), None)
-    if aux is not None:                                  # yes/no question
+    if aux is not None:                                  # "Did X <verb>?" → yes / no / undetermined
         verb = _follow(aux, "asks_predication")          # did → the verb being asked about
         subject = _follow(verb, "subject") if verb else None
         if subject is None:
             return [Deficiency("unanswerable", aux, "I couldn't tell what is being asked")]
-        query = Predication(_descriptor(subject), _lemma(verb.surface))
-        if query in context:                             # directly known
-            return "yes"
-        # universal instantiation: a UNIVERSAL fact "all C <pred>" transfers to the subject iff the
-        # subject is a member of C (transitively via Subset — so multi-hop works). Existentials
-        # ("some students passed") are NOT universal and are skipped, so they never instantiate.
-        member = query.subject[0]
-        for f in context:
-            if isinstance(f, Predication) and f.universal and not f.negated \
-                    and f.predicate == query.predicate and _is_member(member, f.subject, context):
-                return "yes"
-        return "no"
+        return _predication_verdict(_descriptor(subject), _lemma(verb.surface), context)
 
     interro = next((u for u in r.units if "interrogative" in u.features.get("senses", [])), None)
     if interro is None:
@@ -845,16 +864,19 @@ def explain(question: str, context: list) -> list:
         if subject is None:
             return ["couldn't tell what is being asked"]
         subj, pred = _descriptor(subject), _lemma(verb.surface)
-        steps = [f"does {subj[0]!r} {pred}?"]
+        verdict = _predication_verdict(subj, pred, context)
+        steps = [f"does {subj[0]!r} {pred}? → {verdict}"]
         if Predication(subj, pred) in context:
-            return steps + [f"directly known that {subj[0]} {pred} → yes"]
-        mems = [f for f in context if isinstance(f, Membership) and f.member == subj[0]]
-        if not mems:
-            steps.append(f"{subj[0]!r} {pred} is not stated, and it belongs to no collection → no")
-        for m in mems:
-            ok = Predication(m.collection, pred) in context
-            steps.append(f"{subj[0]!r} is a {m.collection[0]}; does {m.collection[0]} {pred}? "
-                         + ("yes" if ok else "no"))
+            steps.append(f"directly stated: {subj[0]} {pred}")
+        if Predication(subj, pred, negated=True) in context:
+            steps.append(f"directly stated: {subj[0]} does NOT {pred}")
+        for f in context:                                # universal facts that reach the subject
+            if isinstance(f, Predication) and f.universal and f.predicate == pred \
+                    and _is_member(subj[0], f.subject, context):
+                steps.append(f"{subj[0]!r} is a {f.subject[0]}; "
+                             f"{'no ' if f.negated else 'all '}{f.subject[0]} {pred}")
+        if verdict == "undetermined":
+            steps.append("nothing in context settles it — lack of information")
         return steps
     interro = next((u for u in r.units if "interrogative" in u.features.get("senses", [])), None)
     if interro is not None:                              # count derivation
