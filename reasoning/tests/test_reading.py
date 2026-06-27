@@ -1084,5 +1084,19 @@ class TestIncrement37ForegoWhenSubordinated(unittest.TestCase):
         self.assertFalse(reading.is_well_formed(reading.analyze("Each of the students")))
 
 
+class TestIncrement38WhObject(unittest.TestCase):
+    """#38 — wh-object: "What does Mary own?" returns the direct OBJECTS of (Mary, own), completing
+    the transitive-verb work. "What is <name>?" still returns memberships."""
+
+    def test_what_does_x_verb_returns_objects(self):
+        self.assertEqual(reading.answer("What does Mary own?", reading.learn("Mary owns a dog")), "dog")
+
+    def test_what_is_still_membership(self):
+        self.assertEqual(reading.answer("What is Bob?", reading.learn("Bob is a student")), "student")
+
+    def test_no_object_known(self):
+        self.assertEqual(reading.answer("What does Mary own?", []), "(nothing)")
+
+
 if __name__ == "__main__":
     unittest.main()

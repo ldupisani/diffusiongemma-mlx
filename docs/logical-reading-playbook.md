@@ -222,7 +222,9 @@ its right; intransitive verbs leave it unmet without a deficiency, via `Obligati
 38. **forego when subordinated** — a unit that FILLS another word's slot (a verb's `dobj`, a copula's
 `complement`) has its own obligations foregone in `deficiencies()`, so "Mary owns a dog" / "Bob is a
 student" / "The apple is red" are *understood*, not false fragments — while a real noun phrase
-("Each of the students", no predicate anywhere) is still flagged.
+("Each of the students", no predicate anywhere) is still flagged ·
+39. **wh-object** — "What does Mary own?" returns the direct OBJECTS of (Mary, own) (the `"what"`
+branch detects the auxiliary+verb pattern); "What is Bob?" still returns memberships.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
@@ -234,7 +236,6 @@ the shape now (free); aggregation/counting is *derived later* when a question's 
 - **Give `boolean` (and other deferred senses) their obligations** — now unblocked: disambiguation
   by coverage means `no`-as-quantifier no longer wrongly inherits `boolean`'s demand. `boolean→`
   (negates a clause?) can be added and will only apply when that reading covers best.
-- **wh-object / `"What does Mary own?"`**: the object slot queried by a wh-word (pairs with `which`).
 - **`which`-questions over instances**: `"Which apples are red?"` — enumerate matching instances.
 - **Verb lemmas** are a small hand-list (`VERB_LEMMA`); grows by deliberate addition like the other
   dictionaries (no stemming guesswork).

@@ -810,8 +810,18 @@ def answer(question: str, context: list):
                        and f.predicate == pred and not f.negated})
         return ", ".join(subs) if subs else "(no one)"
     what = next((u for u in r.units if "wh_value" in u.features.get("senses", [])), None)
-    if what is not None:                                 # "What is <name>?" → its collections
-        name = _follow(what, "asks_individual")
+    if what is not None:
+        aux = next((u for u in r.units if "auxiliary" in u.features.get("senses", [])), None)
+        if aux is not None:                              # "What does <subj> <verb>?" → the objects
+            verb = _follow(aux, "asks_predication")
+            subject = _follow(verb, "subject") if verb else None
+            if subject is None:
+                return [Deficiency("unanswerable", what, "I couldn't tell what is being asked")]
+            subj, pred = _descriptor(subject), _lemma(verb.surface)
+            objs = sorted({f.object[0] for f in context if isinstance(f, Predication)
+                           and f.subject == subj and f.predicate == pred and f.object and not f.negated})
+            return ", ".join(objs) if objs else "(nothing)"
+        name = _follow(what, "asks_individual")          # "What is <name>?" → its collections
         if name is None:
             return [Deficiency("unanswerable", what, "I couldn't tell what is being asked")]
         member = _key(name.surface)
