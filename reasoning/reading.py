@@ -1117,6 +1117,30 @@ def _rate(reading: Reading):
                 _descriptor(unit)[0], _lemma(verbs[0].surface))
 
 
+def _distributed_quantity(reading: Reading):
+    """A DISTRIBUTED quantity — "gave 4 stickers EACH to 3 friends" → 4 × 3 = 12. "each" makes the
+    per-recipient amount (the value-noun just before it) multiply by the recipient count (the other
+    value). None unless "each" sits after a noun with two value-noun pairs around it."""
+    units = reading.units
+    each = next((u for u in units if _key(u.surface) == "each"), None)
+    if each is None:
+        return None
+    verbs = [u for u in units if "verb" in u.features.get("senses", [])]
+    subject = _follow(verbs[0], "subject") if len(verbs) == 1 else None
+    ei = units.index(each)
+    if subject is None or ei == 0 or "noun" not in units[ei - 1].features.get("senses", []):
+        return None
+    per_noun = units[ei - 1]                              # "4 STICKERS each" — the distributed measure
+    per_val = next((u for u in units if "value" in u.features.get("senses", [])
+                    and _follow(u, "quantifies") is per_noun), None)
+    count_val = next((u for u in units if "value" in u.features.get("senses", []) and u is not per_val
+                      and _follow(u, "quantifies") is not None), None)   # "to 3 FRIENDS" — the count
+    if per_val is None or count_val is None:
+        return None
+    total = per_val.features["value"] * count_val.features["value"]
+    return Quantity(_entity(subject), _descriptor(per_noun), total, _lemma(verbs[0].surface))
+
+
 def _quantity(reading: Reading):
     """The quantities a "<entity> <verb>s <amount> …" statement asserts — ONE per value: a
     self-measuring money value ("earns $12") or a value quantifying a noun ("buys 2 apples"). A list,
@@ -1697,6 +1721,9 @@ def _facts_from(reading: Reading, context: list = None) -> list:
         return []                                        # a comparative-quantity structure we couldn't
         # resolve (the standard's count is unknown — a forward ref) → DEFER (don't fall through to a
         # flat _quantity); the solve() fixpoint will retry it once the standard is learned.
+    dq = _distributed_quantity(r)                        # "gave 4 stickers each to 3 friends" → 4×3?
+    if dq is not None:
+        return [dq]
     q = _quantity(r)                                     # "<entity> has 3 apples and 2 oranges" → list
     if q:
         return q
@@ -1815,7 +1842,8 @@ def solve(text: str):
     # into a DERIVED amount ("30 less … than Martha" → 38), so it won't appear verbatim.
     given = set()
     for rp in readings[:len(premises)]:
-        if any(s in u.features.get("senses", []) for u in rp.units for s in ("comparative", "multiplier")):
+        if any(s in u.features.get("senses", []) for u in rp.units for s in ("comparative", "multiplier")) \
+                or any(_key(u.surface) == "each" for u in rp.units):   # "each" multiplies its values
             continue
         given |= {u.features["value"] for u in rp.units if "value" in u.features.get("senses", [])}
     used = {f.amount for f in context if isinstance(f, (Quantity, Rate))} \

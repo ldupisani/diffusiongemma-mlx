@@ -1675,5 +1675,24 @@ class TestIncrement59VerbElision(unittest.TestCase):
         self.assertEqual(reading.solve("Tom gave $5. How much did Tom give?"), 5)
 
 
+class TestIncrement60EachDistribution(unittest.TestCase):
+    """#60 - each/per distribution: "gave 4 stickers each to 3 friends" -> 4 x 3 = 12. "each" makes
+    the per-recipient amount (the value-noun before it) MULTIPLY the recipient count (the other value),
+    instead of becoming two separate conjoined quantities."""
+
+    def test_distribution_multiplies(self):
+        self.assertEqual(reading.learn("Colton gave 4 stickers each to 3 friends"),
+                         [reading.Quantity("colton", ("sticker", frozenset()), 12.0, "give")])
+
+    def test_distribution_solves(self):
+        self.assertEqual(reading.solve("Colton gave 4 stickers each to 3 friends. "
+                                       "How many stickers did Colton give?"), 12)
+
+    def test_conjoined_object_without_each_stays_two_facts(self):
+        self.assertEqual(reading.learn("Tom has 3 apples and 2 oranges"),
+                         [reading.Quantity("tom", ("apple", frozenset()), 3.0, "have"),
+                          reading.Quantity("tom", ("orange", frozenset()), 2.0, "have")])
+
+
 if __name__ == "__main__":
     unittest.main()

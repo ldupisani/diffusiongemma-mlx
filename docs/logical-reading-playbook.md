@@ -453,7 +453,14 @@ baseline; Colton's "three friends" → spurious instance-tuples). GUARD 4 closes
 a premise that STATES a number (value/percent/multiplier) but produces NO quantity fact dropped
 information → decline. Precision back to 100%. The safe grind: vocabulary lifts `fully-read` (the
 ceiling), structure determines `coverage`, and the four guards keep the gap always DECLINED. Side-fix
-("how much" adjacency, #65) was needed because the new subject nouns let "much" mis-bind.
+("how much" adjacency, #65) was needed because the new subject nouns let "much" mis-bind.  ·
+67. **each/per distribution** — "gave 4 stickers EACH to 3 friends" → 4 × 3 = 12. "each" after a
+value-noun makes that per-recipient amount MULTIPLY the recipient count (the other value-noun), instead
+of `_quantity` producing two separate conjoined quantities. `_distributed_quantity` runs before
+`_quantity`; the unused-given guard exempts "each" premises (the two values multiply into a product, so
+they don't appear verbatim — same exemption as comparative/multiplier). Precision 100%. Real "each"
+GSM8K problems (Colton) are multi-step and still decline via the guards. Follow-on: "each box has 5
+apples" (each BEFORE the noun).
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
