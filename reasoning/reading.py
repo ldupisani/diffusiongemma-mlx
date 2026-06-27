@@ -125,6 +125,18 @@ def _key(surface: str) -> str:
     return surface.lower().strip(_PUNCT)
 
 
+def _as_number(surface: str):
+    """The numeric value of a digit/decimal token ("48", "0.2", "1,000"), else None."""
+    try:
+        return float(_key(surface).replace(",", ""))
+    except ValueError:
+        return None
+
+
+# The mathematical lexicon's operator words → their arithmetic symbol (step 1; grows deliberately).
+OPERATORS = {"plus": "+", "minus": "-", "times": "*", "divided": "/"}
+
+
 def _singular_of(surface: str) -> Optional[str]:
     """The known singular of `surface` if it is a recognized plural, else None. Pure lookup."""
     return PLURALS.get(_key(surface))
@@ -183,7 +195,9 @@ LEXICON: dict[str, list[str]] = {
     "wilted": ["verb"],
     "taller": ["comparative"], "older": ["comparative"], "bigger": ["comparative"],
     "more": ["comparative"], "fewer": ["comparative"],   # quantity comparatives ("more X than Y")
-    "than": ["preposition"],    # links the two sides of a comparison ("taller than")
+    "than": ["preposition"], "by": ["preposition"],   # links comparison / "divided by"
+    # --- mathematical lexicon (step 1: binary operators) ---
+    "plus": ["operator"], "minus": ["operator"], "times": ["operator"], "divided": ["operator"],
     "how": ["interrogative"],   # asks about the quantity word to its right ("how many …")
     "many": ["quantifier"],     # a quantity quantifier — ranges over a collection like any other
     "who": ["wh_subject"], "what": ["wh_value"],   # wh-questions: each binds to what it asks about
@@ -222,6 +236,8 @@ def annotate_senses(reading: Reading) -> Reading:
             # pass to run first — see analyze().
             singular = u.features.get("singular")
             senses = LEXICON.get(singular.lower()) if singular else None
+        if senses is None and _as_number(u.surface) is not None:
+            senses = ["value"]            # a numeric literal ("48", "0.2") is an arithmetic value
         if senses is None and u.surface[:1].isupper() and _key(u.surface).isalpha():
             # a capitalized word we don't otherwise know is a proper noun — a named individual.
             # (Known capitalized words, e.g. sentence-initial "All"/"The", are caught above first.)
@@ -230,6 +246,10 @@ def annotate_senses(reading: Reading) -> Reading:
             continue  # not in the dictionary → attach no meaning
         before = dict(u.features)
         u.features["senses"] = list(senses)
+        if "value" in senses:
+            u.features["value"] = _as_number(u.surface)
+        if "operator" in senses:
+            u.features["op"] = OPERATORS[_key(u.surface)]
         reading.record("annotate", target=u, before=before, after=dict(u.features),
                        reason="lexical role")
     return reading
@@ -264,6 +284,7 @@ ROLE_OBLIGATIONS: dict[str, list[str]] = {
     "wh_subject": ["asks_predicate"],   # "who" binds the predicate it asks the subject of
     "wh_value": ["asks_individual"],    # "what" binds the individual it asks the type of
     "wh_which": ["restricts"],          # "which" binds the noun (collection) it restricts the query to
+    "operator": ["left", "right"],      # a binary operator binds its two operands (the values it combines)
 }
 
 # Obligations that are grammatically OPTIONAL: unmet is not a deficiency (e.g. a verb's direct
@@ -346,6 +367,12 @@ def _find_target(need, u, i, units, pos):
     if need == "restricts":       # "which": the noun (collection) it restricts the query to
         r = right("noun")
         return r[0] if r else None
+    if need == "left":            # an operator's left operand: the nearest value to its left
+        ll = left("value")
+        return max(ll, key=lambda x: pos[id(x)]) if ll else None
+    if need == "right":           # an operator's right operand: the nearest value to its right
+        rr = right("value")
+        return rr[0] if rr else None
     if need == "negates":         # a negator scopes over the NEAREST verb (copula left, or main right)
         verbs = [x for x in units if has(x, "verb")]
         return min(verbs, key=lambda v: abs(pos[id(v)] - i)) if verbs else None
@@ -805,6 +832,16 @@ def answer(question: str, context: list):
     unknown = [d for d in deficiencies(r) if d.kind == "unknown-word"]
     if unknown:
         return unknown                                   # don't guess about words we don't know
+
+    op_unit = next((u for u in r.units if "operator" in u.features.get("senses", [])), None)
+    if op_unit is not None:                              # arithmetic: "What is 3 plus 2?"
+        a, b = _follow(op_unit, "left"), _follow(op_unit, "right")
+        if a is None or b is None:
+            return [Deficiency("unanswerable", op_unit, "I couldn't read the arithmetic")]
+        from reasoning import translate                  # reuse the audited safe evaluator
+        val = translate.run_program(
+            f"answer = {a.features['value']} {op_unit.features['op']} {b.features['value']}")
+        return int(val) if val == int(val) else val
 
     who = next((u for u in r.units if "wh_subject" in u.features.get("senses", [])), None)
     if who is not None:                                  # "Who <predicate>?" → subjects with it

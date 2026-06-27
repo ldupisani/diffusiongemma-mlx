@@ -229,7 +229,12 @@ branch detects the auxiliary+verb pattern); "What is Bob?" still returns members
 satisfy the predicate (action verb or predicative adjective). "Which students passed?" → the
 students who passed (a teacher who passed is excluded) ·
 41. **aggregation (count comparison)** — "Are there more X than Y?" compares the counts of two
-collections over the instance context via the subset lattice. "more"/"fewer" with "than".
+collections over the instance context via the subset lattice. "more"/"fewer" with "than" ·
+42. **arithmetic (math step 1)** — toward replacing the LLM word-problem translator with this parser.
+A digit token is a `value` (with a numeric `value` feature); operator words (`plus`/`minus`/`times`/
+`divided`) carry an `op` and bind `left`/`right` operands (same shape as the comparative's `standard`).
+"What is 3 plus 2?" → 5, built into a one-line program and run through `translate.run_program` (the
+audited safe evaluator — the model is gone, the correct-by-construction arithmetic stays).
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
@@ -237,6 +242,13 @@ head, attribute-superset; a sub-group's count = instances whose attributes ⊇ t
 the shape now (free); aggregation/counting is *derived later* when a question's obligation needs it.
 
 ## Open threads / next
+
+- **GSM8K via this parser (replace the LLM translator)** — kept as an INDEPENDENT eval (a `bench`-style
+  harness, never in `test_reading.py`). Roadmap, simplest-first: (1) pure arithmetic ✓; (2) `Quantity`
+  facts ("Tom has 3 apples"); (3) aggregation questions ("how many … altogether"); (4) accumulation on
+  one entity; (5) **coreference** (`he`/`she`, "the remaining", "half as many [as X]") and **relational
+  quantities** — the two hard, pervasive gaps; (6) units + **world-knowledge conversions** (hour=60min,
+  year=52wk). Build a math/quantity layer in `reading.py`; reuse `translate.run_program` to evaluate.
 
 - **`boolean` sense of `no`** (decided: leave as-is): no meaningful obligation exists in this
   statement grammar — `no` reliably reads as a quantifier (its `collection` always binds), and a

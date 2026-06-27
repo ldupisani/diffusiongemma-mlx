@@ -1135,5 +1135,28 @@ class TestIncrement40CountComparison(unittest.TestCase):
         self.assertEqual(out.strip(), "yes")
 
 
+class TestIncrement41Arithmetic(unittest.TestCase):
+    """#41 — pure arithmetic via the obligation parser + translate's safe evaluator (step 1 of
+    replacing the LLM translator). A digit token is a `value`; an `operator` binds its left/right
+    operands; the answer is built into a one-line program and evaluated."""
+
+    def test_value_and_operator_are_parsed(self):
+        r = reading.analyze("3 plus 2")
+        v = next(u for u in r.units if u.surface == "3")
+        self.assertIn("value", v.features["senses"])
+        self.assertEqual(v.features["value"], 3.0)
+        op = next(u for u in r.units if u.surface == "plus")
+        self.assertEqual(op.features["op"], "+")
+
+    def test_four_operations(self):
+        self.assertEqual(reading.answer("What is 3 plus 2?", []), 5)
+        self.assertEqual(reading.answer("What is 5 minus 2?", []), 3)
+        self.assertEqual(reading.answer("What is 4 times 3?", []), 12)
+        self.assertEqual(reading.answer("What is 6 divided by 2?", []), 3)
+
+    def test_cli(self):
+        self.assertEqual(reading.run_cli(["What is 3 plus 2?"]).strip(), "5")
+
+
 if __name__ == "__main__":
     unittest.main()
