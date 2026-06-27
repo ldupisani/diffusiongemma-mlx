@@ -1404,5 +1404,42 @@ class TestIncrement50RemainderSubtraction(unittest.TestCase):
         self.assertEqual(out.strip(), "undetermined")
 
 
+class TestIncrement51Currency(unittest.TestCase):
+    """#51 — currency: "$12" is a self-measuring VALUE (12 of the money measure; the "$" discharges
+    its `quantifies` obligation). "X verb $N" -> a money Quantity; "how much" routes like "how many"
+    with the measure fixed to money, so holdings/event-count polarity composes."""
+
+    def test_dollar_value_parses_with_money_measure(self):
+        r = reading.analyze("$12")
+        u = r.units[0]
+        self.assertIn("value", u.features["senses"])
+        self.assertEqual(u.features["value"], 12.0)
+        self.assertEqual(u.features["measure"], reading.MONEY)
+
+    def test_money_quantity_learned(self):
+        self.assertEqual(reading.learn("Weng earns $12"),
+                         [reading.Quantity("weng", reading.MONEY, 12.0, "earn")])
+
+    def test_how_much_holdings(self):
+        out = reading.run_cli(["Tom has $10. Tom spends $3. How much money does Tom have?"])
+        self.assertEqual(out.strip(), "7")
+
+    def test_how_much_event_count(self):
+        out = reading.run_cli(["Weng earns $12. How much did Weng earn?"])
+        self.assertEqual(out.strip(), "12")
+
+    def test_dollar_value_is_well_formed(self):
+        self.assertTrue(reading.is_well_formed(reading.analyze("Weng earns $12")))
+
+    def test_solve_declines_on_unknown_words(self):
+        # a money parse exists, but an unknown word ("babysitting") means we may be missing
+        # information a partial parse dropped -> decline, never commit a number off a fragment.
+        self.assertEqual(reading.solve("Tom earns $12 babysitting. How much did Tom earn?"),
+                         "undetermined")
+
+    def test_solve_still_answers_a_fully_known_problem(self):
+        self.assertEqual(reading.solve("Tom has $10. Tom spends $3. How much money does Tom have?"), 7)
+
+
 if __name__ == "__main__":
     unittest.main()

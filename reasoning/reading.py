@@ -131,11 +131,15 @@ def _key(surface: str) -> str:
 
 
 def _as_number(surface: str):
-    """The numeric value of a digit/decimal token ("48", "0.2", "1,000"), else None."""
+    """The numeric value of a digit/decimal/currency token ("48", "0.2", "1,000", "$12.50"), else
+    None. A leading "$"/"£" is stripped (the currency is recorded separately as a money measure)."""
     try:
-        return float(_key(surface).replace(",", ""))
+        return float(_key(surface).replace(",", "").lstrip("$£"))
     except ValueError:
         return None
+
+
+MONEY = ("money", frozenset())   # the canonical measure for currency ("$12" → 12 of MONEY)
 
 
 # The mathematical lexicon's operator words → their arithmetic symbol (step 1; grows deliberately).
@@ -249,6 +253,7 @@ LEXICON: dict[str, list[str]] = {
     # "what remains" markers — route a count question to the holdings fold:
     "left": ["adjective"], "remaining": ["adjective"], "leftover": ["adjective"], "rest": ["noun"],
     "remain": ["verb"], "remains": ["verb"],
+    "earn": ["verb"], "earns": ["verb"], "earned": ["verb"],
     "pass": ["verb"], "fail": ["verb"], "failed": ["verb"],
     "not": ["negation"], "never": ["negation"],   # negators flip a fact's polarity (see NEGATORS)
     # --- open-class vocabulary (curated, grown deliberately) ---
@@ -298,6 +303,8 @@ def annotate_senses(reading: Reading) -> Reading:
         u.features["senses"] = list(senses)
         if "value" in senses:
             u.features["value"] = _as_number(u.surface)
+            if u.surface.strip().startswith(("$", "£")):   # "$12" — a self-measuring money value
+                u.features["measure"] = MONEY
         if "operator" in senses:
             u.features["op"] = OPERATORS[_key(u.surface)]
         if "pronoun" in senses:
@@ -360,6 +367,8 @@ def annotate_obligations(reading: Reading) -> Reading:
         needs = [n for role in u.features.get("senses", []) for n in ROLE_OBLIGATIONS.get(role, [])]
         if "verb" in u.features.get("senses", []) and _key(u.surface) in ("is", "are", "was", "were"):
             needs = needs + ["complement"]   # a copula ALSO links a complement (its predicate side)
+        if "measure" in u.features:          # a self-measuring value ("$12") needs no `quantifies`
+            needs = [n for n in needs if n != "quantifies"]
         if not needs:
             continue
         before = dict(u.features)
@@ -668,7 +677,7 @@ VERB_LEMMA = {"passed": "pass", "wilted": "wilt", "rose": "rise", "failed": "fai
               "finds": "find", "found": "find", "receives": "receive", "loses": "lose",
               "lost": "lose", "sells": "sell", "gives": "give", "gave": "give", "spends": "spend",
               "spent": "spend", "eats": "eat", "ate": "eat", "uses": "use", "used": "use",
-    "jumps": "jump", "jumped": "jump", "runs": "run"}
+    "jumps": "jump", "jumped": "jump", "runs": "run", "earns": "earn", "earned": "earn"}
 
 def _lemma(surface: str) -> str:
     return VERB_LEMMA.get(_key(surface), _key(surface))
@@ -842,21 +851,25 @@ def _relational_quantity(reading: Reading, context: list):
 
 
 def _quantity(reading: Reading):
-    """The quantity a "<entity> <verb>s <value> <noun>" statement asserts, or None — the one verb with
-    a subject and a direct object that a value quantifies. The verb lemma is kept for its polarity."""
+    """The quantity a "<entity> <verb>s <amount>" statement asserts, or None — the one verb with a
+    subject and either a self-measuring money value ("earns $12") or a value quantifying a direct
+    object ("buys 2 apples"). The verb lemma is kept for its polarity."""
     verbs = [u for u in reading.units if "verb" in u.features.get("senses", [])]
     if len(verbs) != 1:
         return None
     subject = _follow(verbs[0], "subject")
-    obj = _follow(verbs[0], "dobj")
-    if subject is None or obj is None:
+    if subject is None:
         return None
+    lemma = _lemma(verbs[0].surface)
+    money = next((u for u in reading.units if "measure" in u.features), None)   # "$12" self-measures
+    if money is not None:
+        return Quantity(_entity(subject), money.features["measure"], money.features["value"], lemma)
+    obj = _follow(verbs[0], "dobj")
     value_unit = next((u for u in reading.units if "value" in u.features.get("senses", [])
-                       and _follow(u, "quantifies") is obj), None)
+                       and _follow(u, "quantifies") is obj), None) if obj is not None else None
     if value_unit is None:
         return None
-    return Quantity(_entity(subject), _descriptor(obj), value_unit.features["value"],
-                    _lemma(verbs[0].surface))
+    return Quantity(_entity(subject), _descriptor(obj), value_unit.features["value"], lemma)
 
 
 def _predication(reading: Reading):
@@ -1153,6 +1166,8 @@ def answer(question: str, context: list):
         return [Deficiency("not-a-question", interro, "this is not a question I can answer")]
     collection = _follow(_follow(interro, "queries"), "collection")   # how → many → its collection
     query = _descriptor(collection) if collection is not None else None
+    if query is None and any(_key(u.surface) == "much" for u in r.units):
+        query = MONEY                                    # "how much [did X earn]?" → a money question
     remainder = any(_key(u.surface) in _REMAINDER for u in r.units)
     aux = next((u for u in r.units if "auxiliary" in u.features.get("senses", [])), None)
     if aux is not None and query is not None and query[0] == "time":   # "How many times does X <verb>?"
@@ -1370,6 +1385,12 @@ def solve(text: str):
     if not qidx:
         return None
     premises, question = sentences[:qidx[-1]], sentences[qidx[-1]]
+    # PRECISION GUARD: if any word in the problem is unrecognized, we may be missing information a
+    # partial parse silently dropped — so we DECLINE rather than commit to a number off a fragment.
+    # (This is the "definitive-or-decline" stance: never answer what we didn't fully read.)
+    readings = [analyze(s) for s in sentences]
+    if any(d.kind == "unknown-word" for r in readings for d in deficiencies(r)):
+        return "undetermined"
     discourse, context = [], []
     for p in premises:
         context += learn(p, discourse, context)

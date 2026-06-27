@@ -318,7 +318,20 @@ routes through the existing holdings fold once `left`/`remaining`/`rest`/… are
 too ("how many are left" → the latest quantity's measure). DISPATCH FIX: lifted the `has_interrogative`
 guard above the copula yes/no branches so a "how many … are <adjective>?" count is no longer stolen by
 the property branch ("are apples left?") — a latent ordering bug. Composes with loss-verb polarity; 214
-tests; precision stays 100% on the dev slice.
+tests; precision stays 100% on the dev slice.  ·
+54. **currency + the precision GUARD (a key lesson)** — "$12" is a self-measuring VALUE (12 of the
+`MONEY` measure; the "$" discharges its `quantifies`, so no dobj noun needed). "X verb $N" → a money
+`Quantity`; "how much" routes like "how many" with the measure fixed to MONEY, so holdings/event-count
+polarity composes. BUT currency unblocked PARTIAL parses of complex multi-step problems, which
+committed to confident-WRONG numbers — precision crashed 100%→17% (5 wrongs). The fix is the
+philosophy made literal: **`solve` now DECLINES if any word in the problem is unrecognized** — a
+partial parse may have silently dropped the fact that mattered, so "definitive-or-decline" applies at
+the whole-problem level, not just per-word. Wrongs → 0, precision → 100%. Consequence: coverage only
+rises when a problem is FULLY readable — so `reading_bench` now reports **fully-read** (every word
+recognized; the vocabulary frontier and the ceiling for coverage). Honest baseline: **0/300 fully-read**
+— GSM8K's vocabulary is vast; the currency capability is correct (unit-proven) but real problems stay
+blocked. Lesson: a new capability that unblocks parsing can REGRESS precision by enabling fragment
+answers; guard commitment on complete understanding.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

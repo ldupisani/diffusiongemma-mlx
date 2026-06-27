@@ -77,9 +77,13 @@ def run(slice_name: str = "dev", limit=None, show: int = 6) -> str:
     correct, wrong, declined, errored = [], [], [], []
     blockers: Counter = Counter()
     unknown_freq: Counter = Counter()
+    fully_read = 0                                       # problems with EVERY word recognized
 
     for row in rows:
         q, gold = row["question"], _gold(row["answer"])
+        unknown = _unknown_words(q)
+        if not unknown:
+            fully_read += 1
         try:
             result = reading.solve(q)
         except Exception as e:                          # a parse blow-up counts as a decline, tallied
@@ -88,8 +92,7 @@ def run(slice_name: str = "dev", limit=None, show: int = 6) -> str:
         val = _as_number(result)
         if val is None:
             declined.append((q, gold, result))
-            unknown = _unknown_words(q)
-            blockers[_blocker(q, unknown)] += 1
+            blockers[_blocker(q, unknown) if unknown else "fully-read but unsolved (structure)"] += 1
             unknown_freq.update(unknown)
         elif gold is not None and abs(val - gold) < 1e-6:
             correct.append((q, gold, val))
@@ -105,6 +108,8 @@ def run(slice_name: str = "dev", limit=None, show: int = 6) -> str:
     out.append(f"  committed: {answered:4d}"
                + (f"  →  precision {100 * len(correct) / answered:.1f}%" if answered else ""))
     out.append(f"  coverage:  {100 * answered / n:.1f}%  (committed to a number)")
+    out.append(f"  fully-read:{fully_read:4d}  ({100 * fully_read / n:.1f}%)  "
+               f"— every word recognized (the vocabulary frontier; the ceiling for coverage)")
 
     if slice_name == "dev":                              # firewall: only DEV is inspectable
         out.append("\n  blockers among declines (where to aim next):")
