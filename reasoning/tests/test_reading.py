@@ -651,5 +651,28 @@ class TestIncrement19Trace(unittest.TestCase):
         self.assertTrue(any("is a student" in s for s in steps))
 
 
+class TestIncrement20MembershipQuestions(unittest.TestCase):
+    """#20 — "Is X a Y?" membership questions, and "Every X is a Y" universal membership (a Subset
+    fact). Together they give the Barbara syllogism: every teacher is a person, Bob is a teacher,
+    therefore Bob is a person — answered by membership reachability over Subset edges."""
+
+    def test_subset_fact_is_learned(self):
+        self.assertEqual(reading.learn("Every teacher is a person"),
+                         [reading.Subset(("teacher", frozenset()), ("person", frozenset()))])
+
+    def test_direct_membership_question(self):
+        ctx = reading.learn("Bob is a student")
+        self.assertEqual(reading.answer("Is Bob a student?", ctx), "yes")
+        self.assertEqual(reading.answer("Is Bob a teacher?", ctx), "no")
+
+    def test_barbara_syllogism(self):
+        ctx = reading.learn("Every teacher is a person") + reading.learn("Bob is a teacher")
+        self.assertEqual(reading.answer("Is Bob a person?", ctx), "yes")
+
+    def test_cli_barbara_in_one_line(self):
+        out = reading.run_cli(["Every teacher is a person. Bob is a teacher. Is Bob a person?"])
+        self.assertEqual(out.strip(), "yes")
+
+
 if __name__ == "__main__":
     unittest.main()

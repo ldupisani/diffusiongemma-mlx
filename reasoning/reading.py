@@ -167,6 +167,7 @@ LEXICON: dict[str, list[str]] = {
     "of": ["preposition"],
     "student": ["noun"],    # open-class content words live here too, tagged by part of speech
     "teacher": ["noun"],
+    "person": ["noun"],
     "apple": ["noun"],
     "passed": ["verb"],
     "red": ["adjective"],   # adjectives modify a noun, contributing an attribute (a set-restriction)
@@ -510,16 +511,55 @@ class Membership:
     collection: tuple
 
 
+def _has_copula(reading: Reading) -> bool:
+    return any("verb" in u.features.get("senses", []) and _key(u.surface) in
+               ("is", "are", "was", "were") for u in reading.units)
+
+
 def _membership(reading: Reading):
     """The membership a copula statement asserts ("X is a Y"), or None — exactly one named
     individual, one noun, and a copula (is/are/was/were)."""
     names = [u for u in reading.units if "name" in u.features.get("senses", [])]
     nouns = [u for u in reading.units if "noun" in u.features.get("senses", [])]
-    has_copula = any("verb" in u.features.get("senses", []) and _key(u.surface) in
-                     ("is", "are", "was", "were") for u in reading.units)
-    if has_copula and len(names) == 1 and len(nouns) == 1:
+    if _has_copula(reading) and len(names) == 1 and len(nouns) == 1:
         return Membership(_key(names[0].surface), _descriptor(nouns[0]))
     return None
+
+
+@dataclass(frozen=True)
+class Subset:
+    """A universal-membership fact "Every X is a Y": collection `sub` is contained in `sup`, so
+    every member of `sub` is a member of `sup`. e.g. "Every teacher is a person"."""
+    sub: tuple
+    sup: tuple
+
+
+def _subset(reading: Reading):
+    """The subset a universal copula statement asserts ("Every X is a Y"), or None — a universal
+    quantifier, a copula, and exactly two nouns (subject then complement)."""
+    nouns = [u for u in reading.units if "noun" in u.features.get("senses", [])]
+    has_universal = any("quantifier" in u.features.get("senses", []) and
+                        _key(u.surface) in ("every", "all") for u in reading.units)
+    if has_universal and _has_copula(reading) and len(nouns) == 2:
+        sub, sup = sorted(nouns, key=lambda u: u.words[0].index)
+        return Subset(_descriptor(sub), _descriptor(sup))
+    return None
+
+
+def _is_member(member: str, target: tuple, context: list) -> bool:
+    """Is `member` in collection `target`? True if directly a member, or reachable from one of its
+    collections by following Subset edges (transitive). The membership-inference engine."""
+    frontier = [m.collection for m in context if isinstance(m, Membership) and m.member == member]
+    seen = set()
+    while frontier:
+        c = frontier.pop()
+        if c == target:
+            return True
+        if c in seen:
+            continue
+        seen.add(c)
+        frontier += [f.sup for f in context if isinstance(f, Subset) and f.sub == c]
+    return False
 
 
 def _follow(unit, need):
@@ -541,6 +581,11 @@ def answer(question: str, context: list):
     unknown = [d for d in deficiencies(r) if d.kind == "unknown-word"]
     if unknown:
         return unknown                                   # don't guess about words we don't know
+
+    names = [u for u in r.units if "name" in u.features.get("senses", [])]
+    nouns = [u for u in r.units if "noun" in u.features.get("senses", [])]
+    if _has_copula(r) and len(names) == 1 and len(nouns) == 1:   # "Is X a Y?" membership question
+        return "yes" if _is_member(_key(names[0].surface), _descriptor(nouns[0]), context) else "no"
 
     aux = next((u for u in r.units if "auxiliary" in u.features.get("senses", [])), None)
     if aux is not None:                                  # yes/no question
@@ -593,6 +638,16 @@ def explain(question: str, context: list) -> list:
     unknown = [d.message for d in deficiencies(r) if d.kind == "unknown-word"]
     if unknown:
         return unknown
+    names = [u for u in r.units if "name" in u.features.get("senses", [])]
+    nouns = [u for u in r.units if "noun" in u.features.get("senses", [])]
+    if _has_copula(r) and len(names) == 1 and len(nouns) == 1:   # membership derivation
+        member, target = _key(names[0].surface), _descriptor(nouns[0])
+        cols = [m.collection[0] for m in context if isinstance(m, Membership) and m.member == member]
+        verdict = "yes" if _is_member(member, target, context) else "no"
+        return [f"is {member!r} a {target[0]}?",
+                f"{member!r} is a: {', '.join(cols) or 'nothing known'}",
+                f"reachable to {target[0]} via subset edges? {verdict}"]
+
     aux = next((u for u in r.units if "auxiliary" in u.features.get("senses", [])), None)
     if aux is not None:                                  # yes/no derivation
         verb = _follow(aux, "asks_predication")
@@ -631,6 +686,9 @@ def learn(statement: str) -> list:
         coll = _follow(u, "collection") if value is not None else None
         if coll is not None:
             return [_descriptor(coll)] * value
+    s = _subset(r)                                       # "Every X is a Y" → universal membership?
+    if s is not None:
+        return [s]
     m = _membership(r)                                   # "<name> is a <noun>" → membership?
     if m is not None:
         return [m]

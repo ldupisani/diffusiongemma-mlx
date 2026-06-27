@@ -129,7 +129,10 @@ works directly (no `--about` needed) ·
 19. **`--trace` + `explain()`** — exposes the analyzed data and reasoning: per statement/question,
 the parsed units (senses + obligation bindings), the reversible decision trail, the facts learned,
 and the derivation behind the verdict. Surfacing the trail caught a hard-coded `oblige` reason
-(every obligation said "quantifier ranges over a collection") — now reports the real need.
+(every obligation said "quantifier ranges over a collection") — now reports the real need ·
+20. **membership questions + Barbara syllogism** — `"Is X a Y?"` (membership question) and
+`"Every X is a Y"` (a `Subset` fact). `_is_member` checks membership by reachability over `Subset`
+edges (transitive), so "Every teacher is a person. Bob is a teacher. Is Bob a person?" → yes.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
@@ -143,11 +146,13 @@ the shape now (free); aggregation/counting is *derived later* when a question's 
   (negates a clause?) can be added and will only apply when that reading covers best.
 - **"Forego when subordinated"**: a noun used as an object shouldn't independently demand a
   `predicate`; refine so object-nouns don't read as false fragments.
-- **Deeper inference**: multi-hop chains ("all A are B", "all B are C", "is x a C?"), negative
-  universals ("no students failed"), transitivity. The one-hop instantiation in `answer()` is the
-  seed of a small deductive engine.
-- **More question types**: which/what ("which apples are red?"), comparison ("are there more red
-  than green?"). Each is another interrogative obligation fulfilled against context.
+- **Open-class words** to add as we meet them (probe surfaced: verbs `sells`/`bought`/`failed`,
+  nouns `car`/`dog`, etc.) — each with a `VERB_LEMMA` entry where needed.
+- **Negation**: `"not"` (`"Bob did not pass"`), negative universals (`"No students failed"`).
+- **Predicate adjectives**: `"The apple is red"` / `"Is the apple red?"` — copula + adjective as a
+  property fact, distinct from membership.
+- **wh-questions**: `who` / `what` / `which` — each a new interrogative obligation.
+- **Comparatives**: `"taller than"` — a relational fact (the deferred relations thread).
 - **Verb lemmas** are a small hand-list (`VERB_LEMMA`); grows by deliberate addition like the other
   dictionaries (no stemming guesswork).
 - **Overlapping facts**: count statements are currently assumed disjoint (subset-matching sums
