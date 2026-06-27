@@ -1010,6 +1010,10 @@ def _resolve_references(reading: Reading, discourse: list) -> None:
 # baseline) adds. Keyed by lemma; grown deliberately like the other dictionaries.
 LOSS_VERBS = {"lose", "sell", "give", "spend", "eat", "use", "drop"}
 
+# A comparative's arithmetic direction: −1 lowers the referent ("10 years YOUNGER" → −10), +1 raises it.
+COMPARATIVE_SIGN = {"less": -1, "fewer": -1, "younger": -1, "shorter": -1, "lighter": -1,
+                    "slower": -1, "cheaper": -1, "smaller": -1, "lower": -1, "poorer": -1}
+
 
 def _verb_sign(lemma: str) -> int:
     """+1 for a gain or the 'have' baseline, -1 for a loss verb — how this quantity folds."""
@@ -1118,7 +1122,7 @@ def _comparative_quantity(reading: Reading, context: list):
     referent = _holdings(_entity(standard), measure, context)
     if referent is None:
         return None                                      # standard's count unknown (e.g. forward ref)
-    sign = -1 if _key(comp.surface) in ("less", "fewer") else 1
+    sign = COMPARATIVE_SIGN.get(_key(comp.surface), 1)   # "younger"/"less" → −, "older"/"more" → +
     return Quantity(_entity(subject), measure, referent + sign * value_unit.features["value"],
                     _lemma(verbs[0].surface))
 
@@ -1269,7 +1273,9 @@ def _copula_args(reading: Reading):
 def _membership(reading: Reading):
     """The membership a copula statement asserts ("X is a Y"), or None — read off the copula's bound
     subject (a name) and complement (a noun); polarity from a negation bound to the copula."""
-    subj, comp = _copula_args(reading)
+    if any("value" in u.features.get("senses", []) for u in reading.units):
+        return None                                      # "Kris is 24 years old" is a QUANTITY, not a
+    subj, comp = _copula_args(reading)                   # membership — defer to the quantity extractors
     if _has_sense(subj, "name") and _has_sense(comp, "noun"):
         return Membership(_key(subj.surface), _descriptor(comp),
                           _verb_negated(_copula_unit(reading), reading))
@@ -1457,6 +1463,25 @@ def answer(question: str, context: list, discourse: list = None):
         val = translate.run_program(
             f"answer = {percent.features['value']} * {base.features['value']}")
         return int(val) if val == int(val) else val
+    if any("interrogative" in u.features.get("senses", []) for u in r.units) \
+            and any(_key(u.surface) == "old" for u in r.units):   # "How old is/will X be?" → age (years)
+        shift = ("next", "ago", "last", "later")         # a future/past age SHIFT we don't compute
+        if any(_key(u.surface) in shift or any(a in shift for a in u.features.get("attributes", []))
+               for u in r.units):                        # "next year" merges → "next" is an attribute
+            return "undetermined"
+        aux = next((u for u in r.units if "auxiliary" in u.features.get("senses", [])), None)
+        if aux is not None:
+            entities, _ = _question_subjects(r, aux)
+        else:                                            # "How old is X?" — copula, subject is fronted
+            subj, _ = _copula_args(r)
+            entities = [_entity(subj)] if subj is not None else []
+        total = 0
+        for ent in entities:
+            h = _holdings(ent, ("year", frozenset()), context)
+            if h is None:
+                return "undetermined"
+            total += h
+        return (int(total) if total == int(total) else total) if entities else "undetermined"
 
     who = next((u for u in r.units if "wh_subject" in u.features.get("senses", [])), None)
     if who is not None:                                  # "Who <predicate>?" → subjects with it

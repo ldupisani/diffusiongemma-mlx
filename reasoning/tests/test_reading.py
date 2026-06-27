@@ -1723,5 +1723,30 @@ class TestIncrement61PercentHoldingCompoundsAndGroupRef(unittest.TestCase):
                                        "how many goats do they have in total?"), 320)
 
 
+class TestIncrement62AgeQuestions(unittest.TestCase):
+    """#62 - age / "how old": "X is N years old" -> an age Quantity (measure year); "X is N years
+    younger/older than Y" -> a comparative age (younger = -, older = +, via COMPARATIVE_SIGN);
+    "how old is/will X be?" reads the year-holdings. A future/past SHIFT ("next year") declines."""
+
+    def test_age_statement_is_a_quantity_not_membership(self):
+        self.assertEqual(reading.learn("Kris is 24 years old"),
+                         [reading.Quantity("kris", ("year", frozenset()), 24.0, "is")])
+
+    def test_younger_age(self):
+        self.assertEqual(reading.solve("Herbert is 10 years younger than Kris. Kris is 24 years old. "
+                                       "How old is Herbert?"), 14)
+
+    def test_older_age_will_be(self):
+        self.assertEqual(reading.solve("Tom is 5 years older than Bob. Bob is 10 years old. "
+                                       "How old will Tom be?"), 15)
+
+    def test_temporal_shift_declines(self):
+        self.assertEqual(reading.solve("Herbert is 10 years younger than Kris. Kris is 24 years old. "
+                                       "How old will Herbert be next year?"), "undetermined")
+
+    def test_plain_membership_unaffected(self):
+        self.assertEqual(reading.answer("Is Bob a student?", reading.learn("Bob is a student")), "yes")
+
+
 if __name__ == "__main__":
     unittest.main()

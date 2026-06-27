@@ -470,7 +470,15 @@ so "how much does SHE have" works — which made the real Susie solve. (d) That 
 "they" had resolved to ONE entity ("how many do THEY have in total" → just the last) — now "they"/"them"
 resolves to the GROUP of all prior entities (a `members` list, reusing the conjoined-subject machinery),
 so Paddington (180+140) → 320. **Second real GSM8K problem solves.** Precision held at 100% throughout
-(the group fix turned a confident-wrong back into a correct). 269 tests.
+(the group fix turned a confident-wrong back into a correct). 269 tests.  ·
+69. **age / "how old" questions** — map onto the comparative machinery: "X is N years old" → an age
+`Quantity` (measure `year`, verb `be`); "X is N years younger/older than Y" → a comparative age
+(`COMPARATIVE_SIGN`: younger/shorter/lighter… → −, older/taller… → +, replacing the hardcoded
+less/fewer); "how old is/will X be?" reads the year-holdings (entity via `_question_subjects` or the
+copula subject). FIX: `_membership` now skips when a VALUE is present ("Kris is 24 years old" is a
+QUANTITY, not Membership(kris, year)). PRECISION: a future/past SHIFT ("how old will X be NEXT YEAR")
+declines — caught by checking the shift word's ATTRIBUTE too, since "next year" condenses to year{next}.
+Precision 100% (the shift check turned a confident-wrong back into a decline). 274 tests.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
