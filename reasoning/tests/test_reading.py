@@ -1694,5 +1694,34 @@ class TestIncrement60EachDistribution(unittest.TestCase):
                           reading.Quantity("tom", ("orange", frozenset()), 2.0, "have")])
 
 
+class TestIncrement61PercentHoldingCompoundsAndGroupRef(unittest.TestCase):
+    """#61 - percentage of a holding ("puts 20% more money" -> 0.2 x the prior quantity); multi-word
+    INDIVISIBLE compounds ("piggy bank" -> one unit); the QUESTION's pronouns resolve against the
+    discourse ("how much does SHE have"); a plural "they" resolves to the GROUP of prior entities."""
+
+    def test_percent_more_of_a_holding(self):
+        self.assertEqual(reading.solve("Susie has $200. Susie puts 20% more money. "
+                                       "How much money does Susie have?"), 240)
+
+    def test_percent_quantity_uses_the_referent(self):
+        self.assertEqual(reading.learn("Susie puts 20% more money", None,
+                                       [reading.Quantity("susie", reading.MONEY, 200.0, "have")]),
+                         [reading.Quantity("susie", reading.MONEY, 40.0, "put")])
+
+    def test_piggy_bank_is_one_indivisible_unit(self):
+        r = reading.analyze("her piggy bank")
+        self.assertTrue(any(u.surface == "piggy bank" and u.features.get("senses") == ["noun"]
+                            for u in r.units))
+
+    def test_question_pronoun_resolves_via_discourse(self):
+        self.assertEqual(reading.solve("Susie has $30. Susie spends $10. "
+                                       "How much money does she have?"), 20)
+
+    def test_they_resolves_to_the_group(self):
+        self.assertEqual(reading.solve("Paddington has 40 more goats than Washington. "
+                                       "If Washington has 140 goats, "
+                                       "how many goats do they have in total?"), 320)
+
+
 if __name__ == "__main__":
     unittest.main()

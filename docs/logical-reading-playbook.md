@@ -460,7 +460,17 @@ of `_quantity` producing two separate conjoined quantities. `_distributed_quanti
 `_quantity`; the unused-given guard exempts "each" premises (the two values multiply into a product, so
 they don't appear verbatim — same exemption as comparative/multiplier). Precision 100%. Real "each"
 GSM8K problems (Colton) are multi-step and still decline via the guards. Follow-on: "each box has 5
-apples" (each BEFORE the noun).
+apples" (each BEFORE the noun).  ·
+68. **percentage-of-a-holding + compounds + question/group coreference** (coverage 1→2). (a) "puts 20%
+more money" → `_percent_quantity` = 0.2 × the matching prior Quantity (a percent with NO base value —
+its base is the referent). (b) MULTI-WORD COMPOUNDS: "piggy bank" merges into ONE indivisible unit
+(`_merge_compounds` before analysis; `COMPOUNDS` = lexicon keys with a space) — the original design's
+"indivisible units". (c) The QUESTION's pronouns now resolve against the discourse (`answer(…, discourse)`),
+so "how much does SHE have" works — which made the real Susie solve. (d) That exposed a wrong: a plural
+"they" had resolved to ONE entity ("how many do THEY have in total" → just the last) — now "they"/"them"
+resolves to the GROUP of all prior entities (a `members` list, reusing the conjoined-subject machinery),
+so Paddington (180+140) → 320. **Second real GSM8K problem solves.** Precision held at 100% throughout
+(the group fix turned a confident-wrong back into a correct). 269 tests.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

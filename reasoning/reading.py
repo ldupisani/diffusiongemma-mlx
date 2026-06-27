@@ -98,6 +98,26 @@ def read(text: str) -> Reading:
     return Reading(units=[Unit(words=[w]) for w in words])
 
 
+def _merge_compounds(reading: Reading) -> Reading:
+    """Merge a known multi-word phrase ("piggy bank") into ONE unit — an INDIVISIBLE compound — before
+    the rest of analysis sees it (so it reads as a single noun, not two words). Reversible."""
+    changed = True
+    while changed:
+        changed = False
+        units = reading.units
+        for i in range(len(units) - 1):
+            phrase = _key(units[i].surface) + " " + _key(units[i + 1].surface)
+            if phrase in COMPOUNDS:
+                merged = Unit(words=sorted(units[i].words + units[i + 1].words, key=lambda w: w.index))
+                reading.record("merge", target=merged,
+                               before={"merged_from": [units[i], units[i + 1]], "at": i},
+                               after={"compound": phrase}, reason=f"indivisible compound {phrase!r}")
+                units[i:i + 2] = [merged]
+                changed = True
+                break
+    return reading
+
+
 # --- annotation: number ---------------------------------------------------------------------
 # We do NOT guess at plurals. A unit is plural iff it appears in this definitive, curated
 # dictionary mapping a known plural to its singular. Irregulars ("children"→"child") cost nothing
@@ -359,6 +379,8 @@ LEXICON: dict[str, list[str]] = {
     "photo": ["noun"], "present": ["noun"], "plate": ["noun"], "bowl": ["noun"], "spoon": ["noun"],
     "fork": ["noun"], "pan": ["noun"], "pot": ["noun"], "dolphin": ["noun"], "step": ["noun"],
     "level": ["noun"], "score": ["noun"], "grade": ["noun"],
+    # multi-word INDIVISIBLE compounds (merged into one unit before analysis — see _merge_compounds):
+    "piggy bank": ["noun"], "ice cream": ["noun"], "high school": ["noun"], "credit card": ["noun"],
     # possessive / object pronouns (recognised, and they extend coreference — "his" → its antecedent):
     "him": ["pronoun"], "his": ["pronoun"], "her": ["pronoun"], "them": ["pronoun"],
     "their": ["pronoun"], "its": ["pronoun"],
@@ -389,6 +411,9 @@ LEXICON: dict[str, list[str]] = {
     "tall": ["adjective"], "old": ["adjective"], "small": ["adjective"], "happy": ["adjective"],
     "blue": ["adjective"], "yellow": ["adjective"],
 }
+
+# Multi-word phrases that are ONE indivisible concept (merged before analysis by _merge_compounds).
+COMPOUNDS = {k for k in LEXICON if " " in k}
 
 # Number words → their value, for "there are N <collection>" statements that introduce instances.
 NUMBERS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5}
@@ -743,6 +768,7 @@ def analyze(text: str) -> Reading:
     a fixed point, and finally resolve (bind) the remaining obligations. Every step is logged and
     reversible; 0 model calls."""
     r = read(text)
+    _merge_compounds(r)      # "piggy bank" → one indivisible unit before anything else reads it
     annotate_number(r)
     annotate_senses(r)
     disambiguate(r)          # collapse multi-sense words to the reading that covers best
@@ -962,14 +988,22 @@ def _resolve_references(reading: Reading, discourse: list) -> None:
         ref_ob = next((o for o in obs if o.need == "refers"), None)
         if ref_ob is None or ref_ob.met:
             continue
-        antecedent = _pick_antecedent(u.features.get("gender"), discourse)
-        if antecedent is None:
-            continue
-        before = dict(u.features)
+        if u.features.get("gender") == "plural":         # "they"/"them" → the GROUP of all prior
+            members = list(dict.fromkeys(discourse))     # distinct entities (a collective, like a
+            if not members:                              # conjoined subject) → _question_subjects expands
+                continue
+            antecedent = " and ".join(members)
+            before = dict(u.features)
+            u.features["members"] = members
+        else:
+            antecedent = _pick_antecedent(u.features.get("gender"), discourse)
+            if antecedent is None:
+                continue
+            before = dict(u.features)
         u.features["obligations"] = [Obligation(o.need, target=Referent(antecedent)) if o is ref_ob
                                      else o for o in obs]
         reading.record("bind", target=u, before=before, after=dict(u.features),
-                       reason=f"{u.surface!r} refers to {antecedent!r} (recency + gender)")
+                       reason=f"{u.surface!r} refers to {antecedent!r}")
 
 
 # A quantity verb's arithmetic polarity: a LOSS verb subtracts, everything else (gains + the "have"
@@ -1115,6 +1149,26 @@ def _rate(reading: Reading):
         return None
     return Rate(_entity(subject), rate_val.features["value"], rate_val.features["measure"],
                 _descriptor(unit)[0], _lemma(verbs[0].surface))
+
+
+def _percent_quantity(reading: Reading, context: list):
+    """A percentage OF A HOLDING — "puts 20% more money" → 0.2 × the matching prior quantity. The
+    percent has NO explicit base value (that case, "20% of 50", is arithmetic) — its base is the
+    referent: the most recent prior Quantity whose measure a noun here names."""
+    pct = next((u for u in reading.units if "percent" in u.features.get("senses", [])), None)
+    if pct is None or _follow(pct, "base") is not None:
+        return None
+    verbs = [u for u in reading.units if "verb" in u.features.get("senses", [])]
+    subject = _follow(verbs[0], "subject") if len(verbs) == 1 else None
+    if subject is None:
+        return None
+    measures = {_descriptor(u) for u in reading.units if "noun" in u.features.get("senses", [])}
+    referent = next((f for f in reversed(context or [])
+                     if isinstance(f, Quantity) and f.measure in measures), None)
+    if referent is None:
+        return None
+    return Quantity(_entity(subject), referent.measure,
+                    pct.features["value"] * referent.amount, _lemma(verbs[0].surface))
 
 
 def _distributed_quantity(reading: Reading):
@@ -1372,12 +1426,15 @@ def _question_subjects(reading: Reading, aux):
     return entities, q_verb
 
 
-def answer(question: str, context: list):
+def answer(question: str, context: list, discourse: list = None):
     """Answer a question against a context of facts. A yes/no question ("Did the student pass?")
     returns "yes"/"no" by checking a Predication; a count question ("How many red apples?") returns
     an int by counting matching instances. Returns a list of Deficiency (what to ASK) when the
-    question can't be answered. Reuses the same parse; dispatches on the interrogative kind."""
+    question can't be answered. Reuses the same parse; dispatches on the interrogative kind. `discourse`
+    resolves the question's own pronouns ("how much does SHE have?" → the entity she refers to)."""
     r = analyze(question)
+    if discourse is not None:
+        _resolve_references(r, discourse)
     unknown = [d for d in deficiencies(r) if d.kind == "unknown-word"]
     if unknown:
         return unknown                                   # don't guess about words we don't know
@@ -1721,6 +1778,14 @@ def _facts_from(reading: Reading, context: list = None) -> list:
         return []                                        # a comparative-quantity structure we couldn't
         # resolve (the standard's count is unknown — a forward ref) → DEFER (don't fall through to a
         # flat _quantity); the solve() fixpoint will retry it once the standard is learned.
+    pq = _percent_quantity(r, context)                   # "puts 20% more money" → 0.2 × holding?
+    if pq is not None:
+        return [pq]
+    pct = next((u for u in r.units if "percent" in u.features.get("senses", [])), None)
+    if pct is not None and _follow(pct, "base") is None \
+            and len([u for u in r.units if "verb" in u.features.get("senses", [])]) == 1 \
+            and any("noun" in u.features.get("senses", []) for u in r.units):
+        return []                                        # percent-of-holding, referent not yet known → defer
     dq = _distributed_quantity(r)                        # "gave 4 stickers each to 3 friends" → 4×3?
     if dq is not None:
         return [dq]
@@ -1858,7 +1923,7 @@ def solve(text: str):
                for s in ("value", "percent", "multiplier")) \
                 and not any(isinstance(f, (Quantity, Rate, Frequency)) for f in (facts_of[i] or [])):
             return "undetermined"
-    return answer(question, context)
+    return answer(question, context, discourse)
 
 
 # --- CLI -------------------------------------------------------------------------------------
