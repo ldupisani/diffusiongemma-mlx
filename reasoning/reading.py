@@ -107,6 +107,9 @@ PLURALS = {
     "students": "student",
     "children": "child",
     "apples": "apple",
+    "dogs": "dog", "cats": "cat", "birds": "bird", "cars": "car", "houses": "house",
+    "trees": "tree", "books": "book", "flowers": "flower", "teachers": "teacher",
+    "people": "person", "men": "man", "women": "woman",
 }
 
 
@@ -189,6 +192,16 @@ LEXICON: dict[str, list[str]] = {
     "did": ["auxiliary"], "does": ["auxiliary"], "do": ["auxiliary"],  # yes/no question markers
     "pass": ["verb"], "fail": ["verb"], "failed": ["verb"],
     "not": ["negation"], "never": ["negation"],   # negators flip a fact's polarity (see NEGATORS)
+    # --- open-class vocabulary (curated, grown deliberately) ---
+    "dog": ["noun"], "cat": ["noun"], "bird": ["noun"], "car": ["noun"], "house": ["noun"],
+    "tree": ["noun"], "book": ["noun"], "flower": ["noun"], "man": ["noun"], "woman": ["noun"],
+    "child": ["noun"],
+    "bark": ["verb"], "barked": ["verb"], "fly": ["verb"], "flew": ["verb"], "run": ["verb"],
+    "ran": ["verb"], "swim": ["verb"], "swam": ["verb"], "sleep": ["verb"], "slept": ["verb"],
+    "sing": ["verb"], "sang": ["verb"], "sell": ["verb"], "sold": ["verb"], "buy": ["verb"],
+    "bought": ["verb"],
+    "tall": ["adjective"], "old": ["adjective"], "small": ["adjective"], "happy": ["adjective"],
+    "blue": ["adjective"], "yellow": ["adjective"],
 }
 
 # Number words → their value, for "there are N <collection>" statements that introduce instances.
@@ -493,7 +506,9 @@ class Predication:
 
 
 # Past tense → base form, so a fact ("passed") and a question ("pass") name the same predicate.
-VERB_LEMMA = {"passed": "pass", "wilted": "wilt", "rose": "rise", "failed": "fail"}
+VERB_LEMMA = {"passed": "pass", "wilted": "wilt", "rose": "rise", "failed": "fail",
+              "barked": "bark", "flew": "fly", "ran": "run", "swam": "swim", "slept": "sleep",
+              "sang": "sing", "sold": "sell", "bought": "buy"}
 
 # Words that negate a statement's polarity. "no" both quantifies AND negates ("no students failed"
 # = students did NOT fail); detection is by surface, independent of which sense was selected.

@@ -765,5 +765,24 @@ class TestIncrement24Comparatives(unittest.TestCase):
         self.assertEqual(out.strip(), "yes")
 
 
+class TestIncrement25Vocabulary(unittest.TestCase):
+    """#25 — a batch of open-class words (nouns, verbs with lemmas, adjectives, plurals) so common
+    sentences parse and reason. Vocabulary is curated data, grown deliberately — not stemming."""
+
+    def test_new_words_parse_cleanly(self):
+        for s in ["The dog barked.", "Birds fly.", "The cat slept.", "Mary is happy."]:
+            unknown = [d for d in reading.deficiencies(reading.analyze(s)) if d.kind == "unknown-word"]
+            self.assertEqual(unknown, [], s)
+
+    def test_reasoning_with_new_vocabulary(self):
+        out = reading.run_cli(["All dogs bark. Rex is a dog. Does Rex bark?"])
+        self.assertEqual(out.strip(), "yes")
+
+    def test_new_plural_and_lemma(self):
+        # "dogs" inherits noun via singular "dog"; "barked" lemmatizes to "bark"
+        self.assertEqual(reading.learn("All dogs barked"),
+                         [reading.Predication(("dog", frozenset()), "bark")])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -142,7 +142,9 @@ merge), distinct from attributive `"red apple"`. `"Is the apple red?"` queries i
 23. **wh-questions** — `"Who passed?"` returns the subjects with that predicate; `"What is Bob?"`
 returns Bob's collections. These return ENTITIES, not yes/no. (`which` over instances still queued.) ·
 24. **comparatives** — `"Alice is taller than Bob"` is a `Relation` fact; comparisons are
-TRANSITIVE (`_related` walks the edges), so A>B>C ⊢ A>C. The first true relation (not set membership).
+TRANSITIVE (`_related` walks the edges), so A>B>C ⊢ A>C. The first true relation (not set membership) ·
+25. **open-class vocabulary** — a curated batch of nouns/verbs/adjectives (with plurals + lemmas),
+grown deliberately like every other dictionary, so common sentences parse and reason.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
@@ -156,13 +158,12 @@ the shape now (free); aggregation/counting is *derived later* when a question's 
   (negates a clause?) can be added and will only apply when that reading covers best.
 - **"Forego when subordinated"**: a noun used as an object shouldn't independently demand a
   `predicate`; refine so object-nouns don't read as false fragments.
-- **Open-class words** to add as we meet them (probe surfaced: verbs `sells`/`bought`/`failed`,
-  nouns `car`/`dog`, etc.) — each with a `VERB_LEMMA` entry where needed.
-- **Negation**: `"not"` (`"Bob did not pass"`), negative universals (`"No students failed"`).
-- **Predicate adjectives**: `"The apple is red"` / `"Is the apple red?"` — copula + adjective as a
-  property fact, distinct from membership.
-- **wh-questions**: `who` / `what` / `which` — each a new interrogative obligation.
-- **Comparatives**: `"taller than"` — a relational fact (the deferred relations thread).
+- **Transitive verbs / objects**: `"Mary owns a dog"` currently drops the object (predication is
+  subject-verb only) — model the object so `"What does Mary own?"` works.
+- **`which`-questions over instances**: `"Which apples are red?"` — enumerate matching instances.
+- **Multi-hop predication**: chain a universal through several subset/membership hops; combine with
+  relations. The inference in `answer()` is still shallow (one universal, one relation walk).
+- **Overlapping-fact counts** and **contradiction detection** (a fact and its negation both present).
 - **Verb lemmas** are a small hand-list (`VERB_LEMMA`); grows by deliberate addition like the other
   dictionaries (no stemming guesswork).
 - **Overlapping facts**: count statements are currently assumed disjoint (subset-matching sums
