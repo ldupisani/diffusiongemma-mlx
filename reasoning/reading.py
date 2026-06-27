@@ -178,6 +178,7 @@ LEXICON: dict[str, list[str]] = {
     "wilted": ["verb"],
     "how": ["interrogative"],   # asks about the quantity word to its right ("how many …")
     "many": ["quantifier"],     # a quantity quantifier — ranges over a collection like any other
+    "who": ["wh"], "what": ["wh"],   # wh-questions: return entities, not yes/no (handled in answer)
     "there": ["existential"],   # existential "there are …" — introduces instances into the context
     "are": ["verb"],
     "is": ["verb"],
@@ -607,6 +608,22 @@ def answer(question: str, context: list):
     unknown = [d for d in deficiencies(r) if d.kind == "unknown-word"]
     if unknown:
         return unknown                                   # don't guess about words we don't know
+
+    wh = next((u for u in r.units if "wh" in u.features.get("senses", [])), None)
+    if wh is not None:                                   # wh-question → return entities
+        key, verbs = _key(wh.surface), [u for u in r.units if "verb" in u.features.get("senses", [])]
+        nm = [u for u in r.units if "name" in u.features.get("senses", [])]
+        if key == "who" and len(verbs) == 1:             # who did <predicate>?
+            pred = _lemma(verbs[0].surface)
+            subs = sorted({f.subject[0] for f in context if isinstance(f, Predication)
+                           and f.predicate == pred and not f.negated})
+            return ", ".join(subs) if subs else "(no one)"
+        if key == "what" and len(nm) == 1:               # what is <name>? → its collections
+            member = _key(nm[0].surface)
+            cols = sorted({m.collection[0] for m in context
+                           if isinstance(m, Membership) and m.member == member})
+            return ", ".join(cols) if cols else "(unknown)"
+        return [Deficiency("unanswerable", wh, "I couldn't answer that question")]
 
     names = [u for u in r.units if "name" in u.features.get("senses", [])]
     nouns = [u for u in r.units if "noun" in u.features.get("senses", [])]

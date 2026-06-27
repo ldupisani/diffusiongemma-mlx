@@ -138,7 +138,9 @@ edges (transitive), so "Every teacher is a person. Bob is a teacher. Is Bob a pe
 The positive query then doesn't match → `"no"`, and the false-positive (the real danger) is avoided ·
 22. **predicate adjectives** — `"The apple is red"` is a property fact (predicative adjective, didn't
 merge), distinct from attributive `"red apple"`. `"Is the apple red?"` queries it; reuses
-`Predication` with the adjective as predicate.
+`Predication` with the adjective as predicate ·
+23. **wh-questions** — `"Who passed?"` returns the subjects with that predicate; `"What is Bob?"`
+returns Bob's collections. These return ENTITIES, not yes/no. (`which` over instances still queued.)
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

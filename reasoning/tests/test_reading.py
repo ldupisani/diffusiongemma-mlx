@@ -724,5 +724,22 @@ class TestIncrement22PredicateAdjectives(unittest.TestCase):
         self.assertEqual(reading.run_cli(["The apple is red. Is the apple red?"]).strip(), "yes")
 
 
+class TestIncrement23WhQuestions(unittest.TestCase):
+    """#23 — wh-questions return entities, not yes/no. "Who passed?" → the subjects with that
+    predicate; "What is Bob?" → the collections Bob belongs to. ("(no one)"/"(unknown)" when empty.)"""
+
+    def test_who_did_something(self):
+        self.assertEqual(reading.answer("Who passed?", reading.learn("Bob passed")), "bob")
+
+    def test_who_with_no_match(self):
+        self.assertEqual(reading.answer("Who passed?", []), "(no one)")
+
+    def test_what_is_an_individual(self):
+        self.assertEqual(reading.answer("What is Bob?", reading.learn("Bob is a student")), "student")
+
+    def test_cli_who(self):
+        self.assertEqual(reading.run_cli(["Bob passed. Who passed?"]).strip(), "bob")
+
+
 if __name__ == "__main__":
     unittest.main()
