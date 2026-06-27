@@ -289,7 +289,16 @@ not just its verb. "How many does X HAVE?" folds holdings (baseline + gains − 
 filtered to that verb). The same `Quantity(..., sell)` is −amount toward holdings but +amount toward a
 sales count — the fact is neutral; the query interprets it. Unblocks the most common GSM8K shape and
 gets **GSM8K problem #1 (Natalia) end-to-end at 0 model calls**: "Natalia sold 48 clips. She sold half
-as many. How many clips did Natalia sell?" → 72 (coreference + relational quantity + event-count).
+as many. How many clips did Natalia sell?" → 72 (coreference + relational quantity + event-count).  ·
+51. **GSM8K coverage harness** (`reading_bench.py`) — an INDEPENDENT eval over `reading.solve`,
+firewall-respecting (DEV inspectable, TEST aggregate-only; never in the unit tests). Honest baseline:
+**0% on real GSM8K** — the clean shapes the parser handles ("Tom sold 8 apples") are far simpler than
+real problems ("Natalia sold clips to 48 of her friends in April"). The value is the decline-blocker
+taxonomy + the most-frequent-unknown-word list, which turns "what next?" from a guess into a measurement:
+top blockers are FUNCTION-WORD vocabulary (`to`/`in`/`for`/`on`/`per`/`with`/`from`…), then currency
+(`$`, ~32%) and percentage (~8%). Lesson: the gap analysis guessed "the hardest gaps are coreference &
+relational referents" (true, and now built) — but the FIRST wall is mundane: the parser can't even
+recognize the function words to attempt the structure. Measure before filling.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

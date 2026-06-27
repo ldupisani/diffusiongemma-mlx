@@ -1311,6 +1311,22 @@ def _facts_from(reading: Reading, context: list = None) -> list:
     return [d] if d is not None else []
 
 
+def solve(text: str):
+    """Read a whole word-problem paragraph (premises + a trailing question) and answer the question —
+    threading coreference (`discourse`) and the growing `context` across the premises, exactly as the
+    paragraph CLI does. Returns the raw `answer()` result (a number, a verdict string, or a list of
+    Deficiency). The programmatic entry the GSM8K coverage harness scores. None if there's no question."""
+    sentences = _sentences(text)
+    qidx = [k for k, s in enumerate(sentences) if s.endswith("?")]
+    if not qidx:
+        return None
+    premises, question = sentences[:qidx[-1]], sentences[qidx[-1]]
+    discourse, context = [], []
+    for p in premises:
+        context += learn(p, discourse, context)
+    return answer(question, context)
+
+
 # --- CLI -------------------------------------------------------------------------------------
 # A thin shell over the engine. `run_cli` returns the text to print (factored out of __main__ so it
 # is testable): with no --about it analyzes a statement and reports understood / what to clarify;

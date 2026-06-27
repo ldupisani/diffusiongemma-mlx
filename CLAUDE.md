@@ -94,6 +94,25 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   and `solve_consistent` (K-draw majority vote; `agreement` is the signal — also lifts accuracy).
   Measured via `bench --translate [--backend …] [--style …] [--consistency K]` and the preprocessing
   `bench --ablation`. Wired into `ask` as an OPT-IN fallback (default off — keeps the service 0-call).
+- **`reasoning/reading.py`** — the **model-free obligation parser** (a separate, bottom-up effort to
+  REPLACE the LLM translator): grammar lives in the words, each carrying an *obligation* it discharges
+  by binding; parsing, sense-disambiguation, deficiency-detection and reasoning are all one
+  coverage/saturation mechanism. Ingests statements into facts (`Predication`/`Membership`/`Subset`/
+  `Relation`/`Quantity`/`Frequency` + count instances) and answers questions with a four-verdict
+  epistemic square (yes/no/undetermined/conflict) plus count/wh/which/aggregation and **arithmetic**
+  (values, operators, quantities, accumulation with signed verbs, coreference, relational quantities,
+  question-relative polarity). `solve(text)` reads a whole word-problem paragraph (premises + trailing
+  question); arithmetic executes through `translate.run_program` (the audited safe evaluator). 0 model
+  calls; every step a reversible `Decision`, auditable via `--trace`. Strategy doc:
+  `docs/logical-reading-playbook.md`; tests `reasoning/tests/test_reading.py` (curated/synthetic, never
+  GSM8K). CLI: `python -m reasoning.reading "<text>" [--trace]`.
+- **`reasoning/reading_bench.py`** — INDEPENDENT GSM8K coverage harness for `reading.solve` (mirrors
+  `bench.py`'s firewall: DEV=train inspectable, TEST=test aggregate-only; never imported by the unit
+  tests). Scores against the gold `#### N`, reports coverage / precision / a decline-blocker taxonomy
+  (currency / percentage / unknown-word / structure) and the **most-frequent unknown words** (the
+  data-driven vocabulary worklist). Baseline: **0%** on real GSM8K (the clean shapes the parser handles
+  are far simpler than real problems; top blockers are function-word vocabulary, then `$`/`%`). 0 model
+  calls. CLI: `python -m reasoning.reading_bench --slice dev|test [--limit N]`.
 - **`backend.py`** — pluggable inference backend (see below).
 - **`reasoning/mcp_server.py`** — exposes the reasoning project as an MCP service (FastMCP, stdio):
   `ask` (route → coded answer + domain + model-call count; 0-call compound split; non-coded types
