@@ -238,11 +238,14 @@ the shape now (free); aggregation/counting is *derived later* when a question's 
 
 ## Open threads / next
 
-- **Give `boolean` (and other deferred senses) their obligations** — now unblocked: disambiguation
-  by coverage means `no`-as-quantifier no longer wrongly inherits `boolean`'s demand. `boolean→`
-  (negates a clause?) can be added and will only apply when that reading covers best.
+- **`boolean` sense of `no`** (decided: leave as-is): no meaningful obligation exists in this
+  statement grammar — `no` reliably reads as a quantifier (its `collection` always binds), and a
+  standalone polar `No` isn't ingested. Kept as the multi-sense demonstrator (#5); a forced
+  obligation would never fire.
 - **Verb lemmas** are a small hand-list (`VERB_LEMMA`); grows by deliberate addition like the other
   dictionaries (no stemming guesswork).
-- **Overlapping facts**: count statements are currently assumed disjoint (subset-matching sums
-  them). "3 red apples" + "1 rotten red apple" would double-count — needs an inclusion model.
+- **Overlapping facts** (documented limitation): counts assume DISJOINT sub-collections — correct
+  for "3 red, 2 green" → 5, but "3 red + 1 rotten red" double-counts. A correct fix is
+  underdetermined without instance identity (we can't verify overlap); would need a count-layer
+  redesign to `(descriptor → count)` facts with exact-match + partition logic. Left as-is.
 - **Aggregation beyond count**: sum across heads, max, "which has the most" (count comparison done).
