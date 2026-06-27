@@ -434,7 +434,16 @@ sentence becomes its own premise. This feeds the fixpoint, and **the first real 
 end-to-end at 0 model calls**: "Tim has 30 less apples than Martha, and Harry has half as many apples as
 Tim. If Martha has 68 apples, how many apples does Harry have?" → 19 — composing clause-split +
 comparative + named-relational + forward-ref + fixpoint + holdings, ZERO glue. Coverage 0→0.3% (1/300),
-**precision still 100% (0 wrong)** — a benchmark point earned without lowering the bar to commit.
+**precision still 100% (0 wrong)** — a benchmark point earned without lowering the bar to commit.  ·
+65. **verb elision ("grandparents twice as much" borrows "gave")** — a clause joined by `, and` that
+LACKS a verb but has a SUBJECT before its quantity ("Mary 5 apples", "her grandparents twice as much")
+inherits the prior clause's verb. `_split_clauses` now splits when the left has a verb and the right is
+an `_is_elided_clause` (a name/noun BEFORE its first value/multiplier — which distinguishes it from a
+bare conjoined object "2 oranges", quantity-first/no-subject); `_supply_verb` inserts the left's last
+verb after the right's subject and re-analyzes. SIDE-FIX: "how much" is a MONEY question UNLESS a mass
+noun sits IMMEDIATELY after it — "how much did GRANDPARENTS give" had bound `much→collection→grandparents`
+(the subject) and asked "count grandparents"; the adjacency check routes it to money. 261 tests;
+precision 100%. The synthesis is guarded (only fires on a real elided clause), so no confident-wrongs.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

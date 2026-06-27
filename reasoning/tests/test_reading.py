@@ -1650,5 +1650,30 @@ class TestIncrement58MultiStepChaining(unittest.TestCase):
                                        "How many apples does Tim have?"), "undetermined")
 
 
+class TestIncrement59VerbElision(unittest.TestCase):
+    """#59 - verb elision: a clause joined by ', and' that lacks a verb but has a SUBJECT before its
+    quantity ("Mary 5 apples", "grandparents twice as much") BORROWS the prior clause's verb. A bare
+    conjoined object ("2 oranges": quantity-first, no subject) is NOT treated as elided."""
+
+    def test_simple_elision_splits_and_inherits(self):
+        self.assertEqual(reading._split_clauses("Tom has 3 apples, and Mary 5 apples"),
+                         ["Tom has 3 apples", "Mary has 5 apples"])
+
+    def test_simple_elision_solves(self):
+        self.assertEqual(reading.solve("Tom has 3 apples, and Mary 5 apples. "
+                                       "How many apples does Mary have?"), 5)
+
+    def test_relational_elision_solves(self):
+        self.assertEqual(reading.solve("Parents gave $15, and grandparents twice as much. "
+                                       "How much did grandparents give?"), 30)
+
+    def test_conjoined_object_is_not_elision(self):
+        self.assertEqual(reading._split_clauses("Tom has 3 apples and 2 oranges"),
+                         ["Tom has 3 apples and 2 oranges"])
+
+    def test_how_much_is_money_not_a_subject_count(self):
+        self.assertEqual(reading.solve("Tom gave $5. How much did Tom give?"), 5)
+
+
 if __name__ == "__main__":
     unittest.main()

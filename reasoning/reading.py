@@ -125,6 +125,7 @@ PLURALS = {
     "customers": "customer", "workers": "worker", "tickets": "ticket", "gifts": "gift",
     "cards": "card", "coins": "coin", "bills": "bill", "goats": "goat", "roommates": "roommate",
     "stickers": "sticker", "marbles": "marble", "cars": "car", "children": "child",
+    "parents": "parent", "grandparents": "grandparent",
 }
 
 
@@ -303,6 +304,7 @@ LEXICON: dict[str, list[str]] = {
     "jar": ["noun"], "customer": ["noun"], "worker": ["noun"], "ticket": ["noun"], "gift": ["noun"],
     "card": ["noun"], "coin": ["noun"], "bill": ["noun"], "goat": ["noun"], "roommate": ["noun"],
     "sticker": ["noun"], "marble": ["noun"], "child": ["noun"], "person": ["noun"], "car": ["noun"],
+    "parent": ["noun"], "grandparent": ["noun"], "friend": ["noun"],
     "washing": ["noun"], "babysitting": ["noun"],
     # possessive / object pronouns (recognised, and they extend coreference — "his" → its antecedent):
     "him": ["pronoun"], "his": ["pronoun"], "her": ["pronoun"], "them": ["pronoun"],
@@ -1406,8 +1408,12 @@ def answer(question: str, context: list):
         return [Deficiency("not-a-question", interro, "this is not a question I can answer")]
     collection = _follow(_follow(interro, "queries"), "collection")   # how → many → its collection
     query = _descriptor(collection) if collection is not None else None
-    if query is None and any(_key(u.surface) == "much" for u in r.units):
-        query = MONEY                                    # "how much [did X earn]?" → a money question
+    much = next((u for u in r.units if _key(u.surface) == "much"), None)
+    if much is not None:                                 # "how much" → a MONEY question, UNLESS a mass
+        coll = _follow(much, "collection")               # noun sits immediately after it ("how much
+        mi = r.units.index(much)                         # WATER"); a non-adjacent noun ("how much did
+        if coll is None or r.units.index(coll) != mi + 1:   # GRANDPARENTS give") is the subject, not it
+            query = MONEY
     remainder = any(_key(u.surface) in _REMAINDER for u in r.units)
     aux = next((u for u in r.units if "auxiliary" in u.features.get("senses", [])), None)
     comp = next((u for u in r.units if "comparative" in u.features.get("senses", [])), None)
@@ -1644,17 +1650,54 @@ def _has_verb(text: str) -> bool:
     return any("verb" in u.features.get("senses", []) for u in analyze(text).units)
 
 
+def _main_verb(text: str):
+    """The surface of the last verb in a clause — the action to lend to an elided neighbour."""
+    verbs = [u for u in analyze(text).units if "verb" in u.features.get("senses", [])]
+    return verbs[-1].surface if verbs else None
+
+
+def _is_elided_clause(text: str) -> bool:
+    """A verb-less clause whose verb is ELIDED: it has a SUBJECT (name/noun) BEFORE its first quantity
+    ("her grandparents twice as much", "Mary 5 apples") — distinct from a bare conjoined object
+    ("2 oranges": the quantity comes first, no subject)."""
+    units = analyze(text).units
+    qi = next((k for k, u in enumerate(units)
+               if any(s in u.features.get("senses", []) for s in ("value", "multiplier"))), None)
+    return qi is not None and any(
+        any(s in units[k].features.get("senses", []) for s in ("name", "noun")) for k in range(qi))
+
+
+def _supply_verb(clause: str, verb: str):
+    """Insert `verb` after the elided clause's subject (its first name/noun) — "Mary 5 apples" +
+    "has" → "Mary has 5 apples". None if there's no subject word to anchor to."""
+    if verb is None:
+        return None
+    subj = next((u for u in analyze(clause).units
+                 if any(s in u.features.get("senses", []) for s in ("name", "noun"))), None)
+    if subj is None:
+        return None
+    idx, words = subj.words[-1].index, clause.split()
+    if idx >= len(words):
+        return None
+    return " ".join(words[:idx + 1] + [verb] + words[idx + 1:])
+
+
 def _split_clauses(sentence: str) -> list:
-    """Split a sentence into INDEPENDENT clauses joined by ';'/'and'/comma — but ONLY where both sides
-    have their own verb. So a clause-joining "and" ("Tim has X, and Harry has Y") splits, while a
-    phrase-joining "and" ("3 apples and 2 oranges", "Tom and Mary") does NOT. Recursive, so a chain of
-    clauses (and a leading "If P, Q?" premise) all separate."""
+    """Split a sentence into INDEPENDENT clauses joined by ';'/'and'/comma — ONLY where the left has its
+    own verb AND the right either has one too OR is an elided clause that can BORROW the left's verb. A
+    phrase-joining "and" ("3 apples and 2 oranges", "Tom and Mary") does NOT split. Recursive, so a
+    chain of clauses (and a leading "If P, Q?" premise) all separate."""
     for sep in ("; ", ", and ", ", but ", ", so ", " and ", ", "):
         i = sentence.find(sep)
         while i != -1:
             left, right = sentence[:i].strip(), sentence[i + len(sep):].strip()
-            if _has_verb(left) and _has_verb(right):
-                return _split_clauses(left) + _split_clauses(right)
+            if _has_verb(left):
+                if _has_verb(right):
+                    return _split_clauses(left) + _split_clauses(right)
+                if _is_elided_clause(right):           # the right borrows the left's verb (elision)
+                    synth = _supply_verb(right, _main_verb(left))
+                    if synth:
+                        return _split_clauses(left) + _split_clauses(synth)
             i = sentence.find(sep, i + 1)
     return [sentence]
 
