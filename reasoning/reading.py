@@ -254,6 +254,8 @@ LEXICON: dict[str, list[str]] = {
     "left": ["adjective"], "remaining": ["adjective"], "leftover": ["adjective"], "rest": ["noun"],
     "remain": ["verb"], "remains": ["verb"],
     "earn": ["verb"], "earns": ["verb"], "earned": ["verb"],
+    "work": ["verb"], "works": ["verb"], "worked": ["verb"],
+    "per": ["per"],   # a rate: "$12 PER hour" — a value distributed over a unit
     "pass": ["verb"], "fail": ["verb"], "failed": ["verb"],
     "not": ["negation"], "never": ["negation"],   # negators flip a fact's polarity (see NEGATORS)
     # --- open-class vocabulary (curated, grown deliberately) ---
@@ -351,6 +353,7 @@ ROLE_OBLIGATIONS: dict[str, list[str]] = {
     "pronoun": ["refers"],              # a pronoun must find its antecedent (resolved cross-sentence
                                         # against the discourse, not within one reading)
     "multiplier": ["scales"],           # a frequency multiplier scales the verb to its left ("jumps TWICE")
+    "per": ["rate", "unit"],            # "$12 per hour" — binds the rate value (left) and the unit (right)
 }
 
 # Obligations that are grammatically OPTIONAL: unmet is not a deficiency. A verb's direct object is
@@ -446,6 +449,12 @@ def _find_target(need, u, i, units, pos):
             return rq[0]
         ll = left("verb")
         return max(ll, key=lambda x: pos[id(x)]) if ll else None
+    if need == "rate":            # "per"'s rate value: the nearest value to its LEFT ("$12 per hour")
+        ll = left("value")
+        return max(ll, key=lambda x: pos[id(x)]) if ll else None
+    if need == "unit":            # "per"'s unit: the nearest noun to its RIGHT
+        r = right("noun")
+        return r[0] if r else None
     if need == "left":            # an operator's left operand: the nearest value to its left
         ll = left("value")
         return max(ll, key=lambda x: pos[id(x)]) if ll else None
@@ -610,7 +619,7 @@ def deficiencies(reading: Reading) -> list:
     # subordinated: it's discharged by being that slot-filler, so its own unmet obligations are
     # foregone — "the dog" in "Mary owns a dog" doesn't independently demand a predicate.
     subordinated = {id(o.target) for u in reading.units for o in u.features.get("obligations", [])
-                    if o.met and o.need in ("complement", "dobj", "left", "right")}
+                    if o.met and o.need in ("complement", "dobj", "left", "right", "unit")}
     out = []
     for u in reading.units:
         if not u.features.get("senses"):
@@ -677,7 +686,8 @@ VERB_LEMMA = {"passed": "pass", "wilted": "wilt", "rose": "rise", "failed": "fai
               "finds": "find", "found": "find", "receives": "receive", "loses": "lose",
               "lost": "lose", "sells": "sell", "gives": "give", "gave": "give", "spends": "spend",
               "spent": "spend", "eats": "eat", "ate": "eat", "uses": "use", "used": "use",
-    "jumps": "jump", "jumped": "jump", "runs": "run", "earns": "earn", "earned": "earn"}
+    "jumps": "jump", "jumped": "jump", "runs": "run", "earns": "earn", "earned": "earn",
+    "works": "work", "worked": "work"}
 
 def _lemma(surface: str) -> str:
     return VERB_LEMMA.get(_key(surface), _key(surface))
@@ -848,6 +858,34 @@ def _relational_quantity(reading: Reading, context: list):
         return None
     return Quantity(_entity(subject), referent.measure,
                     mult.features["value"] * referent.amount, _lemma(verbs[0].surface))
+
+
+@dataclass(frozen=True)
+class Rate:
+    """A per-unit rate: "Weng earns $12 per hour" → Rate("weng", 12, MONEY, "hour", "earn"). The total
+    is `amount × (the quantity of per_unit)` — composed at answer time, not stored."""
+    entity: str
+    amount: float
+    measure: tuple
+    per_unit: str
+    verb: str
+
+
+def _rate(reading: Reading):
+    """The rate a "<entity> <verb>s $R per <unit>" statement asserts, or None. Slice 1 is money rates
+    (the rate value carries its own MONEY measure); "N items per unit" comes later."""
+    per = next((u for u in reading.units if "per" in u.features.get("senses", [])), None)
+    if per is None:
+        return None
+    rate_val, unit = _follow(per, "rate"), _follow(per, "unit")
+    if rate_val is None or unit is None or "measure" not in rate_val.features:
+        return None
+    verbs = [u for u in reading.units if "verb" in u.features.get("senses", [])]
+    subject = _follow(verbs[0], "subject") if len(verbs) == 1 else None
+    if subject is None:
+        return None
+    return Rate(_entity(subject), rate_val.features["value"], rate_val.features["measure"],
+                _descriptor(unit)[0], _lemma(verbs[0].surface))
 
 
 def _quantity(reading: Reading):
@@ -1200,9 +1238,15 @@ def answer(question: str, context: list):
                     folded = [_verb_sign(f.verb) * f.amount for f in qs]
                 else:
                     folded = [f.amount for f in qs if f.verb == q_verb]   # events of THIS verb
-                if not folded:
-                    return "undetermined"                # no relevant quantity for this conjunct
-                total += sum(folded)
+                if folded:
+                    total += sum(folded)
+                    continue
+                rate = next((f for f in context if isinstance(f, Rate) and f.entity == ent     # rate ×
+                             and f.measure == query and f.verb == q_verb), None)                # per-unit
+                per_qty = _holdings(ent, (rate.per_unit, frozenset()), context) if rate else None
+                if per_qty is None:
+                    return "undetermined"                # no relevant quantity/rate for this conjunct
+                total += rate.amount * per_qty
             return int(total) if total == int(total) else total
     if remainder:                                        # "How many [<measure>] are left?" → the net
         measure = query                                  # HOLDINGS of the (implicit) owner — no aux/entity
@@ -1365,6 +1409,9 @@ def _facts_from(reading: Reading, context: list = None) -> list:
     fr = _frequency(r)                                   # "<entity> <verb>s twice" → frequency?
     if fr is not None:
         return [fr]
+    rate = _rate(r)                                      # "<entity> earns $12 per hour" → rate?
+    if rate is not None:
+        return [rate]
     q = _quantity(r)                                     # "<entity> has <value> <noun>" → quantity?
     if q is not None:
         return [q]

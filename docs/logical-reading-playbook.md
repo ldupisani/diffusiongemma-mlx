@@ -331,7 +331,15 @@ rises when a problem is FULLY readable — so `reading_bench` now reports **full
 recognized; the vocabulary frontier and the ceiling for coverage). Honest baseline: **0/300 fully-read**
 — GSM8K's vocabulary is vast; the currency capability is correct (unit-proven) but real problems stay
 blocked. Lesson: a new capability that unblocks parsing can REGRESS precision by enabling fragment
-answers; guard commitment on complete understanding.
+answers; guard commitment on complete understanding.  ·
+55. **per → rates (money)** — "$12 per hour" is a `Rate(entity, amount, measure, per_unit, verb)`:
+"per" binds the rate value (left) and the unit noun (right). The TOTAL isn't stored — it's composed at
+answer time as `rate.amount × _holdings(entity, per_unit)`, slotting into the existing event-count fold
+as a FALLBACK (no direct money quantity → try a rate). "Weng earns $12 per hour. Weng works 3 hours.
+How much did Weng earn?" → 36. Declines when the per-unit quantity is unknown (the per-unit `_holdings`
+→ None). Because it reuses `_holdings`, a rate composes with accumulation for free (hours add up first).
+Same lesson as polarity: facts stay neutral, the query computes. Precision stays 100%; "per" leaves the
+unknown frontier. Slice 1 is money; "N items per unit" (non-money rate measure) is the follow-on.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

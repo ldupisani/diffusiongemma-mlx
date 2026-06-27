@@ -1441,5 +1441,28 @@ class TestIncrement51Currency(unittest.TestCase):
         self.assertEqual(reading.solve("Tom has $10. Tom spends $3. How much money does Tom have?"), 7)
 
 
+class TestIncrement52Rates(unittest.TestCase):
+    """#52 — "per" rates (slice 1: money). "$12 per hour" is a Rate (a value distributed over a unit);
+    the total is composed at answer time as rate.amount x (quantity of the per-unit). "Weng earns $12
+    per hour. Weng works 3 hours. How much did Weng earn?" -> 36."""
+
+    def test_rate_is_learned(self):
+        self.assertEqual(reading.learn("Weng earns $12 per hour"),
+                         [reading.Rate("weng", 12.0, reading.MONEY, "hour", "earn")])
+
+    def test_rate_times_quantity(self):
+        out = reading.run_cli(["Weng earns $12 per hour. Weng works 3 hours. How much did Weng earn?"])
+        self.assertEqual(out.strip(), "36")
+
+    def test_rate_without_the_quantity_declines(self):
+        out = reading.run_cli(["Weng earns $12 per hour. How much did Weng earn?"])
+        self.assertEqual(out.strip(), "undetermined")
+
+    def test_flat_money_still_works(self):
+        # "$12" with no "per" is still a flat money quantity, not a rate
+        self.assertEqual(reading.learn("Weng earns $12"),
+                         [reading.Quantity("weng", reading.MONEY, 12.0, "earn")])
+
+
 if __name__ == "__main__":
     unittest.main()
