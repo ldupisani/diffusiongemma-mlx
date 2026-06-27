@@ -955,5 +955,27 @@ class TestIncrement31UndeterminedVerdict(unittest.TestCase):
         self.assertEqual(reading.answer("Is Bob taller than Alice?", ctx), "no")
 
 
+class TestIncrement32UniversalPropertyInstantiation(unittest.TestCase):
+    """#32 — fix probe bug E: a universal PROPERTY ("Every student is happy") instantiates to a
+    member, exactly like a universal predication. Properties are Predications with the adjective as
+    the predicate, so they route through the same universal-instantiation verdict."""
+
+    def test_property_universal_only_for_all_every(self):
+        self.assertTrue(reading.learn("Every student is happy")[0].universal)
+        self.assertFalse(reading.learn("The apple is red")[0].universal)
+
+    def test_universal_property_instantiates_to_a_member(self):
+        ctx = reading.learn("Every student is happy") + reading.learn("Bob is a student")
+        self.assertEqual(reading.answer("Is Bob happy?", ctx), "yes")
+
+    def test_existential_property_does_not_instantiate(self):
+        ctx = reading.learn("Some students are happy") + reading.learn("Bob is a student")
+        self.assertEqual(reading.answer("Is Bob happy?", ctx), "undetermined")
+
+    def test_direct_and_negated_property_unchanged(self):
+        self.assertEqual(reading.answer("Is the apple red?", reading.learn("The apple is red")), "yes")
+        self.assertEqual(reading.answer("Is the apple red?", reading.learn("The apple is not red")), "no")
+
+
 if __name__ == "__main__":
     unittest.main()

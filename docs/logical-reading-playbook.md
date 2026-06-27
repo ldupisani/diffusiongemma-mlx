@@ -198,7 +198,11 @@ through `_is_member` (transitive Subset). So `"Some students passed"` no longer 
 or comparative asymmetry), or **`"undetermined"`** (we lack the information). No more closed-world
 `"no"`: `"Some students passed. … Did Bob pass?"` → `undetermined`. Applies to all yes/no branches
 (predication / membership / property / comparative). This IS the tool's contract: answer, decline,
-or say precisely what can't be concluded.
+or say precisely what can't be concluded ·
+32. **universal property instantiation** (probe bug E) — a property IS a `Predication` (adjective as
+predicate), so `_property` carries the `universal` flag and the property question routes through
+`_predication_verdict`. `"Every student is happy. Bob is a student. Is Bob happy?"` → `yes`; `"Some
+…"` → `undetermined`. The bug-C fix, one layer up (verbs → adjectives).
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
@@ -217,6 +221,10 @@ the shape now (free); aggregation/counting is *derived later* when a question's 
 - **`which`-questions over instances**: `"Which apples are red?"` — enumerate matching instances.
 - **Contradiction detection** (probe bug D): a fact and its negation both present (`"Bob passed.
   Bob did not pass."`) — currently the positive wins silently; report a conflict instead.
+- **Negative subset / disjointness** (probe bug F): `"No students are teachers"` should be a NEGATED
+  `Subset` (disjoint), so `"Is Bob (a student) a teacher?"` → `no`. Currently mis-parsed / undetermined.
+- **`explain()` for property/comparative questions** — `--trace` currently says "not a question I can
+  answer" for those (the answer is correct; only the derivation text is missing).
 - **Verb lemmas** are a small hand-list (`VERB_LEMMA`); grows by deliberate addition like the other
   dictionaries (no stemming guesswork).
 - **Overlapping facts**: count statements are currently assumed disjoint (subset-matching sums

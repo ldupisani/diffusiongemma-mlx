@@ -663,8 +663,9 @@ def _property(reading: Reading):
     adjective; polarity from any negator. Distinct from attributive "red apple" (which merges)."""
     subj, comp = _copula_args(reading)
     if (_has_sense(subj, "noun") or _has_sense(subj, "name")) and _has_sense(comp, "adjective"):
+        cop = _copula_unit(reading)
         return Predication(_descriptor(subj), _key(comp.surface),
-                           _verb_negated(_copula_unit(reading), reading))
+                           _verb_negated(cop, reading), _universal(cop, reading))
     return None
 
 
@@ -799,12 +800,8 @@ def answer(question: str, context: list):
         return "undetermined"
 
     prop = _property(r)                                  # "Is <subject> <adjective>?" property question
-    if prop is not None:
-        if Predication(prop.subject, prop.predicate) in context:
-            return "yes"
-        if Predication(prop.subject, prop.predicate, negated=True) in context:
-            return "no"
-        return "undetermined"
+    if prop is not None:                                 # a property is a Predication (adjective as
+        return _predication_verdict(prop.subject, prop.predicate, context)   # predicate) → same verdict
 
     aux = next((u for u in r.units if "auxiliary" in u.features.get("senses", [])), None)
     if aux is not None:                                  # "Did X <verb>?" → yes / no / undetermined
