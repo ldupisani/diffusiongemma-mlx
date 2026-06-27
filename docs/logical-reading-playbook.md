@@ -424,7 +424,17 @@ additive like "30 less" but is multiplicative — the Riku trap; refusing means 
 resolves it → declines, never the plausible-wrong 85+25); (c) relational referents resolve by NAME
 ("half as many as TIM" → Tim's quantity, not "most recent" — makes the chain robust, not order-lucky).
 A test flipped decline→38 (the capability landing). 256 tests; precision 100%. Follow-on: multi-CLAUSE
-sentences (comma-joined "Tim …, and Harry …" is one premise — needs clause splitting).
+sentences (comma-joined "Tim …, and Harry …" is one premise — needs clause splitting).  ·
+64. **clause splitting → FIRST real GSM8K solve** — `_split_clauses` splits a sentence into independent
+clauses joined by `;`/`, and`/`and`/comma, but ONLY where BOTH sides have their own verb (so a
+clause-joining "and" splits, a phrase-joining "and" — "3 apples and 2 oranges", "Tom and Mary" — does
+not; same structural-honesty discriminator as everywhere). `solve` splits all sentences into clauses
+and picks the `?`-clause as the question, so a leading "If P, Q?" premise embedded in the question
+sentence becomes its own premise. This feeds the fixpoint, and **the first real GSM8K problem solves
+end-to-end at 0 model calls**: "Tim has 30 less apples than Martha, and Harry has half as many apples as
+Tim. If Martha has 68 apples, how many apples does Harry have?" → 19 — composing clause-split +
+comparative + named-relational + forward-ref + fixpoint + holdings, ZERO glue. Coverage 0→0.3% (1/300),
+**precision still 100% (0 wrong)** — a benchmark point earned without lowering the bar to commit.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

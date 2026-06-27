@@ -1640,17 +1640,40 @@ def _facts_from(reading: Reading, context: list = None) -> list:
     return [d] if d is not None else []
 
 
+def _has_verb(text: str) -> bool:
+    return any("verb" in u.features.get("senses", []) for u in analyze(text).units)
+
+
+def _split_clauses(sentence: str) -> list:
+    """Split a sentence into INDEPENDENT clauses joined by ';'/'and'/comma — but ONLY where both sides
+    have their own verb. So a clause-joining "and" ("Tim has X, and Harry has Y") splits, while a
+    phrase-joining "and" ("3 apples and 2 oranges", "Tom and Mary") does NOT. Recursive, so a chain of
+    clauses (and a leading "If P, Q?" premise) all separate."""
+    for sep in ("; ", ", and ", ", but ", ", so ", " and ", ", "):
+        i = sentence.find(sep)
+        while i != -1:
+            left, right = sentence[:i].strip(), sentence[i + len(sep):].strip()
+            if _has_verb(left) and _has_verb(right):
+                return _split_clauses(left) + _split_clauses(right)
+            i = sentence.find(sep, i + 1)
+    return [sentence]
+
+
 def solve(text: str):
     """Read a whole word-problem paragraph (premises + a trailing question) and answer the question —
-    threading coreference (`discourse`) and the growing `context` across the premises, exactly as the
-    paragraph CLI does. Returns the raw `answer()` result (a number, a verdict string, or a list of
-    Deficiency). The programmatic entry the GSM8K coverage harness scores. None if there's no question."""
+    threading coreference (`discourse`) and the growing `context` across the premises (split into
+    independent CLAUSES first, so the fixpoint sees each fact separately). Returns the raw `answer()`
+    result. The programmatic entry the GSM8K coverage harness scores. None if there's no question."""
     sentences = _sentences(text)
-    qidx = [k for k, s in enumerate(sentences) if s.endswith("?")]
-    if not qidx:
+    if not any(s.endswith("?") for s in sentences):
         return None
-    premises, question = sentences[:qidx[-1]], sentences[qidx[-1]]
-    readings = [analyze(s) for s in sentences]
+    clauses = [c for s in sentences for c in _split_clauses(s)]   # split into independent clauses
+    qpos = max((k for k, c in enumerate(clauses) if c.rstrip().endswith("?")), default=None)
+    if qpos is None:
+        return None
+    question = clauses[qpos]                              # the question clause; the rest are premises
+    premises = clauses[:qpos] + clauses[qpos + 1:]        # (a leading "If P," clause is now a premise)
+    readings = [analyze(c) for c in premises + [question]]
     # PRECISION GUARD 1 — unrecognized word: a partial parse may have dropped the fact that mattered,
     # so we DECLINE rather than commit off a fragment ("definitive-or-decline": never answer what we
     # didn't fully read).
