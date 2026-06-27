@@ -1322,5 +1322,36 @@ class TestIncrement47VerbFrequency(unittest.TestCase):
                          "undetermined")
 
 
+class TestIncrement48RelationalQuantity(unittest.TestCase):
+    """#48 — relational quantities (math step 5b): "Mary has twice as many" is a DERIVED Quantity =
+    factor x a resolved referent (the most recent prior Quantity, like coreference but for a
+    quantity). The multiplier (twice/half) scales the "as many" quantifier; the referent supplies
+    both the measure and the amount."""
+
+    def test_twice_as_many(self):
+        out = reading.run_cli(["Tom has 3 apples. Mary has twice as many. "
+                               "How many apples does Mary have?"])
+        self.assertEqual(out.strip(), "6")
+
+    def test_half_as_many(self):
+        out = reading.run_cli(["Tom has 8 apples. Mary has half as many. "
+                               "How many apples does Mary have?"])
+        self.assertEqual(out.strip(), "4")
+
+    def test_referent_supplies_measure_and_amount(self):
+        ctx = reading.learn("Tom has 3 apples")
+        self.assertEqual(reading.learn("Mary has twice as many", None, ctx),
+                         [reading.Quantity("mary", ("apple", frozenset()), 6, "have")])
+
+    def test_no_referent_declines(self):
+        # nothing prior to be "as many as" -> no fabricated quantity
+        self.assertEqual(reading.learn("Mary has twice as many", None, []), [])
+
+    def test_relational_across_a_pronoun(self):
+        out = reading.run_cli(["Tom has 4 apples. He buys twice as many. "
+                               "How many apples does Tom have?"])
+        self.assertEqual(out.strip(), "12")  # 4 (has) + 8 (twice as many as the 4)
+
+
 if __name__ == "__main__":
     unittest.main()

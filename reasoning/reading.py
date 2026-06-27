@@ -137,8 +137,9 @@ def _as_number(surface: str):
 # The mathematical lexicon's operator words → their arithmetic symbol (step 1; grows deliberately).
 OPERATORS = {"plus": "+", "minus": "-", "times": "*", "divided": "/"}
 
-# Lexicalized frequency multipliers: a value fused with "× N times" — modifies a verb's frequency.
-MULTIPLIERS = {"once": 1, "twice": 2, "thrice": 3}
+# Lexicalized multipliers: a value fused with "× N" — scales a verb's frequency ("jumps twice") or a
+# referent quantity ("twice as many"). `half` is the ×0.5 case ("half as many").
+MULTIPLIERS = {"once": 1, "twice": 2, "thrice": 3, "half": 0.5}
 
 # Coreference: a pronoun's grammatical gender, and a small name→gender lexicon used to pick a
 # compatible antecedent. Both grown deliberately (no guessing from spelling).
@@ -222,6 +223,8 @@ LEXICON: dict[str, list[str]] = {
     "altogether": ["aggregator"], "total": ["aggregator"],   # fold a set of quantities (sum)
     "he": ["pronoun"], "she": ["pronoun"], "it": ["pronoun"], "they": ["pronoun"],  # coreference
     "once": ["multiplier"], "twice": ["multiplier"], "thrice": ["multiplier"],  # frequency (value + ×)
+    "half": ["multiplier"],   # "half as many" → ×0.5 of a referent quantity
+    "as": ["particle"], "much": ["quantifier"],   # "twice as many / as much" relational phrasing
     "time": ["noun"], "times": ["operator", "noun"],   # "times" is × OR the occurrence-noun (ambiguous)
     "jump": ["verb"], "jumps": ["verb"], "jumped": ["verb"], "run": ["verb"], "runs": ["verb"],
     "pass": ["verb"], "fail": ["verb"], "failed": ["verb"],
@@ -406,7 +409,10 @@ def _find_target(need, u, i, units, pos):
     if need == "quantifies":      # a value quantifies the nearest noun to its right ("3 apples")
         r = right("noun")
         return r[0] if r else None
-    if need == "scales":          # a frequency multiplier scales the nearest verb to its LEFT
+    if need == "scales":          # a multiplier scales a quantifier to its RIGHT ("twice as MANY"),
+        rq = right("quantifier")  # else the nearest verb to its LEFT ("jumps TWICE" — frequency)
+        if rq:
+            return rq[0]
         ll = left("verb")
         return max(ll, key=lambda x: pos[id(x)]) if ll else None
     if need == "left":            # an operator's left operand: the nearest value to its left
@@ -774,10 +780,32 @@ def _frequency(reading: Reading):
     if mult is None:
         return None
     verb = _follow(mult, "scales")
-    subject = _follow(verb, "subject") if verb is not None else None
+    if verb is None or "verb" not in verb.features.get("senses", []):   # scaling a quantifier instead
+        return None                                                     # ("twice as many") → not a freq
+    subject = _follow(verb, "subject")
     if subject is None:
         return None
     return Frequency(_entity(subject), _lemma(verb.surface), mult.features["value"])
+
+
+def _relational_quantity(reading: Reading, context: list):
+    """A DERIVED quantity — "Mary has twice as many" → `factor × referent`, the referent being the most
+    recent prior Quantity (resolved like coreference, but for a quantity). The referent supplies the
+    measure; the multiplier supplies the factor. None if there's no multiplier-on-a-quantifier or no
+    referent to scale."""
+    mult = next((u for u in reading.units if "multiplier" in u.features.get("senses", [])), None)
+    if mult is None:
+        return None
+    scaled = _follow(mult, "scales")                     # must scale "as many" (a quantifier), not a verb
+    if scaled is None or "quantifier" not in scaled.features.get("senses", []):
+        return None
+    verbs = [u for u in reading.units if "verb" in u.features.get("senses", [])]
+    subject = _follow(verbs[0], "subject") if len(verbs) == 1 else None
+    referent = next((f for f in reversed(context or []) if isinstance(f, Quantity)), None)
+    if subject is None or referent is None:
+        return None
+    return Quantity(_entity(subject), referent.measure,
+                    mult.features["value"] * referent.amount, _lemma(verbs[0].surface))
 
 
 def _quantity(reading: Reading):
@@ -1217,18 +1245,19 @@ def explain(question: str, context: list) -> list:
     return ["not a question I can answer"]
 
 
-def learn(statement: str, discourse: list = None) -> list:
+def learn(statement: str, discourse: list = None, context: list = None) -> list:
     """Parse a statement into context facts — the one ingestion door. A count statement ("There are
     three red apples") → instances; a subject-verb statement ("The student passed") → a Predication;
     a bare collection ("red apple") → one instance. [] when nothing parses, so we never guess.
 
     `discourse` (entity names, most-recent LAST) threads coreference across sentences: a pronoun's
     `refers` obligation is resolved against it before extraction, and the statement's own subject is
-    appended after, so a later pronoun can find it."""
+    appended after, so a later pronoun can find it. `context` (the facts so far) lets a RELATIONAL
+    quantity ("twice as many") resolve its referent quantity."""
     r = analyze(statement)
     if discourse is not None:
         _resolve_references(r, discourse)
-    facts = _facts_from(r)
+    facts = _facts_from(r, context)
     if discourse is not None:                            # remember this statement's subject entity
         verbs = [u for u in r.units if "verb" in u.features.get("senses", [])]
         subj = _follow(verbs[0], "subject") if len(verbs) == 1 else None
@@ -1237,13 +1266,18 @@ def learn(statement: str, discourse: list = None) -> list:
     return facts
 
 
-def _facts_from(reading: Reading) -> list:
+def _facts_from(reading: Reading, context: list = None) -> list:
     r = reading
     for u in r.units:                                    # count statement?
         value = NUMBERS.get(_key(u.surface))
         coll = _follow(u, "collection") if value is not None else None
         if coll is not None:
             return [_descriptor(coll)] * value
+    mult = next((u for u in r.units if "multiplier" in u.features.get("senses", [])), None)
+    scaled = _follow(mult, "scales") if mult is not None else None
+    if scaled is not None and "quantifier" in scaled.features.get("senses", []):
+        rq = _relational_quantity(r, context)            # "<entity> has twice as many" → derived, or
+        return [rq] if rq is not None else []            # decline (no referent) — never a bare predication
     s = _subset(r)                                       # "Every X is a Y" → universal membership?
     if s is not None:
         return [s]
@@ -1332,8 +1366,8 @@ def run_cli(args: list) -> str:
         qidx = [k for k, s in enumerate(sentences) if s.endswith("?")]
         premises, question = (sentences[:qidx[-1]], sentences[qidx[-1]]) if qidx else ([], None)
     discourse, context = [], []
-    for p in premises:                                     # thread coreference across the premises
-        context += learn(p, discourse)
+    for p in premises:                                     # thread coreference + the growing context
+        context += learn(p, discourse, context)
 
     if question is None:                                   # a single statement → analyze it
         r = analyze(text)
@@ -1349,11 +1383,12 @@ def run_cli(args: list) -> str:
         return _answer_text(answer(question, context))
 
     out = []                                               # the full trace
-    disc = []
+    disc, ctx = [], []
     for s in premises:
         rs = analyze(s)
         _resolve_references(rs, disc)                      # resolve on THIS reading so trace shows it
-        learned = _facts_from(rs)
+        learned = _facts_from(rs, ctx)
+        ctx += learned
         verbs = [u for u in rs.units if "verb" in u.features.get("senses", [])]
         subj = _follow(verbs[0], "subject") if len(verbs) == 1 else None
         if subj is not None:

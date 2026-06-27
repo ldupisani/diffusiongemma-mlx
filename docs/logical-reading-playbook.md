@@ -274,7 +274,15 @@ twice" → Frequency(mary, jump, 2); "How many times does Mary jump?" → 2. `ti
 fall to the operator by sense-order, a verb-to-bind with no second value ("how many times … jump")
 wins as the noun. SIDE-FIX: `_unmet_count` (disambiguation cost) now reuses `deficiencies` so coverage
 and the answer-or-ask boundary share ONE notion of "unmet" (optional/subordinated foregone) — the
-operator reading no longer loses to a `times`-as-noun that opportunistically fills a copula's slot.
+operator reading no longer loses to a `times`-as-noun that opportunistically fills a copula's slot.  ·
+49. **relational quantities (math step 5b)** — "Mary has twice as many" is a DERIVED `Quantity` =
+`factor × referent`, the referent resolved like coreference but pointing at a prior QUANTITY (the
+most recent in `context`, threaded into `learn`). The multiplier now `scales` a quantifier to its
+RIGHT ("twice as MANY") — else a verb to its left (frequency); the referent supplies BOTH the measure
+and the amount. The relational STRUCTURE (multiplier-on-quantifier) is committed-or-declined: no
+referent → `[]`, never a bare predication. Composes: "Tom has 4 apples. He buys twice as many." → 12
+(coreference + relational + signed accumulation, zero glue). `half`=×0.5. Refinements queued: explicit
+referent ("as many as Tom"), same-measure referent selection, "many"'s collection → referent measure.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
@@ -286,8 +294,8 @@ the shape now (free); aggregation/counting is *derived later* when a question's 
 - **GSM8K via this parser (replace the LLM translator)** — kept as an INDEPENDENT eval (a `bench`-style
   harness, never in `test_reading.py`). Roadmap, simplest-first: (1) pure arithmetic ✓; (2) `Quantity`
   facts ("Tom has 3 apples") ✓; (3) aggregation questions ("how many … altogether") ✓; (4) accumulation on
-  one entity ✓; (5a) **coreference** (`he`/`she`) ✓; (5b) "the remaining", "half/twice as many [as X]" **relational
-  quantities** — the second hard gap; (6) units + **world-knowledge conversions** (hour=60min,
+  one entity ✓; (5a) **coreference** (`he`/`she`) ✓; (5b) "half/twice as many" **relational
+  quantities** ✓ (implicit referent); "the remaining", explicit "as many as X" queued; (6) units + **world-knowledge conversions** (hour=60min,
   year=52wk). Build a math/quantity layer in `reading.py`; reuse `translate.run_program` to evaluate.
 - **"N times" STATEMENT form** ("Mary jumps 2 times") — slice 2 of frequency: the multiplier words
   (twice/thrice) ✓; the "N times" form needs the frequency-noun "times" to modify the verb to its LEFT
