@@ -834,5 +834,37 @@ class TestIncrement27ScopedNoNegation(unittest.TestCase):
                       next(o.target for o in failed.features["obligations"] if o.need == "subject"))
 
 
+class TestIncrement28CopulaComplement(unittest.TestCase):
+    """#28 (alignment) — the copula binds BOTH a `subject` and a `complement`; the fact extractors
+    read those bindings instead of counting nouns/adjectives. Inversion-aware so it works for
+    statements (subject left) and fronted questions (subject right)."""
+
+    def test_copula_binds_subject_and_complement(self):
+        r = reading.analyze("Bob is a student")
+        cop = next(u for u in r.units if u.surface == "is")
+        obs = {o.need: o for o in cop.features["obligations"]}
+        self.assertEqual(obs["subject"].target.surface, "Bob")
+        self.assertEqual(obs["complement"].target.surface, "student")
+
+    def test_fronted_question_binds_subject_on_the_right(self):
+        r = reading.analyze("Is Bob a student?")
+        cop = next(u for u in r.units if u.surface == "Is")
+        obs = {o.need: o for o in cop.features["obligations"]}
+        self.assertEqual(obs["subject"].target.surface, "Bob")        # fronted → right
+        self.assertEqual(obs["complement"].target.surface, "student?")  # surface kept lossless
+
+    def test_extractors_read_the_bindings(self):
+        self.assertEqual(reading.learn("Bob is a student"),
+                         [reading.Membership("bob", ("student", frozenset()))])
+        self.assertEqual(reading.learn("The apple is red"),
+                         [reading.Predication(("apple", frozenset()), "red")])
+        self.assertEqual(reading.learn("Every teacher is a person"),
+                         [reading.Subset(("teacher", frozenset()), ("person", frozenset()))])
+
+    def test_questions_still_answer_via_bindings(self):
+        self.assertEqual(reading.answer("Is Bob a student?", reading.learn("Bob is a student")), "yes")
+        self.assertEqual(reading.answer("Is the apple red?", reading.learn("The apple is red")), "yes")
+
+
 if __name__ == "__main__":
     unittest.main()

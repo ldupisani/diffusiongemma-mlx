@@ -179,7 +179,11 @@ verb/copula they scope (no longer a global flag). Polarity then attaches to the 
 a silent false-`yes`) ·
 27. **(alignment) scoped `"no"` negation** — `"no"`-quantifier negation now reads the BINDINGS too:
 a verb is negated iff its `subject` is the collection a `"no"` quantifier bound to — not "is `no`
-present?". Removes the global flag (latent multi-clause over-negation). Behavior-preserving today.
+present?". Removes the global flag (latent multi-clause over-negation). Behavior-preserving today ·
+28. **(alignment) the copula binds a `complement`** — `is`/`are`/`was`/`were` now carry BOTH a
+`subject` and a `complement` obligation (inversion-aware: subject left in statements, right in
+fronted questions). `_membership`/`_property`/`_subset` read those bindings instead of COUNTING
+nouns/adjectives — the keystone that dissolved the unit-counting from the fact-extraction layer.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

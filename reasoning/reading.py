@@ -185,8 +185,7 @@ LEXICON: dict[str, list[str]] = {
     "many": ["quantifier"],     # a quantity quantifier — ranges over a collection like any other
     "who": ["wh"], "what": ["wh"],   # wh-questions: return entities, not yes/no (handled in answer)
     "there": ["existential"],   # existential "there are …" — introduces instances into the context
-    "are": ["verb"],
-    "is": ["verb"],
+    "are": ["verb"], "is": ["verb"], "was": ["verb"], "were": ["verb"],   # copulas (also link a complement)
     "one": ["number"], "two": ["number"], "three": ["number"],   # a number is a quantifier with a
     "four": ["number"], "five": ["number"],                      # VALUE (see NUMBERS)
     "did": ["auxiliary"], "does": ["auxiliary"], "do": ["auxiliary"],  # yes/no question markers
@@ -264,6 +263,8 @@ def annotate_obligations(reading: Reading) -> Reading:
     A unit with no obligation-bearing sense is left untouched."""
     for u in reading.units:
         needs = [n for role in u.features.get("senses", []) for n in ROLE_OBLIGATIONS.get(role, [])]
+        if "verb" in u.features.get("senses", []) and _key(u.surface) in ("is", "are", "was", "were"):
+            needs = needs + ["complement"]   # a copula ALSO links a complement (its predicate side)
         if not needs:
             continue
         before = dict(u.features)
@@ -278,7 +279,7 @@ def annotate_obligations(reading: Reading) -> Reading:
 # the answer is unambiguous — zero or several candidates leave it unmet, a reportable deficiency
 # rather than a guess. We replace the Obligation (not mutate it) so the Decision's before/after
 # snapshots stay a clean, reversible diff. Runs after the obligations pass.
-def _find_target(need, u, i, units, nouns, verbs, names, pos):
+def _find_target(need, u, i, units, nouns, verbs, names, adjs, pos):
     """The unit that discharges obligation `need` on unit `u` (at position `i`), or None if it is
     absent or ambiguous. We commit only when exactly one candidate fits in the right direction."""
     if need == "collection":      # a quantifier ranges over the one available noun
@@ -289,9 +290,19 @@ def _find_target(need, u, i, units, nouns, verbs, names, pos):
         return right[0] if len(right) == 1 else None
     if need == "anchor":          # a preposition attaches to the unit on its immediate left
         return units[i - 1] if i > 0 else None   # (PP-attachment can be ambiguous; revisit later)
-    if need == "subject":         # a verb's subject is the unique noun OR named individual to its left
-        left = [n for n in (nouns + names) if pos[id(n)] < i]
-        return left[0] if len(left) == 1 else None
+    if need == "subject":         # the unique noun/name to the left; if NONE (fronted, e.g. a
+        left = [n for n in (nouns + names) if pos[id(n)] < i]   #   question), the first to the right
+        if len(left) == 1:
+            return left[0]
+        if not left:
+            right = sorted((n for n in (nouns + names) if pos[id(n)] > i), key=lambda n: pos[id(n)])
+            return right[0] if right else None
+        return None
+    if need == "complement":      # a copula links its subject to a complement (noun/name/adjective):
+        left = [n for n in (nouns + names) if pos[id(n)] < i]   #   the nearest to the right, but if
+        right = sorted((x for x in (nouns + names + adjs) if pos[id(x)] > i),  # fronted, the SECOND
+                       key=lambda x: pos[id(x)])                #   (the first right is the subject)
+        return right[0] if left else (right[1] if len(right) > 1 else None)
     if need == "predicate":       # a noun's predicate is the unique verb to its right
         right = [v for v in verbs if pos[id(v)] > i]
         return right[0] if len(right) == 1 else None
@@ -313,13 +324,14 @@ def resolve(reading: Reading) -> Reading:
     nouns = [u for u in units if "noun" in u.features.get("senses", [])]
     verbs = [u for u in units if "verb" in u.features.get("senses", [])]
     names = [u for u in units if "name" in u.features.get("senses", [])]
+    adjs = [u for u in units if "adjective" in u.features.get("senses", [])]
     for i, u in enumerate(units):
         obs = u.features.get("obligations")
         if not obs:
             continue
         new_obs, bound = [], False
         for o in obs:
-            target = None if o.met else _find_target(o.need, u, i, units, nouns, verbs, names, pos)
+            target = None if o.met else _find_target(o.need, u, i, units, nouns, verbs, names, adjs, pos)
             if target is not None:                             # unambiguous → bind
                 new_obs.append(Obligation(o.need, target=target))
                 bound = True
@@ -571,13 +583,25 @@ def _has_copula(reading: Reading) -> bool:
     return _copula_unit(reading) is not None
 
 
+def _has_sense(unit, sense) -> bool:
+    return unit is not None and sense in unit.features.get("senses", [])
+
+
+def _copula_args(reading: Reading):
+    """(subject, complement) units bound by the copula — read from its BINDINGS, not by counting.
+    Works for statements ("Bob is a student") and fronted questions ("Is Bob a student?")."""
+    cop = _copula_unit(reading)
+    if cop is None:
+        return (None, None)
+    return (_follow(cop, "subject"), _follow(cop, "complement"))
+
+
 def _membership(reading: Reading):
-    """The membership a copula statement asserts ("X is a Y"), or None — exactly one named
-    individual, one noun, and a copula; polarity from a negation bound to the copula."""
-    names = [u for u in reading.units if "name" in u.features.get("senses", [])]
-    nouns = [u for u in reading.units if "noun" in u.features.get("senses", [])]
-    if _has_copula(reading) and len(names) == 1 and len(nouns) == 1:
-        return Membership(_key(names[0].surface), _descriptor(nouns[0]),
+    """The membership a copula statement asserts ("X is a Y"), or None — read off the copula's bound
+    subject (a name) and complement (a noun); polarity from a negation bound to the copula."""
+    subj, comp = _copula_args(reading)
+    if _has_sense(subj, "name") and _has_sense(comp, "noun"):
+        return Membership(_key(subj.surface), _descriptor(comp),
                           _verb_negated(_copula_unit(reading), reading))
     return None
 
@@ -591,14 +615,13 @@ class Subset:
 
 
 def _subset(reading: Reading):
-    """The subset a universal copula statement asserts ("Every X is a Y"), or None — a universal
-    quantifier, a copula, and exactly two nouns (subject then complement)."""
-    nouns = [u for u in reading.units if "noun" in u.features.get("senses", [])]
+    """The subset a universal copula statement asserts ("Every X is a Y"), or None — read off the
+    copula's bound subject and complement (both nouns), with a universal quantifier present."""
     has_universal = any("quantifier" in u.features.get("senses", []) and
                         _key(u.surface) in ("every", "all") for u in reading.units)
-    if has_universal and _has_copula(reading) and len(nouns) == 2:
-        sub, sup = sorted(nouns, key=lambda u: u.words[0].index)
-        return Subset(_descriptor(sub), _descriptor(sup))
+    subj, comp = _copula_args(reading)
+    if has_universal and _has_sense(subj, "noun") and _has_sense(comp, "noun"):
+        return Subset(_descriptor(subj), _descriptor(comp))
     return None
 
 
@@ -606,11 +629,9 @@ def _property(reading: Reading):
     """A predicative-adjective fact ("The apple is red"), or None — a copula, one subject (noun or
     name), and one PREDICATIVE adjective (one that didn't merge into a noun). The predicate is the
     adjective; polarity from any negator. Distinct from attributive "red apple" (which merges)."""
-    adjs = [u for u in reading.units if "adjective" in u.features.get("senses", [])]
-    subjects = [u for u in reading.units
-                if "noun" in u.features.get("senses", []) or "name" in u.features.get("senses", [])]
-    if _has_copula(reading) and len(adjs) == 1 and len(subjects) == 1:
-        return Predication(_descriptor(subjects[0]), _key(adjs[0].surface),
+    subj, comp = _copula_args(reading)
+    if (_has_sense(subj, "noun") or _has_sense(subj, "name")) and _has_sense(comp, "adjective"):
+        return Predication(_descriptor(subj), _key(comp.surface),
                            _verb_negated(_copula_unit(reading), reading))
     return None
 
@@ -714,8 +735,9 @@ def answer(question: str, context: list):
         a, b = sorted(names, key=lambda u: u.words[0].index)         # "Is A <comparative> than B?"
         return "yes" if _related(_key(a.surface), _key(comps[0].surface),
                                  _key(b.surface), context) else "no"
-    if _has_copula(r) and len(names) == 1 and len(nouns) == 1:   # "Is X a Y?" membership question
-        return "yes" if _is_member(_key(names[0].surface), _descriptor(nouns[0]), context) else "no"
+    subj, comp = _copula_args(r)                         # "Is X a Y?" membership question
+    if _has_sense(subj, "name") and _has_sense(comp, "noun"):
+        return "yes" if _is_member(_key(subj.surface), _descriptor(comp), context) else "no"
 
     prop = _property(r)                                  # "Is <subject> <adjective>?" property question
     if prop is not None:
@@ -772,10 +794,9 @@ def explain(question: str, context: list) -> list:
     unknown = [d.message for d in deficiencies(r) if d.kind == "unknown-word"]
     if unknown:
         return unknown
-    names = [u for u in r.units if "name" in u.features.get("senses", [])]
-    nouns = [u for u in r.units if "noun" in u.features.get("senses", [])]
-    if _has_copula(r) and len(names) == 1 and len(nouns) == 1:   # membership derivation
-        member, target = _key(names[0].surface), _descriptor(nouns[0])
+    subj, comp = _copula_args(r)
+    if _has_sense(subj, "name") and _has_sense(comp, "noun"):    # membership derivation
+        member, target = _key(subj.surface), _descriptor(comp)
         cols = [m.collection[0] for m in context if isinstance(m, Membership) and m.member == member]
         verdict = "yes" if _is_member(member, target, context) else "no"
         return [f"is {member!r} a {target[0]}?",
