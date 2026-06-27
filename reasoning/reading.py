@@ -220,6 +220,13 @@ LEXICON: dict[str, list[str]] = {
     "sing": ["verb"], "sang": ["verb"], "sell": ["verb"], "sold": ["verb"], "buy": ["verb"],
     "bought": ["verb"], "own": ["verb"], "owns": ["verb"], "owned": ["verb"],
     "have": ["verb"], "has": ["verb"], "had": ["verb"],
+    # accumulation verbs (their lemma's polarity folds in _verb_sign): gains + losses
+    "buy": ["verb"], "buys": ["verb"], "get": ["verb"], "gets": ["verb"], "got": ["verb"],
+    "find": ["verb"], "finds": ["verb"], "found": ["verb"], "receive": ["verb"], "receives": ["verb"],
+    "lose": ["verb"], "loses": ["verb"], "lost": ["verb"], "sells": ["verb"],
+    "give": ["verb"], "gives": ["verb"], "gave": ["verb"], "spend": ["verb"], "spends": ["verb"],
+    "spent": ["verb"], "eat": ["verb"], "eats": ["verb"], "ate": ["verb"], "use": ["verb"],
+    "uses": ["verb"], "used": ["verb"],
     "tall": ["adjective"], "old": ["adjective"], "small": ["adjective"], "happy": ["adjective"],
     "blue": ["adjective"], "yellow": ["adjective"],
 }
@@ -599,7 +606,10 @@ class Predication:
 VERB_LEMMA = {"passed": "pass", "wilted": "wilt", "rose": "rise", "failed": "fail",
               "barked": "bark", "flew": "fly", "ran": "run", "swam": "swim", "slept": "sleep",
               "sang": "sing", "sold": "sell", "bought": "buy", "owns": "own", "owned": "own",
-              "has": "have", "had": "have"}
+              "has": "have", "had": "have", "buys": "buy", "gets": "get", "got": "get",
+              "finds": "find", "found": "find", "receives": "receive", "loses": "lose",
+              "lost": "lose", "sells": "sell", "gives": "give", "gave": "give", "spends": "spend",
+              "spent": "spend", "eats": "eat", "ate": "eat", "uses": "use", "used": "use"}
 
 def _lemma(surface: str) -> str:
     return VERB_LEMMA.get(_key(surface), _key(surface))
@@ -650,19 +660,31 @@ def _universal(verb, reading: Reading) -> bool:
     return False
 
 
+# A quantity verb's arithmetic polarity: a LOSS verb subtracts, everything else (gains + the "have"
+# baseline) adds. Keyed by lemma; grown deliberately like the other dictionaries.
+LOSS_VERBS = {"lose", "sell", "give", "spend", "eat", "use", "drop"}
+
+
+def _verb_sign(lemma: str) -> int:
+    """+1 for a gain or the 'have' baseline, -1 for a loss verb — how this quantity folds."""
+    return -1 if lemma in LOSS_VERBS else 1
+
+
 @dataclass(frozen=True)
 class Quantity:
-    """A counted-amount fact: "Tom has 3 apples" → Quantity("tom", ("apple", frozenset()), 3.0). The
-    measure is a collection descriptor, so attributes work ("3 RED apples"). The arithmetic analogue
-    of Predication."""
+    """A counted-amount fact: "Tom has 3 apples" → Quantity("tom", ("apple", frozenset()), 3.0,
+    "have"). The measure is a collection descriptor ("3 RED apples"); `verb` (the lemma) carries the
+    arithmetic intent (have=baseline, buy=gain, lose=loss) used when folding. Arithmetic analogue of
+    Predication."""
     entity: str
     measure: tuple
     amount: float
+    verb: str = "have"
 
 
 def _quantity(reading: Reading):
-    """The quantity a "<entity> has <value> <noun>" statement asserts, or None — the one verb with a
-    subject and a direct object that a value quantifies."""
+    """The quantity a "<entity> <verb>s <value> <noun>" statement asserts, or None — the one verb with
+    a subject and a direct object that a value quantifies. The verb lemma is kept for its polarity."""
     verbs = [u for u in reading.units if "verb" in u.features.get("senses", [])]
     if len(verbs) != 1:
         return None
@@ -674,7 +696,8 @@ def _quantity(reading: Reading):
                        and _follow(u, "quantifies") is obj), None)
     if value_unit is None:
         return None
-    return Quantity(_key(subject.surface), _descriptor(obj), value_unit.features["value"])
+    return Quantity(_key(subject.surface), _descriptor(obj), value_unit.features["value"],
+                    _lemma(verbs[0].surface))
 
 
 def _predication(reading: Reading):
@@ -980,12 +1003,12 @@ def answer(question: str, context: list):
                     if "name" in u.features.get("senses", []) or "noun" in u.features.get("senses", [])]
         if entities:
             total = 0
-            for ent in entities:                         # fold each entity's amount (sum)
-                amounts = [f.amount for f in context if isinstance(f, Quantity)
-                           and f.entity == ent and f.measure == query]
-                if not amounts:
+            for ent in entities:                         # fold each entity's quantities (signed sum:
+                qs = [f for f in context if isinstance(f, Quantity)   # baseline + gains - losses)
+                      and f.entity == ent and f.measure == query]
+                if not qs:
                     return "undetermined"                # one conjunct's quantity is unknown
-                total += amounts[0]
+                total += sum(_verb_sign(f.verb) * f.amount for f in qs)
             return int(total) if total == int(total) else total
     return sum(1 for inst in context if isinstance(inst, tuple) and _matches(query, inst))
 

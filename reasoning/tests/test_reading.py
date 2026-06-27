@@ -1208,5 +1208,36 @@ class TestIncrement43Aggregation(unittest.TestCase):
         self.assertEqual(out.strip(), "5")
 
 
+class TestIncrement44Accumulation(unittest.TestCase):
+    """#44 — accumulation on one entity (math step 4): repeated Quantity statements for the same
+    entity+measure ACCUMULATE (signed sum). The verb carries the polarity: buy/get = gain (+),
+    lose/sell/give = loss (-), have = baseline. The first arithmetic INTENT carried by a verb."""
+
+    def test_buy_quantity_records_the_verb(self):
+        self.assertEqual(reading.learn("Tom buys 2 apples"),
+                         [reading.Quantity("tom", ("apple", frozenset()), 2.0, "buy")])
+
+    def test_buys_adds(self):
+        ctx = reading.learn("Tom has 3 apples") + reading.learn("Tom buys 2 apples")
+        self.assertEqual(reading.answer("How many apples does Tom have?", ctx), 5)
+
+    def test_loses_subtracts(self):
+        ctx = reading.learn("Tom has 5 apples") + reading.learn("Tom loses 2 apples")
+        self.assertEqual(reading.answer("How many apples does Tom have?", ctx), 3)
+
+    def test_chain_of_changes(self):
+        ctx = (reading.learn("Tom has 3 apples") + reading.learn("Tom buys 4 apples")
+               + reading.learn("Tom gives 2 apples"))
+        self.assertEqual(reading.answer("How many apples does Tom have?", ctx), 5)
+
+    def test_gains_without_a_baseline(self):
+        ctx = reading.learn("Tom buys 3 apples") + reading.learn("Tom buys 2 apples")
+        self.assertEqual(reading.answer("How many apples does Tom have?", ctx), 5)
+
+    def test_cli(self):
+        out = reading.run_cli(["Tom has 3 apples. Tom buys 2 apples. How many apples does Tom have?"])
+        self.assertEqual(out.strip(), "5")
+
+
 if __name__ == "__main__":
     unittest.main()
