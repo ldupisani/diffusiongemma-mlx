@@ -187,7 +187,12 @@ nouns/adjectives — the keystone that dissolved the unit-counting from the fact
 29. **(alignment) comparative + wh obligations** — a `comparative` is the copula's complement and
 binds its `standard` (after "than"), so `_relation` reads off bindings; `who`/`what` bind to what
 they ask about (`asks_predicate` → the verb / `asks_individual` → the name). The last counting is
-gone; every meaningful role now BINDS. (`_find_target` also simplified to compute pools by role.)
+gone; every meaningful role now BINDS. (`_find_target` also simplified to compute pools by role.) ·
+30. **`some` ≠ `all` (+ multi-hop)** — a `Predication` is `universal` only when its subject is bound
+by `all`/`every` (read from the bindings); universal-instantiation uses ONLY universal facts, routed
+through `_is_member` (transitive Subset). So `"Some students passed"` no longer instantiates to Bob
+(probe bug B — a false `yes`), AND multi-hop `"all teachers are persons; every person passed"` ⊢
+"Bob (a teacher) passed" works (probe bug C) — the same fix closes both.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
@@ -208,9 +213,8 @@ the shape now (free); aggregation/counting is *derived later* when a question's 
 - **Transitive verbs / objects**: `"Mary owns a dog"` currently drops the object (predication is
   subject-verb only) — model the object so `"What does Mary own?"` works.
 - **`which`-questions over instances**: `"Which apples are red?"` — enumerate matching instances.
-- **Multi-hop predication**: chain a universal through several subset/membership hops; combine with
-  relations. The inference in `answer()` is still shallow (one universal, one relation walk).
-- **Overlapping-fact counts** and **contradiction detection** (a fact and its negation both present).
+- **Contradiction detection** (probe bug D): a fact and its negation both present (`"Bob passed.
+  Bob did not pass."`) — currently the positive wins silently; report a conflict instead.
 - **Verb lemmas** are a small hand-list (`VERB_LEMMA`); grows by deliberate addition like the other
   dictionaries (no stemming guesswork).
 - **Overlapping facts**: count statements are currently assumed disjoint (subset-matching sums

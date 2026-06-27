@@ -109,7 +109,7 @@ PLURALS = {
     "apples": "apple",
     "dogs": "dog", "cats": "cat", "birds": "bird", "cars": "car", "houses": "house",
     "trees": "tree", "books": "book", "flowers": "flower", "teachers": "teacher",
-    "people": "person", "men": "man", "women": "woman",
+    "people": "person", "persons": "person", "men": "man", "women": "woman",
 }
 
 
@@ -311,7 +311,9 @@ def _find_target(need, u, i, units, pos):
         return None
     if need == "complement":      # a copula's complement (noun/name/adjective/comparative): the nearest
         r = right("noun", "name", "adjective", "comparative")   # to the RIGHT, but if fronted, the
-        return r[0] if left("noun", "name") else (r[1] if len(r) > 1 else None)  # SECOND (1st=subject)
+        if left("noun", "name"):                                # SECOND (the first right is the subject)
+            return r[0] if r else None
+        return r[1] if len(r) > 1 else None
     if need == "standard":        # a comparative's standard of comparison: the noun/name after "than"
         r = right("noun", "name")
         return r[0] if r else None
@@ -524,11 +526,13 @@ def _matches(query, instance) -> bool:
 @dataclass(frozen=True)
 class Predication:
     """A known fact "subject does predicate": ((head, attributes), verb-lemma). Tense is normalized
-    to the lemma so "passed" and "pass" name one predicate. `negated` is the polarity — set when the
-    statement carries a negator, so "Bob did not pass" is NOT the positive "Bob passed"."""
+    to the lemma so "passed" and "pass" name one predicate. `negated` is the polarity. `universal`
+    is True only when the subject is bound by all/every ("All students passed") — only universal
+    facts may be instantiated to a member; an existential ("Some students passed") may NOT."""
     subject: tuple
     predicate: str
     negated: bool = False
+    universal: bool = False
 
 
 # Past tense → base form, so a fact ("passed") and a question ("pass") name the same predicate.
@@ -569,16 +573,32 @@ def _verb_negated(verb, reading: Reading) -> bool:
     return False
 
 
+def _universal(verb, reading: Reading) -> bool:
+    """Is `verb`'s predication universally quantified? True iff its SUBJECT is the collection an
+    all/every quantifier bound to ("All students passed") — read from the bindings, like _verb_negated.
+    "some"/"the"/a number/a bare plural are NOT universal, so they can't be instantiated to a member."""
+    subject = _follow(verb, "subject")
+    if subject is None:
+        return False
+    for u in reading.units:
+        if "quantifier" in u.features.get("senses", []) and _key(u.surface) in ("all", "every"):
+            if any(o.need == "collection" and o.met and o.target is subject
+                   for o in u.features.get("obligations", [])):
+                return True
+    return False
+
+
 def _predication(reading: Reading):
-    """The (subject, predicate, polarity) a simple statement asserts, or None — the one verb and its
-    subject, negated if a negator (not/never/no) is present."""
+    """The (subject, predicate, polarity, scope) a simple statement asserts, or None — the one verb
+    and its subject; negated if a negator is present, universal if an all/every quantifier scopes it."""
     verbs = [u for u in reading.units if "verb" in u.features.get("senses", [])]
     if len(verbs) != 1:
         return None
     subject = _follow(verbs[0], "subject")
     if subject is None:
         return None
-    return Predication(_descriptor(subject), _lemma(verbs[0].surface), _verb_negated(verbs[0], reading))
+    return Predication(_descriptor(subject), _lemma(verbs[0].surface),
+                       _verb_negated(verbs[0], reading), _universal(verbs[0], reading))
 
 
 @dataclass(frozen=True)
@@ -765,11 +785,13 @@ def answer(question: str, context: list):
         query = Predication(_descriptor(subject), _lemma(verb.surface))
         if query in context:                             # directly known
             return "yes"
-        # universal instantiation: the subject is a member of a collection that has the predicate
+        # universal instantiation: a UNIVERSAL fact "all C <pred>" transfers to the subject iff the
+        # subject is a member of C (transitively via Subset — so multi-hop works). Existentials
+        # ("some students passed") are NOT universal and are skipped, so they never instantiate.
         member = query.subject[0]
         for f in context:
-            if isinstance(f, Membership) and f.member == member \
-                    and Predication(f.collection, query.predicate) in context:
+            if isinstance(f, Predication) and f.universal and not f.negated \
+                    and f.predicate == query.predicate and _is_member(member, f.subject, context):
                 return "yes"
         return "no"
 

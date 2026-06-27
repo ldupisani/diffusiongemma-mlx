@@ -781,7 +781,7 @@ class TestIncrement25Vocabulary(unittest.TestCase):
     def test_new_plural_and_lemma(self):
         # "dogs" inherits noun via singular "dog"; "barked" lemmatizes to "bark"
         self.assertEqual(reading.learn("All dogs barked"),
-                         [reading.Predication(("dog", frozenset()), "bark")])
+                         [reading.Predication(("dog", frozenset()), "bark", universal=True)])
 
 
 class TestIncrement26NegationIsAnObligation(unittest.TestCase):
@@ -823,7 +823,7 @@ class TestIncrement27ScopedNoNegation(unittest.TestCase):
 
     def test_universal_without_no_stays_positive(self):
         self.assertEqual(reading.learn("All students failed"),
-                         [reading.Predication(("student", frozenset()), "fail")])
+                         [reading.Predication(("student", frozenset()), "fail", universal=True)])
 
     def test_no_negation_rides_the_collection_binding(self):
         # the 'no' quantifier binds its collection to the same unit the verb takes as subject
@@ -897,6 +897,33 @@ class TestIncrement29ComparativeAndWhObligations(unittest.TestCase):
     def test_wh_questions_still_answer(self):
         self.assertEqual(reading.answer("Who passed?", reading.learn("Bob passed")), "bob")
         self.assertEqual(reading.answer("What is Bob?", reading.learn("Bob is a student")), "student")
+
+
+class TestIncrement30SomeIsNotAll(unittest.TestCase):
+    """#30 — fix probe bug B (+C): an existential "Some X passed" is NOT a universal, so it must not
+    be instantiated to a specific individual. A Predication is `universal` only when its subject is
+    bound by all/every; instantiation uses only those, routed through `_is_member` (so multi-hop
+    membership — bug C — works too)."""
+
+    def test_only_all_every_are_universal(self):
+        self.assertTrue(reading.learn("All students passed")[0].universal)
+        self.assertTrue(reading.learn("Every student passed")[0].universal)
+        self.assertFalse(reading.learn("Some students passed")[0].universal)
+        self.assertFalse(reading.learn("Bob passed")[0].universal)
+
+    def test_some_does_not_instantiate(self):   # bug B
+        ctx = reading.learn("Some students passed") + reading.learn("Bob is a student")
+        self.assertEqual(reading.answer("Did Bob pass?", ctx), "no")
+
+    def test_all_still_instantiates(self):
+        ctx = reading.learn("All students passed") + reading.learn("Bob is a student")
+        self.assertEqual(reading.answer("Did Bob pass?", ctx), "yes")
+
+    def test_multi_hop_predication(self):   # bug C — falls out of the same fix
+        ctx = (reading.learn("All teachers are persons")
+               + reading.learn("Every person passed")
+               + reading.learn("Bob is a teacher"))
+        self.assertEqual(reading.answer("Did Bob pass?", ctx), "yes")
 
 
 if __name__ == "__main__":
