@@ -1158,5 +1158,26 @@ class TestIncrement41Arithmetic(unittest.TestCase):
         self.assertEqual(reading.run_cli(["What is 3 plus 2?"]).strip(), "5")
 
 
+class TestIncrement42QuantityFacts(unittest.TestCase):
+    """#42 — Quantity facts: "Tom has 3 apples" -> Quantity(tom, apple, 3) (a value quantifies the
+    noun via its `quantifies` obligation). "How many apples does Tom have?" reads the amount back."""
+
+    def test_quantity_is_learned(self):
+        self.assertEqual(reading.learn("Tom has 3 apples"),
+                         [reading.Quantity("tom", ("apple", frozenset()), 3.0)])
+
+    def test_how_many_does_entity_have(self):
+        self.assertEqual(reading.answer("How many apples does Tom have?",
+                                        reading.learn("Tom has 3 apples")), 3)
+
+    def test_unknown_entity_is_undetermined(self):
+        self.assertEqual(reading.answer("How many apples does Mary have?",
+                                        reading.learn("Tom has 3 apples")), "undetermined")
+
+    def test_cli(self):
+        self.assertEqual(reading.run_cli(["Tom has 3 apples. How many apples does Tom have?"]).strip(),
+                         "3")
+
+
 if __name__ == "__main__":
     unittest.main()

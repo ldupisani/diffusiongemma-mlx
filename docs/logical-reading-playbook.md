@@ -234,7 +234,11 @@ collections over the instance context via the subset lattice. "more"/"fewer" wit
 A digit token is a `value` (with a numeric `value` feature); operator words (`plus`/`minus`/`times`/
 `divided`) carry an `op` and bind `left`/`right` operands (same shape as the comparative's `standard`).
 "What is 3 plus 2?" → 5, built into a one-line program and run through `translate.run_program` (the
-audited safe evaluator — the model is gone, the correct-by-construction arithmetic stays).
+audited safe evaluator — the model is gone, the correct-by-construction arithmetic stays) ·
+43. **Quantity facts (math step 2)** — "Tom has 3 apples" → `Quantity("tom", (apple,{}), 3)`: a value
+gains a `quantifies` obligation (binds the noun to its right; OPTIONAL so a bare operand quantifies
+nothing). "How many apples does Tom have?" reads the amount back (entity fronted after the auxiliary);
+an unknown entity → `undetermined`, not a fabricated count.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
@@ -245,7 +249,7 @@ the shape now (free); aggregation/counting is *derived later* when a question's 
 
 - **GSM8K via this parser (replace the LLM translator)** — kept as an INDEPENDENT eval (a `bench`-style
   harness, never in `test_reading.py`). Roadmap, simplest-first: (1) pure arithmetic ✓; (2) `Quantity`
-  facts ("Tom has 3 apples"); (3) aggregation questions ("how many … altogether"); (4) accumulation on
+  facts ("Tom has 3 apples") ✓; (3) aggregation questions ("how many … altogether"); (4) accumulation on
   one entity; (5) **coreference** (`he`/`she`, "the remaining", "half as many [as X]") and **relational
   quantities** — the two hard, pervasive gaps; (6) units + **world-knowledge conversions** (hour=60min,
   year=52wk). Build a math/quantity layer in `reading.py`; reuse `translate.run_program` to evaluate.

@@ -217,6 +217,7 @@ LEXICON: dict[str, list[str]] = {
     "ran": ["verb"], "swim": ["verb"], "swam": ["verb"], "sleep": ["verb"], "slept": ["verb"],
     "sing": ["verb"], "sang": ["verb"], "sell": ["verb"], "sold": ["verb"], "buy": ["verb"],
     "bought": ["verb"], "own": ["verb"], "owns": ["verb"], "owned": ["verb"],
+    "have": ["verb"], "has": ["verb"], "had": ["verb"],
     "tall": ["adjective"], "old": ["adjective"], "small": ["adjective"], "happy": ["adjective"],
     "blue": ["adjective"], "yellow": ["adjective"],
 }
@@ -285,11 +286,13 @@ ROLE_OBLIGATIONS: dict[str, list[str]] = {
     "wh_value": ["asks_individual"],    # "what" binds the individual it asks the type of
     "wh_which": ["restricts"],          # "which" binds the noun (collection) it restricts the query to
     "operator": ["left", "right"],      # a binary operator binds its two operands (the values it combines)
+    "value": ["quantifies"],            # a value may quantify a noun ("3 APPLES"); optional (a bare
+                                        # operand in "3 plus 2" quantifies nothing)
 }
 
-# Obligations that are grammatically OPTIONAL: unmet is not a deficiency (e.g. a verb's direct
-# object — "Bob passed" is complete; "Mary owns a dog" simply also fills it).
-OPTIONAL_NEEDS = {"dobj"}
+# Obligations that are grammatically OPTIONAL: unmet is not a deficiency (a verb's direct object, or
+# a bare value that doesn't quantify anything).
+OPTIONAL_NEEDS = {"dobj", "quantifies"}
 
 
 def annotate_obligations(reading: Reading) -> Reading:
@@ -365,6 +368,9 @@ def _find_target(need, u, i, units, pos):
         r = right("name")
         return r[0] if len(r) == 1 else None
     if need == "restricts":       # "which": the noun (collection) it restricts the query to
+        r = right("noun")
+        return r[0] if r else None
+    if need == "quantifies":      # a value quantifies the nearest noun to its right ("3 apples")
         r = right("noun")
         return r[0] if r else None
     if need == "left":            # an operator's left operand: the nearest value to its left
@@ -590,7 +596,8 @@ class Predication:
 # Past tense → base form, so a fact ("passed") and a question ("pass") name the same predicate.
 VERB_LEMMA = {"passed": "pass", "wilted": "wilt", "rose": "rise", "failed": "fail",
               "barked": "bark", "flew": "fly", "ran": "run", "swam": "swim", "slept": "sleep",
-              "sang": "sing", "sold": "sell", "bought": "buy", "owns": "own", "owned": "own"}
+              "sang": "sing", "sold": "sell", "bought": "buy", "owns": "own", "owned": "own",
+              "has": "have", "had": "have"}
 
 def _lemma(surface: str) -> str:
     return VERB_LEMMA.get(_key(surface), _key(surface))
@@ -639,6 +646,33 @@ def _universal(verb, reading: Reading) -> bool:
                    for o in u.features.get("obligations", [])):
                 return True
     return False
+
+
+@dataclass(frozen=True)
+class Quantity:
+    """A counted-amount fact: "Tom has 3 apples" → Quantity("tom", ("apple", frozenset()), 3.0). The
+    measure is a collection descriptor, so attributes work ("3 RED apples"). The arithmetic analogue
+    of Predication."""
+    entity: str
+    measure: tuple
+    amount: float
+
+
+def _quantity(reading: Reading):
+    """The quantity a "<entity> has <value> <noun>" statement asserts, or None — the one verb with a
+    subject and a direct object that a value quantifies."""
+    verbs = [u for u in reading.units if "verb" in u.features.get("senses", [])]
+    if len(verbs) != 1:
+        return None
+    subject = _follow(verbs[0], "subject")
+    obj = _follow(verbs[0], "dobj")
+    if subject is None or obj is None:
+        return None
+    value_unit = next((u for u in reading.units if "value" in u.features.get("senses", [])
+                       and _follow(u, "quantifies") is obj), None)
+    if value_unit is None:
+        return None
+    return Quantity(_key(subject.surface), _descriptor(obj), value_unit.features["value"])
 
 
 def _predication(reading: Reading):
@@ -916,8 +950,11 @@ def answer(question: str, context: list):
         return _predication_verdict(prop.subject, prop.predicate, context)   # predicate) → same verdict
 
     aux = next((u for u in r.units if "auxiliary" in u.features.get("senses", [])), None)
-    if aux is not None:                                  # "Did X <verb> [Y]?" → yes / no / undetermined
-        verb = _follow(aux, "asks_predication")          # did → the verb being asked about
+    has_interrogative = any("interrogative" in u.features.get("senses", []) for u in r.units)
+    if aux is not None and not has_interrogative:        # "Did X <verb> [Y]?" → yes / no / undetermined
+        verb = _follow(aux, "asks_predication")          # did → the verb being asked about (an
+                                                         # interrogative present → it's a "how many …
+                                                         # does …?" count/quantity question instead)
         subject = _follow(verb, "subject") if verb else None
         if subject is None:
             return [Deficiency("unanswerable", aux, "I couldn't tell what is being asked")]
@@ -932,6 +969,18 @@ def answer(question: str, context: list):
     if collection is None:
         return [Deficiency("unanswerable", interro, "I couldn't tell what to count")]
     query = _descriptor(collection)
+    aux = next((u for u in r.units if "auxiliary" in u.features.get("senses", [])), None)
+    if aux is not None:                                  # "How many <measure> does <entity> have?"
+        after = r.units[r.units.index(aux) + 1:]         # the entity is fronted: right after the aux
+        ent_unit = next((u for u in after if "name" in u.features.get("senses", [])
+                         or "noun" in u.features.get("senses", [])), None)
+        if ent_unit is not None:
+            ent = _key(ent_unit.surface)
+            amounts = [f.amount for f in context if isinstance(f, Quantity)
+                       and f.entity == ent and f.measure == query]
+            if amounts:
+                return int(amounts[0]) if amounts[0] == int(amounts[0]) else amounts[0]
+            return "undetermined"
     return sum(1 for inst in context if isinstance(inst, tuple) and _matches(query, inst))
 
 
@@ -1051,6 +1100,9 @@ def learn(statement: str) -> list:
     rel = _relation(r)                                   # "<A> is <comparative> than <B>" → relation?
     if rel is not None:
         return [rel]
+    q = _quantity(r)                                     # "<entity> has <value> <noun>" → quantity?
+    if q is not None:
+        return [q]
     p = _predication(r)                                  # subject-verb statement?
     if p is not None:
         return [p]
