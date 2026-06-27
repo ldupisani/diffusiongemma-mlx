@@ -186,6 +186,7 @@ LEXICON: dict[str, list[str]] = {
     "how": ["interrogative"],   # asks about the quantity word to its right ("how many …")
     "many": ["quantifier"],     # a quantity quantifier — ranges over a collection like any other
     "who": ["wh_subject"], "what": ["wh_value"],   # wh-questions: each binds to what it asks about
+    "which": ["wh_which"],   # "which <noun> …?" restricts to members of that noun
     "there": ["existential"],   # existential "there are …" — introduces instances into the context
     "are": ["verb"], "is": ["verb"], "was": ["verb"], "were": ["verb"],   # copulas (also link a complement)
     "one": ["number"], "two": ["number"], "three": ["number"],   # a number is a quantifier with a
@@ -261,6 +262,7 @@ ROLE_OBLIGATIONS: dict[str, list[str]] = {
     "comparative": ["standard"],   # "taller" must find the standard it compares against (after "than")
     "wh_subject": ["asks_predicate"],   # "who" binds the predicate it asks the subject of
     "wh_value": ["asks_individual"],    # "what" binds the individual it asks the type of
+    "wh_which": ["restricts"],          # "which" binds the noun (collection) it restricts the query to
 }
 
 # Obligations that are grammatically OPTIONAL: unmet is not a deficiency (e.g. a verb's direct
@@ -340,6 +342,9 @@ def _find_target(need, u, i, units, pos):
     if need == "asks_individual":   # "what": the unique named individual to its right
         r = right("name")
         return r[0] if len(r) == 1 else None
+    if need == "restricts":       # "which": the noun (collection) it restricts the query to
+        r = right("noun")
+        return r[0] if r else None
     if need == "negates":         # a negator scopes over the NEAREST verb (copula left, or main right)
         verbs = [x for x in units if has(x, "verb")]
         return min(verbs, key=lambda v: abs(pos[id(v)] - i)) if verbs else None
@@ -828,6 +833,20 @@ def answer(question: str, context: list):
         cols = sorted({m.collection[0] for m in context
                        if isinstance(m, Membership) and m.member == member and not m.negated})
         return ", ".join(cols) if cols else "(unknown)"
+    which = next((u for u in r.units if "wh_which" in u.features.get("senses", [])), None)
+    if which is not None:        # "Which <noun> <predicate>?" → members of the noun that satisfy it
+        coll_unit = _follow(which, "restricts")
+        adjs = [u for u in r.units if "adjective" in u.features.get("senses", [])]
+        verbs = [u for u in r.units if "verb" in u.features.get("senses", [])
+                 and _key(u.surface) not in ("is", "are", "was", "were")]
+        pred = _key(adjs[0].surface) if adjs else (_lemma(verbs[0].surface) if verbs else None)
+        if coll_unit is None or pred is None:
+            return [Deficiency("unanswerable", which, "I couldn't tell what is being asked")]
+        coll = _descriptor(coll_unit)
+        hits = sorted({f.subject[0] for f in context if isinstance(f, Predication)
+                       and f.predicate == pred and not f.negated and f.object is None
+                       and _is_member(f.subject[0], coll, context)})
+        return ", ".join(hits) if hits else "(none)"
 
     subj, comp = _copula_args(r)
     if _has_sense(comp, "comparative"):                  # "Is A <comparative> than B?"

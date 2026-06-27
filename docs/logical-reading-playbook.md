@@ -224,7 +224,10 @@ its right; intransitive verbs leave it unmet without a deficiency, via `Obligati
 student" / "The apple is red" are *understood*, not false fragments — while a real noun phrase
 ("Each of the students", no predicate anywhere) is still flagged ·
 39. **wh-object** — "What does Mary own?" returns the direct OBJECTS of (Mary, own) (the `"what"`
-branch detects the auxiliary+verb pattern); "What is Bob?" still returns memberships.
+branch detects the auxiliary+verb pattern); "What is Bob?" still returns memberships ·
+40. **which-questions** — "Which <noun> <predicate>?" returns the named members of that noun that
+satisfy the predicate (action verb or predicative adjective). "Which students passed?" → the
+students who passed (a teacher who passed is excluded).
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
@@ -236,7 +239,6 @@ the shape now (free); aggregation/counting is *derived later* when a question's 
 - **Give `boolean` (and other deferred senses) their obligations** — now unblocked: disambiguation
   by coverage means `no`-as-quantifier no longer wrongly inherits `boolean`'s demand. `boolean→`
   (negates a clause?) can be added and will only apply when that reading covers best.
-- **`which`-questions over instances**: `"Which apples are red?"` — enumerate matching instances.
 - **Verb lemmas** are a small hand-list (`VERB_LEMMA`); grows by deliberate addition like the other
   dictionaries (no stemming guesswork).
 - **Overlapping facts**: count statements are currently assumed disjoint (subset-matching sums

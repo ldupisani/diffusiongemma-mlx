@@ -1098,5 +1098,22 @@ class TestIncrement38WhObject(unittest.TestCase):
         self.assertEqual(reading.answer("What does Mary own?", []), "(nothing)")
 
 
+class TestIncrement39WhichQuestions(unittest.TestCase):
+    """#39 — "Which <noun> <predicate>?" returns the named members of that noun which satisfy the
+    predicate (an action verb or a predicative adjective)."""
+
+    def test_which_with_a_verb(self):
+        ctx = (reading.learn("Bob is a student") + reading.learn("Bob passed")
+               + reading.learn("Carol is a teacher") + reading.learn("Carol passed"))
+        self.assertEqual(reading.answer("Which students passed?", ctx), "bob")  # Carol is a teacher
+
+    def test_which_with_a_property(self):
+        ctx = reading.learn("Bob is a student") + reading.learn("Bob is happy")
+        self.assertEqual(reading.answer("Which students are happy?", ctx), "bob")
+
+    def test_which_none(self):
+        self.assertEqual(reading.answer("Which students passed?", []), "(none)")
+
+
 if __name__ == "__main__":
     unittest.main()
