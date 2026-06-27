@@ -1376,5 +1376,33 @@ class TestIncrement49QuestionRelativePolarity(unittest.TestCase):
         self.assertEqual(out.strip(), "72")
 
 
+class TestIncrement50RemainderSubtraction(unittest.TestCase):
+    """#50 — "how many are left / remaining" is the HOLDINGS question (baseline + gains - losses) in
+    another surface form. Form A ("does X have left") routes through the existing holdings fold once
+    the remainder words are recognized; Form B ("are left", no aux) folds the implicit unique owner.
+    A "how many" interrogative no longer gets stolen by the property branch ("are apples left?")."""
+
+    def test_have_left_form(self):
+        out = reading.run_cli(["Tom has 10 apples. Tom eats 3 apples. "
+                               "How many apples does Tom have left?"])
+        self.assertEqual(out.strip(), "7")
+
+    def test_are_left_form_implicit_entity(self):
+        out = reading.run_cli(["Tom has 10 apples. Tom eats 3 apples. How many apples are left?"])
+        self.assertEqual(out.strip(), "7")
+
+    def test_remaining_synonym(self):
+        out = reading.run_cli(["Tom has 8 apples. Tom gives 5 apples. How many apples are remaining?"])
+        self.assertEqual(out.strip(), "3")
+
+    def test_implicit_measure(self):
+        out = reading.run_cli(["Tom has 9 apples. Tom eats 4 apples. How many are left?"])
+        self.assertEqual(out.strip(), "5")
+
+    def test_ambiguous_owner_declines(self):
+        out = reading.run_cli(["Tom has 5 apples. Mary has 4 apples. How many apples are left?"])
+        self.assertEqual(out.strip(), "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()

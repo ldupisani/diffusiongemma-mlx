@@ -246,6 +246,9 @@ LEXICON: dict[str, list[str]] = {
     # possessive / object pronouns (recognised, and they extend coreference — "his" → its antecedent):
     "him": ["pronoun"], "his": ["pronoun"], "her": ["pronoun"], "them": ["pronoun"],
     "their": ["pronoun"], "its": ["pronoun"],
+    # "what remains" markers — route a count question to the holdings fold:
+    "left": ["adjective"], "remaining": ["adjective"], "leftover": ["adjective"], "rest": ["noun"],
+    "remain": ["verb"], "remains": ["verb"],
     "pass": ["verb"], "fail": ["verb"], "failed": ["verb"],
     "not": ["negation"], "never": ["negation"],   # negators flip a fact's polarity (see NEGATORS)
     # --- open-class vocabulary (curated, grown deliberately) ---
@@ -771,6 +774,17 @@ def _verb_sign(lemma: str) -> int:
     return -1 if lemma in LOSS_VERBS else 1
 
 
+# Words that ask for what REMAINS — a holdings question ("how many are left / remaining") in another
+# surface form. ("rest" = "the rest"; "remain"/"remains" the verb form.)
+_REMAINDER = {"left", "remaining", "leftover", "remain", "remains", "rest"}
+
+
+def _holdings(entity: str, measure: tuple, context: list):
+    """The net holdings of `entity` for `measure` — baseline + gains − losses — or None if unknown."""
+    qs = [f for f in context if isinstance(f, Quantity) and f.entity == entity and f.measure == measure]
+    return sum(_verb_sign(f.verb) * f.amount for f in qs) if qs else None
+
+
 @dataclass(frozen=True)
 class Quantity:
     """A counted-amount fact: "Tom has 3 apples" → Quantity("tom", ("apple", frozenset()), 3.0,
@@ -1100,27 +1114,29 @@ def answer(question: str, context: list):
             more = counts[0] > counts[1] if _key(qcomp.surface) == "more" else counts[0] < counts[1]
             return "yes" if more else "no"
 
+    # The copula yes/no questions — but NOT when a "how many" interrogative is present: "How many
+    # apples ARE LEFT?" is a count question, not the property question "are apples left?".
+    has_interrogative = any("interrogative" in u.features.get("senses", []) for u in r.units)
     subj, comp = _copula_args(r)
-    if _has_sense(comp, "comparative"):                  # "Is A <comparative> than B?"
+    if not has_interrogative and _has_sense(comp, "comparative"):  # "Is A <comparative> than B?"
         standard = _follow(comp, "standard")
         if subj is not None and standard is not None:
             a, rel, b = _key(subj.surface), _key(comp.surface), _key(standard.surface)
             return _verdict(_related(a, rel, b, context),
                             _related(b, rel, a, context))   # B>A ⇒ NOT A>B (asymmetry)
-    if _has_sense(subj, "name") and _has_sense(comp, "noun"):    # "Is X a Y?" membership question
+    if not has_interrogative and _has_sense(subj, "name") and _has_sense(comp, "noun"):  # "Is X a Y?"
         member, target = _key(subj.surface), _descriptor(comp)
         yes = _is_member(member, target, context)
         no = any(isinstance(m, Membership) and m.member == member         # explicitly "not a Y", or
                  and m.collection == target and m.negated for m in context) \
             or any(_disjoint(c, target, context) for c in _collections_of(member, context))  # disjoint
         return _verdict(yes, no)
-
-    prop = _property(r)                                  # "Is <subject> <adjective>?" property question
-    if prop is not None:                                 # a property is a Predication (adjective as
-        return _predication_verdict(prop.subject, prop.predicate, context)   # predicate) → same verdict
+    if not has_interrogative:
+        prop = _property(r)                              # "Is <subject> <adjective>?" property question
+        if prop is not None:                             # a property is a Predication (adjective as
+            return _predication_verdict(prop.subject, prop.predicate, context)   # predicate) → verdict
 
     aux = next((u for u in r.units if "auxiliary" in u.features.get("senses", [])), None)
-    has_interrogative = any("interrogative" in u.features.get("senses", []) for u in r.units)
     if aux is not None and not has_interrogative:        # "Did X <verb> [Y]?" → yes / no / undetermined
         verb = _follow(aux, "asks_predication")          # did → the verb being asked about (an
                                                          # interrogative present → it's a "how many …
@@ -1136,11 +1152,10 @@ def answer(question: str, context: list):
     if interro is None:
         return [Deficiency("not-a-question", interro, "this is not a question I can answer")]
     collection = _follow(_follow(interro, "queries"), "collection")   # how → many → its collection
-    if collection is None:
-        return [Deficiency("unanswerable", interro, "I couldn't tell what to count")]
-    query = _descriptor(collection)
+    query = _descriptor(collection) if collection is not None else None
+    remainder = any(_key(u.surface) in _REMAINDER for u in r.units)
     aux = next((u for u in r.units if "auxiliary" in u.features.get("senses", [])), None)
-    if aux is not None and query[0] == "time":          # "How many times does <entity> <verb>?"
+    if aux is not None and query is not None and query[0] == "time":   # "How many times does X <verb>?"
         after = r.units[r.units.index(aux) + 1:]
         ent_unit = next((u for u in after if any(s in u.features.get("senses", [])
                                                  for s in ("name", "noun", "pronoun"))), None)
@@ -1152,7 +1167,7 @@ def answer(question: str, context: list):
             if counts:
                 return int(counts[0]) if counts[0] == int(counts[0]) else counts[0]
             return "undetermined"
-    if aux is not None:                                  # "How many <measure> do <entities> <verb>?"
+    if aux is not None and query is not None:            # "How many <measure> do <entities> <verb>?"
         ai = r.units.index(aux)                          # entities are fronted, between aux and verb
         vi = next((i for i, u in enumerate(r.units)
                    if i > ai and "verb" in u.features.get("senses", [])), len(r.units))
@@ -1174,6 +1189,20 @@ def answer(question: str, context: list):
                     return "undetermined"                # no relevant quantity for this conjunct
                 total += sum(folded)
             return int(total) if total == int(total) else total
+    if remainder:                                        # "How many [<measure>] are left?" → the net
+        measure = query                                  # HOLDINGS of the (implicit) owner — no aux/entity
+        if measure is None:                              # "how many are left" — measure from the latest qty
+            recent = next((f for f in reversed(context) if isinstance(f, Quantity)), None)
+            measure = recent.measure if recent is not None else None
+        if measure is not None:
+            owners = {f.entity for f in context if isinstance(f, Quantity) and f.measure == measure}
+            if len(owners) == 1:                         # one holder → its net holdings; else ambiguous
+                total = _holdings(next(iter(owners)), measure, context)
+                if total is not None:
+                    return int(total) if total == int(total) else total
+        return "undetermined"
+    if query is None:
+        return [Deficiency("unanswerable", interro, "I couldn't tell what to count")]
     if not any(isinstance(inst, tuple) for inst in context):
         return "undetermined"        # no instance data to count — we don't know (never a fabricated 0)
     return sum(1 for inst in context if isinstance(inst, tuple) and _matches(query, inst))
