@@ -58,11 +58,8 @@ def _unknown_words(text: str) -> set:
 
 
 def _blocker(text: str, unknown: set) -> str:
-    """A coarse reason the engine couldn't commit — to rank the next gap, most-actionable first."""
-    if "$" in text:
-        return "currency ($)"
-    if "%" in text or "percent" in text.lower():
-        return "percentage"
+    """A coarse reason the engine couldn't commit. ($ and % now PARSE, so they're no longer blockers
+    — a declining problem with them is blocked by its remaining unknowns or by unsupported structure.)"""
     if unknown:
         return "unknown-word"
     return "no-fact / unsupported structure"

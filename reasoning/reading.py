@@ -142,6 +142,15 @@ def _as_number(surface: str):
 MONEY = ("money", frozenset())   # the canonical measure for currency ("$12" → 12 of MONEY)
 
 
+def _as_percent(surface: str):
+    """The fraction a percentage token denotes ("20%" → 0.20), else None."""
+    s = _key(surface)
+    if s.endswith("%"):
+        n = _as_number(s[:-1])
+        return n / 100 if n is not None else None
+    return None
+
+
 # The mathematical lexicon's operator words → their arithmetic symbol (step 1; grows deliberately).
 OPERATORS = {"plus": "+", "minus": "-", "times": "*", "divided": "/"}
 
@@ -293,6 +302,8 @@ def annotate_senses(reading: Reading) -> Reading:
             # pass to run first — see analyze().
             singular = u.features.get("singular")
             senses = LEXICON.get(singular.lower()) if singular else None
+        if senses is None and _as_percent(u.surface) is not None:
+            senses = ["percent"]          # "20%" — a fraction (0.20) applied to a base via "of"
         if senses is None and _as_number(u.surface) is not None:
             senses = ["value"]            # a numeric literal ("48", "0.2") is an arithmetic value
         if senses is None and u.surface[:1].isupper() and _key(u.surface).isalpha():
@@ -313,6 +324,8 @@ def annotate_senses(reading: Reading) -> Reading:
             u.features["gender"] = PRONOUN_GENDER.get(_key(u.surface))
         if "multiplier" in senses:
             u.features["value"] = MULTIPLIERS[_key(u.surface)]
+        if "percent" in senses:
+            u.features["value"] = _as_percent(u.surface)
         reading.record("annotate", target=u, before=before, after=dict(u.features),
                        reason="lexical role")
     return reading
@@ -354,6 +367,7 @@ ROLE_OBLIGATIONS: dict[str, list[str]] = {
                                         # against the discourse, not within one reading)
     "multiplier": ["scales"],           # a frequency multiplier scales the verb to its left ("jumps TWICE")
     "per": ["rate", "unit"],            # "$12 per hour" — binds the rate value (left) and the unit (right)
+    "percent": ["base"],                # "20% of 50" — binds the base the fraction applies to
 }
 
 # Obligations that are grammatically OPTIONAL: unmet is not a deficiency. A verb's direct object is
@@ -454,6 +468,9 @@ def _find_target(need, u, i, units, pos):
         return max(ll, key=lambda x: pos[id(x)]) if ll else None
     if need == "unit":            # "per"'s unit: the nearest noun to its RIGHT
         r = right("noun")
+        return r[0] if r else None
+    if need == "base":            # "20% OF 50" — the nearest value to the percent's right (past "of")
+        r = right("value")
         return r[0] if r else None
     if need == "left":            # an operator's left operand: the nearest value to its left
         ll = left("value")
@@ -1110,6 +1127,15 @@ def answer(question: str, context: list):
         from reasoning import translate                  # reuse the audited safe evaluator
         val = translate.run_program(
             f"answer = {a.features['value']} {op_unit.features['op']} {b.features['value']}")
+        return int(val) if val == int(val) else val
+    percent = next((u for u in r.units if "percent" in u.features.get("senses", [])), None)
+    if percent is not None:                              # "What is 20% of 50?" → fraction × base
+        base = _follow(percent, "base")
+        if base is None or "value" not in base.features:
+            return [Deficiency("unanswerable", percent, "I couldn't find what the percentage is of")]
+        from reasoning import translate
+        val = translate.run_program(
+            f"answer = {percent.features['value']} * {base.features['value']}")
         return int(val) if val == int(val) else val
 
     who = next((u for u in r.units if "wh_subject" in u.features.get("senses", [])), None)

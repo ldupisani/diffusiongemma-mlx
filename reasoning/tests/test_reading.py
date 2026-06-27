@@ -1464,5 +1464,27 @@ class TestIncrement52Rates(unittest.TestCase):
                          [reading.Quantity("weng", reading.MONEY, 12.0, "earn")])
 
 
+class TestIncrement53Percentage(unittest.TestCase):
+    """#53 - percentage (slice 1: arithmetic). "20%" is a fraction (0.20) with a `base` obligation;
+    "What is 20% of 50?" -> 0.20 x 50 = 10. ("% of them"/of a holding is the follow-on.)"""
+
+    def test_percent_parses_as_a_fraction(self):
+        r = reading.analyze("20%")
+        u = r.units[0]
+        self.assertIn("percent", u.features["senses"])
+        self.assertEqual(u.features["value"], 0.2)
+
+    def test_percent_of_a_value(self):
+        self.assertEqual(reading.answer("What is 20% of 50?", []), 10)
+        self.assertEqual(reading.answer("What is 50% of 80?", []), 40)
+
+    def test_percent_without_a_base_declines(self):
+        result = reading.answer("What is 20%?", [])
+        self.assertTrue(isinstance(result, list))  # a deficiency, not a number
+
+    def test_solve_recognises_percent(self):
+        self.assertEqual(reading.solve("What is 25% of 40?"), 10)
+
+
 if __name__ == "__main__":
     unittest.main()

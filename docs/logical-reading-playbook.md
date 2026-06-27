@@ -339,7 +339,15 @@ as a FALLBACK (no direct money quantity → try a rate). "Weng earns $12 per hou
 How much did Weng earn?" → 36. Declines when the per-unit quantity is unknown (the per-unit `_holdings`
 → None). Because it reuses `_holdings`, a rate composes with accumulation for free (hours add up first).
 Same lesson as polarity: facts stay neutral, the query computes. Precision stays 100%; "per" leaves the
-unknown frontier. Slice 1 is money; "N items per unit" (non-money rate measure) is the follow-on.
+unknown frontier. Slice 1 is money; "N items per unit" (non-money rate measure) is the follow-on.  ·
+56. **percentage % (arithmetic)** — "20%" is a fraction (0.20; a `percent` sense parsed before `value`
+so "%" doesn't read as a plain number) carrying a `base` obligation: "What is 20% of 50?" → 0.20 × 50 =
+10 (a third arithmetic answer-branch beside operators and rates). "% of them / of a holding" (referent)
+is the follow-on. HARNESS HONESTY: with `$` and `%` now PARSING, they're no longer blockers — so
+`reading_bench` dropped them from the decline taxonomy (a capability must stop being counted as a gap,
+or the metric flatters progress). The taxonomy is now stark: **300/300 declines are unknown-word** —
+not one problem is even fully-read. Vocabulary breadth is the universal wall; the frequency list is the
+worklist. Precision stays 100%; coverage 0%.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
