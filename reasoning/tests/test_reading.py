@@ -1487,5 +1487,51 @@ class TestIncrement53Percentage(unittest.TestCase):
         self.assertEqual(reading.solve("What is 25% of 40?"), 10)
 
 
+class TestIncrement54ComparativeQuantity(unittest.TestCase):
+    """#54 - comparative quantities: "how much more X does A have than B?" -> holdings(A)-holdings(B);
+    "A has N less X than B" -> B-N (a derived quantity off the NAMED standard). Fixed the `object`
+    resolver (binds names: "than WILLIAM") and `standard` (resolves through `than`, skipping the
+    measure). Currency words normalize to one MONEY measure. The precision guards still hold."""
+
+    def test_than_binds_the_name(self):
+        r = reading.analyze("How much more money does Oliver have than William?")
+        than = next(u for u in r.units if u.surface == "than")
+        self.assertEqual(reading._follow(than, "object").surface, "William?")
+        more = next(u for u in r.units if u.surface == "more")
+        self.assertEqual(reading._follow(more, "standard").surface, "William?")  # not "money"
+
+    def test_question_form_more(self):
+        out = reading.run_cli(["Oliver has $30. William has $20. "
+                               "How much more money does Oliver have than William?"])
+        self.assertEqual(out.strip(), "10")
+
+    def test_question_form_less(self):
+        out = reading.run_cli(["Oliver has $30. William has $50. "
+                               "How much less money does Oliver have than William?"])
+        self.assertEqual(out.strip(), "20")
+
+    def test_currency_words_agree(self):
+        self.assertEqual(reading.solve("Oliver has 30 dollars. William has 20 dollars. "
+                                       "How much more money does Oliver have than William?"), 10)
+
+    def test_statement_form_less(self):
+        self.assertEqual(reading.solve("Martha has 68 apples. Tim has 30 less apples than Martha. "
+                                       "How many apples does Tim have?"), 38)
+
+    def test_statement_form_more(self):
+        self.assertEqual(reading.solve("Bob has 10 apples. Tom has 5 more apples than Bob. "
+                                       "How many apples does Tom have?"), 15)
+
+    def test_forward_reference_declines(self):
+        # the standard's count is stated AFTER -> can't resolve sequentially -> decline (precision)
+        self.assertEqual(reading.solve("Tim has 30 less apples than Martha. Martha has 68 apples. "
+                                       "How many apples does Tim have?"), "undetermined")
+
+    def test_times_more_misparse_still_declines(self):
+        self.assertEqual(reading.solve("Riku has 25 times more stickers than Kristoff. "
+                                       "Kristoff has 85 stickers. How many stickers does Riku have?"),
+                         "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()

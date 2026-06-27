@@ -463,7 +463,10 @@ def _find_target(need, u, i, units, pos):
     if need == "collection":      # a quantifier ranges over its HEAD: the nearest noun to its right
         r = right("noun")         # (not "the unique noun anywhere" — that broke on objects/complements)
         return r[0] if r else None
-    if need in ("object", "determines"):   # preposition governs / article determines unique noun right
+    if need == "object":          # a preposition's object: the nearest noun OR NAME to its right
+        r = right("noun", "name")  # (names too, so "than WILLIAM" binds — comparatives compare people)
+        return r[0] if r else None
+    if need == "determines":      # an article determines the unique noun to its right
         r = right("noun")
         return r[0] if len(r) == 1 else None
     if need == "anchor":          # a preposition attaches to the unit on its immediate left
@@ -481,9 +484,13 @@ def _find_target(need, u, i, units, pos):
         if left("noun", "name"):                                # SECOND (the first right is the subject)
             return r[0] if r else None
         return r[1] if len(r) > 1 else None
-    if need == "standard":        # a comparative's standard of comparison: the noun/name after "than"
-        r = right("noun", "name")
-        return r[0] if r else None
+    if need == "standard":        # a comparative's standard: the noun/name after "than" (skipping the
+        rns = right("noun", "name")                                       # measure: "more MONEY than
+        than = next((x for x in units if pos[id(x)] > i                   # WILLIAM" → William, not money)
+                     and _key(x.surface) == "than"), None)
+        if than is not None:
+            rns = [x for x in rns if pos[id(x)] > pos[id(than)]]
+        return rns[0] if rns else None
     if need == "dobj":            # a verb's (optional) direct object: the nearest noun to its right
         r = right("noun")
         return r[0] if r else None
@@ -711,9 +718,15 @@ def is_well_formed(reading: Reading) -> bool:
 # pipeline — same reader, same obligations — and inherits the answer-or-ask contract: an
 # unrecognized word makes the question unanswerable, so we ASK rather than guess. (Questions ask,
 # they don't assert, so we follow the interrogative chain rather than require full saturation.)
+_MONEY_WORDS = {"dollar", "cent", "buck", "money", "penny"}   # all normalise to the MONEY measure
+
+
 def _descriptor(unit: "Unit"):
-    """A collection descriptor (head, frozenset(attributes)) for a noun unit."""
+    """A collection descriptor (head, frozenset(attributes)) for a noun unit. Currency words all
+    collapse to the canonical `money` head, so "$30", "30 dollars", and "how much money" agree."""
     head = unit.features.get("head") or unit.features.get("singular") or _key(unit.surface)
+    if head in _MONEY_WORDS:
+        return MONEY
     return (head, frozenset(unit.features.get("attributes", [])))
 
 
@@ -931,6 +944,34 @@ def _relational_quantity(reading: Reading, context: list):
         return None
     return Quantity(_entity(subject), referent.measure,
                     mult.features["value"] * referent.amount, _lemma(verbs[0].surface))
+
+
+def _comparative_quantity(reading: Reading, context: list):
+    """A DERIVED quantity from a comparison — "Tim has 30 less apples than Martha" → `referent ± N`,
+    the referent being the NAMED standard's holdings (resolved by name via `than`). None unless there's
+    a comparative + a value + a known standard. "more" → +N; "less"/"fewer" → −N."""
+    comp = next((u for u in reading.units if "comparative" in u.features.get("senses", [])), None)
+    if comp is None:
+        return None
+    standard = _follow(comp, "standard")
+    value_unit = next((u for u in reading.units if "value" in u.features.get("senses", [])), None)
+    verbs = [u for u in reading.units if "verb" in u.features.get("senses", [])]
+    subject = _follow(verbs[0], "subject") if len(verbs) == 1 else None
+    if standard is None or value_unit is None or subject is None:
+        return None
+    if "measure" in value_unit.features:                 # "$10 more than William" — money value
+        measure = value_unit.features["measure"]
+    else:                                                # "30 less apples than Martha" — value+noun
+        noun = _follow(value_unit, "quantifies")
+        if noun is None:
+            return None
+        measure = _descriptor(noun)
+    referent = _holdings(_entity(standard), measure, context)
+    if referent is None:
+        return None                                      # standard's count unknown (e.g. forward ref)
+    sign = -1 if _key(comp.surface) in ("less", "fewer") else 1
+    return Quantity(_entity(subject), measure, referent + sign * value_unit.features["value"],
+                    _lemma(verbs[0].surface))
 
 
 @dataclass(frozen=True)
@@ -1290,6 +1331,19 @@ def answer(question: str, context: list):
         query = MONEY                                    # "how much [did X earn]?" → a money question
     remainder = any(_key(u.surface) in _REMAINDER for u in r.units)
     aux = next((u for u in r.units if "auxiliary" in u.features.get("senses", [])), None)
+    comp = next((u for u in r.units if "comparative" in u.features.get("senses", [])), None)
+    if comp is not None and aux is not None and query is not None:    # "How much more <measure> does
+        standard = _follow(comp, "standard")                         # A have than B?" → A's − B's
+        after = r.units[r.units.index(aux) + 1:]
+        subj_unit = next((u for u in after if any(s in u.features.get("senses", [])
+                                                  for s in ("name", "noun", "pronoun")) and u is not standard), None)
+        if standard is not None and subj_unit is not None:
+            a = _holdings(_entity(subj_unit), query, context)
+            b = _holdings(_entity(standard), query, context)
+            if a is not None and b is not None:
+                diff = a - b if _key(comp.surface) == "more" else b - a   # "less"/"fewer" → B − A
+                return int(diff) if diff == int(diff) else diff
+        return "undetermined"
     if aux is not None and query is not None and query[0] == "time":   # "How many times does X <verb>?"
         after = r.units[r.units.index(aux) + 1:]
         ent_unit = next((u for u in after if any(s in u.features.get("senses", [])
@@ -1494,6 +1548,9 @@ def _facts_from(reading: Reading, context: list = None) -> list:
     rate = _rate(r)                                      # "<entity> earns $12 per hour" → rate?
     if rate is not None:
         return [rate]
+    cq = _comparative_quantity(r, context)               # "<A> has 30 less <X> than <B>" → derived?
+    if cq is not None:
+        return [cq]
     q = _quantity(r)                                     # "<entity> has <value> <noun>" → quantity?
     if q is not None:
         return [q]
@@ -1525,18 +1582,25 @@ def solve(text: str):
     for p in premises:
         facts = learn(p, discourse, context)
         context += facts
-        # GUARD 2 — a "than" comparison that collapsed to a FLAT quantity (no Relation) means the
-        # relation ("25 times more stickers THAN Kristoff") was dropped → we misread it.
-        if "than" in [w.strip(".,?!:;") for w in p.lower().split()] \
-                and any(isinstance(f, Quantity) for f in facts) \
-                and not any(isinstance(f, Relation) for f in facts):
-            lost_comparison = True
+        # GUARD 2 — a "than" comparison that collapsed to a FLAT quantity (a verbatim stated value,
+        # no Relation, not a derived ±) means the relation ("25 times more stickers THAN Kristoff")
+        # was dropped → we misread it. A comparative-derived quantity (amount ≠ any stated value) is OK.
+        if "than" in [w.strip(".,?!:;") for w in p.lower().split()]:
+            raw = {u.features["value"] for u in analyze(p).units if "value" in u.features.get("senses", [])}
+            if any(isinstance(f, Quantity) and f.amount in raw for f in facts) \
+                    and not any(isinstance(f, Relation) for f in facts):
+                lost_comparison = True
     if lost_comparison:
         return "undetermined"
     # GUARD 3 — unused given: every NUMBER stated in the premises must surface as a fact amount; a
     # dropped number means we didn't capture the whole problem ("Oliver has 10 $20 and 3 $5 bills").
-    given = {u.features["value"] for r in readings[:len(premises)] for u in r.units
-             if "value" in u.features.get("senses", [])}
+    # A premise with a comparative/multiplier is exempt — its stated value is an offset/factor consumed
+    # into a DERIVED amount ("30 less … than Martha" → 38), so it won't appear verbatim.
+    given = set()
+    for rp in readings[:len(premises)]:
+        if any(s in u.features.get("senses", []) for u in rp.units for s in ("comparative", "multiplier")):
+            continue
+        given |= {u.features["value"] for u in rp.units if "value" in u.features.get("senses", [])}
     used = {f.amount for f in context if isinstance(f, (Quantity, Rate))} \
         | {f.count for f in context if isinstance(f, Frequency)}
     if given - used:

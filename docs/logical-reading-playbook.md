@@ -359,7 +359,20 @@ bills" dropped three), or (3) read without MISREADING a relation (**lost-compari
 that collapsed to a flat Quantity, no Relation — "25 times more stickers than Kristoff"). Precision back
 to 100%; clean problems still solve. Lesson: each new capability that unblocks parsing can regress
 precision; guard commitment on completeness, not just recognition. Nonce-pin unknown-word tests
-(`wuggle`) so they survive the grind.
+(`wuggle`) so they survive the grind.  ·
+58. **comparative quantities (diagnosed from "how much more money does Oliver have than William?")** —
+"A has N more/less X than B" and "how much more X does A have than B?" → a comparison off the NAMED
+standard. Surfaced a LATENT BUG: the `object` resolver was noun-only (`right("noun")`) and merged with
+`determines`, so prepositions NEVER bound names ("than Bob", "of Mary" all silently failed). Fix: split
+them — `object` binds noun OR name; `determines` stays noun-only. Also fixed `standard` to resolve
+THROUGH `than` (skipping the measure: "more MONEY than WILLIAM" → William, not money). Question form →
+`holdings(A) − holdings(B)` (`less`/`fewer` → B−A); statement form "Tim has 30 less apples than Martha"
+→ a derived `Quantity` = `holdings(Martha) ± N` (`_comparative_quantity`, sequential referent only —
+forward refs decline). Currency words (`dollar`/`cent`/`money`) normalize to one `MONEY` measure so "$30"
+/ "30 dollars" / "how much money" agree. Precision guards REFINED, not just reused: unused-given exempts
+comparative/multiplier premises (their value is a consumed offset/factor, not a stored amount), and
+lost-comparison checks the amount is a VERBATIM stated value (a derived ± is fine). 237 tests; precision
+100%; the "?" the diagnosis started from was a non-issue (`_key` strips it; lossless surface is by design).
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
