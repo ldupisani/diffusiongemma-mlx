@@ -250,7 +250,15 @@ entity+measure ACCUMULATE (signed sum): `Quantity` now carries its `verb`, and `
 the polarity (`LOSS_VERBS` = lose/sell/give/spend/eat/use/drop → −; everything else incl. the `have`
 baseline → +). "Tom has 3 apples. Tom buys 4. Tom gives 2 away." → 3+4−2 = 5. The first arithmetic
 INTENT carried by a verb rather than an operator word — the bridge to GSM8K phrasing. `LOSS_VERBS`
-is the human-owned semantic knob.
+is the human-owned semantic knob.  ·
+46. **coreference as an obligation (math step 5a)** — a pronoun (`he`/`she`/`it`/`they`) carries a
+`refers` obligation, discharged CROSS-SENTENCE against the discourse (entity names threaded through
+`learn`, most-recent last): `_pick_antecedent` takes the most recent gender-compatible entity
+(`PRONOUN_GENDER` × `NAME_GENDER`), bound to a `Referent` stand-in and logged as a reversible Decision
+(shown in `--trace`). `_entity()` reads the resolved name into facts. "Tom has 3 apples. He buys 2."
+→ 5; "Mary … Tom … She buys 2" → She=Mary (gender skips the nearer Tom). A pronoun with no antecedent
+is just an unmet obligation → honest clarification, not a guess. (Subject resolution now accepts a
+pronoun.) Still singular-only; `they`/object pronouns and relational quantities (5b) are next.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
@@ -262,8 +270,8 @@ the shape now (free); aggregation/counting is *derived later* when a question's 
 - **GSM8K via this parser (replace the LLM translator)** — kept as an INDEPENDENT eval (a `bench`-style
   harness, never in `test_reading.py`). Roadmap, simplest-first: (1) pure arithmetic ✓; (2) `Quantity`
   facts ("Tom has 3 apples") ✓; (3) aggregation questions ("how many … altogether") ✓; (4) accumulation on
-  one entity ✓; (5) **coreference** (`he`/`she`, "the remaining", "half as many [as X]") and **relational
-  quantities** — the two hard, pervasive gaps; (6) units + **world-knowledge conversions** (hour=60min,
+  one entity ✓; (5a) **coreference** (`he`/`she`) ✓; (5b) "the remaining", "half/twice as many [as X]" **relational
+  quantities** — the second hard gap; (6) units + **world-knowledge conversions** (hour=60min,
   year=52wk). Build a math/quantity layer in `reading.py`; reuse `translate.run_program` to evaluate.
 
 - **`boolean` sense of `no`** (decided: leave as-is): no meaningful obligation exists in this

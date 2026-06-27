@@ -1239,5 +1239,38 @@ class TestIncrement44Accumulation(unittest.TestCase):
         self.assertEqual(out.strip(), "5")
 
 
+class TestIncrement45Coreference(unittest.TestCase):
+    """#45 — coreference as an obligation (math step 5a): a pronoun carries a `refers` obligation,
+    discharged cross-sentence against the discourse (most recent gender-compatible entity), logged as
+    a reversible Decision. Accumulation then works across pronouns."""
+
+    def test_pronoun_resolves_via_discourse(self):
+        disc = []
+        reading.learn("Tom has 3 apples", disc)         # discourse now knows Tom
+        self.assertEqual(reading.learn("He buys 2 apples", disc),
+                         [reading.Quantity("tom", ("apple", frozenset()), 2.0, "buy")])
+
+    def test_accumulation_across_a_pronoun(self):
+        out = reading.run_cli(["Tom has 3 apples. He buys 2 apples. How many apples does Tom have?"])
+        self.assertEqual(out.strip(), "5")
+
+    def test_gender_picks_the_right_antecedent(self):
+        # "She" must skip the more-recent Tom and bind Mary.
+        out = reading.run_cli(["Mary has 5 apples. Tom has 3 apples. She buys 2 apples. "
+                               "How many apples does Mary have?"])
+        self.assertEqual(out.strip(), "7")
+
+    def test_pronoun_without_antecedent_is_a_deficiency(self):
+        r = reading.analyze("He buys 2 apples")          # no discourse → who is "he"?
+        self.assertFalse(reading.is_well_formed(r))
+        self.assertTrue(any("refers" in d.message or "antecedent" in d.message
+                            for d in reading.deficiencies(r)))
+
+    def test_coreference_shows_in_trace(self):
+        out = reading.run_cli(["Tom has 3 apples. He buys 2 apples. How many apples does Tom have?",
+                               "--trace"])
+        self.assertIn("refers to 'tom'", out)
+
+
 if __name__ == "__main__":
     unittest.main()

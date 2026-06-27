@@ -136,6 +136,13 @@ def _as_number(surface: str):
 # The mathematical lexicon's operator words → their arithmetic symbol (step 1; grows deliberately).
 OPERATORS = {"plus": "+", "minus": "-", "times": "*", "divided": "/"}
 
+# Coreference: a pronoun's grammatical gender, and a small name→gender lexicon used to pick a
+# compatible antecedent. Both grown deliberately (no guessing from spelling).
+PRONOUN_GENDER = {"he": "male", "she": "female", "it": "neuter", "they": "plural"}
+NAME_GENDER = {"tom": "male", "bob": "male", "john": "male", "jim": "male", "jack": "male",
+               "mary": "female", "alice": "female", "jane": "female", "carol": "female",
+               "sue": "female", "anna": "female"}
+
 
 def _singular_of(surface: str) -> Optional[str]:
     """The known singular of `surface` if it is a recognized plural, else None. Pure lookup."""
@@ -209,6 +216,7 @@ LEXICON: dict[str, list[str]] = {
     "did": ["auxiliary"], "does": ["auxiliary"], "do": ["auxiliary"],  # yes/no question markers
     "and": ["conjunction"],   # conjoins items ("Tom and Mary")
     "altogether": ["aggregator"], "total": ["aggregator"],   # fold a set of quantities (sum)
+    "he": ["pronoun"], "she": ["pronoun"], "it": ["pronoun"], "they": ["pronoun"],  # coreference
     "pass": ["verb"], "fail": ["verb"], "failed": ["verb"],
     "not": ["negation"], "never": ["negation"],   # negators flip a fact's polarity (see NEGATORS)
     # --- open-class vocabulary (curated, grown deliberately) ---
@@ -260,6 +268,8 @@ def annotate_senses(reading: Reading) -> Reading:
             u.features["value"] = _as_number(u.surface)
         if "operator" in senses:
             u.features["op"] = OPERATORS[_key(u.surface)]
+        if "pronoun" in senses:
+            u.features["gender"] = PRONOUN_GENDER.get(_key(u.surface))
         reading.record("annotate", target=u, before=before, after=dict(u.features),
                        reason="lexical role")
     return reading
@@ -297,6 +307,8 @@ ROLE_OBLIGATIONS: dict[str, list[str]] = {
     "operator": ["left", "right"],      # a binary operator binds its two operands (the values it combines)
     "value": ["quantifies"],            # a value may quantify a noun ("3 APPLES"); optional (a bare
                                         # operand in "3 plus 2" quantifies nothing)
+    "pronoun": ["refers"],              # a pronoun must find its antecedent (resolved cross-sentence
+                                        # against the discourse, not within one reading)
 }
 
 # Obligations that are grammatically OPTIONAL: unmet is not a deficiency (a verb's direct object, or
@@ -345,12 +357,12 @@ def _find_target(need, u, i, units, pos):
         return r[0] if len(r) == 1 else None
     if need == "anchor":          # a preposition attaches to the unit on its immediate left
         return units[i - 1] if i > 0 else None   # (PP-attachment can be ambiguous; revisit later)
-    if need == "subject":         # unique noun/name to the LEFT; if none (fronted question), first RIGHT
-        ll = left("noun", "name")
+    if need == "subject":         # unique noun/name/pronoun LEFT; if none (fronted question), first RIGHT
+        ll = left("noun", "name", "pronoun")
         if len(ll) == 1:
             return ll[0]
         if not ll:
-            r = right("noun", "name")
+            r = right("noun", "name", "pronoun")
             return r[0] if r else None
         return None
     if need == "complement":      # a copula's complement (noun/name/adjective/comparative): the nearest
@@ -533,6 +545,7 @@ _NEED_PHRASING = {
     "predicate": "has nothing asserted of it (missing a predicate)",
     "determines": "has no noun to determine",
     "modifies": "has no noun to modify",
+    "refers": "has no antecedent — it isn't clear who or what it refers to",
 }
 
 
@@ -660,6 +673,51 @@ def _universal(verb, reading: Reading) -> bool:
     return False
 
 
+@dataclass(frozen=True)
+class Referent:
+    """A resolved pronoun's antecedent — the stand-in `target` for the cross-sentence `refers`
+    obligation. Its `.surface` is the entity name, so trace / obligation-summary read it like a Unit."""
+    surface: str
+
+
+def _entity(unit) -> str:
+    """The entity a subject unit denotes: a resolved pronoun's antecedent if bound, else its own key."""
+    if "pronoun" in unit.features.get("senses", []):
+        ref = _follow(unit, "refers")
+        if ref is not None:
+            return _key(ref.surface)
+    return _key(unit.surface)
+
+
+def _pick_antecedent(gender, discourse: list):
+    """The antecedent for a pronoun of `gender` from `discourse` (entity names, most-recent LAST): the
+    most recent gender-compatible entity, else the most recent. None if the discourse is empty."""
+    compatible = [n for n in discourse
+                  if gender in (None, "plural") or NAME_GENDER.get(n) in (None, gender)]
+    pool = compatible or discourse
+    return pool[-1] if pool else None
+
+
+def _resolve_references(reading: Reading, discourse: list) -> None:
+    """Discharge each pronoun's `refers` obligation against the discourse — binding it to a Referent
+    and logging a reversible Decision, so coreference shows in --trace like any other binding."""
+    for u in reading.units:
+        if "pronoun" not in u.features.get("senses", []):
+            continue
+        obs = u.features.get("obligations", [])
+        ref_ob = next((o for o in obs if o.need == "refers"), None)
+        if ref_ob is None or ref_ob.met:
+            continue
+        antecedent = _pick_antecedent(u.features.get("gender"), discourse)
+        if antecedent is None:
+            continue
+        before = dict(u.features)
+        u.features["obligations"] = [Obligation(o.need, target=Referent(antecedent)) if o is ref_ob
+                                     else o for o in obs]
+        reading.record("bind", target=u, before=before, after=dict(u.features),
+                       reason=f"{u.surface!r} refers to {antecedent!r} (recency + gender)")
+
+
 # A quantity verb's arithmetic polarity: a LOSS verb subtracts, everything else (gains + the "have"
 # baseline) adds. Keyed by lemma; grown deliberately like the other dictionaries.
 LOSS_VERBS = {"lose", "sell", "give", "spend", "eat", "use", "drop"}
@@ -696,7 +754,7 @@ def _quantity(reading: Reading):
                        and _follow(u, "quantifies") is obj), None)
     if value_unit is None:
         return None
-    return Quantity(_key(subject.surface), _descriptor(obj), value_unit.features["value"],
+    return Quantity(_entity(subject), _descriptor(obj), value_unit.features["value"],
                     _lemma(verbs[0].surface))
 
 
@@ -1107,11 +1165,28 @@ def explain(question: str, context: list) -> list:
     return ["not a question I can answer"]
 
 
-def learn(statement: str) -> list:
+def learn(statement: str, discourse: list = None) -> list:
     """Parse a statement into context facts — the one ingestion door. A count statement ("There are
     three red apples") → instances; a subject-verb statement ("The student passed") → a Predication;
-    a bare collection ("red apple") → one instance. [] when nothing parses, so we never guess."""
+    a bare collection ("red apple") → one instance. [] when nothing parses, so we never guess.
+
+    `discourse` (entity names, most-recent LAST) threads coreference across sentences: a pronoun's
+    `refers` obligation is resolved against it before extraction, and the statement's own subject is
+    appended after, so a later pronoun can find it."""
     r = analyze(statement)
+    if discourse is not None:
+        _resolve_references(r, discourse)
+    facts = _facts_from(r)
+    if discourse is not None:                            # remember this statement's subject entity
+        verbs = [u for u in r.units if "verb" in u.features.get("senses", [])]
+        subj = _follow(verbs[0], "subject") if len(verbs) == 1 else None
+        if subj is not None:
+            discourse.append(_entity(subj))
+    return facts
+
+
+def _facts_from(reading: Reading) -> list:
+    r = reading
     for u in r.units:                                    # count statement?
         value = NUMBERS.get(_key(u.surface))
         coll = _follow(u, "collection") if value is not None else None
@@ -1201,7 +1276,9 @@ def run_cli(args: list) -> str:
         sentences = _sentences(text)
         qidx = [k for k, s in enumerate(sentences) if s.endswith("?")]
         premises, question = (sentences[:qidx[-1]], sentences[qidx[-1]]) if qidx else ([], None)
-    context = [fact for p in premises for fact in learn(p)]
+    discourse, context = [], []
+    for p in premises:                                     # thread coreference across the premises
+        context += learn(p, discourse)
 
     if question is None:                                   # a single statement → analyze it
         r = analyze(text)
@@ -1217,8 +1294,16 @@ def run_cli(args: list) -> str:
         return _answer_text(answer(question, context))
 
     out = []                                               # the full trace
+    disc = []
     for s in premises:
-        out += [f'STATEMENT: "{s}"'] + _trace_lines(analyze(s)) + [f"  learned: {learn(s)}", ""]
+        rs = analyze(s)
+        _resolve_references(rs, disc)                      # resolve on THIS reading so trace shows it
+        learned = _facts_from(rs)
+        verbs = [u for u in rs.units if "verb" in u.features.get("senses", [])]
+        subj = _follow(verbs[0], "subject") if len(verbs) == 1 else None
+        if subj is not None:
+            disc.append(_entity(subj))
+        out += [f'STATEMENT: "{s}"'] + _trace_lines(rs) + [f"  learned: {learned}", ""]
     out += [f'QUESTION: "{question}"'] + _trace_lines(analyze(question)) + [""]
     out += ["derivation:"] + ["  " + line for line in explain(question, context)]
     out += [f"ANSWER: {_answer_text(answer(question, context))}"]
