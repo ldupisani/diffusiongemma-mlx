@@ -184,7 +184,8 @@ LEXICON: dict[str, list[str]] = {
     "one": ["number"], "two": ["number"], "three": ["number"],   # a number is a quantifier with a
     "four": ["number"], "five": ["number"],                      # VALUE (see NUMBERS)
     "did": ["auxiliary"], "does": ["auxiliary"], "do": ["auxiliary"],  # yes/no question markers
-    "pass": ["verb"],
+    "pass": ["verb"], "fail": ["verb"], "failed": ["verb"],
+    "not": ["negation"], "never": ["negation"],   # negators flip a fact's polarity (see NEGATORS)
 }
 
 # Number words → their value, for "there are N <collection>" statements that introduce instances.
@@ -480,27 +481,40 @@ def _matches(query, instance) -> bool:
 
 @dataclass(frozen=True)
 class Predication:
-    """A known fact of the form "subject does predicate": ((head, attributes), verb-lemma). Tense is
-    normalized to the lemma so "the student passed" and "did the student pass" refer to one fact."""
+    """A known fact "subject does predicate": ((head, attributes), verb-lemma). Tense is normalized
+    to the lemma so "passed" and "pass" name one predicate. `negated` is the polarity — set when the
+    statement carries a negator, so "Bob did not pass" is NOT the positive "Bob passed"."""
     subject: tuple
     predicate: str
+    negated: bool = False
 
 
 # Past tense → base form, so a fact ("passed") and a question ("pass") name the same predicate.
-VERB_LEMMA = {"passed": "pass", "wilted": "wilt", "rose": "rise"}
+VERB_LEMMA = {"passed": "pass", "wilted": "wilt", "rose": "rise", "failed": "fail"}
+
+# Words that negate a statement's polarity. "no" both quantifies AND negates ("no students failed"
+# = students did NOT fail); detection is by surface, independent of which sense was selected.
+NEGATORS = {"not", "never", "no"}
 
 
 def _lemma(surface: str) -> str:
     return VERB_LEMMA.get(_key(surface), _key(surface))
 
 
+def _negated(reading: Reading) -> bool:
+    return any(_key(u.surface) in NEGATORS for u in reading.units)
+
+
 def _predication(reading: Reading):
-    """The (subject, predicate) a simple statement asserts, or None — the one verb and its subject."""
+    """The (subject, predicate, polarity) a simple statement asserts, or None — the one verb and its
+    subject, negated if a negator (not/never/no) is present."""
     verbs = [u for u in reading.units if "verb" in u.features.get("senses", [])]
     if len(verbs) != 1:
         return None
     subject = _follow(verbs[0], "subject")
-    return Predication(_descriptor(subject), _lemma(verbs[0].surface)) if subject else None
+    if subject is None:
+        return None
+    return Predication(_descriptor(subject), _lemma(verbs[0].surface), _negated(reading))
 
 
 @dataclass(frozen=True)

@@ -674,5 +674,34 @@ class TestIncrement20MembershipQuestions(unittest.TestCase):
         self.assertEqual(out.strip(), "yes")
 
 
+class TestIncrement21Negation(unittest.TestCase):
+    """#21 — negation. "Bob did not pass" and "No students failed" must NOT be learned as positive
+    facts (the dangerous silent error). A polarity bit on Predication, set at ingestion when a
+    negator (not/never/no) is present; the positive query then doesn't match → "no"."""
+
+    def test_negated_predication_is_learned_with_polarity(self):
+        self.assertEqual(reading.learn("Bob did not pass"),
+                         [reading.Predication(("bob", frozenset()), "pass", negated=True)])
+
+    def test_negative_universal_is_learned(self):
+        self.assertEqual(reading.learn("No students failed"),
+                         [reading.Predication(("student", frozenset()), "fail", negated=True)])
+
+    def test_did_not_pass_answers_no(self):
+        self.assertEqual(reading.answer("Did Bob pass?", reading.learn("Bob did not pass")), "no")
+
+    def test_no_students_failed_means_a_student_did_not_fail(self):
+        ctx = reading.learn("No students failed") + reading.learn("Bob is a student")
+        self.assertEqual(reading.answer("Did Bob fail?", ctx), "no")
+
+    def test_positive_still_works_alongside(self):
+        # the same word "pass" stays positive without a negator
+        self.assertEqual(reading.learn("The student passed"),
+                         [reading.Predication(("student", frozenset()), "pass")])
+
+    def test_cli_negation(self):
+        self.assertEqual(reading.run_cli(["Bob did not pass. Did Bob pass?"]).strip(), "no")
+
+
 if __name__ == "__main__":
     unittest.main()

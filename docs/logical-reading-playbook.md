@@ -132,7 +132,10 @@ and the derivation behind the verdict. Surfacing the trail caught a hard-coded `
 (every obligation said "quantifier ranges over a collection") — now reports the real need ·
 20. **membership questions + Barbara syllogism** — `"Is X a Y?"` (membership question) and
 `"Every X is a Y"` (a `Subset` fact). `_is_member` checks membership by reachability over `Subset`
-edges (transitive), so "Every teacher is a person. Bob is a teacher. Is Bob a person?" → yes.
+edges (transitive), so "Every teacher is a person. Bob is a teacher. Is Bob a person?" → yes ·
+21. **negation** — `Predication.negated` polarity, set at INGESTION when a negator (`not`/`never`/
+`no`) is present, so `"Bob did not pass"` / `"No students failed"` are never learned as positives.
+The positive query then doesn't match → `"no"`, and the false-positive (the real danger) is avoided.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
