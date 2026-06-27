@@ -1115,5 +1115,25 @@ class TestIncrement39WhichQuestions(unittest.TestCase):
         self.assertEqual(reading.answer("Which students passed?", []), "(none)")
 
 
+class TestIncrement40CountComparison(unittest.TestCase):
+    """#40 — aggregation: "Are there more X than Y?" compares the counts of two collections over the
+    instance context (using the subset lattice)."""
+
+    def _ctx(self):
+        return (reading.instances("There are three red apples")
+                + reading.instances("There are two green apples"))
+
+    def test_more_than(self):
+        self.assertEqual(reading.answer("Are there more red apples than green apples?", self._ctx()), "yes")
+
+    def test_fewer_direction(self):
+        self.assertEqual(reading.answer("Are there more green apples than red apples?", self._ctx()), "no")
+
+    def test_cli(self):
+        out = reading.run_cli(["There are three red apples. There are two green apples. "
+                               "Are there more red apples than green apples?"])
+        self.assertEqual(out.strip(), "yes")
+
+
 if __name__ == "__main__":
     unittest.main()

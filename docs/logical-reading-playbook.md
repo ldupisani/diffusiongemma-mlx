@@ -227,7 +227,9 @@ student" / "The apple is red" are *understood*, not false fragments — while a 
 branch detects the auxiliary+verb pattern); "What is Bob?" still returns memberships ·
 40. **which-questions** — "Which <noun> <predicate>?" returns the named members of that noun that
 satisfy the predicate (action verb or predicative adjective). "Which students passed?" → the
-students who passed (a teacher who passed is excluded).
+students who passed (a teacher who passed is excluded) ·
+41. **aggregation (count comparison)** — "Are there more X than Y?" compares the counts of two
+collections over the instance context via the subset lattice. "more"/"fewer" with "than".
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
@@ -243,4 +245,4 @@ the shape now (free); aggregation/counting is *derived later* when a question's 
   dictionaries (no stemming guesswork).
 - **Overlapping facts**: count statements are currently assumed disjoint (subset-matching sums
   them). "3 red apples" + "1 rotten red apple" would double-count — needs an inclusion model.
-- **Aggregation beyond count** (sum, max, "which has the most") over collection descriptors.
+- **Aggregation beyond count**: sum across heads, max, "which has the most" (count comparison done).

@@ -182,6 +182,7 @@ LEXICON: dict[str, list[str]] = {
     "rose": ["noun", "verb"],   # ambiguous: a flower (noun) or the past of "rise" (verb)
     "wilted": ["verb"],
     "taller": ["comparative"], "older": ["comparative"], "bigger": ["comparative"],
+    "more": ["comparative"], "fewer": ["comparative"],   # quantity comparatives ("more X than Y")
     "than": ["preposition"],    # links the two sides of a comparison ("taller than")
     "how": ["interrogative"],   # asks about the quantity word to its right ("how many …")
     "many": ["quantifier"],     # a quantity quantifier — ranges over a collection like any other
@@ -847,6 +848,16 @@ def answer(question: str, context: list):
                        and f.predicate == pred and not f.negated and f.object is None
                        and _is_member(f.subject[0], coll, context)})
         return ", ".join(hits) if hits else "(none)"
+
+    qcomp = next((u for u in r.units if _key(u.surface) in ("more", "fewer")), None)
+    if qcomp is not None and any(_key(u.surface) == "than" for u in r.units):  # "more X than Y?" count
+        ns = sorted((u for u in r.units if "noun" in u.features.get("senses", [])),
+                    key=lambda u: u.words[0].index)
+        if len(ns) >= 2:
+            counts = [sum(1 for inst in context if isinstance(inst, tuple)
+                          and _matches(_descriptor(n), inst)) for n in ns[:2]]
+            more = counts[0] > counts[1] if _key(qcomp.surface) == "more" else counts[0] < counts[1]
+            return "yes" if more else "no"
 
     subj, comp = _copula_args(r)
     if _has_sense(comp, "comparative"):                  # "Is A <comparative> than B?"
