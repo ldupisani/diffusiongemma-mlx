@@ -115,7 +115,17 @@ loop closes: same reader, same obligations, now producing an answer. 0 model cal
 14. **CLI** — `python -m reasoning.reading "<text>"` (analyze) / `… --about "<phrase>" …` (answer);
 logic in a testable `run_cli` · 15. **`instances(statement)`** — context is now PARSED, not
 hand-fed: `"There are three red apples"` → three `(apple,{red})` instances (a number is a quantifier
-with a VALUE). The reader that answers questions is the same one that ingests facts.
+with a VALUE). The reader that answers questions is the same one that ingests facts ·
+16. **yes/no questions** — `"Did the student pass?"` checks a `Predication((student,{}), "pass")`
+against context; tense is lemmatized so `"passed"` == `"pass"`. `learn(statement)` is the one
+ingestion door (count / predication / bare phrase); `answer()` dispatches on the interrogative kind ·
+17. **syllogistic inference** — `"All students passed" + "Bob is a student" ⊢ "Did Bob pass?" = yes`,
+by **universal instantiation**: a capitalized unknown word is a proper noun (named individual);
+`"X is a Y"` is a `Membership`; the answer is *derived* (subject → its collections → predicate),
+not looked up. Lookup became reasoning, still 0 model calls ·
+18. **paragraph mode (CLI)** — one string is split into sentences; the statements are `learn`ed and
+the trailing question answered, so `"All students passed. Bob is a student. Did Bob pass?"` → `yes`
+works directly (no `--about` needed).
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
@@ -129,8 +139,13 @@ the shape now (free); aggregation/counting is *derived later* when a question's 
   (negates a clause?) can be added and will only apply when that reading covers best.
 - **"Forego when subordinated"**: a noun used as an object shouldn't independently demand a
   `predicate`; refine so object-nouns don't read as false fragments.
-- **More question types** beyond count: yes/no ("did the student pass?"), which/what, comparison.
-  Each is another interrogative obligation fulfilled against context.
+- **Deeper inference**: multi-hop chains ("all A are B", "all B are C", "is x a C?"), negative
+  universals ("no students failed"), transitivity. The one-hop instantiation in `answer()` is the
+  seed of a small deductive engine.
+- **More question types**: which/what ("which apples are red?"), comparison ("are there more red
+  than green?"). Each is another interrogative obligation fulfilled against context.
+- **Verb lemmas** are a small hand-list (`VERB_LEMMA`); grows by deliberate addition like the other
+  dictionaries (no stemming guesswork).
 - **Overlapping facts**: count statements are currently assumed disjoint (subset-matching sums
   them). "3 red apples" + "1 rotten red apple" would double-count — needs an inclusion model.
 - **Aggregation beyond count** (sum, max, "which has the most") over collection descriptors.

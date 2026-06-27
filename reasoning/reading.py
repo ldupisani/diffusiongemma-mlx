@@ -182,6 +182,8 @@ LEXICON: dict[str, list[str]] = {
     "is": ["verb"],
     "one": ["number"], "two": ["number"], "three": ["number"],   # a number is a quantifier with a
     "four": ["number"], "five": ["number"],                      # VALUE (see NUMBERS)
+    "did": ["auxiliary"], "does": ["auxiliary"], "do": ["auxiliary"],  # yes/no question markers
+    "pass": ["verb"],
 }
 
 # Number words → their value, for "there are N <collection>" statements that introduce instances.
@@ -199,6 +201,10 @@ def annotate_senses(reading: Reading) -> Reading:
             # pass to run first — see analyze().
             singular = u.features.get("singular")
             senses = LEXICON.get(singular.lower()) if singular else None
+        if senses is None and u.surface[:1].isupper() and _key(u.surface).isalpha():
+            # a capitalized word we don't otherwise know is a proper noun — a named individual.
+            # (Known capitalized words, e.g. sentence-initial "All"/"The", are caught above first.)
+            senses = ["name"]
         if senses is None:
             continue  # not in the dictionary → attach no meaning
         before = dict(u.features)
@@ -229,6 +235,8 @@ ROLE_OBLIGATIONS: dict[str, list[str]] = {
                                 # subordinated" refinement; current examples don't hit it.)
     "interrogative": ["queries"],  # asks about the quantity word to its right ("how" → "many")
     "number": ["collection"],      # a number ranges over the collection it counts ("three apples")
+    "auxiliary": ["asks_predication"],  # a yes/no marker asks whether a verb (its predication) holds
+    "name": ["predicate"],         # a named individual is noun-like — it wants a predicate too
 }
 
 
@@ -251,7 +259,7 @@ def annotate_obligations(reading: Reading) -> Reading:
 # the answer is unambiguous — zero or several candidates leave it unmet, a reportable deficiency
 # rather than a guess. We replace the Obligation (not mutate it) so the Decision's before/after
 # snapshots stay a clean, reversible diff. Runs after the obligations pass.
-def _find_target(need, u, i, units, nouns, verbs, pos):
+def _find_target(need, u, i, units, nouns, verbs, names, pos):
     """The unit that discharges obligation `need` on unit `u` (at position `i`), or None if it is
     absent or ambiguous. We commit only when exactly one candidate fits in the right direction."""
     if need == "collection":      # a quantifier ranges over the one available noun
@@ -262,8 +270,8 @@ def _find_target(need, u, i, units, nouns, verbs, pos):
         return right[0] if len(right) == 1 else None
     if need == "anchor":          # a preposition attaches to the unit on its immediate left
         return units[i - 1] if i > 0 else None   # (PP-attachment can be ambiguous; revisit later)
-    if need == "subject":         # a verb's subject is the unique noun to its left
-        left = [n for n in nouns if pos[id(n)] < i]
+    if need == "subject":         # a verb's subject is the unique noun OR named individual to its left
+        left = [n for n in (nouns + names) if pos[id(n)] < i]
         return left[0] if len(left) == 1 else None
     if need == "predicate":       # a noun's predicate is the unique verb to its right
         right = [v for v in verbs if pos[id(v)] > i]
@@ -272,6 +280,9 @@ def _find_target(need, u, i, units, nouns, verbs, pos):
         quants = [q for q in units
                   if "quantifier" in q.features.get("senses", []) and pos[id(q)] > i]
         return quants[0] if len(quants) == 1 else None
+    if need == "asks_predication":   # an auxiliary asks whether the unique verb to its right holds
+        right = [v for v in verbs if pos[id(v)] > i]
+        return right[0] if len(right) == 1 else None
     return None
 
 
@@ -280,13 +291,14 @@ def resolve(reading: Reading) -> Reading:
     pos = {id(u): k for k, u in enumerate(units)}
     nouns = [u for u in units if "noun" in u.features.get("senses", [])]
     verbs = [u for u in units if "verb" in u.features.get("senses", [])]
+    names = [u for u in units if "name" in u.features.get("senses", [])]
     for i, u in enumerate(units):
         obs = u.features.get("obligations")
         if not obs:
             continue
         new_obs, bound = [], False
         for o in obs:
-            target = None if o.met else _find_target(o.need, u, i, units, nouns, verbs, pos)
+            target = None if o.met else _find_target(o.need, u, i, units, nouns, verbs, names, pos)
             if target is not None:                             # unambiguous → bind
                 new_obs.append(Obligation(o.need, target=target))
                 bound = True
@@ -465,6 +477,51 @@ def _matches(query, instance) -> bool:
     return query[0] == instance[0] and query[1] <= instance[1]
 
 
+@dataclass(frozen=True)
+class Predication:
+    """A known fact of the form "subject does predicate": ((head, attributes), verb-lemma). Tense is
+    normalized to the lemma so "the student passed" and "did the student pass" refer to one fact."""
+    subject: tuple
+    predicate: str
+
+
+# Past tense → base form, so a fact ("passed") and a question ("pass") name the same predicate.
+VERB_LEMMA = {"passed": "pass", "wilted": "wilt", "rose": "rise"}
+
+
+def _lemma(surface: str) -> str:
+    return VERB_LEMMA.get(_key(surface), _key(surface))
+
+
+def _predication(reading: Reading):
+    """The (subject, predicate) a simple statement asserts, or None — the one verb and its subject."""
+    verbs = [u for u in reading.units if "verb" in u.features.get("senses", [])]
+    if len(verbs) != 1:
+        return None
+    subject = _follow(verbs[0], "subject")
+    return Predication(_descriptor(subject), _lemma(verbs[0].surface)) if subject else None
+
+
+@dataclass(frozen=True)
+class Membership:
+    """A known fact "<individual> is a <collection>": a named individual belongs to a collection,
+    e.g. "Bob is a student" → Membership("bob", ("student", frozenset()))."""
+    member: str
+    collection: tuple
+
+
+def _membership(reading: Reading):
+    """The membership a copula statement asserts ("X is a Y"), or None — exactly one named
+    individual, one noun, and a copula (is/are/was/were)."""
+    names = [u for u in reading.units if "name" in u.features.get("senses", [])]
+    nouns = [u for u in reading.units if "noun" in u.features.get("senses", [])]
+    has_copula = any("verb" in u.features.get("senses", []) and _key(u.surface) in
+                     ("is", "are", "was", "were") for u in reading.units)
+    if has_copula and len(names) == 1 and len(nouns) == 1:
+        return Membership(_key(names[0].surface), _descriptor(nouns[0]))
+    return None
+
+
 def _follow(unit, need):
     """The target of `unit`'s met obligation named `need`, or None."""
     if unit is None:
@@ -476,12 +533,32 @@ def _follow(unit, need):
 
 
 def answer(question: str, context: list):
-    """Answer a count question against a context of collection descriptors. Returns an int count, or
-    a list of Deficiency (what to ASK) when the question cannot be answered."""
+    """Answer a question against a context of facts. A yes/no question ("Did the student pass?")
+    returns "yes"/"no" by checking a Predication; a count question ("How many red apples?") returns
+    an int by counting matching instances. Returns a list of Deficiency (what to ASK) when the
+    question can't be answered. Reuses the same parse; dispatches on the interrogative kind."""
     r = analyze(question)
     unknown = [d for d in deficiencies(r) if d.kind == "unknown-word"]
     if unknown:
         return unknown                                   # don't guess about words we don't know
+
+    aux = next((u for u in r.units if "auxiliary" in u.features.get("senses", [])), None)
+    if aux is not None:                                  # yes/no question
+        verb = _follow(aux, "asks_predication")          # did → the verb being asked about
+        subject = _follow(verb, "subject") if verb else None
+        if subject is None:
+            return [Deficiency("unanswerable", aux, "I couldn't tell what is being asked")]
+        query = Predication(_descriptor(subject), _lemma(verb.surface))
+        if query in context:                             # directly known
+            return "yes"
+        # universal instantiation: the subject is a member of a collection that has the predicate
+        member = query.subject[0]
+        for f in context:
+            if isinstance(f, Membership) and f.member == member \
+                    and Predication(f.collection, query.predicate) in context:
+                return "yes"
+        return "no"
+
     interro = next((u for u in r.units if "interrogative" in u.features.get("senses", [])), None)
     if interro is None:
         return [Deficiency("not-a-question", interro, "this is not a question I can answer")]
@@ -489,7 +566,7 @@ def answer(question: str, context: list):
     if collection is None:
         return [Deficiency("unanswerable", interro, "I couldn't tell what to count")]
     query = _descriptor(collection)
-    return sum(1 for inst in context if _matches(query, inst))
+    return sum(1 for inst in context if isinstance(inst, tuple) and _matches(query, inst))
 
 
 def instances(statement: str) -> list:
@@ -509,13 +586,23 @@ def instances(statement: str) -> list:
     return []
 
 
-def _as_instances(phrase: str) -> list:
-    """Read a context phrase into instances: a count statement ("There are three red apples") expands
-    via `instances`; a bare collection ("red apple") counts as one instance. Empty if unreadable."""
-    learned = instances(phrase)
-    if learned:
-        return learned
-    d = collection_descriptor(analyze(phrase))
+def learn(statement: str) -> list:
+    """Parse a statement into context facts — the one ingestion door. A count statement ("There are
+    three red apples") → instances; a subject-verb statement ("The student passed") → a Predication;
+    a bare collection ("red apple") → one instance. [] when nothing parses, so we never guess."""
+    r = analyze(statement)
+    for u in r.units:                                    # count statement?
+        value = NUMBERS.get(_key(u.surface))
+        coll = _follow(u, "collection") if value is not None else None
+        if coll is not None:
+            return [_descriptor(coll)] * value
+    m = _membership(r)                                   # "<name> is a <noun>" → membership?
+    if m is not None:
+        return [m]
+    p = _predication(r)                                  # subject-verb statement?
+    if p is not None:
+        return [p]
+    d = collection_descriptor(r)                         # bare collection phrase?
     return [d] if d is not None else []
 
 
@@ -529,18 +616,40 @@ def _obligation_summary(unit: "Unit") -> str:
     return ("  " + ", ".join(parts)) if parts else ""
 
 
+def _sentences(text: str) -> list:
+    """Split text into sentences on . ? ! (keeping the terminator). No regex — stdlib only."""
+    out, cur = [], ""
+    for ch in text:
+        cur += ch
+        if ch in ".?!" and cur.strip():
+            out.append(cur.strip())
+            cur = ""
+    if cur.strip():
+        out.append(cur.strip())
+    return out
+
+
+def _answer_text(result) -> str:
+    if isinstance(result, list):
+        return "I can't answer that:\n" + "\n".join("  - " + d.message for d in result)
+    return str(result)
+
+
 def run_cli(args: list) -> str:
     if not args:
         return 'usage: python -m reasoning.reading "<text>" [--about "<phrase>" "<phrase>" ...]'
     text = args[0]
-    if "--about" in args:                                  # question mode
+    if "--about" in args:                                  # explicit context
         phrases = args[args.index("--about") + 1:]
-        context = [inst for p in phrases for inst in _as_instances(p)]
-        result = answer(text, context)
-        if isinstance(result, list):
-            return "I can't answer that:\n" + "\n".join("  - " + d.message for d in result)
-        return str(result)
-    r = analyze(text)                                      # statement mode
+        context = [fact for p in phrases for fact in learn(p)]
+        return _answer_text(answer(text, context))
+    sentences = _sentences(text)
+    questions = [k for k, s in enumerate(sentences) if s.endswith("?")]
+    if questions:                                          # paragraph: premises, then the question
+        qi = questions[-1]
+        context = [fact for s in sentences[:qi] for fact in learn(s)]
+        return _answer_text(answer(sentences[qi], context))
+    r = analyze(text)                                      # a single statement → analyze it
     lines = [f"  {u.surface!r:14} {u.features.get('senses', '?')}{_obligation_summary(u)}"
              for u in r.units]
     defs = deficiencies(r)

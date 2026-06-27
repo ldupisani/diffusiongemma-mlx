@@ -557,5 +557,77 @@ class TestIncrement15ContextFromStatements(unittest.TestCase):
         self.assertEqual(out.strip(), "3")
 
 
+class TestIncrement16YesNoQuestions(unittest.TestCase):
+    """#16 — yes/no questions. "Did the student pass?" asks whether a predication (subject + verb)
+    is known. A statement is learned as a Predication; tense is normalized ("passed" == "pass").
+    Same reader, same obligations — just a different fact type and a yes/no verdict."""
+
+    def _context(self):
+        return reading.learn("The student passed")   # one known predication
+
+    def test_statement_is_learned_as_a_predication_with_lemma(self):
+        self.assertEqual(reading.learn("The student passed"),
+                         [reading.Predication(("student", frozenset()), "pass")])
+
+    def test_yes_when_the_fact_is_known(self):
+        self.assertEqual(reading.answer("Did the student pass?", self._context()), "yes")
+
+    def test_no_when_the_fact_is_not_known(self):
+        self.assertEqual(reading.answer("Did the teacher pass?", self._context()), "no")
+
+    def test_unknown_word_makes_it_ask(self):
+        result = reading.answer("Did the wizard pass?", self._context())
+        self.assertIsInstance(result, list)
+        self.assertTrue(any(d.kind == "unknown-word" for d in result))
+
+    def test_cli_answers_yes_no(self):
+        out = reading.run_cli(["Did the student pass?", "--about", "The student passed"])
+        self.assertEqual(out.strip(), "yes")
+
+
+class TestIncrement17SyllogisticInference(unittest.TestCase):
+    """#17 — derive an answer, don't just look it up. "All students passed" + "Bob is a student" =>
+    "Did Bob pass?" is YES by universal instantiation. Proper nouns (capitalized unknown words) are
+    named individuals; "X is a Y" is a Membership fact; the deduction is one hop."""
+
+    def test_proper_noun_recognized_and_membership_learned(self):
+        self.assertEqual(reading.learn("Bob is a student"),
+                         [reading.Membership("bob", ("student", frozenset()))])
+
+    def test_universal_instantiation_yields_yes(self):
+        ctx = reading.learn("All students passed") + reading.learn("Bob is a student")
+        self.assertEqual(reading.answer("Did Bob pass?", ctx), "yes")
+
+    def test_non_member_yields_no(self):
+        ctx = reading.learn("All students passed") + reading.learn("Bob is a teacher")
+        self.assertEqual(reading.answer("Did Bob pass?", ctx), "no")
+
+    def test_full_chain_through_the_cli(self):
+        out = reading.run_cli(["Did Bob pass?",
+                               "--about", "All students passed", "Bob is a student"])
+        self.assertEqual(out.strip(), "yes")
+
+
+class TestIncrement18ParagraphMode(unittest.TestCase):
+    """#18 — the CLI accepts a whole paragraph: split into sentences, learn the statements, answer
+    the trailing question. So the natural one-liner works without --about."""
+
+    def test_inline_premises_then_question(self):
+        out = reading.run_cli(["All students passed. Bob is a student. Did Bob pass?"])
+        self.assertEqual(out.strip(), "yes")
+
+    def test_count_paragraph(self):
+        out = reading.run_cli(["There are three red apples. How many red apples?"])
+        self.assertEqual(out.strip(), "3")
+
+    def test_single_statement_still_analyzed(self):
+        out = reading.run_cli(["The student passed"])
+        self.assertIn("understood", out)
+
+    def test_about_flag_still_works(self):
+        out = reading.run_cli(["Did Bob pass?", "--about", "All students passed", "Bob is a student"])
+        self.assertEqual(out.strip(), "yes")
+
+
 if __name__ == "__main__":
     unittest.main()
