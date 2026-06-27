@@ -183,7 +183,7 @@ LEXICON: dict[str, list[str]] = {
     "than": ["preposition"],    # links the two sides of a comparison ("taller than")
     "how": ["interrogative"],   # asks about the quantity word to its right ("how many …")
     "many": ["quantifier"],     # a quantity quantifier — ranges over a collection like any other
-    "who": ["wh"], "what": ["wh"],   # wh-questions: return entities, not yes/no (handled in answer)
+    "who": ["wh_subject"], "what": ["wh_value"],   # wh-questions: each binds to what it asks about
     "there": ["existential"],   # existential "there are …" — introduces instances into the context
     "are": ["verb"], "is": ["verb"], "was": ["verb"], "were": ["verb"],   # copulas (also link a complement)
     "one": ["number"], "two": ["number"], "three": ["number"],   # a number is a quantifier with a
@@ -255,6 +255,9 @@ ROLE_OBLIGATIONS: dict[str, list[str]] = {
     "auxiliary": ["asks_predication"],  # a yes/no marker asks whether a verb (its predication) holds
     "name": ["predicate"],         # a named individual is noun-like — it wants a predicate too
     "negation": ["negates"],       # "not"/"never" must find the verb (predicate) it scopes over
+    "comparative": ["standard"],   # "taller" must find the standard it compares against (after "than")
+    "wh_subject": ["asks_predicate"],   # "who" binds the predicate it asks the subject of
+    "wh_value": ["asks_individual"],    # "what" binds the individual it asks the type of
 }
 
 
@@ -279,41 +282,53 @@ def annotate_obligations(reading: Reading) -> Reading:
 # the answer is unambiguous — zero or several candidates leave it unmet, a reportable deficiency
 # rather than a guess. We replace the Obligation (not mutate it) so the Decision's before/after
 # snapshots stay a clean, reversible diff. Runs after the obligations pass.
-def _find_target(need, u, i, units, nouns, verbs, names, adjs, pos):
+def _find_target(need, u, i, units, pos):
     """The unit that discharges obligation `need` on unit `u` (at position `i`), or None if it is
-    absent or ambiguous. We commit only when exactly one candidate fits in the right direction."""
+    absent or ambiguous. We commit only when exactly one candidate fits in the right direction.
+    Candidate pools are computed by role so every obligation reads from the same word inventory."""
+    def has(x, *s):
+        return any(k in x.features.get("senses", []) for k in s)
+    def right(*s):
+        return sorted((x for x in units if has(x, *s) and pos[id(x)] > i), key=lambda x: pos[id(x)])
+    def left(*s):
+        return [x for x in units if has(x, *s) and pos[id(x)] < i]
+
     if need == "collection":      # a quantifier ranges over the one available noun
-        cands = [n for n in nouns if n is not u]
+        cands = [n for n in units if has(n, "noun") and n is not u]
         return cands[0] if len(cands) == 1 else None
-    if need in ("object", "determines"):   # preposition governs / article determines the unique noun to its right
-        right = [n for n in nouns if pos[id(n)] > i]
-        return right[0] if len(right) == 1 else None
+    if need in ("object", "determines"):   # preposition governs / article determines unique noun right
+        r = right("noun")
+        return r[0] if len(r) == 1 else None
     if need == "anchor":          # a preposition attaches to the unit on its immediate left
         return units[i - 1] if i > 0 else None   # (PP-attachment can be ambiguous; revisit later)
-    if need == "subject":         # the unique noun/name to the left; if NONE (fronted, e.g. a
-        left = [n for n in (nouns + names) if pos[id(n)] < i]   #   question), the first to the right
-        if len(left) == 1:
-            return left[0]
-        if not left:
-            right = sorted((n for n in (nouns + names) if pos[id(n)] > i), key=lambda n: pos[id(n)])
-            return right[0] if right else None
+    if need == "subject":         # unique noun/name to the LEFT; if none (fronted question), first RIGHT
+        ll = left("noun", "name")
+        if len(ll) == 1:
+            return ll[0]
+        if not ll:
+            r = right("noun", "name")
+            return r[0] if r else None
         return None
-    if need == "complement":      # a copula links its subject to a complement (noun/name/adjective):
-        left = [n for n in (nouns + names) if pos[id(n)] < i]   #   the nearest to the right, but if
-        right = sorted((x for x in (nouns + names + adjs) if pos[id(x)] > i),  # fronted, the SECOND
-                       key=lambda x: pos[id(x)])                #   (the first right is the subject)
-        return right[0] if left else (right[1] if len(right) > 1 else None)
+    if need == "complement":      # a copula's complement (noun/name/adjective/comparative): the nearest
+        r = right("noun", "name", "adjective", "comparative")   # to the RIGHT, but if fronted, the
+        return r[0] if left("noun", "name") else (r[1] if len(r) > 1 else None)  # SECOND (1st=subject)
+    if need == "standard":        # a comparative's standard of comparison: the noun/name after "than"
+        r = right("noun", "name")
+        return r[0] if r else None
     if need == "predicate":       # a noun's predicate is the unique verb to its right
-        right = [v for v in verbs if pos[id(v)] > i]
-        return right[0] if len(right) == 1 else None
-    if need == "queries":         # an interrogative asks about the unique quantifier to its right
-        quants = [q for q in units
-                  if "quantifier" in q.features.get("senses", []) and pos[id(q)] > i]
-        return quants[0] if len(quants) == 1 else None
-    if need == "asks_predication":   # an auxiliary asks whether the unique verb to its right holds
-        right = [v for v in verbs if pos[id(v)] > i]
-        return right[0] if len(right) == 1 else None
+        r = right("verb")
+        return r[0] if len(r) == 1 else None
+    if need in ("queries",):      # an interrogative asks about the unique quantifier to its right
+        r = right("quantifier")
+        return r[0] if len(r) == 1 else None
+    if need in ("asks_predication", "asks_predicate"):   # auxiliary / "who": the unique verb to the right
+        r = right("verb")
+        return r[0] if len(r) == 1 else None
+    if need == "asks_individual":   # "what": the unique named individual to its right
+        r = right("name")
+        return r[0] if len(r) == 1 else None
     if need == "negates":         # a negator scopes over the NEAREST verb (copula left, or main right)
+        verbs = [x for x in units if has(x, "verb")]
         return min(verbs, key=lambda v: abs(pos[id(v)] - i)) if verbs else None
     return None
 
@@ -321,17 +336,13 @@ def _find_target(need, u, i, units, nouns, verbs, names, adjs, pos):
 def resolve(reading: Reading) -> Reading:
     units = reading.units
     pos = {id(u): k for k, u in enumerate(units)}
-    nouns = [u for u in units if "noun" in u.features.get("senses", [])]
-    verbs = [u for u in units if "verb" in u.features.get("senses", [])]
-    names = [u for u in units if "name" in u.features.get("senses", [])]
-    adjs = [u for u in units if "adjective" in u.features.get("senses", [])]
     for i, u in enumerate(units):
         obs = u.features.get("obligations")
         if not obs:
             continue
         new_obs, bound = [], False
         for o in obs:
-            target = None if o.met else _find_target(o.need, u, i, units, nouns, verbs, names, adjs, pos)
+            target = None if o.met else _find_target(o.need, u, i, units, pos)
             if target is not None:                             # unambiguous → bind
                 new_obs.append(Obligation(o.need, target=target))
                 bound = True
@@ -663,15 +674,16 @@ class Relation:
 
 
 def _relation(reading: Reading):
-    """The comparison a "<A> is <comparative> than <B>" statement asserts, or None — one comparative,
-    a "than", and exactly two named individuals (subject then object by position)."""
-    comps = [u for u in reading.units if "comparative" in u.features.get("senses", [])]
-    names = [u for u in reading.units if "name" in u.features.get("senses", [])]
-    has_than = any(_key(u.surface) == "than" for u in reading.units)
-    if len(comps) == 1 and has_than and len(names) == 2:
-        a, b = sorted(names, key=lambda u: u.words[0].index)
-        return Relation(_key(a.surface), _key(comps[0].surface), _key(b.surface))
-    return None
+    """The comparison a "<A> is <comparative> than <B>" statement asserts, or None — read off the
+    bindings: the copula's subject (A), its complement (the comparative), and the comparative's
+    bound `standard` (B)."""
+    subj, comp = _copula_args(reading)
+    if not _has_sense(comp, "comparative"):
+        return None
+    standard = _follow(comp, "standard")
+    if subj is None or standard is None:
+        return None
+    return Relation(_key(subj.surface), _key(comp.surface), _key(standard.surface))
 
 
 def _related(subj: str, rel: str, obj: str, context: list) -> bool:
@@ -712,31 +724,32 @@ def answer(question: str, context: list):
     if unknown:
         return unknown                                   # don't guess about words we don't know
 
-    wh = next((u for u in r.units if "wh" in u.features.get("senses", [])), None)
-    if wh is not None:                                   # wh-question → return entities
-        key, verbs = _key(wh.surface), [u for u in r.units if "verb" in u.features.get("senses", [])]
-        nm = [u for u in r.units if "name" in u.features.get("senses", [])]
-        if key == "who" and len(verbs) == 1:             # who did <predicate>?
-            pred = _lemma(verbs[0].surface)
-            subs = sorted({f.subject[0] for f in context if isinstance(f, Predication)
-                           and f.predicate == pred and not f.negated})
-            return ", ".join(subs) if subs else "(no one)"
-        if key == "what" and len(nm) == 1:               # what is <name>? → its collections
-            member = _key(nm[0].surface)
-            cols = sorted({m.collection[0] for m in context
-                           if isinstance(m, Membership) and m.member == member and not m.negated})
-            return ", ".join(cols) if cols else "(unknown)"
-        return [Deficiency("unanswerable", wh, "I couldn't answer that question")]
+    who = next((u for u in r.units if "wh_subject" in u.features.get("senses", [])), None)
+    if who is not None:                                  # "Who <predicate>?" → subjects with it
+        verb = _follow(who, "asks_predicate")
+        if verb is None:
+            return [Deficiency("unanswerable", who, "I couldn't tell what is being asked")]
+        pred = _lemma(verb.surface)
+        subs = sorted({f.subject[0] for f in context if isinstance(f, Predication)
+                       and f.predicate == pred and not f.negated})
+        return ", ".join(subs) if subs else "(no one)"
+    what = next((u for u in r.units if "wh_value" in u.features.get("senses", [])), None)
+    if what is not None:                                 # "What is <name>?" → its collections
+        name = _follow(what, "asks_individual")
+        if name is None:
+            return [Deficiency("unanswerable", what, "I couldn't tell what is being asked")]
+        member = _key(name.surface)
+        cols = sorted({m.collection[0] for m in context
+                       if isinstance(m, Membership) and m.member == member and not m.negated})
+        return ", ".join(cols) if cols else "(unknown)"
 
-    names = [u for u in r.units if "name" in u.features.get("senses", [])]
-    nouns = [u for u in r.units if "noun" in u.features.get("senses", [])]
-    comps = [u for u in r.units if "comparative" in u.features.get("senses", [])]
-    if len(comps) == 1 and len(names) == 2 and any(_key(u.surface) == "than" for u in r.units):
-        a, b = sorted(names, key=lambda u: u.words[0].index)         # "Is A <comparative> than B?"
-        return "yes" if _related(_key(a.surface), _key(comps[0].surface),
-                                 _key(b.surface), context) else "no"
-    subj, comp = _copula_args(r)                         # "Is X a Y?" membership question
-    if _has_sense(subj, "name") and _has_sense(comp, "noun"):
+    subj, comp = _copula_args(r)
+    if _has_sense(comp, "comparative"):                  # "Is A <comparative> than B?"
+        standard = _follow(comp, "standard")
+        if subj is not None and standard is not None:
+            return "yes" if _related(_key(subj.surface), _key(comp.surface),
+                                     _key(standard.surface), context) else "no"
+    if _has_sense(subj, "name") and _has_sense(comp, "noun"):    # "Is X a Y?" membership question
         return "yes" if _is_member(_key(subj.surface), _descriptor(comp), context) else "no"
 
     prop = _property(r)                                  # "Is <subject> <adjective>?" property question

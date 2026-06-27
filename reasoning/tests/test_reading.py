@@ -866,5 +866,38 @@ class TestIncrement28CopulaComplement(unittest.TestCase):
         self.assertEqual(reading.answer("Is the apple red?", reading.learn("The apple is red")), "yes")
 
 
+class TestIncrement29ComparativeAndWhObligations(unittest.TestCase):
+    """#29 (alignment) — the last ad-hoc words get obligations. A comparative is the copula's
+    complement and binds its `standard` (after "than"), so Relations read off bindings; wh-words bind
+    to what they ask about (who → the verb, what → the individual). No more counting in the fact layer."""
+
+    def test_comparative_binds_its_standard(self):
+        r = reading.analyze("Alice is taller than Bob")
+        taller = next(u for u in r.units if u.surface == "taller")
+        std = next(o for o in taller.features["obligations"] if o.need == "standard")
+        self.assertEqual(std.target.surface, "Bob")
+
+    def test_relation_read_from_bindings(self):
+        self.assertEqual(reading.learn("Alice is taller than Bob"),
+                         [reading.Relation("alice", "taller", "bob")])
+
+    def test_comparative_question_and_transitivity_intact(self):
+        ctx = (reading.learn("Alice is taller than Bob")
+               + reading.learn("Bob is taller than Carol"))
+        self.assertEqual(reading.answer("Is Alice taller than Carol?", ctx), "yes")
+        self.assertEqual(reading.answer("Is Carol taller than Alice?", ctx), "no")
+
+    def test_who_binds_the_predicate(self):
+        r = reading.analyze("Who passed?")
+        who = next(u for u in r.units if u.surface == "Who")
+        ob = who.features["obligations"][0]
+        self.assertEqual(ob.need, "asks_predicate")
+        self.assertEqual(ob.target.surface, "passed?")
+
+    def test_wh_questions_still_answer(self):
+        self.assertEqual(reading.answer("Who passed?", reading.learn("Bob passed")), "bob")
+        self.assertEqual(reading.answer("What is Bob?", reading.learn("Bob is a student")), "student")
+
+
 if __name__ == "__main__":
     unittest.main()

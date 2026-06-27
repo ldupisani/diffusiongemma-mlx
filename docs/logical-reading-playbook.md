@@ -183,7 +183,11 @@ present?". Removes the global flag (latent multi-clause over-negation). Behavior
 28. **(alignment) the copula binds a `complement`** — `is`/`are`/`was`/`were` now carry BOTH a
 `subject` and a `complement` obligation (inversion-aware: subject left in statements, right in
 fronted questions). `_membership`/`_property`/`_subset` read those bindings instead of COUNTING
-nouns/adjectives — the keystone that dissolved the unit-counting from the fact-extraction layer.
+nouns/adjectives — the keystone that dissolved the unit-counting from the fact-extraction layer ·
+29. **(alignment) comparative + wh obligations** — a `comparative` is the copula's complement and
+binds its `standard` (after "than"), so `_relation` reads off bindings; `who`/`what` bind to what
+they ask about (`asks_predicate` → the verb / `asks_individual` → the name). The last counting is
+gone; every meaningful role now BINDS. (`_find_target` also simplified to compute pools by role.)
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
