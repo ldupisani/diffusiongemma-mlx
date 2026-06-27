@@ -1179,5 +1179,34 @@ class TestIncrement42QuantityFacts(unittest.TestCase):
                          "3")
 
 
+class TestIncrement43Aggregation(unittest.TestCase):
+    """#43 — aggregation across entities (math step 3): "How many apples do Tom and Mary have
+    altogether?" sums the matching Quantity facts. Needs a conjoined subject ("Tom and Mary") and a
+    fold over the amounts. Still no coreference."""
+
+    def _ctx(self):
+        return reading.learn("Tom has 3 apples") + reading.learn("Mary has 2 apples")
+
+    def test_altogether_sums(self):
+        self.assertEqual(reading.answer("How many apples do Tom and Mary have altogether?",
+                                        self._ctx()), 5)
+
+    def test_without_altogether_also_sums(self):
+        self.assertEqual(reading.answer("How many apples do Tom and Mary have?", self._ctx()), 5)
+
+    def test_unknown_entity_is_undetermined(self):
+        ctx = reading.learn("Tom has 3 apples")  # Mary's count was never stated
+        self.assertEqual(reading.answer("How many apples do Tom and Mary have altogether?", ctx),
+                         "undetermined")
+
+    def test_single_entity_still_works(self):
+        self.assertEqual(reading.answer("How many apples does Tom have?", self._ctx()), 3)
+
+    def test_cli(self):
+        out = reading.run_cli(["Tom has 3 apples. Mary has 2 apples. "
+                               "How many apples do Tom and Mary have altogether?"])
+        self.assertEqual(out.strip(), "5")
+
+
 if __name__ == "__main__":
     unittest.main()

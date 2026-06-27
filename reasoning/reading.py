@@ -207,6 +207,8 @@ LEXICON: dict[str, list[str]] = {
     "one": ["number"], "two": ["number"], "three": ["number"],   # a number is a quantifier with a
     "four": ["number"], "five": ["number"],                      # VALUE (see NUMBERS)
     "did": ["auxiliary"], "does": ["auxiliary"], "do": ["auxiliary"],  # yes/no question markers
+    "and": ["conjunction"],   # conjoins items ("Tom and Mary")
+    "altogether": ["aggregator"], "total": ["aggregator"],   # fold a set of quantities (sum)
     "pass": ["verb"], "fail": ["verb"], "failed": ["verb"],
     "not": ["negation"], "never": ["negation"],   # negators flip a fact's polarity (see NEGATORS)
     # --- open-class vocabulary (curated, grown deliberately) ---
@@ -970,17 +972,21 @@ def answer(question: str, context: list):
         return [Deficiency("unanswerable", interro, "I couldn't tell what to count")]
     query = _descriptor(collection)
     aux = next((u for u in r.units if "auxiliary" in u.features.get("senses", [])), None)
-    if aux is not None:                                  # "How many <measure> does <entity> have?"
-        after = r.units[r.units.index(aux) + 1:]         # the entity is fronted: right after the aux
-        ent_unit = next((u for u in after if "name" in u.features.get("senses", [])
-                         or "noun" in u.features.get("senses", [])), None)
-        if ent_unit is not None:
-            ent = _key(ent_unit.surface)
-            amounts = [f.amount for f in context if isinstance(f, Quantity)
-                       and f.entity == ent and f.measure == query]
-            if amounts:
-                return int(amounts[0]) if amounts[0] == int(amounts[0]) else amounts[0]
-            return "undetermined"
+    if aux is not None:                                  # "How many <measure> do <entities> have?"
+        ai = r.units.index(aux)                          # entities are fronted, between aux and verb
+        vi = next((i for i, u in enumerate(r.units)
+                   if i > ai and "verb" in u.features.get("senses", [])), len(r.units))
+        entities = [_key(u.surface) for u in r.units[ai + 1:vi]
+                    if "name" in u.features.get("senses", []) or "noun" in u.features.get("senses", [])]
+        if entities:
+            total = 0
+            for ent in entities:                         # fold each entity's amount (sum)
+                amounts = [f.amount for f in context if isinstance(f, Quantity)
+                           and f.entity == ent and f.measure == query]
+                if not amounts:
+                    return "undetermined"                # one conjunct's quantity is unknown
+                total += amounts[0]
+            return int(total) if total == int(total) else total
     return sum(1 for inst in context if isinstance(inst, tuple) and _matches(query, inst))
 
 

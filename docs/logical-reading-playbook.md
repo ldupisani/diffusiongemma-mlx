@@ -238,7 +238,13 @@ audited safe evaluator — the model is gone, the correct-by-construction arithm
 43. **Quantity facts (math step 2)** — "Tom has 3 apples" → `Quantity("tom", (apple,{}), 3)`: a value
 gains a `quantifies` obligation (binds the noun to its right; OPTIONAL so a bare operand quantifies
 nothing). "How many apples does Tom have?" reads the amount back (entity fronted after the auxiliary);
-an unknown entity → `undetermined`, not a fabricated count.
+an unknown entity → `undetermined`, not a fabricated count.  ·
+44. **aggregation across entities (math step 3)** — "How many apples do Tom and Mary have
+altogether?" collects the conjoined entities (names between the auxiliary and the verb) and folds
+their `Quantity` amounts (sum). Multiple entities ⇒ sum by default; `altogether`/`total` reinforce.
+An unknown conjunct → `undetermined`. NOTE: `and`/`altogether` are recognized but don't yet carry
+obligations (positional collection for now) — a principled conjunction-binds-conjuncts refinement
+is queued for when conjunction appears in more roles (objects, "3 apples and 2 oranges").
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
@@ -249,7 +255,7 @@ the shape now (free); aggregation/counting is *derived later* when a question's 
 
 - **GSM8K via this parser (replace the LLM translator)** — kept as an INDEPENDENT eval (a `bench`-style
   harness, never in `test_reading.py`). Roadmap, simplest-first: (1) pure arithmetic ✓; (2) `Quantity`
-  facts ("Tom has 3 apples") ✓; (3) aggregation questions ("how many … altogether"); (4) accumulation on
+  facts ("Tom has 3 apples") ✓; (3) aggregation questions ("how many … altogether") ✓; (4) accumulation on
   one entity; (5) **coreference** (`he`/`she`, "the remaining", "half as many [as X]") and **relational
   quantities** — the two hard, pervasive gaps; (6) units + **world-knowledge conversions** (hour=60min,
   year=52wk). Build a math/quantity layer in `reading.py`; reuse `translate.run_program` to evaluate.
