@@ -1522,10 +1522,11 @@ class TestIncrement54ComparativeQuantity(unittest.TestCase):
         self.assertEqual(reading.solve("Bob has 10 apples. Tom has 5 more apples than Bob. "
                                        "How many apples does Tom have?"), 15)
 
-    def test_forward_reference_declines(self):
-        # the standard's count is stated AFTER -> can't resolve sequentially -> decline (precision)
+    def test_forward_reference_resolves_via_fixpoint(self):
+        # the standard's count is stated AFTER -> the solve() fixpoint defers and retries -> resolves
+        # (this declined before multi-step chaining; #58 made it resolve)
         self.assertEqual(reading.solve("Tim has 30 less apples than Martha. Martha has 68 apples. "
-                                       "How many apples does Tim have?"), "undetermined")
+                                       "How many apples does Tim have?"), 38)
 
     def test_times_more_misparse_still_declines(self):
         self.assertEqual(reading.solve("Riku has 25 times more stickers than Kristoff. "
@@ -1616,6 +1617,37 @@ class TestIncrement57ConjoinedObjects(unittest.TestCase):
     def test_single_object_unchanged(self):
         self.assertEqual(reading.learn("Tom buys 2 apples"),
                          [reading.Quantity("tom", ("apple", frozenset()), 2.0, "buy")])
+
+
+class TestIncrement58MultiStepChaining(unittest.TestCase):
+    """#58 - multi-step chaining via a solve() FIXPOINT: a statement whose referent is stated LATER
+    (a forward reference) is deferred and retried as the context grows, until nothing new resolves.
+    Chains of derived quantities resolve; relational referents resolve by NAME; "N times more" stays
+    declined (multiplicative, not our additive ±)."""
+
+    def test_forward_reference(self):
+        self.assertEqual(reading.solve("Tim has 30 less apples than Martha. Martha has 68 apples. "
+                                       "How many apples does Tim have?"), 38)
+
+    def test_three_hop_chain(self):
+        self.assertEqual(reading.solve("Tim has 30 less apples than Martha. "
+                                       "Harry has half as many apples as Tim. Martha has 68 apples. "
+                                       "How many apples does Harry have?"), 19)
+
+    def test_relational_referent_resolves_by_name(self):
+        # "half as many as Tim" -> Tim's 10 (named), NOT the most-recent Bob's 4
+        self.assertEqual(reading.solve("Tim has 10 apples. Bob has 4 apples. "
+                                       "Harry has half as many apples as Tim. "
+                                       "How many apples does Harry have?"), 5)
+
+    def test_times_more_still_declines(self):
+        self.assertEqual(reading.solve("Riku has 25 times more stickers than Kristoff. "
+                                       "Kristoff has 85 stickers. How many stickers does Riku have?"),
+                         "undetermined")
+
+    def test_unresolvable_chain_declines(self):
+        self.assertEqual(reading.solve("Tim has 30 less apples than Martha. "
+                                       "How many apples does Tim have?"), "undetermined")
 
 
 if __name__ == "__main__":

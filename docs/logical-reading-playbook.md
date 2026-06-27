@@ -412,7 +412,19 @@ fact), so "10 $20 bills" (ten twenty-dollar bills, a compound denomination) slip
 Fix is structural at the source, not another whole-problem guard: two ADJACENT bare values ("10 $20")
 are a compound we can't parse — a genuine conjoined object always SEPARATES its values with nouns + `and`
 — so decline. Lesson: a capability that captures more can capture it wrong; the durable defense is to
-recognize the shape you CAN'T parse and refuse it, not to keep patching the shapes you can.
+recognize the shape you CAN'T parse and refuse it, not to keep patching the shapes you can.  ·
+63. **multi-step chaining (a solve() FIXPOINT)** — instead of requiring premises in dependency order,
+`solve` DEFERS a statement it can't yet resolve and RETRIES it as the context fills, iterating to a
+fixed point. This turns the sequential engine into a constraint-propagating one: a FORWARD REFERENCE
+("Tim has 30 less than Martha. Martha has 68 …" — base stated last) resolves, and chains
+(Harry←Tim←Martha) resolve hop by hop. Three things made it precision-safe: (a) `_facts_from` DEFERS an
+unresolved comparative-quantity structure (returns [] / pending) rather than falling through to a FLAT
+`_quantity` that would fabricate "Tim=30"; (b) `_comparative_quantity` REFUSES "N times more" (it looks
+additive like "30 less" but is multiplicative — the Riku trap; refusing means the fixpoint never
+resolves it → declines, never the plausible-wrong 85+25); (c) relational referents resolve by NAME
+("half as many as TIM" → Tim's quantity, not "most recent" — makes the chain robust, not order-lucky).
+A test flipped decline→38 (the capability landing). 256 tests; precision 100%. Follow-on: multi-CLAUSE
+sentences (comma-joined "Tim …, and Harry …" is one premise — needs clause splitting).
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

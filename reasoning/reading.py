@@ -979,8 +979,18 @@ def _relational_quantity(reading: Reading, context: list):
         return None
     verbs = [u for u in reading.units if "verb" in u.features.get("senses", [])]
     subject = _follow(verbs[0], "subject") if len(verbs) == 1 else None
-    referent = next((f for f in reversed(context or []) if isinstance(f, Quantity)), None)
-    if subject is None or referent is None:
+    if subject is None:
+        return None
+    # the referent: a NAMED quantity ("half as many as TIM" — a name other than the subject), else the
+    # most recent prior quantity ("twice as many" — implicit, like coreference).
+    named = [u for u in reading.units if "name" in u.features.get("senses", []) and u is not subject]
+    if named:
+        ref_ent = _entity(named[-1])
+        referent = next((f for f in reversed(context or [])
+                         if isinstance(f, Quantity) and f.entity == ref_ent), None)
+    else:
+        referent = next((f for f in reversed(context or []) if isinstance(f, Quantity)), None)
+    if referent is None:
         return None
     return Quantity(_entity(subject), referent.measure,
                     mult.features["value"] * referent.amount, _lemma(verbs[0].surface))
@@ -993,6 +1003,8 @@ def _comparative_quantity(reading: Reading, context: list):
     comp = next((u for u in reading.units if "comparative" in u.features.get("senses", [])), None)
     if comp is None:
         return None
+    if any(_key(u.surface) == "times" for u in reading.units):   # "25 TIMES more" is multiplicative,
+        return None                                              # not our additive ±N — don't guess
     standard = _follow(comp, "standard")
     value_unit = next((u for u in reading.units if "value" in u.features.get("senses", [])), None)
     verbs = [u for u in reading.units if "verb" in u.features.get("senses", [])]
@@ -1612,6 +1624,12 @@ def _facts_from(reading: Reading, context: list = None) -> list:
     cq = _comparative_quantity(r, context)               # "<A> has 30 less <X> than <B>" → derived?
     if cq is not None:
         return [cq]
+    comp = next((u for u in r.units if "comparative" in u.features.get("senses", [])), None)
+    if comp is not None and _follow(comp, "standard") is not None \
+            and any("value" in u.features.get("senses", []) for u in r.units):
+        return []                                        # a comparative-quantity structure we couldn't
+        # resolve (the standard's count is unknown — a forward ref) → DEFER (don't fall through to a
+        # flat _quantity); the solve() fixpoint will retry it once the standard is learned.
     q = _quantity(r)                                     # "<entity> has 3 apples and 2 oranges" → list
     if q:
         return q
@@ -1639,20 +1657,31 @@ def solve(text: str):
     if any(d.kind == "unknown-word" for r in readings for d in deficiencies(r)):
         return "undetermined"
     discourse, context = [], []
-    lost_comparison = False
-    for p in premises:
-        facts = learn(p, discourse, context)
-        context += facts
-        # GUARD 2 — a "than" comparison that collapsed to a FLAT quantity (a verbatim stated value,
-        # no Relation, not a derived ±) means the relation ("25 times more stickers THAN Kristoff")
-        # was dropped → we misread it. A comparative-derived quantity (amount ≠ any stated value) is OK.
+    facts_of = [None] * len(premises)                    # per-premise facts (None = not yet resolved)
+    for i, p in enumerate(premises):                     # first pass: sequential, builds the discourse
+        f = learn(p, discourse, context)
+        if f:
+            facts_of[i] = f
+            context += f
+    progress = True                                      # FIXPOINT: retry the unresolved (forward refs,
+    while progress:                                      # chains) against the growing context
+        progress = False
+        for i, p in enumerate(premises):
+            if facts_of[i] is None:
+                f = learn(p, None, context)              # discourse already built in the first pass
+                if f:
+                    facts_of[i], progress = f, True
+                    context += f
+    # GUARD 2 — a "than" comparison that collapsed to a FLAT quantity (a verbatim stated value, no
+    # Relation, not a derived ±) means the relation ("25 times more stickers THAN Kristoff") was
+    # dropped → we misread it. A comparative-derived quantity (amount ≠ any stated value) is OK.
+    for i, p in enumerate(premises):
         if "than" in [w.strip(".,?!:;") for w in p.lower().split()]:
-            raw = {u.features["value"] for u in analyze(p).units if "value" in u.features.get("senses", [])}
+            facts = facts_of[i] or []
+            raw = {u.features["value"] for u in readings[i].units if "value" in u.features.get("senses", [])}
             if any(isinstance(f, Quantity) and f.amount in raw for f in facts) \
                     and not any(isinstance(f, Relation) for f in facts):
-                lost_comparison = True
-    if lost_comparison:
-        return "undetermined"
+                return "undetermined"
     # GUARD 3 — unused given: every NUMBER stated in the premises must surface as a fact amount; a
     # dropped number means we didn't capture the whole problem ("Oliver has 10 $20 and 3 $5 bills").
     # A premise with a comparative/multiplier is exempt — its stated value is an offset/factor consumed
