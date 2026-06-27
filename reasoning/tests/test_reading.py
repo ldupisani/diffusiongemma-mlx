@@ -1272,5 +1272,24 @@ class TestIncrement45Coreference(unittest.TestCase):
         self.assertIn("refers to 'tom'", out)
 
 
+class TestIncrement46ValueOperandForego(unittest.TestCase):
+    """#46 — a value's `quantifies` is REQUIRED but FOREGONE when the value is an operator's operand
+    (forego-when-subordinated, #37) — not the `optional` shortcut it was. "3 plus 2" is well-formed
+    (operands), "Tom has 3 apples" is well-formed (quantifies a noun), but a stray "Tom has 3" is
+    honestly flagged."""
+
+    def test_operands_are_well_formed(self):
+        self.assertTrue(reading.is_well_formed(reading.analyze("3 plus 2")))
+
+    def test_value_quantifying_a_noun_is_well_formed(self):
+        self.assertTrue(reading.is_well_formed(reading.analyze("Tom has 3 apples")))
+
+    def test_stray_value_is_flagged(self):
+        r = reading.analyze("Tom has 3")
+        self.assertFalse(reading.is_well_formed(r))
+        self.assertTrue(any("quantifies" in d.message or "counts" in d.message
+                            for d in reading.deficiencies(r)))
+
+
 if __name__ == "__main__":
     unittest.main()

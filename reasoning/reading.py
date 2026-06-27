@@ -311,9 +311,11 @@ ROLE_OBLIGATIONS: dict[str, list[str]] = {
                                         # against the discourse, not within one reading)
 }
 
-# Obligations that are grammatically OPTIONAL: unmet is not a deficiency (a verb's direct object, or
-# a bare value that doesn't quantify anything).
-OPTIONAL_NEEDS = {"dobj", "quantifies"}
+# Obligations that are grammatically OPTIONAL: unmet is not a deficiency. A verb's direct object is
+# genuinely optional (intransitive use) — nothing else accounts for its absence. A value's
+# `quantifies` is NOT here: it's required, but FOREGONE when the value is an operand (see the
+# subordination forego in deficiencies) — being grabbed by an operator discharges its role.
+OPTIONAL_NEEDS = {"dobj"}
 
 
 def annotate_obligations(reading: Reading) -> Reading:
@@ -546,6 +548,7 @@ _NEED_PHRASING = {
     "determines": "has no noun to determine",
     "modifies": "has no noun to modify",
     "refers": "has no antecedent — it isn't clear who or what it refers to",
+    "quantifies": "doesn't say what it counts (a quantity of what?)",
 }
 
 
@@ -556,7 +559,7 @@ def deficiencies(reading: Reading) -> list:
     # subordinated: it's discharged by being that slot-filler, so its own unmet obligations are
     # foregone — "the dog" in "Mary owns a dog" doesn't independently demand a predicate.
     subordinated = {id(o.target) for u in reading.units for o in u.features.get("obligations", [])
-                    if o.met and o.need in ("complement", "dobj")}
+                    if o.met and o.need in ("complement", "dobj", "left", "right")}
     out = []
     for u in reading.units:
         if not u.features.get("senses"):
