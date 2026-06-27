@@ -784,5 +784,33 @@ class TestIncrement25Vocabulary(unittest.TestCase):
                          [reading.Predication(("dog", frozenset()), "bark")])
 
 
+class TestIncrement26NegationIsAnObligation(unittest.TestCase):
+    """#26 — "not" is a proper obligation-bearing word: it carries a `negates` obligation that BINDS
+    to the verb/copula it scopes (not a global flag). Polarity then attaches to the right fact, so
+    `Membership` gets a polarity and "Bob is not a student" is no longer a positive membership."""
+
+    def test_not_carries_a_negates_obligation_bound_to_the_verb(self):
+        r = reading.analyze("Bob did not pass")
+        neg = next(u for u in r.units if "negation" in u.features.get("senses", []))
+        ob = neg.features["obligations"][0]
+        self.assertEqual(ob.need, "negates")
+        self.assertTrue(ob.met)
+        self.assertEqual(ob.target.surface, "pass")     # bound to the verb it negates
+
+    def test_negated_membership_is_learned(self):
+        self.assertEqual(reading.learn("Bob is not a student"),
+                         [reading.Membership("bob", ("student", frozenset()), negated=True)])
+
+    def test_is_not_a_student_answers_no(self):
+        self.assertEqual(reading.answer("Is Bob a student?", reading.learn("Bob is not a student")), "no")
+
+    def test_positive_membership_still_yes(self):
+        self.assertEqual(reading.answer("Is Bob a student?", reading.learn("Bob is a student")), "yes")
+
+    def test_negated_predication_still_works(self):
+        self.assertEqual(reading.learn("Bob did not pass"),
+                         [reading.Predication(("bob", frozenset()), "pass", negated=True)])
+
+
 if __name__ == "__main__":
     unittest.main()

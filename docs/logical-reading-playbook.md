@@ -144,7 +144,11 @@ returns Bob's collections. These return ENTITIES, not yes/no. (`which` over inst
 24. **comparatives** — `"Alice is taller than Bob"` is a `Relation` fact; comparisons are
 TRANSITIVE (`_related` walks the edges), so A>B>C ⊢ A>C. The first true relation (not set membership) ·
 25. **open-class vocabulary** — a curated batch of nouns/verbs/adjectives (with plurals + lemmas),
-grown deliberately like every other dictionary, so common sentences parse and reason.
+grown deliberately like every other dictionary, so common sentences parse and reason ·
+26. **negation is an obligation** — `"not"`/`"never"` carry a `negates` obligation that BINDS to the
+verb/copula they scope (no longer a global flag). Polarity then attaches to the right fact, so
+`Membership` gained a polarity and `"Bob is not a student"` is no longer a positive membership (fixed
+a silent false-`yes`). "no"-quantifier negation kept as the universal-negative case.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

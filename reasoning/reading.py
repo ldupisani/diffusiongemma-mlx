@@ -255,6 +255,7 @@ ROLE_OBLIGATIONS: dict[str, list[str]] = {
     "number": ["collection"],      # a number ranges over the collection it counts ("three apples")
     "auxiliary": ["asks_predication"],  # a yes/no marker asks whether a verb (its predication) holds
     "name": ["predicate"],         # a named individual is noun-like — it wants a predicate too
+    "negation": ["negates"],       # "not"/"never" must find the verb (predicate) it scopes over
 }
 
 
@@ -301,6 +302,8 @@ def _find_target(need, u, i, units, nouns, verbs, names, pos):
     if need == "asks_predication":   # an auxiliary asks whether the unique verb to its right holds
         right = [v for v in verbs if pos[id(v)] > i]
         return right[0] if len(right) == 1 else None
+    if need == "negates":         # a negator scopes over the NEAREST verb (copula left, or main right)
+        return min(verbs, key=lambda v: abs(pos[id(v)] - i)) if verbs else None
     return None
 
 
@@ -510,17 +513,28 @@ VERB_LEMMA = {"passed": "pass", "wilted": "wilt", "rose": "rise", "failed": "fai
               "barked": "bark", "flew": "fly", "ran": "run", "swam": "swim", "slept": "sleep",
               "sang": "sing", "sold": "sell", "bought": "buy"}
 
-# Words that negate a statement's polarity. "no" both quantifies AND negates ("no students failed"
-# = students did NOT fail); detection is by surface, independent of which sense was selected.
-NEGATORS = {"not", "never", "no"}
-
-
 def _lemma(surface: str) -> str:
     return VERB_LEMMA.get(_key(surface), _key(surface))
 
 
-def _negated(reading: Reading) -> bool:
-    return any(_key(u.surface) in NEGATORS for u in reading.units)
+def _copula_unit(reading: Reading):
+    """The copula verb (is/are/was/were) unit, or None — the anchor a property/membership negates."""
+    for u in reading.units:
+        if "verb" in u.features.get("senses", []) and _key(u.surface) in ("is", "are", "was", "were"):
+            return u
+    return None
+
+
+def _verb_negated(verb, reading: Reading) -> bool:
+    """Is `verb` negated? True if a "not"/"never" bound its `negates` obligation to this verb, OR a
+    "no" quantifier is present ("no students failed" = students did NOT fail — quantifier negation)."""
+    for u in reading.units:
+        if "negation" in u.features.get("senses", []):
+            if any(o.need == "negates" and o.met and o.target is verb
+                   for o in u.features.get("obligations", [])):
+                return True
+    return any("quantifier" in u.features.get("senses", []) and _key(u.surface) == "no"
+               for u in reading.units)
 
 
 def _predication(reading: Reading):
@@ -532,29 +546,30 @@ def _predication(reading: Reading):
     subject = _follow(verbs[0], "subject")
     if subject is None:
         return None
-    return Predication(_descriptor(subject), _lemma(verbs[0].surface), _negated(reading))
+    return Predication(_descriptor(subject), _lemma(verbs[0].surface), _verb_negated(verbs[0], reading))
 
 
 @dataclass(frozen=True)
 class Membership:
     """A known fact "<individual> is a <collection>": a named individual belongs to a collection,
-    e.g. "Bob is a student" → Membership("bob", ("student", frozenset()))."""
+    e.g. "Bob is a student" → Membership("bob", ("student", frozenset())). `negated` for "is not"."""
     member: str
     collection: tuple
+    negated: bool = False
 
 
 def _has_copula(reading: Reading) -> bool:
-    return any("verb" in u.features.get("senses", []) and _key(u.surface) in
-               ("is", "are", "was", "were") for u in reading.units)
+    return _copula_unit(reading) is not None
 
 
 def _membership(reading: Reading):
     """The membership a copula statement asserts ("X is a Y"), or None — exactly one named
-    individual, one noun, and a copula (is/are/was/were)."""
+    individual, one noun, and a copula; polarity from a negation bound to the copula."""
     names = [u for u in reading.units if "name" in u.features.get("senses", [])]
     nouns = [u for u in reading.units if "noun" in u.features.get("senses", [])]
     if _has_copula(reading) and len(names) == 1 and len(nouns) == 1:
-        return Membership(_key(names[0].surface), _descriptor(nouns[0]))
+        return Membership(_key(names[0].surface), _descriptor(nouns[0]),
+                          _verb_negated(_copula_unit(reading), reading))
     return None
 
 
@@ -586,14 +601,16 @@ def _property(reading: Reading):
     subjects = [u for u in reading.units
                 if "noun" in u.features.get("senses", []) or "name" in u.features.get("senses", [])]
     if _has_copula(reading) and len(adjs) == 1 and len(subjects) == 1:
-        return Predication(_descriptor(subjects[0]), _key(adjs[0].surface), _negated(reading))
+        return Predication(_descriptor(subjects[0]), _key(adjs[0].surface),
+                           _verb_negated(_copula_unit(reading), reading))
     return None
 
 
 def _is_member(member: str, target: tuple, context: list) -> bool:
     """Is `member` in collection `target`? True if directly a member, or reachable from one of its
     collections by following Subset edges (transitive). The membership-inference engine."""
-    frontier = [m.collection for m in context if isinstance(m, Membership) and m.member == member]
+    frontier = [m.collection for m in context
+                if isinstance(m, Membership) and m.member == member and not m.negated]
     seen = set()
     while frontier:
         c = frontier.pop()
@@ -677,7 +694,7 @@ def answer(question: str, context: list):
         if key == "what" and len(nm) == 1:               # what is <name>? → its collections
             member = _key(nm[0].surface)
             cols = sorted({m.collection[0] for m in context
-                           if isinstance(m, Membership) and m.member == member})
+                           if isinstance(m, Membership) and m.member == member and not m.negated})
             return ", ".join(cols) if cols else "(unknown)"
         return [Deficiency("unanswerable", wh, "I couldn't answer that question")]
 
