@@ -176,7 +176,10 @@ grown deliberately like every other dictionary, so common sentences parse and re
 26. **negation is an obligation** — `"not"`/`"never"` carry a `negates` obligation that BINDS to the
 verb/copula they scope (no longer a global flag). Polarity then attaches to the right fact, so
 `Membership` gained a polarity and `"Bob is not a student"` is no longer a positive membership (fixed
-a silent false-`yes`). "no"-quantifier negation kept as the universal-negative case.
+a silent false-`yes`) ·
+27. **(alignment) scoped `"no"` negation** — `"no"`-quantifier negation now reads the BINDINGS too:
+a verb is negated iff its `subject` is the collection a `"no"` quantifier bound to — not "is `no`
+present?". Removes the global flag (latent multi-clause over-negation). Behavior-preserving today.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

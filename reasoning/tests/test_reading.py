@@ -812,5 +812,27 @@ class TestIncrement26NegationIsAnObligation(unittest.TestCase):
                          [reading.Predication(("bob", frozenset()), "pass", negated=True)])
 
 
+class TestIncrement27ScopedNoNegation(unittest.TestCase):
+    """#27 (alignment) — "no" negation is now scoped via BINDING: a verb is 'no'-negated iff its
+    subject is the collection a 'no' quantifier binds to, not a global "is 'no' present?" flag.
+    Behavioral contract preserved; the latent multi-clause over-negation is gone."""
+
+    def test_no_subject_negates_its_own_predication(self):
+        self.assertEqual(reading.learn("No students failed"),
+                         [reading.Predication(("student", frozenset()), "fail", negated=True)])
+
+    def test_universal_without_no_stays_positive(self):
+        self.assertEqual(reading.learn("All students failed"),
+                         [reading.Predication(("student", frozenset()), "fail")])
+
+    def test_no_negation_rides_the_collection_binding(self):
+        # the 'no' quantifier binds its collection to the same unit the verb takes as subject
+        r = reading.analyze("No students failed")
+        no = next(u for u in r.units if u.surface == "No")
+        failed = next(u for u in r.units if u.surface == "failed")
+        self.assertIs(no.features["obligations"][0].target,
+                      next(o.target for o in failed.features["obligations"] if o.need == "subject"))
+
+
 if __name__ == "__main__":
     unittest.main()

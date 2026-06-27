@@ -526,15 +526,24 @@ def _copula_unit(reading: Reading):
 
 
 def _verb_negated(verb, reading: Reading) -> bool:
-    """Is `verb` negated? True if a "not"/"never" bound its `negates` obligation to this verb, OR a
-    "no" quantifier is present ("no students failed" = students did NOT fail — quantifier negation)."""
+    """Is `verb` negated? Both paths are scoped by BINDING, not by presence:
+      - a "not"/"never" whose `negates` obligation bound to THIS verb, or
+      - a "no" quantifier whose `collection` bound to this verb's SUBJECT ("no students failed" =
+        the students-collection did not fail). Scoping via the bindings means "no" negates only its
+        own predication, never every verb in reach (the global-flag trap the principle warns of)."""
     for u in reading.units:
         if "negation" in u.features.get("senses", []):
             if any(o.need == "negates" and o.met and o.target is verb
                    for o in u.features.get("obligations", [])):
                 return True
-    return any("quantifier" in u.features.get("senses", []) and _key(u.surface) == "no"
-               for u in reading.units)
+    subject = _follow(verb, "subject")
+    if subject is not None:
+        for u in reading.units:
+            if "quantifier" in u.features.get("senses", []) and _key(u.surface) == "no":
+                if any(o.need == "collection" and o.met and o.target is subject
+                       for o in u.features.get("obligations", [])):
+                    return True
+    return False
 
 
 def _predication(reading: Reading):
