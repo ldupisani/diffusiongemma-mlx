@@ -5,6 +5,33 @@ word (`reasoning/reading.py`, `reasoning/tests/test_reading.py`). A living docum
 strategies stabilize. See also [[logical-reading-initiative]] and
 [[working-method-piecemeal-annotate]] in project memory.
 
+## THE CORE PRINCIPLE — every word is an obligation
+
+**Word obligation is the PRIMARY feature of this parser. Everything else exists to serve it.**
+
+A word does not passively "have a meaning" — it carries a **demand on the rest of the sentence**:
+something it must FIND, by binding, to be satisfied. A quantifier must find its collection; a verb
+its subject; an article its noun; a preposition its object; a negator the verb it scopes. **Parsing
+IS the discharge of these obligations** — there is no separate grammar. Everything we do is a view
+of one mechanism:
+
+- **Structure** = the bindings that discharge obligations.
+- **Sense disambiguation** = choose the sense-assignment whose obligations cover best.
+- **Deficiency / "ask, don't guess"** = an obligation left unmet (the answer-or-ask boundary).
+- **Reasoning** = facts read off the saturated obligation graph.
+
+**The non-negotiable rule when adding ANY word or capability: give the word an obligation and let it
+BIND. Never special-case a word with a global flag or an ad-hoc check** — that is a corner being
+cut, and it *will* produce a silent bug. The obligation is what *scopes* a word to a specific
+target; a global flag cannot.
+
+> **Cautionary lesson (increment #26).** `"not"` was first handled as a global "is a negator
+> present?" flag instead of an obligation. Because nothing *bound* it to a specific predicate,
+> `_membership` silently ignored it and `"Bob is not a student"` was learned as a *positive*
+> membership — a confident false `"yes"`. Giving `"not"` a `negates` obligation that binds to its
+> verb fixed the design and the bug at the same time. When a fact comes out wrong, suspect a word
+> that isn't carrying (or binding) its obligation.
+
 ## Goal & stance
 
 - Deterministic reasoning, **not an LLM**. A valid statement gets a definitive, auditable reading;
@@ -31,10 +58,11 @@ strategies stabilize. See also [[logical-reading-initiative]] and
    Backtrack by restoring `before`. For nested objects (an `Obligation`), **replace rather than
    mutate** so the diff stays a clean, reversible snapshot.
 
-4. **Every role carries an obligation; the unmet ones are what we still track.** An obligation
-   belongs to a *role*, not a word: a quantifier ranges over a collection; a linking preposition
-   relates an `anchor` (left) to an `object` (right) — by virtue of their roles. Attach unmet;
-   binding **drains** the set. A statement is **well-formed (saturated)** when nothing is unmet and
+4. **Every role carries an obligation; the unmet ones are what we still track.** *(This is THE core
+   principle — see the section above; it is restated here because it is the move we reach for most.)*
+   An obligation belongs to a *role*, not a word: a quantifier ranges over a collection; a linking
+   preposition relates an `anchor` (left) to an `object` (right) — by virtue of their roles. Attach
+   unmet; binding **drains** the set. A statement is **well-formed (saturated)** when nothing is unmet and
    no word is an orphan; **deficient** exactly when something stays unmet — the bottom-up
    deficiency detector. ("Filter all the concepts we track" = drain the open-obligation set.)
 
