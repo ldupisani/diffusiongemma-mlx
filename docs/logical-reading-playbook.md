@@ -196,6 +196,10 @@ the shape now (free); aggregation/counting is *derived later* when a question's 
 
 ## Open threads / next
 
+- **"Undetermined" vs "no"** (answer-or-ask depth): today a question we can't derive falls to
+  closed-world `"no"`, and an unknown referent reads as a generic "no information about X". The
+  richer behavior is a third verdict — *"I can't determine whether Bob passed"* — distinguishing
+  **lack of information** from a confident negative. Needs bug B fixed (`some`≠`all`) first.
 - **Give `boolean` (and other deferred senses) their obligations** — now unblocked: disambiguation
   by coverage means `no`-as-quantifier no longer wrongly inherits `boolean`'s demand. `boolean→`
   (negates a clause?) can be added and will only apply when that reading covers best.

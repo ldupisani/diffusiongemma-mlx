@@ -481,7 +481,7 @@ def deficiencies(reading: Reading) -> list:
     out = []
     for u in reading.units:
         if not u.features.get("senses"):
-            out.append(Deficiency("unknown-word", u, f"unrecognized word {u.surface!r}"))
+            out.append(Deficiency("unknown-word", u, f"I have no information about {u.surface!r}"))
             continue
         for o in u.features.get("obligations", []):
             if not o.met:
