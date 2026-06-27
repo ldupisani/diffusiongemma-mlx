@@ -117,6 +117,14 @@ PLURALS = {
     "days": "day", "weeks": "week", "months": "month", "years": "year", "items": "item",
     "pages": "page", "miles": "mile", "pounds": "pound", "boxes": "box", "bags": "bag",
     "points": "point", "numbers": "number", "amounts": "amount", "costs": "cost",
+    "stores": "store", "shops": "shop", "schools": "school", "classes": "class", "games": "game",
+    "teams": "team", "prices": "price", "pieces": "piece", "dozens": "dozen", "pairs": "pair",
+    "sets": "set", "cups": "cup", "gallons": "gallon", "kids": "kid", "toys": "toy", "balls": "ball",
+    "candies": "candy", "cookies": "cookie", "cupcakes": "cupcake", "slices": "slice", "pies": "pie",
+    "cakes": "cake", "eggs": "egg", "bottles": "bottle", "baskets": "basket", "jars": "jar",
+    "customers": "customer", "workers": "worker", "tickets": "ticket", "gifts": "gift",
+    "cards": "card", "coins": "coin", "bills": "bill", "goats": "goat", "roommates": "roommate",
+    "stickers": "sticker", "marbles": "marble", "cars": "car", "children": "child",
 }
 
 
@@ -256,6 +264,46 @@ LEXICON: dict[str, list[str]] = {
     # common prepositions (link an anchor to an object; recognised so they stop blocking the parse):
     "to": ["preposition"], "in": ["preposition"], "on": ["preposition"], "at": ["preposition"],
     "from": ["preposition"], "with": ["preposition"], "for": ["preposition"], "after": ["preposition"],
+    "into": ["preposition"], "over": ["preposition"], "under": ["preposition"], "about": ["preposition"],
+    "around": ["preposition"], "through": ["preposition"],
+    # modal auxiliaries (recognised; behave like did/does for question framing):
+    "will": ["auxiliary"], "can": ["auxiliary"], "would": ["auxiliary"], "should": ["auxiliary"],
+    "could": ["auxiliary"], "must": ["auxiliary"], "may": ["auxiliary"], "might": ["auxiliary"],
+    # adverbs / conjunctions (recognised; no obligation — they don't block the parse):
+    "then": ["adverb"], "just": ["adverb"], "also": ["adverb"], "only": ["adverb"], "now": ["adverb"],
+    "still": ["adverb"], "again": ["adverb"], "already": ["adverb"], "if": ["conjunction"],
+    "but": ["conjunction"], "or": ["conjunction"], "so": ["conjunction"], "less": ["comparative"],
+    # ordinals + common adjectives:
+    "first": ["adjective"], "second": ["adjective"], "third": ["adjective"], "fourth": ["adjective"],
+    "fifth": ["adjective"], "last": ["adjective"], "next": ["adjective"], "new": ["adjective"],
+    "old": ["adjective"], "same": ["adjective"], "long": ["adjective"], "short": ["adjective"],
+    "full": ["adjective"], "empty": ["adjective"], "large": ["adjective"], "small": ["adjective"],
+    "big": ["adjective"],
+    # common action verbs (their lemmas drive polarity / event-counting):
+    "need": ["verb"], "make": ["verb"], "made": ["verb"], "pay": ["verb"], "paid": ["verb"],
+    "take": ["verb"], "took": ["verb"], "go": ["verb"], "went": ["verb"], "want": ["verb"],
+    "put": ["verb"], "keep": ["verb"], "kept": ["verb"], "bring": ["verb"], "brought": ["verb"],
+    "send": ["verb"], "sent": ["verb"], "read": ["verb"], "write": ["verb"], "wrote": ["verb"],
+    "build": ["verb"], "built": ["verb"], "fill": ["verb"], "walk": ["verb"], "see": ["verb"],
+    "saw": ["verb"], "drink": ["verb"], "drank": ["verb"], "cut": ["verb"], "save": ["verb"],
+    "collect": ["verb"], "count": ["verb"], "pick": ["verb"], "win": ["verb"], "won": ["verb"],
+    "cook": ["verb"], "bake": ["verb"], "wash": ["verb"],
+    "needs": ["verb"], "makes": ["verb"], "pays": ["verb"], "takes": ["verb"], "goes": ["verb"],
+    "wants": ["verb"], "puts": ["verb"], "keeps": ["verb"], "brings": ["verb"], "sends": ["verb"],
+    "reads": ["verb"], "writes": ["verb"], "builds": ["verb"], "fills": ["verb"], "walks": ["verb"],
+    "sees": ["verb"], "drinks": ["verb"], "cuts": ["verb"], "saves": ["verb"], "collects": ["verb"],
+    "counts": ["verb"], "picks": ["verb"], "wins": ["verb"], "cooks": ["verb"], "bakes": ["verb"],
+    "washes": ["verb"], "wanted": ["verb"], "needed": ["verb"], "saved": ["verb"], "picked": ["verb"],
+    # common GSM8K nouns (measures of word problems):
+    "store": ["noun"], "shop": ["noun"], "school": ["noun"], "class": ["noun"], "game": ["noun"],
+    "team": ["noun"], "price": ["noun"], "piece": ["noun"], "dozen": ["noun"], "pair": ["noun"],
+    "set": ["noun"], "cup": ["noun"], "gallon": ["noun"], "kid": ["noun"], "toy": ["noun"],
+    "ball": ["noun"], "candy": ["noun"], "cookie": ["noun"], "cupcake": ["noun"], "slice": ["noun"],
+    "pie": ["noun"], "cake": ["noun"], "egg": ["noun"], "bottle": ["noun"], "basket": ["noun"],
+    "jar": ["noun"], "customer": ["noun"], "worker": ["noun"], "ticket": ["noun"], "gift": ["noun"],
+    "card": ["noun"], "coin": ["noun"], "bill": ["noun"], "goat": ["noun"], "roommate": ["noun"],
+    "sticker": ["noun"], "marble": ["noun"], "child": ["noun"], "person": ["noun"], "car": ["noun"],
+    "washing": ["noun"], "babysitting": ["noun"],
     # possessive / object pronouns (recognised, and they extend coreference — "his" → its antecedent):
     "him": ["pronoun"], "his": ["pronoun"], "her": ["pronoun"], "them": ["pronoun"],
     "their": ["pronoun"], "its": ["pronoun"],
@@ -704,7 +752,15 @@ VERB_LEMMA = {"passed": "pass", "wilted": "wilt", "rose": "rise", "failed": "fai
               "lost": "lose", "sells": "sell", "gives": "give", "gave": "give", "spends": "spend",
               "spent": "spend", "eats": "eat", "ate": "eat", "uses": "use", "used": "use",
     "jumps": "jump", "jumped": "jump", "runs": "run", "earns": "earn", "earned": "earn",
-    "works": "work", "worked": "work"}
+    "works": "work", "worked": "work",
+    "needs": "need", "needed": "need", "makes": "make", "made": "make", "pays": "pay", "paid": "pay",
+    "takes": "take", "took": "take", "goes": "go", "went": "go", "wants": "want", "wanted": "want",
+    "puts": "put", "keeps": "keep", "kept": "keep", "brings": "bring", "brought": "bring",
+    "sends": "send", "sent": "send", "reads": "read", "writes": "write", "wrote": "write",
+    "builds": "build", "built": "build", "fills": "fill", "walks": "walk", "sees": "see", "saw": "see",
+    "drinks": "drink", "drank": "drink", "cuts": "cut", "saves": "save", "saved": "save",
+    "collects": "collect", "counts": "count", "picks": "pick", "picked": "pick", "wins": "win",
+    "won": "win", "cooks": "cook", "bakes": "bake", "washes": "wash"}
 
 def _lemma(surface: str) -> str:
     return VERB_LEMMA.get(_key(surface), _key(surface))
@@ -1458,15 +1514,33 @@ def solve(text: str):
     if not qidx:
         return None
     premises, question = sentences[:qidx[-1]], sentences[qidx[-1]]
-    # PRECISION GUARD: if any word in the problem is unrecognized, we may be missing information a
-    # partial parse silently dropped — so we DECLINE rather than commit to a number off a fragment.
-    # (This is the "definitive-or-decline" stance: never answer what we didn't fully read.)
     readings = [analyze(s) for s in sentences]
+    # PRECISION GUARD 1 — unrecognized word: a partial parse may have dropped the fact that mattered,
+    # so we DECLINE rather than commit off a fragment ("definitive-or-decline": never answer what we
+    # didn't fully read).
     if any(d.kind == "unknown-word" for r in readings for d in deficiencies(r)):
         return "undetermined"
     discourse, context = [], []
+    lost_comparison = False
     for p in premises:
-        context += learn(p, discourse, context)
+        facts = learn(p, discourse, context)
+        context += facts
+        # GUARD 2 — a "than" comparison that collapsed to a FLAT quantity (no Relation) means the
+        # relation ("25 times more stickers THAN Kristoff") was dropped → we misread it.
+        if "than" in [w.strip(".,?!:;") for w in p.lower().split()] \
+                and any(isinstance(f, Quantity) for f in facts) \
+                and not any(isinstance(f, Relation) for f in facts):
+            lost_comparison = True
+    if lost_comparison:
+        return "undetermined"
+    # GUARD 3 — unused given: every NUMBER stated in the premises must surface as a fact amount; a
+    # dropped number means we didn't capture the whole problem ("Oliver has 10 $20 and 3 $5 bills").
+    given = {u.features["value"] for r in readings[:len(premises)] for u in r.units
+             if "value" in u.features.get("senses", [])}
+    used = {f.amount for f in context if isinstance(f, (Quantity, Rate))} \
+        | {f.count for f in context if isinstance(f, Frequency)}
+    if given - used:
+        return "undetermined"
     return answer(question, context)
 
 

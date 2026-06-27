@@ -1432,9 +1432,10 @@ class TestIncrement51Currency(unittest.TestCase):
         self.assertTrue(reading.is_well_formed(reading.analyze("Weng earns $12")))
 
     def test_solve_declines_on_unknown_words(self):
-        # a money parse exists, but an unknown word ("babysitting") means we may be missing
-        # information a partial parse dropped -> decline, never commit a number off a fragment.
-        self.assertEqual(reading.solve("Tom earns $12 babysitting. How much did Tom earn?"),
+        # a money parse exists, but a nonce word ("wuggle") means we may be missing information a
+        # partial parse dropped -> decline, never commit a number off a fragment. (Nonce-pinned so it
+        # stays an unknown-word test as the lexicon grows.)
+        self.assertEqual(reading.solve("Tom earns $12 wuggle. How much did Tom earn?"),
                          "undetermined")
 
     def test_solve_still_answers_a_fully_known_problem(self):
