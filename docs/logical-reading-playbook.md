@@ -265,7 +265,16 @@ pronoun.) Still singular-only; `they`/object pronouns and relational quantities 
 #37 — `left`/`right` join `complement`/`dobj` as subordinating roles). "3 plus 2" stays well-formed
 (operands excused); a STRAY value "Tom has 3" is now honestly flagged ("what does 3 count?"), which the
 `optional` shortcut had silently swallowed. Lesson: reach for the existing obligation mechanism
-(subordination) before adding an exception flag.
+(subordination) before adding an exception flag.  ·
+48. **value quantifies a verb's frequency (multipliers)** — a value can measure an ACTION, not only a
+noun. `once`/`twice`/`thrice` are lexicalized multipliers (value + frequency) carrying a `scales`
+obligation that binds the verb to their LEFT → a `Frequency(entity, action, count)` fact. "Mary jumps
+twice" → Frequency(mary, jump, 2); "How many times does Mary jump?" → 2. `times` is now multi-sense
+(`operator` | `noun`): the collision resolves by coverage — values flanking it ("4 times 3") tie and
+fall to the operator by sense-order, a verb-to-bind with no second value ("how many times … jump")
+wins as the noun. SIDE-FIX: `_unmet_count` (disambiguation cost) now reuses `deficiencies` so coverage
+and the answer-or-ask boundary share ONE notion of "unmet" (optional/subordinated foregone) — the
+operator reading no longer loses to a `times`-as-noun that opportunistically fills a copula's slot.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
@@ -280,10 +289,10 @@ the shape now (free); aggregation/counting is *derived later* when a question's 
   one entity ✓; (5a) **coreference** (`he`/`she`) ✓; (5b) "the remaining", "half/twice as many [as X]" **relational
   quantities** — the second hard gap; (6) units + **world-knowledge conversions** (hour=60min,
   year=52wk). Build a math/quantity layer in `reading.py`; reuse `translate.run_program` to evaluate.
-- **value quantifies a verb's frequency** ("Mary jumps 2 times", "Mary jumps twice") — a value should
-  measure an ACTION, not only a noun; `twice`/`thrice` are lexicalized multipliers (value + ×N). Must
-  resolve the `times` operator-vs-noun collision via disambiguation-by-coverage. The natural lead-in to
-  (5b) relational quantities, where the same multiplier applies to a referent quantity.
+- **"N times" STATEMENT form** ("Mary jumps 2 times") — slice 2 of frequency: the multiplier words
+  (twice/thrice) ✓; the "N times" form needs the frequency-noun "times" to modify the verb to its LEFT
+  (a `scales`-like obligation on the noun reading), distinct from a subject-noun's predicate. Lead-in
+  to (5b) relational quantities, where the same multiplier applies to a referent quantity.
 
 - **`boolean` sense of `no`** (decided: leave as-is): no meaningful obligation exists in this
   statement grammar — `no` reliably reads as a quantifier (its `collection` always binds), and a

@@ -1291,5 +1291,36 @@ class TestIncrement46ValueOperandForego(unittest.TestCase):
                             for d in reading.deficiencies(r)))
 
 
+class TestIncrement47VerbFrequency(unittest.TestCase):
+    """#47 — a value can quantify a VERB's frequency, not only a noun. "twice"/"thrice"/"once" are
+    lexicalized multipliers (value + frequency) that `scales` the verb to their left. "Mary jumps
+    twice" -> Frequency(mary, jump, 2); "How many times does Mary jump?" -> 2. ("N times" later.)"""
+
+    def test_twice_is_a_frequency(self):
+        self.assertEqual(reading.learn("Mary jumps twice"), [reading.Frequency("mary", "jump", 2)])
+
+    def test_once_and_thrice(self):
+        self.assertEqual(reading.learn("Mary jumps once"), [reading.Frequency("mary", "jump", 1)])
+        self.assertEqual(reading.learn("Tom runs thrice"), [reading.Frequency("tom", "run", 3)])
+
+    def test_multiplier_scales_the_verb(self):
+        r = reading.analyze("Mary jumps twice")
+        tw = next(u for u in r.units if u.surface == "twice")
+        self.assertEqual(tw.features["value"], 2)
+        self.assertEqual(reading._follow(tw, "scales").surface, "jumps")
+
+    def test_how_many_times_question(self):
+        self.assertEqual(reading.run_cli(["Mary jumps twice. How many times does Mary jump?"]).strip(),
+                         "2")
+
+    def test_times_operator_still_multiplies(self):
+        # the times operator-vs-noun ambiguity resolves by coverage: here values flank it -> operator.
+        self.assertEqual(reading.answer("What is 4 times 3?", []), 12)
+
+    def test_unknown_frequency_is_undetermined(self):
+        self.assertEqual(reading.run_cli(["Mary jumps twice. How many times does Tom jump?"]).strip(),
+                         "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()

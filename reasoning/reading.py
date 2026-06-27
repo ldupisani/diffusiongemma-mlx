@@ -112,6 +112,7 @@ PLURALS = {
     "dogs": "dog", "cats": "cat", "birds": "bird", "cars": "car", "houses": "house",
     "trees": "tree", "books": "book", "flowers": "flower", "teachers": "teacher",
     "people": "person", "persons": "person", "men": "man", "women": "woman",
+    "times": "time",
 }
 
 
@@ -135,6 +136,9 @@ def _as_number(surface: str):
 
 # The mathematical lexicon's operator words → their arithmetic symbol (step 1; grows deliberately).
 OPERATORS = {"plus": "+", "minus": "-", "times": "*", "divided": "/"}
+
+# Lexicalized frequency multipliers: a value fused with "× N times" — modifies a verb's frequency.
+MULTIPLIERS = {"once": 1, "twice": 2, "thrice": 3}
 
 # Coreference: a pronoun's grammatical gender, and a small name→gender lexicon used to pick a
 # compatible antecedent. Both grown deliberately (no guessing from spelling).
@@ -217,6 +221,9 @@ LEXICON: dict[str, list[str]] = {
     "and": ["conjunction"],   # conjoins items ("Tom and Mary")
     "altogether": ["aggregator"], "total": ["aggregator"],   # fold a set of quantities (sum)
     "he": ["pronoun"], "she": ["pronoun"], "it": ["pronoun"], "they": ["pronoun"],  # coreference
+    "once": ["multiplier"], "twice": ["multiplier"], "thrice": ["multiplier"],  # frequency (value + ×)
+    "time": ["noun"], "times": ["operator", "noun"],   # "times" is × OR the occurrence-noun (ambiguous)
+    "jump": ["verb"], "jumps": ["verb"], "jumped": ["verb"], "run": ["verb"], "runs": ["verb"],
     "pass": ["verb"], "fail": ["verb"], "failed": ["verb"],
     "not": ["negation"], "never": ["negation"],   # negators flip a fact's polarity (see NEGATORS)
     # --- open-class vocabulary (curated, grown deliberately) ---
@@ -270,6 +277,8 @@ def annotate_senses(reading: Reading) -> Reading:
             u.features["op"] = OPERATORS[_key(u.surface)]
         if "pronoun" in senses:
             u.features["gender"] = PRONOUN_GENDER.get(_key(u.surface))
+        if "multiplier" in senses:
+            u.features["value"] = MULTIPLIERS[_key(u.surface)]
         reading.record("annotate", target=u, before=before, after=dict(u.features),
                        reason="lexical role")
     return reading
@@ -309,6 +318,7 @@ ROLE_OBLIGATIONS: dict[str, list[str]] = {
                                         # operand in "3 plus 2" quantifies nothing)
     "pronoun": ["refers"],              # a pronoun must find its antecedent (resolved cross-sentence
                                         # against the discourse, not within one reading)
+    "multiplier": ["scales"],           # a frequency multiplier scales the verb to its left ("jumps TWICE")
 }
 
 # Obligations that are grammatically OPTIONAL: unmet is not a deficiency. A verb's direct object is
@@ -396,6 +406,9 @@ def _find_target(need, u, i, units, pos):
     if need == "quantifies":      # a value quantifies the nearest noun to its right ("3 apples")
         r = right("noun")
         return r[0] if r else None
+    if need == "scales":          # a frequency multiplier scales the nearest verb to its LEFT
+        ll = left("verb")
+        return max(ll, key=lambda x: pos[id(x)]) if ll else None
     if need == "left":            # an operator's left operand: the nearest value to its left
         ll = left("value")
         return max(ll, key=lambda x: pos[id(x)]) if ll else None
@@ -475,8 +488,9 @@ def condense(reading: Reading) -> bool:
 # the best-covering combination is committed as reversible 'assign-sense' decisions. No-op when
 # nothing is ambiguous, so unambiguous sentences pay nothing.
 def _unmet_count(reading: Reading) -> int:
-    return sum(1 for u in reading.units
-               for o in u.features.get("obligations", []) if not o.met)
+    # Coverage uses the SAME notion of "unmet" as the deficiency check: optional and subordinated
+    # (foregone) obligations don't count — an operand isn't "uncovered", it's discharged by its role.
+    return sum(1 for d in deficiencies(reading) if d.kind == "unmet-obligation")
 
 
 def _trial_cost(reading: Reading, multi_idx, combo) -> int:
@@ -625,7 +639,8 @@ VERB_LEMMA = {"passed": "pass", "wilted": "wilt", "rose": "rise", "failed": "fai
               "has": "have", "had": "have", "buys": "buy", "gets": "get", "got": "get",
               "finds": "find", "found": "find", "receives": "receive", "loses": "lose",
               "lost": "lose", "sells": "sell", "gives": "give", "gave": "give", "spends": "spend",
-              "spent": "spend", "eats": "eat", "ate": "eat", "uses": "use", "used": "use"}
+              "spent": "spend", "eats": "eat", "ate": "eat", "uses": "use", "used": "use",
+    "jumps": "jump", "jumped": "jump", "runs": "run"}
 
 def _lemma(surface: str) -> str:
     return VERB_LEMMA.get(_key(surface), _key(surface))
@@ -741,6 +756,28 @@ class Quantity:
     measure: tuple
     amount: float
     verb: str = "have"
+
+
+@dataclass(frozen=True)
+class Frequency:
+    """A how-many-times fact: "Mary jumps twice" → Frequency("mary", "jump", 2). Counts OCCURRENCES of
+    an action (the verb), distinct from Quantity (a count of a noun)."""
+    entity: str
+    action: str
+    count: float
+
+
+def _frequency(reading: Reading):
+    """The frequency a "<entity> <verb>s <multiplier>" statement asserts, or None — a multiplier that
+    scales a verb whose subject is known. ("N times" — the frequency-noun form — comes later.)"""
+    mult = next((u for u in reading.units if "multiplier" in u.features.get("senses", [])), None)
+    if mult is None:
+        return None
+    verb = _follow(mult, "scales")
+    subject = _follow(verb, "subject") if verb is not None else None
+    if subject is None:
+        return None
+    return Frequency(_entity(subject), _lemma(verb.surface), mult.features["value"])
 
 
 def _quantity(reading: Reading):
@@ -1056,6 +1093,18 @@ def answer(question: str, context: list):
         return [Deficiency("unanswerable", interro, "I couldn't tell what to count")]
     query = _descriptor(collection)
     aux = next((u for u in r.units if "auxiliary" in u.features.get("senses", [])), None)
+    if aux is not None and query[0] == "time":          # "How many times does <entity> <verb>?"
+        after = r.units[r.units.index(aux) + 1:]
+        ent_unit = next((u for u in after if any(s in u.features.get("senses", [])
+                                                 for s in ("name", "noun", "pronoun"))), None)
+        verb_unit = next((u for u in after if "verb" in u.features.get("senses", [])), None)
+        if ent_unit is not None and verb_unit is not None:
+            ent, action = _entity(ent_unit), _lemma(verb_unit.surface)
+            counts = [f.count for f in context if isinstance(f, Frequency)
+                      and f.entity == ent and f.action == action]
+            if counts:
+                return int(counts[0]) if counts[0] == int(counts[0]) else counts[0]
+            return "undetermined"
     if aux is not None:                                  # "How many <measure> do <entities> have?"
         ai = r.units.index(aux)                          # entities are fronted, between aux and verb
         vi = next((i for i, u in enumerate(r.units)
@@ -1207,6 +1256,9 @@ def _facts_from(reading: Reading) -> list:
     rel = _relation(r)                                   # "<A> is <comparative> than <B>" → relation?
     if rel is not None:
         return [rel]
+    fr = _frequency(r)                                   # "<entity> <verb>s twice" → frequency?
+    if fr is not None:
+        return [fr]
     q = _quantity(r)                                     # "<entity> has <value> <noun>" → quantity?
     if q is not None:
         return [q]
