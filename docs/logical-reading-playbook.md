@@ -347,7 +347,19 @@ is the follow-on. HARNESS HONESTY: with `$` and `%` now PARSING, they're no long
 `reading_bench` dropped them from the decline taxonomy (a capability must stop being counted as a gap,
 or the metric flatters progress). The taxonomy is now stark: **300/300 declines are unknown-word** —
 not one problem is even fully-read. Vocabulary breadth is the universal wall; the frequency list is the
-worklist. Precision stays 100%; coverage 0%.
+worklist. Precision stays 100%; coverage 0%.  ·
+57. **vocabulary grind (safe) + two structural-confidence guards** — added ~60 frequency-list words in
+correct roles (modal auxiliaries `will`/`can`; common verbs `make`/`pay`/`take`/`go`/…; nouns
+`store`/`bill`/`marble`/…; ordinals/adjectives; adverbs/conjunctions/prepositions). This moved
+**fully-read 0→12 (4%)** — but full readability REMOVES the unknown-word guard, so 2 of the 12 misparsed
+into confident-WRONG (precision 100%→0%). The grind is only safe with structural-confidence signals, so
+`solve` now has THREE precision layers: decline what we can't (1) READ (unknown word), (2) ACCOUNT FOR
+(**unused-given**: every stated data-number must surface as a fact amount — "Oliver has 10 $20 and 3 $5
+bills" dropped three), or (3) read without MISREADING a relation (**lost-comparison**: a `than` premise
+that collapsed to a flat Quantity, no Relation — "25 times more stickers than Kristoff"). Precision back
+to 100%; clean problems still solve. Lesson: each new capability that unblocks parsing can regress
+precision; guard commitment on completeness, not just recognition. Nonce-pin unknown-word tests
+(`wuggle`) so they survive the grind.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
