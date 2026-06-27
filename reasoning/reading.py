@@ -176,6 +176,8 @@ LEXICON: dict[str, list[str]] = {
     "big": ["adjective"],
     "rose": ["noun", "verb"],   # ambiguous: a flower (noun) or the past of "rise" (verb)
     "wilted": ["verb"],
+    "taller": ["comparative"], "older": ["comparative"], "bigger": ["comparative"],
+    "than": ["preposition"],    # links the two sides of a comparison ("taller than")
     "how": ["interrogative"],   # asks about the quantity word to its right ("how many …")
     "many": ["quantifier"],     # a quantity quantifier — ranges over a collection like any other
     "who": ["wh"], "what": ["wh"],   # wh-questions: return entities, not yes/no (handled in answer)
@@ -589,6 +591,45 @@ def _is_member(member: str, target: tuple, context: list) -> bool:
     return False
 
 
+@dataclass(frozen=True)
+class Relation:
+    """A comparative relation between two individuals, e.g. "Alice is taller than Bob" →
+    Relation("alice", "taller", "bob"). Transitive (see _related)."""
+    subject: str
+    relation: str
+    object: str
+
+
+def _relation(reading: Reading):
+    """The comparison a "<A> is <comparative> than <B>" statement asserts, or None — one comparative,
+    a "than", and exactly two named individuals (subject then object by position)."""
+    comps = [u for u in reading.units if "comparative" in u.features.get("senses", [])]
+    names = [u for u in reading.units if "name" in u.features.get("senses", [])]
+    has_than = any(_key(u.surface) == "than" for u in reading.units)
+    if len(comps) == 1 and has_than and len(names) == 2:
+        a, b = sorted(names, key=lambda u: u.words[0].index)
+        return Relation(_key(a.surface), _key(comps[0].surface), _key(b.surface))
+    return None
+
+
+def _related(subj: str, rel: str, obj: str, context: list) -> bool:
+    """Does `subj rel obj` hold, transitively? Reachable from subj to obj along `rel` edges (start
+    from subj's direct successors, so nothing is its own comparative)."""
+    frontier = [f.object for f in context if isinstance(f, Relation) and f.relation == rel
+                and f.subject == subj]
+    seen = set()
+    while frontier:
+        x = frontier.pop()
+        if x == obj:
+            return True
+        if x in seen:
+            continue
+        seen.add(x)
+        frontier += [f.object for f in context if isinstance(f, Relation) and f.relation == rel
+                     and f.subject == x]
+    return False
+
+
 def _follow(unit, need):
     """The target of `unit`'s met obligation named `need`, or None."""
     if unit is None:
@@ -627,6 +668,11 @@ def answer(question: str, context: list):
 
     names = [u for u in r.units if "name" in u.features.get("senses", [])]
     nouns = [u for u in r.units if "noun" in u.features.get("senses", [])]
+    comps = [u for u in r.units if "comparative" in u.features.get("senses", [])]
+    if len(comps) == 1 and len(names) == 2 and any(_key(u.surface) == "than" for u in r.units):
+        a, b = sorted(names, key=lambda u: u.words[0].index)         # "Is A <comparative> than B?"
+        return "yes" if _related(_key(a.surface), _key(comps[0].surface),
+                                 _key(b.surface), context) else "no"
     if _has_copula(r) and len(names) == 1 and len(nouns) == 1:   # "Is X a Y?" membership question
         return "yes" if _is_member(_key(names[0].surface), _descriptor(nouns[0]), context) else "no"
 
@@ -742,6 +788,9 @@ def learn(statement: str) -> list:
     prop = _property(r)                                  # "<subject> is <adjective>" → property?
     if prop is not None:
         return [prop]
+    rel = _relation(r)                                   # "<A> is <comparative> than <B>" → relation?
+    if rel is not None:
+        return [rel]
     p = _predication(r)                                  # subject-verb statement?
     if p is not None:
         return [p]

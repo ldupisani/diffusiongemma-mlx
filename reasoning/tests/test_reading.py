@@ -741,5 +741,29 @@ class TestIncrement23WhQuestions(unittest.TestCase):
         self.assertEqual(reading.run_cli(["Bob passed. Who passed?"]).strip(), "bob")
 
 
+class TestIncrement24Comparatives(unittest.TestCase):
+    """#24 — comparatives are relational facts ("Alice is taller than Bob" → Relation), and the
+    relation is transitive: A>B and B>C ⊢ A>C. The first genuine relation (vs set membership)."""
+
+    def test_relation_is_learned(self):
+        self.assertEqual(reading.learn("Alice is taller than Bob"),
+                         [reading.Relation("alice", "taller", "bob")])
+
+    def test_direct_comparison(self):
+        ctx = reading.learn("Alice is taller than Bob")
+        self.assertEqual(reading.answer("Is Alice taller than Bob?", ctx), "yes")
+        self.assertEqual(reading.answer("Is Bob taller than Alice?", ctx), "no")
+
+    def test_transitive_comparison(self):
+        ctx = (reading.learn("Alice is taller than Bob")
+               + reading.learn("Bob is taller than Carol"))
+        self.assertEqual(reading.answer("Is Alice taller than Carol?", ctx), "yes")
+
+    def test_cli_transitive_chain(self):
+        out = reading.run_cli(["Alice is taller than Bob. Bob is taller than Carol. "
+                               "Is Alice taller than Carol?"])
+        self.assertEqual(out.strip(), "yes")
+
+
 if __name__ == "__main__":
     unittest.main()

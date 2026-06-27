@@ -140,7 +140,9 @@ The positive query then doesn't match → `"no"`, and the false-positive (the re
 merge), distinct from attributive `"red apple"`. `"Is the apple red?"` queries it; reuses
 `Predication` with the adjective as predicate ·
 23. **wh-questions** — `"Who passed?"` returns the subjects with that predicate; `"What is Bob?"`
-returns Bob's collections. These return ENTITIES, not yes/no. (`which` over instances still queued.)
+returns Bob's collections. These return ENTITIES, not yes/no. (`which` over instances still queued.) ·
+24. **comparatives** — `"Alice is taller than Bob"` is a `Relation` fact; comparisons are
+TRANSITIVE (`_related` walks the edges), so A>B>C ⊢ A>C. The first true relation (not set membership).
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
