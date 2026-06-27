@@ -1025,5 +1025,27 @@ class TestIncrement34ContradictionDetection(unittest.TestCase):
         self.assertEqual(reading.answer("Did Bob pass?", reading.learn("Bob did not pass")), "no")
 
 
+class TestIncrement35ExplainAllQuestionTypes(unittest.TestCase):
+    """#35 — `explain()`/`--trace` now derives property and comparative questions too (they used to
+    fall through to "not a question I can answer")."""
+
+    def test_explain_property(self):
+        ctx = reading.learn("Every student is happy") + reading.learn("Bob is a student")
+        steps = reading.explain("Is Bob happy?", ctx)
+        self.assertTrue(any("happy" in s for s in steps))
+        self.assertTrue(any("yes" in s for s in steps))
+        self.assertFalse(any("not a question" in s for s in steps))
+
+    def test_explain_comparative(self):
+        steps = reading.explain("Is Alice taller than Bob?", reading.learn("Alice is taller than Bob"))
+        self.assertTrue(any("taller" in s for s in steps))
+        self.assertFalse(any("not a question" in s for s in steps))
+
+    def test_trace_property_in_cli(self):
+        out = reading.run_cli(["Every student is happy. Bob is a student. Is Bob happy?", "--trace"])
+        self.assertIn("ANSWER: yes", out)
+        self.assertNotIn("not a question", out)
+
+
 if __name__ == "__main__":
     unittest.main()

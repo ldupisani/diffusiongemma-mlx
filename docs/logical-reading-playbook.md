@@ -212,7 +212,9 @@ a deeper fix: a quantifier's `collection` is now its **nearest noun to the right
 `no` are derivable (`_verdict(yes, no)`). Detection is DERIVABLE: it counts inference, so `"All
 students passed. Bob did not pass. Bob is a student."` is a conflict, not just direct `P`∧`¬P`. The
 four verdicts now span the epistemic space: **yes / no / undetermined / conflict** = true / false /
-unknown / inconsistent. Applies to predication, property, membership, comparative branches.
+unknown / inconsistent. Applies to predication, property, membership, comparative branches ·
+36. **`explain()` for all question types** — property and comparative questions now derive in
+`--trace` (a shared `_verdict_steps` helper), instead of falling through to "not a question I can answer".
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
@@ -229,8 +231,6 @@ the shape now (free); aggregation/counting is *derived later* when a question's 
 - **Transitive verbs / objects**: `"Mary owns a dog"` currently drops the object (predication is
   subject-verb only) — model the object so `"What does Mary own?"` works.
 - **`which`-questions over instances**: `"Which apples are red?"` — enumerate matching instances.
-- **`explain()` for property/comparative questions** — `--trace` currently says "not a question I can
-  answer" for those (the answer is correct; only the derivation text is missing).
 - **Verb lemmas** are a small hand-list (`VERB_LEMMA`); grows by deliberate addition like the other
   dictionaries (no stemming guesswork).
 - **Overlapping facts**: count statements are currently assumed disjoint (subset-matching sums

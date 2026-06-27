@@ -850,6 +850,30 @@ def instances(statement: str) -> list:
     return []
 
 
+def _verdict_steps(subject: tuple, predicate: str, context: list, q: str, fact: str) -> list:
+    """Derivation steps for a (subject, predicate) yes/no query — shared by the verb (aux) and the
+    adjective (property) branches. `q` opens the question ("does"/"is"); `fact` is how a stated fact
+    reads ("" for a verb, "is" for an adjective)."""
+    def line(text):
+        return " ".join(text.split())                    # tidy doubled spaces from an empty `fact`
+    verdict = _predication_verdict(subject, predicate, context)
+    steps = [line(f"{q} {subject[0]!r} {predicate}? → {verdict}")]
+    if Predication(subject, predicate) in context:
+        steps.append(line(f"directly stated: {subject[0]} {fact} {predicate}"))
+    if Predication(subject, predicate, negated=True) in context:
+        steps.append(line(f"directly stated: {subject[0]} {fact} NOT {predicate}"))
+    for f in context:                                    # universal facts that reach the subject
+        if isinstance(f, Predication) and f.universal and f.predicate == predicate \
+                and _is_member(subject[0], f.subject, context):
+            steps.append(line(f"{subject[0]!r} is a {f.subject[0]}; "
+                              f"{'no ' if f.negated else 'all '}{f.subject[0]} {fact} {predicate}"))
+    if verdict == "undetermined":
+        steps.append("nothing in context settles it — lack of information")
+    if verdict == "conflict":
+        steps.append("both true and false are derivable — the premises contradict")
+    return steps
+
+
 def explain(question: str, context: list) -> list:
     """The human-readable derivation steps behind `answer(question, context)` — what was queried,
     which facts were checked, and how the verdict follows."""
@@ -858,13 +882,29 @@ def explain(question: str, context: list) -> list:
     if unknown:
         return unknown
     subj, comp = _copula_args(r)
+    if _has_sense(comp, "comparative"):                  # comparative derivation
+        standard = _follow(comp, "standard")
+        if subj is not None and standard is not None:
+            a, rel, b = _key(subj.surface), _key(comp.surface), _key(standard.surface)
+            fwd, rev = _related(a, rel, b, context), _related(b, rel, a, context)
+            return [f"is {a!r} {rel} than {b!r}? → {_verdict(fwd, rev)}",
+                    f"{a} {rel} than {b} (transitively)? {'yes' if fwd else 'no'}",
+                    f"{b} {rel} than {a}, so NOT the reverse (asymmetry)? {'yes' if rev else 'no'}"]
     if _has_sense(subj, "name") and _has_sense(comp, "noun"):    # membership derivation
         member, target = _key(subj.surface), _descriptor(comp)
-        cols = [m.collection[0] for m in context if isinstance(m, Membership) and m.member == member]
-        verdict = "yes" if _is_member(member, target, context) else "no"
-        return [f"is {member!r} a {target[0]}?",
-                f"{member!r} is a: {', '.join(cols) or 'nothing known'}",
-                f"reachable to {target[0]} via subset edges? {verdict}"]
+        yes = _is_member(member, target, context)
+        no = any(isinstance(m, Membership) and m.member == member and m.collection == target
+                 and m.negated for m in context) \
+            or any(_disjoint(c, target, context) for c in _collections_of(member, context))
+        cols = sorted(c[0] for c in _collections_of(member, context))
+        steps = [f"is {member!r} a {target[0]}? → {_verdict(yes, no)}",
+                 f"{member!r} is a: {', '.join(cols) or 'nothing known'}"]
+        if no:
+            steps.append(f"and it is stated/derivable that {member!r} is NOT a {target[0]}")
+        return steps
+    prop = _property(r)                                  # property derivation (adjective predicate)
+    if prop is not None:
+        return _verdict_steps(prop.subject, prop.predicate, context, "is", "are")
 
     aux = next((u for u in r.units if "auxiliary" in u.features.get("senses", [])), None)
     if aux is not None:                                  # yes/no derivation
@@ -872,23 +912,7 @@ def explain(question: str, context: list) -> list:
         subject = _follow(verb, "subject") if verb else None
         if subject is None:
             return ["couldn't tell what is being asked"]
-        subj, pred = _descriptor(subject), _lemma(verb.surface)
-        verdict = _predication_verdict(subj, pred, context)
-        steps = [f"does {subj[0]!r} {pred}? → {verdict}"]
-        if Predication(subj, pred) in context:
-            steps.append(f"directly stated: {subj[0]} {pred}")
-        if Predication(subj, pred, negated=True) in context:
-            steps.append(f"directly stated: {subj[0]} does NOT {pred}")
-        for f in context:                                # universal facts that reach the subject
-            if isinstance(f, Predication) and f.universal and f.predicate == pred \
-                    and _is_member(subj[0], f.subject, context):
-                steps.append(f"{subj[0]!r} is a {f.subject[0]}; "
-                             f"{'no ' if f.negated else 'all '}{f.subject[0]} {pred}")
-        if verdict == "undetermined":
-            steps.append("nothing in context settles it — lack of information")
-        if verdict == "conflict":
-            steps.append("both true and false are derivable — the premises contradict")
-        return steps
+        return _verdict_steps(_descriptor(subject), _lemma(verb.surface), context, "does", "")
     interro = next((u for u in r.units if "interrogative" in u.features.get("senses", [])), None)
     if interro is not None:                              # count derivation
         coll = _follow(_follow(interro, "queries"), "collection")
