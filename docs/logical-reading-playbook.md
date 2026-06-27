@@ -125,7 +125,11 @@ by **universal instantiation**: a capitalized unknown word is a proper noun (nam
 not looked up. Lookup became reasoning, still 0 model calls ·
 18. **paragraph mode (CLI)** — one string is split into sentences; the statements are `learn`ed and
 the trailing question answered, so `"All students passed. Bob is a student. Did Bob pass?"` → `yes`
-works directly (no `--about` needed).
+works directly (no `--about` needed) ·
+19. **`--trace` + `explain()`** — exposes the analyzed data and reasoning: per statement/question,
+the parsed units (senses + obligation bindings), the reversible decision trail, the facts learned,
+and the derivation behind the verdict. Surfacing the trail caught a hard-coded `oblige` reason
+(every obligation said "quantifier ranges over a collection") — now reports the real need.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

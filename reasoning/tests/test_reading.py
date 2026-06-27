@@ -629,5 +629,27 @@ class TestIncrement18ParagraphMode(unittest.TestCase):
         self.assertEqual(out.strip(), "yes")
 
 
+class TestIncrement19Trace(unittest.TestCase):
+    """#19 — `--trace` exposes the analyzed data and reasoning: parsed units, the decision trail,
+    the facts learned from each statement, and the derivation behind the answer."""
+
+    def test_trace_shows_facts_decisions_and_derivation(self):
+        out = reading.run_cli(["All apples passed. Bob is a student. Did Bob pass?", "--trace"])
+        self.assertIn("Membership", out)                 # facts learned
+        self.assertIn("decisions:", out)                 # the reversible trail
+        self.assertIn("does student pass? no", out)      # the derivation (why it's no)
+        self.assertIn("ANSWER: no", out)
+
+    def test_trace_on_single_statement(self):
+        out = reading.run_cli(["The student passed", "--trace"])
+        self.assertIn("STATEMENT", out)
+        self.assertIn("decisions:", out)
+
+    def test_explain_lists_the_inference_steps(self):
+        ctx = reading.learn("All students passed") + reading.learn("Bob is a student")
+        steps = reading.explain("Did Bob pass?", ctx)
+        self.assertTrue(any("is a student" in s for s in steps))
+
+
 if __name__ == "__main__":
     unittest.main()

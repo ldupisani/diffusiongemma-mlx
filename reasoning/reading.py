@@ -250,7 +250,7 @@ def annotate_obligations(reading: Reading) -> Reading:
         before = dict(u.features)
         u.features["obligations"] = [Obligation(need) for need in needs]
         reading.record("oblige", target=u, before=before, after=dict(u.features),
-                       reason="quantifier ranges over a collection")
+                       reason="needs " + ", ".join(needs))
     return reading
 
 
@@ -586,6 +586,41 @@ def instances(statement: str) -> list:
     return []
 
 
+def explain(question: str, context: list) -> list:
+    """The human-readable derivation steps behind `answer(question, context)` — what was queried,
+    which facts were checked, and how the verdict follows."""
+    r = analyze(question)
+    unknown = [d.message for d in deficiencies(r) if d.kind == "unknown-word"]
+    if unknown:
+        return unknown
+    aux = next((u for u in r.units if "auxiliary" in u.features.get("senses", [])), None)
+    if aux is not None:                                  # yes/no derivation
+        verb = _follow(aux, "asks_predication")
+        subject = _follow(verb, "subject") if verb else None
+        if subject is None:
+            return ["couldn't tell what is being asked"]
+        subj, pred = _descriptor(subject), _lemma(verb.surface)
+        steps = [f"does {subj[0]!r} {pred}?"]
+        if Predication(subj, pred) in context:
+            return steps + [f"directly known that {subj[0]} {pred} → yes"]
+        mems = [f for f in context if isinstance(f, Membership) and f.member == subj[0]]
+        if not mems:
+            steps.append(f"{subj[0]!r} {pred} is not stated, and it belongs to no collection → no")
+        for m in mems:
+            ok = Predication(m.collection, pred) in context
+            steps.append(f"{subj[0]!r} is a {m.collection[0]}; does {m.collection[0]} {pred}? "
+                         + ("yes" if ok else "no"))
+        return steps
+    interro = next((u for u in r.units if "interrogative" in u.features.get("senses", [])), None)
+    if interro is not None:                              # count derivation
+        coll = _follow(_follow(interro, "queries"), "collection")
+        if coll is not None:
+            q = _descriptor(coll)
+            n = sum(1 for inst in context if isinstance(inst, tuple) and _matches(q, inst))
+            return [f"count of {q}: {n} matching instance(s)"]
+    return ["not a question I can answer"]
+
+
 def learn(statement: str) -> list:
     """Parse a statement into context facts — the one ingestion door. A count statement ("There are
     three red apples") → instances; a subject-verb statement ("The student passed") → a Predication;
@@ -635,27 +670,61 @@ def _answer_text(result) -> str:
     return str(result)
 
 
+def _trace_lines(reading: Reading) -> list:
+    """The full analyzed data for one reading: each unit's senses + obligation bindings (and any
+    head/attributes), then the reversible decision trail."""
+    lines = ["  units:"]
+    for u in reading.units:
+        f = u.features
+        extra = f"  head={f['head']} attrs={f.get('attributes', [])}" if "head" in f else ""
+        lines.append(f"    {u.surface!r:12} {f.get('senses', '?')}{_obligation_summary(u)}{extra}")
+    if reading.decisions:
+        lines.append("  decisions:")
+        for d in reading.decisions:
+            tgt = d.target.surface if d.target else "-"
+            lines.append(f"    [{d.seq}] {d.kind:11} {tgt!r:12} {d.reason}")
+    return lines
+
+
+_USAGE = 'usage: python -m reasoning.reading "<text>" [--about "<phrase>" ...] [--trace]'
+
+
 def run_cli(args: list) -> str:
     if not args:
-        return 'usage: python -m reasoning.reading "<text>" [--about "<phrase>" "<phrase>" ...]'
+        return _USAGE
+    trace = "--trace" in args
+    args = [a for a in args if a != "--trace"]
+    if not args:
+        return _USAGE
     text = args[0]
     if "--about" in args:                                  # explicit context
-        phrases = args[args.index("--about") + 1:]
-        context = [fact for p in phrases for fact in learn(p)]
-        return _answer_text(answer(text, context))
-    sentences = _sentences(text)
-    questions = [k for k, s in enumerate(sentences) if s.endswith("?")]
-    if questions:                                          # paragraph: premises, then the question
-        qi = questions[-1]
-        context = [fact for s in sentences[:qi] for fact in learn(s)]
-        return _answer_text(answer(sentences[qi], context))
-    r = analyze(text)                                      # a single statement → analyze it
-    lines = [f"  {u.surface!r:14} {u.features.get('senses', '?')}{_obligation_summary(u)}"
-             for u in r.units]
-    defs = deficiencies(r)
-    verdict = ("understood" if not defs
-               else "needs clarification:\n" + "\n".join("  - " + d.message for d in defs))
-    return "\n".join(lines + ["", verdict])
+        premises, question = args[args.index("--about") + 1:], text
+    else:                                                  # paragraph: split into sentences
+        sentences = _sentences(text)
+        qidx = [k for k, s in enumerate(sentences) if s.endswith("?")]
+        premises, question = (sentences[:qidx[-1]], sentences[qidx[-1]]) if qidx else ([], None)
+    context = [fact for p in premises for fact in learn(p)]
+
+    if question is None:                                   # a single statement → analyze it
+        r = analyze(text)
+        if trace:
+            return "\n".join([f'STATEMENT: "{text}"'] + _trace_lines(r))
+        defs = deficiencies(r)
+        verdict = ("understood" if not defs
+                   else "needs clarification:\n" + "\n".join("  - " + d.message for d in defs))
+        return "\n".join([f"  {u.surface!r:14} {u.features.get('senses', '?')}"
+                          f"{_obligation_summary(u)}" for u in r.units] + ["", verdict])
+
+    if not trace:                                          # just the answer
+        return _answer_text(answer(question, context))
+
+    out = []                                               # the full trace
+    for s in premises:
+        out += [f'STATEMENT: "{s}"'] + _trace_lines(analyze(s)) + [f"  learned: {learn(s)}", ""]
+    out += [f'QUESTION: "{question}"'] + _trace_lines(analyze(question)) + [""]
+    out += ["derivation:"] + ["  " + line for line in explain(question, context)]
+    out += [f"ANSWER: {_answer_text(answer(question, context))}"]
+    return "\n".join(out)
 
 
 if __name__ == "__main__":
