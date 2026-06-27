@@ -258,7 +258,14 @@ is the human-owned semantic knob.  ·
 (shown in `--trace`). `_entity()` reads the resolved name into facts. "Tom has 3 apples. He buys 2."
 → 5; "Mary … Tom … She buys 2" → She=Mary (gender skips the nearer Tom). A pronoun with no antecedent
 is just an unmet obligation → honest clarification, not a guess. (Subject resolution now accepts a
-pronoun.) Still singular-only; `they`/object pronouns and relational quantities (5b) are next.
+pronoun.) Still singular-only; `they`/object pronouns and relational quantities (5b) are next.  ·
+47. **value operand = forego, not optional** (principle correction, prompted by review) — a value's
+`quantifies` was marked `optional`, a flag-shortcut the core principle forbids. Truthful model:
+`quantifies` is REQUIRED but FOREGONE when the value is an operator's operand (forego-when-subordinated,
+#37 — `left`/`right` join `complement`/`dobj` as subordinating roles). "3 plus 2" stays well-formed
+(operands excused); a STRAY value "Tom has 3" is now honestly flagged ("what does 3 count?"), which the
+`optional` shortcut had silently swallowed. Lesson: reach for the existing obligation mechanism
+(subordination) before adding an exception flag.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
@@ -273,6 +280,10 @@ the shape now (free); aggregation/counting is *derived later* when a question's 
   one entity ✓; (5a) **coreference** (`he`/`she`) ✓; (5b) "the remaining", "half/twice as many [as X]" **relational
   quantities** — the second hard gap; (6) units + **world-knowledge conversions** (hour=60min,
   year=52wk). Build a math/quantity layer in `reading.py`; reuse `translate.run_program` to evaluate.
+- **value quantifies a verb's frequency** ("Mary jumps 2 times", "Mary jumps twice") — a value should
+  measure an ACTION, not only a noun; `twice`/`thrice` are lexicalized multipliers (value + ×N). Must
+  resolve the `times` operator-vs-noun collision via disambiguation-by-coverage. The natural lead-in to
+  (5b) relational quantities, where the same multiplier applies to a referent quantity.
 
 - **`boolean` sense of `no`** (decided: leave as-is): no meaningful obligation exists in this
   statement grammar — `no` reliably reads as a quantifier (its `collection` always binds), and a
