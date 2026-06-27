@@ -282,7 +282,14 @@ RIGHT ("twice as MANY") — else a verb to its left (frequency); the referent su
 and the amount. The relational STRUCTURE (multiplier-on-quantifier) is committed-or-declined: no
 referent → `[]`, never a bare predication. Composes: "Tom has 4 apples. He buys twice as many." → 12
 (coreference + relational + signed accumulation, zero glue). `half`=×0.5. Refinements queued: explicit
-referent ("as many as Tom"), same-measure referent selection, "many"'s collection → referent measure.
+referent ("as many as Tom"), same-measure referent selection, "many"'s collection → referent measure.  ·
+50. **question-relative polarity (events vs. holdings)** — a quantity's SIGN depends on the QUESTION,
+not just its verb. "How many does X HAVE?" folds holdings (baseline + gains − losses, via
+`_verb_sign`/`LOSS_VERBS`); "How many did X SELL?" COUNTS the matching-verb events (positively,
+filtered to that verb). The same `Quantity(..., sell)` is −amount toward holdings but +amount toward a
+sales count — the fact is neutral; the query interprets it. Unblocks the most common GSM8K shape and
+gets **GSM8K problem #1 (Natalia) end-to-end at 0 model calls**: "Natalia sold 48 clips. She sold half
+as many. How many clips did Natalia sell?" → 72 (coreference + relational quantity + event-count).
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

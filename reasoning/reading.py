@@ -112,7 +112,7 @@ PLURALS = {
     "dogs": "dog", "cats": "cat", "birds": "bird", "cars": "car", "houses": "house",
     "trees": "tree", "books": "book", "flowers": "flower", "teachers": "teacher",
     "people": "person", "persons": "person", "men": "man", "women": "woman",
-    "times": "time",
+    "times": "time", "clips": "clip", "oranges": "orange",
 }
 
 
@@ -227,6 +227,7 @@ LEXICON: dict[str, list[str]] = {
     "as": ["particle"], "much": ["quantifier"],   # "twice as many / as much" relational phrasing
     "time": ["noun"], "times": ["operator", "noun"],   # "times" is × OR the occurrence-noun (ambiguous)
     "jump": ["verb"], "jumps": ["verb"], "jumped": ["verb"], "run": ["verb"], "runs": ["verb"],
+    "clip": ["noun"], "orange": ["noun"],   # measures for word problems
     "pass": ["verb"], "fail": ["verb"], "failed": ["verb"],
     "not": ["negation"], "never": ["negation"],   # negators flip a fact's polarity (see NEGATORS)
     # --- open-class vocabulary (curated, grown deliberately) ---
@@ -1133,20 +1134,27 @@ def answer(question: str, context: list):
             if counts:
                 return int(counts[0]) if counts[0] == int(counts[0]) else counts[0]
             return "undetermined"
-    if aux is not None:                                  # "How many <measure> do <entities> have?"
+    if aux is not None:                                  # "How many <measure> do <entities> <verb>?"
         ai = r.units.index(aux)                          # entities are fronted, between aux and verb
         vi = next((i for i, u in enumerate(r.units)
                    if i > ai and "verb" in u.features.get("senses", [])), len(r.units))
+        q_verb = _lemma(r.units[vi].surface) if vi < len(r.units) else "have"
         entities = [_key(u.surface) for u in r.units[ai + 1:vi]
                     if "name" in u.features.get("senses", []) or "noun" in u.features.get("senses", [])]
         if entities:
             total = 0
-            for ent in entities:                         # fold each entity's quantities (signed sum:
-                qs = [f for f in context if isinstance(f, Quantity)   # baseline + gains - losses)
+            for ent in entities:
+                qs = [f for f in context if isinstance(f, Quantity)
                       and f.entity == ent and f.measure == query]
-                if not qs:
-                    return "undetermined"                # one conjunct's quantity is unknown
-                total += sum(_verb_sign(f.verb) * f.amount for f in qs)
+                # POLARITY IS RELATIVE TO THE QUESTION: "how many do you HAVE" folds holdings
+                # (baseline + gains - losses); "how many did you SELL" COUNTS the sell events (+).
+                if q_verb in ("have", "own"):
+                    folded = [_verb_sign(f.verb) * f.amount for f in qs]
+                else:
+                    folded = [f.amount for f in qs if f.verb == q_verb]   # events of THIS verb
+                if not folded:
+                    return "undetermined"                # no relevant quantity for this conjunct
+                total += sum(folded)
             return int(total) if total == int(total) else total
     return sum(1 for inst in context if isinstance(inst, tuple) and _matches(query, inst))
 

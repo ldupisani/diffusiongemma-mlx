@@ -1353,5 +1353,28 @@ class TestIncrement48RelationalQuantity(unittest.TestCase):
         self.assertEqual(out.strip(), "12")  # 4 (has) + 8 (twice as many as the 4)
 
 
+class TestIncrement49QuestionRelativePolarity(unittest.TestCase):
+    """#49 — a quantity's sign is RELATIVE TO THE QUESTION. "how many does X have?" folds holdings
+    (baseline + gains - losses); "how many did X sell?" COUNTS the sell events (positively). The same
+    "sold 8" is -8 toward holdings but +8 toward a sales count -- it's the question that decides."""
+
+    def test_holdings_subtracts_a_sale(self):
+        out = reading.run_cli(["Tom has 10 apples. Tom sells 3 apples. How many apples does Tom have?"])
+        self.assertEqual(out.strip(), "7")
+
+    def test_sales_count_is_positive(self):
+        out = reading.run_cli(["Tom sold 8 apples. Tom sold 4 apples. How many apples did Tom sell?"])
+        self.assertEqual(out.strip(), "12")
+
+    def test_event_count_filters_by_verb(self):
+        out = reading.run_cli(["Tom sold 8 apples. Tom bought 5 apples. How many apples did Tom sell?"])
+        self.assertEqual(out.strip(), "8")
+
+    def test_natalia_end_to_end(self):
+        out = reading.run_cli(["Natalia sold 48 clips. She sold half as many. "
+                               "How many clips did Natalia sell?"])
+        self.assertEqual(out.strip(), "72")
+
+
 if __name__ == "__main__":
     unittest.main()
