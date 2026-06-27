@@ -52,6 +52,8 @@ class Obligation:
     incomplete."""
     need: str
     target: object = None  # the Unit that satisfies it, once found (None = unmet)
+    optional: bool = False  # an optional argument (e.g. a verb's direct object) — unmet is NOT a
+                            # deficiency, since transitive/intransitive use is a free choice
 
     @property
     def met(self) -> bool:
@@ -198,7 +200,7 @@ LEXICON: dict[str, list[str]] = {
     "bark": ["verb"], "barked": ["verb"], "fly": ["verb"], "flew": ["verb"], "run": ["verb"],
     "ran": ["verb"], "swim": ["verb"], "swam": ["verb"], "sleep": ["verb"], "slept": ["verb"],
     "sing": ["verb"], "sang": ["verb"], "sell": ["verb"], "sold": ["verb"], "buy": ["verb"],
-    "bought": ["verb"],
+    "bought": ["verb"], "own": ["verb"], "owns": ["verb"], "owned": ["verb"],
     "tall": ["adjective"], "old": ["adjective"], "small": ["adjective"], "happy": ["adjective"],
     "blue": ["adjective"], "yellow": ["adjective"],
 }
@@ -245,7 +247,8 @@ ROLE_OBLIGATIONS: dict[str, list[str]] = {
     "adjective": ["modifies"],  # must find the head noun it modifies — discharged by MERGE (the
                                 # adjective is absorbed into the noun as an attribute), not by binding
     "article": ["determines"],  # determines the noun it introduces (to its right)
-    "verb": ["subject"],        # predicates a subject (the noun to its left)
+    "verb": ["subject", "dobj"],  # predicates a subject (left); may also take a direct object (right,
+                                  # OPTIONAL — intransitive verbs simply don't bind it)
     "noun": ["predicate"],      # wants something asserted of it (a verb to its right); left UNMET
                                 # in a bare noun phrase → that is how a fragment is detected.
                                 # (Object nouns don't really need this — a later "forego when
@@ -260,6 +263,10 @@ ROLE_OBLIGATIONS: dict[str, list[str]] = {
     "wh_value": ["asks_individual"],    # "what" binds the individual it asks the type of
 }
 
+# Obligations that are grammatically OPTIONAL: unmet is not a deficiency (e.g. a verb's direct
+# object — "Bob passed" is complete; "Mary owns a dog" simply also fills it).
+OPTIONAL_NEEDS = {"dobj"}
+
 
 def annotate_obligations(reading: Reading) -> Reading:
     """For each unit, attach the (unmet) obligations its senses' roles imply, logged reversibly.
@@ -271,7 +278,8 @@ def annotate_obligations(reading: Reading) -> Reading:
         if not needs:
             continue
         before = dict(u.features)
-        u.features["obligations"] = [Obligation(need) for need in needs]
+        u.features["obligations"] = [Obligation(need, optional=(need in OPTIONAL_NEEDS))
+                                     for need in needs]
         reading.record("oblige", target=u, before=before, after=dict(u.features),
                        reason="needs " + ", ".join(needs))
     return reading
@@ -316,6 +324,9 @@ def _find_target(need, u, i, units, pos):
         return r[1] if len(r) > 1 else None
     if need == "standard":        # a comparative's standard of comparison: the noun/name after "than"
         r = right("noun", "name")
+        return r[0] if r else None
+    if need == "dobj":            # a verb's (optional) direct object: the nearest noun to its right
+        r = right("noun")
         return r[0] if r else None
     if need == "predicate":       # a noun's predicate is the unique verb to its right
         r = right("verb")
@@ -486,7 +497,7 @@ def deficiencies(reading: Reading) -> list:
             out.append(Deficiency("unknown-word", u, f"I have no information about {u.surface!r}"))
             continue
         for o in u.features.get("obligations", []):
-            if not o.met:
+            if not o.met and not o.optional:             # optional args (a verb's object) may be unmet
                 phrase = _NEED_PHRASING.get(o.need, f"is missing its {o.need}")
                 out.append(Deficiency("unmet-obligation", u, f"{u.surface!r} {phrase}"))
     return out
@@ -533,12 +544,13 @@ class Predication:
     predicate: str
     negated: bool = False
     universal: bool = False
+    object: tuple = None          # the direct object of a transitive verb ("Mary owns a DOG"), else None
 
 
 # Past tense → base form, so a fact ("passed") and a question ("pass") name the same predicate.
 VERB_LEMMA = {"passed": "pass", "wilted": "wilt", "rose": "rise", "failed": "fail",
               "barked": "bark", "flew": "fly", "ran": "run", "swam": "swim", "slept": "sleep",
-              "sang": "sing", "sold": "sell", "bought": "buy"}
+              "sang": "sing", "sold": "sell", "bought": "buy", "owns": "own", "owned": "own"}
 
 def _lemma(surface: str) -> str:
     return VERB_LEMMA.get(_key(surface), _key(surface))
@@ -598,8 +610,10 @@ def _predication(reading: Reading):
     subject = _follow(verbs[0], "subject")
     if subject is None:
         return None
+    obj = _follow(verbs[0], "dobj")
     return Predication(_descriptor(subject), _lemma(verbs[0].surface),
-                       _verb_negated(verbs[0], reading), _universal(verbs[0], reading))
+                       _verb_negated(verbs[0], reading), _universal(verbs[0], reading),
+                       _descriptor(obj) if obj is not None else None)
 
 
 @dataclass(frozen=True)
@@ -755,14 +769,16 @@ def _verdict(yes: bool, no: bool) -> str:
     return "yes" if yes else "no" if no else "undetermined"
 
 
-def _predication_verdict(subject: tuple, predicate: str, context: list) -> str:
-    """The verdict for "does <subject> <predicate>?". A universal fact transfers iff the subject is a
-    member of its collection (transitively via Subset). yes AND no both derivable → "conflict"."""
+def _predication_verdict(subject: tuple, predicate: str, context: list, obj: tuple = None) -> str:
+    """The verdict for "does <subject> <predicate> [<object>]?". A universal fact transfers iff the
+    subject is a member of its collection (transitively via Subset); the object must match too. yes
+    AND no both derivable → "conflict"."""
     member = subject[0]
-    preds = [f for f in context if isinstance(f, Predication) and f.predicate == predicate]
-    yes = Predication(subject, predicate) in context \
+    preds = [f for f in context if isinstance(f, Predication)
+             and f.predicate == predicate and f.object == obj]
+    yes = Predication(subject, predicate, object=obj) in context \
         or any(f.universal and not f.negated and _is_member(member, f.subject, context) for f in preds)
-    no = Predication(subject, predicate, negated=True) in context \
+    no = Predication(subject, predicate, negated=True, object=obj) in context \
         or any(f.universal and f.negated and _is_member(member, f.subject, context) for f in preds)
     return _verdict(yes, no)
 
@@ -816,12 +832,14 @@ def answer(question: str, context: list):
         return _predication_verdict(prop.subject, prop.predicate, context)   # predicate) → same verdict
 
     aux = next((u for u in r.units if "auxiliary" in u.features.get("senses", [])), None)
-    if aux is not None:                                  # "Did X <verb>?" → yes / no / undetermined
+    if aux is not None:                                  # "Did X <verb> [Y]?" → yes / no / undetermined
         verb = _follow(aux, "asks_predication")          # did → the verb being asked about
         subject = _follow(verb, "subject") if verb else None
         if subject is None:
             return [Deficiency("unanswerable", aux, "I couldn't tell what is being asked")]
-        return _predication_verdict(_descriptor(subject), _lemma(verb.surface), context)
+        obj = _follow(verb, "dobj")
+        return _predication_verdict(_descriptor(subject), _lemma(verb.surface), context,
+                                    _descriptor(obj) if obj is not None else None)
 
     interro = next((u for u in r.units if "interrogative" in u.features.get("senses", [])), None)
     if interro is None:
@@ -850,20 +868,22 @@ def instances(statement: str) -> list:
     return []
 
 
-def _verdict_steps(subject: tuple, predicate: str, context: list, q: str, fact: str) -> list:
-    """Derivation steps for a (subject, predicate) yes/no query — shared by the verb (aux) and the
-    adjective (property) branches. `q` opens the question ("does"/"is"); `fact` is how a stated fact
-    reads ("" for a verb, "is" for an adjective)."""
+def _verdict_steps(subject: tuple, predicate: str, context: list, q: str, fact: str,
+                   obj: tuple = None) -> list:
+    """Derivation steps for a (subject, predicate[, object]) yes/no query — shared by the verb (aux)
+    and the adjective (property) branches. `q` opens the question ("does"/"is"); `fact` is how a
+    stated fact reads ("" for a verb, "is" for an adjective)."""
     def line(text):
         return " ".join(text.split())                    # tidy doubled spaces from an empty `fact`
-    verdict = _predication_verdict(subject, predicate, context)
-    steps = [line(f"{q} {subject[0]!r} {predicate}? → {verdict}")]
-    if Predication(subject, predicate) in context:
-        steps.append(line(f"directly stated: {subject[0]} {fact} {predicate}"))
-    if Predication(subject, predicate, negated=True) in context:
-        steps.append(line(f"directly stated: {subject[0]} {fact} NOT {predicate}"))
+    obj_s = f" {obj[0]}" if obj else ""
+    verdict = _predication_verdict(subject, predicate, context, obj)
+    steps = [line(f"{q} {subject[0]!r} {predicate}{obj_s}? → {verdict}")]
+    if Predication(subject, predicate, object=obj) in context:
+        steps.append(line(f"directly stated: {subject[0]} {fact} {predicate}{obj_s}"))
+    if Predication(subject, predicate, negated=True, object=obj) in context:
+        steps.append(line(f"directly stated: {subject[0]} {fact} NOT {predicate}{obj_s}"))
     for f in context:                                    # universal facts that reach the subject
-        if isinstance(f, Predication) and f.universal and f.predicate == predicate \
+        if isinstance(f, Predication) and f.universal and f.predicate == predicate and f.object == obj \
                 and _is_member(subject[0], f.subject, context):
             steps.append(line(f"{subject[0]!r} is a {f.subject[0]}; "
                               f"{'no ' if f.negated else 'all '}{f.subject[0]} {fact} {predicate}"))
@@ -912,7 +932,9 @@ def explain(question: str, context: list) -> list:
         subject = _follow(verb, "subject") if verb else None
         if subject is None:
             return ["couldn't tell what is being asked"]
-        return _verdict_steps(_descriptor(subject), _lemma(verb.surface), context, "does", "")
+        obj = _follow(verb, "dobj")
+        return _verdict_steps(_descriptor(subject), _lemma(verb.surface), context, "does", "",
+                              _descriptor(obj) if obj is not None else None)
     interro = next((u for u in r.units if "interrogative" in u.features.get("senses", [])), None)
     if interro is not None:                              # count derivation
         coll = _follow(_follow(interro, "queries"), "collection")

@@ -399,12 +399,12 @@ class TestIncrement10EveryWordHasAnObligation(unittest.TestCase):
 
     def test_complete_statement_saturates(self):
         r = reading.analyze("The student passed")
-        unmet = [o.need for u in r.units for o in u.features.get("obligations", []) if not o.met]
+        unmet = [o.need for u in r.units for o in u.features.get("obligations", []) if not o.met and not o.optional]
         self.assertEqual(unmet, [])   # every word's obligation discharged → well-formed
 
     def test_noun_phrase_with_no_verb_is_a_fragment(self):
         r = reading.analyze("Each of the students")  # no predicate
-        unmet = [o.need for u in r.units for o in u.features.get("obligations", []) if not o.met]
+        unmet = [o.need for u in r.units for o in u.features.get("obligations", []) if not o.met and not o.optional]
         self.assertIn("predicate", unmet)   # the noun has nothing asserted of it → incomplete
 
 
@@ -427,7 +427,7 @@ class TestIncrement11SenseDisambiguation(unittest.TestCase):
     def test_chosen_reading_saturates_either_sentence(self):
         for text in ("The rose wilted", "The teacher rose"):
             r = reading.analyze(text)
-            unmet = [o.need for u in r.units for o in u.features.get("obligations", []) if not o.met]
+            unmet = [o.need for u in r.units for o in u.features.get("obligations", []) if not o.met and not o.optional]
             self.assertEqual(unmet, [], text)
 
     def test_selection_is_logged_reversibly(self):
@@ -1045,6 +1045,25 @@ class TestIncrement35ExplainAllQuestionTypes(unittest.TestCase):
         out = reading.run_cli(["Every student is happy. Bob is a student. Is Bob happy?", "--trace"])
         self.assertIn("ANSWER: yes", out)
         self.assertNotIn("not a question", out)
+
+
+class TestIncrement36TransitiveObjects(unittest.TestCase):
+    """#36 — transitive verbs capture their direct object. "Mary owns a dog" -> Predication with
+    object=(dog); "Does Mary own a dog?" vs "a cat?" are different facts. The verb's `dobj`
+    obligation is OPTIONAL (intransitive verbs leave it unmet without a deficiency)."""
+
+    def test_object_is_captured(self):
+        self.assertEqual(reading.learn("Mary owns a dog"),
+                         [reading.Predication(("mary", frozenset()), "own", object=("dog", frozenset()))])
+
+    def test_intransitive_has_no_object_and_no_deficiency(self):
+        self.assertEqual(reading.learn("Bob passed"), [reading.Predication(("bob", frozenset()), "pass")])
+        self.assertTrue(reading.is_well_formed(reading.analyze("Bob passed")))  # dobj unmet is fine
+
+    def test_object_aware_question(self):
+        ctx = reading.learn("Mary owns a dog")
+        self.assertEqual(reading.answer("Does Mary own a dog?", ctx), "yes")
+        self.assertEqual(reading.answer("Does Mary own a cat?", ctx), "undetermined")
 
 
 if __name__ == "__main__":

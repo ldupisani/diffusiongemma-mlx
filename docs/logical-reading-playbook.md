@@ -214,7 +214,11 @@ students passed. Bob did not pass. Bob is a student."` is a conflict, not just d
 four verdicts now span the epistemic space: **yes / no / undetermined / conflict** = true / false /
 unknown / inconsistent. Applies to predication, property, membership, comparative branches ·
 36. **`explain()` for all question types** — property and comparative questions now derive in
-`--trace` (a shared `_verdict_steps` helper), instead of falling through to "not a question I can answer".
+`--trace` (a shared `_verdict_steps` helper), instead of falling through to "not a question I can answer" ·
+37. **transitive verbs / objects** — a verb carries an OPTIONAL `dobj` obligation (binds the noun to
+its right; intransitive verbs leave it unmet without a deficiency, via `Obligation.optional`).
+`Predication` gained an `object`, so "Mary owns a dog" ≠ "owns a cat"; "Does Mary own a dog?" → yes,
+"… a cat?" → undetermined.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
@@ -228,8 +232,7 @@ the shape now (free); aggregation/counting is *derived later* when a question's 
   (negates a clause?) can be added and will only apply when that reading covers best.
 - **"Forego when subordinated"**: a noun used as an object shouldn't independently demand a
   `predicate`; refine so object-nouns don't read as false fragments.
-- **Transitive verbs / objects**: `"Mary owns a dog"` currently drops the object (predication is
-  subject-verb only) — model the object so `"What does Mary own?"` works.
+- **wh-object / `"What does Mary own?"`**: the object slot queried by a wh-word (pairs with `which`).
 - **`which`-questions over instances**: `"Which apples are red?"` — enumerate matching instances.
 - **Verb lemmas** are a small hand-list (`VERB_LEMMA`); grows by deliberate addition like the other
   dictionaries (no stemming guesswork).
