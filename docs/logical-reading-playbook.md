@@ -309,7 +309,16 @@ that next tier (the loop working), coverage stayed ~flat (structure still blocks
 batch EXPOSED a precision leak — an unblocked partial parse reached the count-instances fallback and
 fabricated a confident `0`. Fix: no instance data to count → `undetermined`, never a fabricated 0.
 Wrong dropped 1→0, **precision back to 100%**. Lesson: coverage is a vanity metric here; precision is
-the safety metric, and unblocking parses must not come at its expense.
+the safety metric, and unblocking parses must not come at its expense.  ·
+53. **left/remaining subtraction** — "how many are left / remaining" is NOT a new operation: it's the
+HOLDINGS question (baseline + gains − losses, `_holdings`) in another surface form. The subtraction was
+already there (loss verbs); the remainder words just ASK FOR THE NET. Form A ("does X have left")
+routes through the existing holdings fold once `left`/`remaining`/`rest`/… are recognized; Form B
+("are left", no aux) folds the implicit UNIQUE owner (ambiguous → decline); the measure can be implicit
+too ("how many are left" → the latest quantity's measure). DISPATCH FIX: lifted the `has_interrogative`
+guard above the copula yes/no branches so a "how many … are <adjective>?" count is no longer stolen by
+the property branch ("are apples left?") — a latent ordering bug. Composes with loss-verb polarity; 214
+tests; precision stays 100% on the dev slice.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
