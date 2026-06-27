@@ -1221,6 +1221,23 @@ def _predication_verdict(subject: tuple, predicate: str, context: list, obj: tup
     return _verdict(yes, no)
 
 
+def _question_subjects(reading: Reading, aux):
+    """The entities a fronted question asks about + its verb lemma. Reads the verb's bound `subject`
+    (the STRUCTURAL binding the parse produced — not a positional rescan) when it resolves; falls back
+    to the collection between aux and verb only for a conjoined subject ("Tom and Mary") that the
+    single-target `subject` obligation can't yet bind."""
+    verb = _follow(aux, "asks_predication")
+    q_verb = _lemma(verb.surface) if verb is not None else "have"
+    subject = _follow(verb, "subject") if verb is not None else None
+    if subject is not None:
+        return [_entity(subject)], q_verb
+    units = reading.units
+    ai, vi = units.index(aux), (units.index(verb) if verb is not None else len(units))
+    entities = [_entity(u) for u in units[ai + 1:vi]
+                if any(s in u.features.get("senses", []) for s in ("name", "noun", "pronoun"))]
+    return entities, q_verb
+
+
 def answer(question: str, context: list):
     """Answer a question against a context of facts. A yes/no question ("Did the student pass?")
     returns "yes"/"no" by checking a Predication; a count question ("How many red apples?") returns
@@ -1349,35 +1366,24 @@ def answer(question: str, context: list):
     comp = next((u for u in r.units if "comparative" in u.features.get("senses", [])), None)
     if comp is not None and aux is not None and query is not None:    # "How much more <measure> does
         standard = _follow(comp, "standard")                         # A have than B?" → A's − B's
-        after = r.units[r.units.index(aux) + 1:]
-        subj_unit = next((u for u in after if any(s in u.features.get("senses", [])
-                                                  for s in ("name", "noun", "pronoun")) and u is not standard), None)
-        if standard is not None and subj_unit is not None:
-            a = _holdings(_entity(subj_unit), query, context)
+        subjects, _ = _question_subjects(r, aux)                     # A = the verb's bound subject
+        if standard is not None and len(subjects) == 1:
+            a = _holdings(subjects[0], query, context)
             b = _holdings(_entity(standard), query, context)
             if a is not None and b is not None:
                 diff = a - b if _key(comp.surface) == "more" else b - a   # "less"/"fewer" → B − A
                 return int(diff) if diff == int(diff) else diff
         return "undetermined"
     if aux is not None and query is not None and query[0] == "time":   # "How many times does X <verb>?"
-        after = r.units[r.units.index(aux) + 1:]
-        ent_unit = next((u for u in after if any(s in u.features.get("senses", [])
-                                                 for s in ("name", "noun", "pronoun"))), None)
-        verb_unit = next((u for u in after if "verb" in u.features.get("senses", [])), None)
-        if ent_unit is not None and verb_unit is not None:
-            ent, action = _entity(ent_unit), _lemma(verb_unit.surface)
+        subjects, action = _question_subjects(r, aux)
+        if subjects:
             counts = [f.count for f in context if isinstance(f, Frequency)
-                      and f.entity == ent and f.action == action]
+                      and f.entity == subjects[0] and f.action == action]
             if counts:
                 return int(counts[0]) if counts[0] == int(counts[0]) else counts[0]
             return "undetermined"
     if aux is not None and query is not None:            # "How many <measure> do <entities> <verb>?"
-        ai = r.units.index(aux)                          # entities are fronted, between aux and verb
-        vi = next((i for i, u in enumerate(r.units)
-                   if i > ai and "verb" in u.features.get("senses", [])), len(r.units))
-        q_verb = _lemma(r.units[vi].surface) if vi < len(r.units) else "have"
-        entities = [_key(u.surface) for u in r.units[ai + 1:vi]
-                    if "name" in u.features.get("senses", []) or "noun" in u.features.get("senses", [])]
+        entities, q_verb = _question_subjects(r, aux)    # the verb's bound subject(s), structurally
         if entities:
             total = 0
             for ent in entities:

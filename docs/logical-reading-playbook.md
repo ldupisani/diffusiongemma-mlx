@@ -384,7 +384,16 @@ much MONEY does Oliver have" → money, NOT "than"/William — `than` is a conne
 reference's predicate is foregone. "How much more money does Oliver have than William?" now fully
 SATURATES (no deficiencies). The answer was already correct — what changed is the PARSE binds via
 structure instead of a positional sidestep. 242 tests. Lesson: bind via the obligation/structure, not a
-positional shortcut in the answer (the core principle); fronting is a structural cue the resolvers can read.
+positional shortcut in the answer (the core principle); fronting is a structural cue the resolvers can read.  ·
+60. **answer reads the parse's bindings (`_question_subjects`)** — the count/quantity, frequency, and
+comparative answer branches each had their own POSITIONAL rescan for "the entity after the aux"; with
+the verb's `subject` now binding structurally (#59), they all route through one helper that reads
+`_follow(verb, "subject")` instead. This closes the loop the core principle wants: the parse discharges
+obligations by binding, and the ANSWER consumes those bindings — no re-deriving the same entity three
+slightly-different ways (a drift source). The one honest fallback is a CONJOINED subject ("Tom and
+Mary"): the single-target `subject` obligation can bind only one unit, so a group still needs the
+positional collection — a precise marker of a missing capability (conjunction-binding into a group),
+not a shortcut. 242 tests; precision unchanged. When conjunction-binding lands, the fallback disappears.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
