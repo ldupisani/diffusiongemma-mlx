@@ -393,7 +393,17 @@ obligations by binding, and the ANSWER consumes those bindings — no re-derivin
 slightly-different ways (a drift source). The one honest fallback is a CONJOINED subject ("Tom and
 Mary"): the single-target `subject` obligation can bind only one unit, so a group still needs the
 positional collection — a precise marker of a missing capability (conjunction-binding into a group),
-not a shortcut. 242 tests; precision unchanged. When conjunction-binding lands, the fallback disappears.
+not a shortcut. 242 tests; precision unchanged. When conjunction-binding lands, the fallback disappears.  ·
+61. **conjunction binding ("Tom and Mary" → a group)** — the bind-vs-merge call: a coordinated subject
+acts as ONE compound subject, so "X and Y" (names) CONDENSES into a single group unit carrying both in
+`members` — a collective, not a fusion (reversible, lossless: the merge records its constituents). The
+payoff cascades: the group is one unit, so the `subject` obligation binds it UNIQUELY — the very
+ambiguity (Tom vs Mary) that forced the positional fallback dissolves. `_question_subjects` reads
+`subject.features["members"]`; the fallback (now flattening groups, for comma-lists) is no longer hit
+for "Tom and Mary". Three-way "X and Y and Z" stacks through the multi-pass condense loop, like
+"big red apple". A group-subject STATEMENT ("Tom and Mary have 5 apples") is ambiguous
+distributive-vs-collective → declines (the precision discipline applied to a semantic ambiguity).
+247 tests. Follow-on: conjoined OBJECTS ("3 apples and 2 oranges" — two quantities, not a group).
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

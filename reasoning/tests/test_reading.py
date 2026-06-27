@@ -1565,5 +1565,35 @@ class TestIncrement55FrontedQuestionBinding(unittest.TestCase):
         self.assertEqual(reading._follow(has, "subject").surface, "Oliver")
 
 
+class TestIncrement56ConjunctionBinding(unittest.TestCase):
+    """#56 - conjunction binding: "Tom and Mary" merges into ONE group unit carrying both as
+    `members` (a compound subject), so the verb's `subject` obligation binds it (unique) and the
+    answer reads its members -- no positional fallback needed. A group-subject STATEMENT is
+    ambiguous (distributive vs collective), so it declines."""
+
+    def test_group_merges_with_members(self):
+        r = reading.analyze("How many apples do Tom and Mary have altogether?")
+        grp = next(u for u in r.units if "members" in u.features)
+        self.assertEqual(grp.surface, "Tom and Mary")
+        self.assertEqual(grp.features["members"], ["tom", "mary"])
+
+    def test_verb_subject_binds_the_group(self):
+        r = reading.analyze("How many apples do Tom and Mary have altogether?")
+        have = next(u for u in r.units if reading._key(u.surface) == "have")
+        self.assertEqual(reading._follow(have, "subject").features["members"], ["tom", "mary"])
+
+    def test_aggregation_through_the_binding(self):
+        self.assertEqual(reading.solve("Tom has 3 apples. Mary has 2 apples. "
+                                       "How many apples do Tom and Mary have altogether?"), 5)
+
+    def test_three_way_conjunction_stacks(self):
+        r = reading.analyze("Tom and Mary and Jane")
+        grp = next(u for u in r.units if "members" in u.features)
+        self.assertEqual(sorted(grp.features["members"]), ["jane", "mary", "tom"])
+
+    def test_group_subject_statement_declines(self):
+        self.assertEqual(reading.learn("Tom and Mary have 5 apples"), [])
+
+
 if __name__ == "__main__":
     unittest.main()

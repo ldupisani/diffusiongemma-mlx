@@ -603,13 +603,38 @@ def _merge_adjective(reading: Reading, adj_i: int, noun_i: int) -> None:
                    reason=f"adjective '{attribute}' modifies '{head}'")
 
 
+def _members(unit: "Unit") -> list:
+    """The member entity keys of a unit — a conjoined group's members, else the unit's own key."""
+    return unit.features.get("members") or [_key(unit.surface)]
+
+
+def _merge_conjuncts(reading: Reading, and_i: int) -> None:
+    """Merge "X and Y" (the names flanking an `and`) into ONE group unit carrying both as `members`
+    — a compound subject. Reversible (records the constituents); stacks for "X and Y and Z"."""
+    units = reading.units
+    left, conj, right = units[and_i - 1], units[and_i], units[and_i + 1]
+    members = _members(left) + _members(right)
+    merged = Unit(words=sorted(left.words + conj.words + right.words, key=lambda w: w.index))
+    merged.features = {"senses": ["name"], "members": members}   # a group binds like a single entity
+    units[and_i - 1:and_i + 2] = [merged]
+    reading.record("merge", target=merged,
+                   before={"merged_from": [left, conj, right], "at": and_i - 1},
+                   after={"members": members}, reason=f"conjunction → group {members}")
+
+
 def condense(reading: Reading) -> bool:
-    """One condensation step: find the first adjective immediately left of a noun and merge them.
-    Returns True if it merged (so `analyze` can loop to a fixed point), False once nothing merges."""
+    """One condensation step: merge an adjective into the noun on its right, OR two names flanking an
+    `and` into a group. Returns True if it merged (so `analyze` loops to a fixed point)."""
     for i, u in enumerate(reading.units):
         if "adjective" in u.features.get("senses", []) and i + 1 < len(reading.units):
             if "noun" in reading.units[i + 1].features.get("senses", []):
                 _merge_adjective(reading, i, i + 1)
+                return True
+    for i, u in enumerate(reading.units):                # "Tom and Mary" → one group (names only:
+        if "conjunction" in u.features.get("senses", []) and 0 < i < len(reading.units) - 1:  # a
+            left, right = reading.units[i - 1], reading.units[i + 1]                          # subject)
+            if "name" in left.features.get("senses", []) and "name" in right.features.get("senses", []):
+                _merge_conjuncts(reading, i)
                 return True
     return False
 
@@ -1229,12 +1254,14 @@ def _question_subjects(reading: Reading, aux):
     verb = _follow(aux, "asks_predication")
     q_verb = _lemma(verb.surface) if verb is not None else "have"
     subject = _follow(verb, "subject") if verb is not None else None
-    if subject is not None:
-        return [_entity(subject)], q_verb
+    if subject is not None:                              # a group's `members`, else the single entity
+        return (subject.features.get("members") or [_entity(subject)]), q_verb
     units = reading.units
     ai, vi = units.index(aux), (units.index(verb) if verb is not None else len(units))
-    entities = [_entity(u) for u in units[ai + 1:vi]
-                if any(s in u.features.get("senses", []) for s in ("name", "noun", "pronoun"))]
+    entities = []                                        # flatten any group's members (comma-lists)
+    for u in units[ai + 1:vi]:
+        if any(s in u.features.get("senses", []) for s in ("name", "noun", "pronoun")):
+            entities.extend(u.features.get("members") or [_entity(u)])
     return entities, q_verb
 
 
@@ -1541,6 +1568,11 @@ def learn(statement: str, discourse: list = None, context: list = None) -> list:
 
 def _facts_from(reading: Reading, context: list = None) -> list:
     r = reading
+    verbs = [u for u in r.units if "verb" in u.features.get("senses", [])]
+    if len(verbs) == 1:                                  # a group-subject STATEMENT ("Tom and Mary have
+        subj = _follow(verbs[0], "subject")              # 5 apples") is distributive/collective —
+        if subj is not None and "members" in subj.features:   # ambiguous — so decline (no guessed fact)
+            return []
     for u in r.units:                                    # count statement?
         value = NUMBERS.get(_key(u.surface))
         coll = _follow(u, "collection") if value is not None else None
