@@ -1043,25 +1043,33 @@ def _rate(reading: Reading):
 
 
 def _quantity(reading: Reading):
-    """The quantity a "<entity> <verb>s <amount>" statement asserts, or None — the one verb with a
-    subject and either a self-measuring money value ("earns $12") or a value quantifying a direct
-    object ("buys 2 apples"). The verb lemma is kept for its polarity."""
+    """The quantities a "<entity> <verb>s <amount> …" statement asserts — ONE per value: a
+    self-measuring money value ("earns $12") or a value quantifying a noun ("buys 2 apples"). A list,
+    so a CONJOINED object yields several ("has 3 apples and 2 oranges" → two). The verb lemma carries
+    the polarity. [] if there's no single verb with a subject."""
     verbs = [u for u in reading.units if "verb" in u.features.get("senses", [])]
     if len(verbs) != 1:
-        return None
+        return []
     subject = _follow(verbs[0], "subject")
     if subject is None:
-        return None
-    lemma = _lemma(verbs[0].surface)
-    money = next((u for u in reading.units if "measure" in u.features), None)   # "$12" self-measures
-    if money is not None:
-        return Quantity(_entity(subject), money.features["measure"], money.features["value"], lemma)
-    obj = _follow(verbs[0], "dobj")
-    value_unit = next((u for u in reading.units if "value" in u.features.get("senses", [])
-                       and _follow(u, "quantifies") is obj), None) if obj is not None else None
-    if value_unit is None:
-        return None
-    return Quantity(_entity(subject), _descriptor(obj), value_unit.features["value"], lemma)
+        return []
+    # Two ADJACENT bare values ("10 $20" = ten twenty-dollar bills) are a compound denomination we
+    # don't parse — never a genuine conjoined object ("3 apples AND 2 oranges" separates them). Decline.
+    vi = [k for k, u in enumerate(reading.units) if "value" in u.features.get("senses", [])]
+    if any(b - a == 1 for a, b in zip(vi, vi[1:])):
+        return []
+    ent, lemma = _entity(subject), _lemma(verbs[0].surface)
+    out = []
+    for u in reading.units:
+        if "value" not in u.features.get("senses", []):
+            continue
+        if "measure" in u.features:                      # "$12" — a self-measuring money value
+            out.append(Quantity(ent, u.features["measure"], u.features["value"], lemma))
+        else:
+            noun = _follow(u, "quantifies")              # "3 APPLES" — the value's measure noun
+            if noun is not None:
+                out.append(Quantity(ent, _descriptor(noun), u.features["value"], lemma))
+    return out
 
 
 def _predication(reading: Reading):
@@ -1604,9 +1612,9 @@ def _facts_from(reading: Reading, context: list = None) -> list:
     cq = _comparative_quantity(r, context)               # "<A> has 30 less <X> than <B>" → derived?
     if cq is not None:
         return [cq]
-    q = _quantity(r)                                     # "<entity> has <value> <noun>" → quantity?
-    if q is not None:
-        return [q]
+    q = _quantity(r)                                     # "<entity> has 3 apples and 2 oranges" → list
+    if q:
+        return q
     p = _predication(r)                                  # subject-verb statement?
     if p is not None:
         return [p]

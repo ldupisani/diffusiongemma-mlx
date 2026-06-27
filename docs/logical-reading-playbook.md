@@ -403,7 +403,16 @@ ambiguity (Tom vs Mary) that forced the positional fallback dissolves. `_questio
 for "Tom and Mary". Three-way "X and Y and Z" stacks through the multi-pass condense loop, like
 "big red apple". A group-subject STATEMENT ("Tom and Mary have 5 apples") is ambiguous
 distributive-vs-collective → declines (the precision discipline applied to a semantic ambiguity).
-247 tests. Follow-on: conjoined OBJECTS ("3 apples and 2 oranges" — two quantities, not a group).
+247 tests. Follow-on: conjoined OBJECTS ("3 apples and 2 oranges" — two quantities, not a group).  ·
+62. **conjoined objects ("3 apples and 2 oranges" → two quantities)** — `_quantity` now returns a LIST,
+one Quantity per value-noun pair (or per money value), so a conjoined object yields several; "how many
+apples / oranges does Tom have?" → 3 / 2; composes with accumulation. PRECISION (the Oliver-bills
+problem, 3rd encounter): capturing ALL values DEFEATED the unused-given guard (every number became a
+fact), so "10 $20 bills" (ten twenty-dollar bills, a compound denomination) slipped to a confident-wrong.
+Fix is structural at the source, not another whole-problem guard: two ADJACENT bare values ("10 $20")
+are a compound we can't parse — a genuine conjoined object always SEPARATES its values with nouns + `and`
+— so decline. Lesson: a capability that captures more can capture it wrong; the durable defense is to
+recognize the shape you CAN'T parse and refuse it, not to keep patching the shapes you can.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

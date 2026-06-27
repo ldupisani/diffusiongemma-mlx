@@ -1595,5 +1595,28 @@ class TestIncrement56ConjunctionBinding(unittest.TestCase):
         self.assertEqual(reading.learn("Tom and Mary have 5 apples"), [])
 
 
+class TestIncrement57ConjoinedObjects(unittest.TestCase):
+    """#57 - conjoined OBJECTS: "Tom has 3 apples and 2 oranges" joins two QUANTITIES (not a group) ->
+    two facts, one per value-noun pair. `_quantity` returns a LIST. Composes with accumulation."""
+
+    def test_two_quantities_learned(self):
+        self.assertEqual(reading.learn("Tom has 3 apples and 2 oranges"),
+                         [reading.Quantity("tom", ("apple", frozenset()), 3.0, "have"),
+                          reading.Quantity("tom", ("orange", frozenset()), 2.0, "have")])
+
+    def test_query_each_measure(self):
+        ctx = "Tom has 3 apples and 2 oranges."
+        self.assertEqual(reading.solve(ctx + " How many apples does Tom have?"), 3)
+        self.assertEqual(reading.solve(ctx + " How many oranges does Tom have?"), 2)
+
+    def test_conjoined_object_composes_with_accumulation(self):
+        self.assertEqual(reading.solve("Tom has 3 apples and 2 oranges. Tom buys 4 apples. "
+                                       "How many apples does Tom have?"), 7)
+
+    def test_single_object_unchanged(self):
+        self.assertEqual(reading.learn("Tom buys 2 apples"),
+                         [reading.Quantity("tom", ("apple", frozenset()), 2.0, "buy")])
+
+
 if __name__ == "__main__":
     unittest.main()
