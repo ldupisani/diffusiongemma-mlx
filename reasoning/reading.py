@@ -113,6 +113,10 @@ PLURALS = {
     "trees": "tree", "books": "book", "flowers": "flower", "teachers": "teacher",
     "people": "person", "persons": "person", "men": "man", "women": "woman",
     "times": "time", "clips": "clip", "oranges": "orange",
+    "friends": "friend", "dollars": "dollar", "cents": "cent", "hours": "hour", "minutes": "minute",
+    "days": "day", "weeks": "week", "months": "month", "years": "year", "items": "item",
+    "pages": "page", "miles": "mile", "pounds": "pound", "boxes": "box", "bags": "bag",
+    "points": "point", "numbers": "number", "amounts": "amount", "costs": "cost",
 }
 
 
@@ -143,7 +147,9 @@ MULTIPLIERS = {"once": 1, "twice": 2, "thrice": 3, "half": 0.5}
 
 # Coreference: a pronoun's grammatical gender, and a small name→gender lexicon used to pick a
 # compatible antecedent. Both grown deliberately (no guessing from spelling).
-PRONOUN_GENDER = {"he": "male", "she": "female", "it": "neuter", "they": "plural"}
+PRONOUN_GENDER = {"he": "male", "she": "female", "it": "neuter", "they": "plural",
+                  "him": "male", "his": "male", "her": "female",
+                  "them": "plural", "their": "plural", "its": "neuter"}
 NAME_GENDER = {"tom": "male", "bob": "male", "john": "male", "jim": "male", "jack": "male",
                "mary": "female", "alice": "female", "jane": "female", "carol": "female",
                "sue": "female", "anna": "female"}
@@ -228,6 +234,18 @@ LEXICON: dict[str, list[str]] = {
     "time": ["noun"], "times": ["operator", "noun"],   # "times" is × OR the occurrence-noun (ambiguous)
     "jump": ["verb"], "jumps": ["verb"], "jumped": ["verb"], "run": ["verb"], "runs": ["verb"],
     "clip": ["noun"], "orange": ["noun"],   # measures for word problems
+    # --- word-problem vocabulary (data-driven from reading_bench's unknown-word frequency list) ---
+    # content nouns (units of time / money / measure):
+    "friend": ["noun"], "dollar": ["noun"], "cent": ["noun"], "hour": ["noun"], "minute": ["noun"],
+    "day": ["noun"], "week": ["noun"], "month": ["noun"], "year": ["noun"], "money": ["noun"],
+    "number": ["noun"], "cost": ["noun"], "amount": ["noun"], "item": ["noun"], "page": ["noun"],
+    "mile": ["noun"], "pound": ["noun"], "box": ["noun"], "bag": ["noun"], "point": ["noun"],
+    # common prepositions (link an anchor to an object; recognised so they stop blocking the parse):
+    "to": ["preposition"], "in": ["preposition"], "on": ["preposition"], "at": ["preposition"],
+    "from": ["preposition"], "with": ["preposition"], "for": ["preposition"], "after": ["preposition"],
+    # possessive / object pronouns (recognised, and they extend coreference — "his" → its antecedent):
+    "him": ["pronoun"], "his": ["pronoun"], "her": ["pronoun"], "them": ["pronoun"],
+    "their": ["pronoun"], "its": ["pronoun"],
     "pass": ["verb"], "fail": ["verb"], "failed": ["verb"],
     "not": ["negation"], "never": ["negation"],   # negators flip a fact's polarity (see NEGATORS)
     # --- open-class vocabulary (curated, grown deliberately) ---
@@ -1156,6 +1174,8 @@ def answer(question: str, context: list):
                     return "undetermined"                # no relevant quantity for this conjunct
                 total += sum(folded)
             return int(total) if total == int(total) else total
+    if not any(isinstance(inst, tuple) for inst in context):
+        return "undetermined"        # no instance data to count — we don't know (never a fabricated 0)
     return sum(1 for inst in context if isinstance(inst, tuple) and _matches(query, inst))
 
 

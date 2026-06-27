@@ -298,7 +298,18 @@ taxonomy + the most-frequent-unknown-word list, which turns "what next?" from a 
 top blockers are FUNCTION-WORD vocabulary (`to`/`in`/`for`/`on`/`per`/`with`/`from`…), then currency
 (`$`, ~32%) and percentage (~8%). Lesson: the gap analysis guessed "the hardest gaps are coreference &
 relational referents" (true, and now built) — but the FIRST wall is mundane: the parser can't even
-recognize the function words to attempt the structure. Measure before filling.
+recognize the function words to attempt the structure. Measure before filling.  ·
+52. **function-word vocabulary (data-driven) + a precision fix** — added a curated, correctly-TYPED
+batch from the harness's unknown-word frequency list: content nouns (time/money/measure + plurals),
+common prepositions (`to`/`in`/`on`/`at`/`from`/`with`/`for`/`after`), and possessive/object pronouns
+(`his`/`her`/`him`/`them`/`their`/`its` — which also extend coreference). DEFERRED the
+construction-dependent words (`per`→rates, `left`/`remaining`→subtraction, `will`/`can` modals,
+`that`/`then`/ordinals) rather than tag them empty. Effect: the unknown-word frequency list shifted to
+that next tier (the loop working), coverage stayed ~flat (structure still blocks — as predicted). The
+batch EXPOSED a precision leak — an unblocked partial parse reached the count-instances fallback and
+fabricated a confident `0`. Fix: no instance data to count → `undetermined`, never a fabricated 0.
+Wrong dropped 1→0, **precision back to 100%**. Lesson: coverage is a vanity metric here; precision is
+the safety metric, and unblocking parses must not come at its expense.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
