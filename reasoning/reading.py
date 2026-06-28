@@ -237,6 +237,16 @@ FRACTIONS = {"half": 2, "third": 3, "fourth": 4, "quarter": 4, "fifth": 5, "sixt
 DISTRIBUTION_METHODS = {"equally": "equal", "evenly": "equal", "uniformly": "equal",
                         "randomly": "random", "optimally": "optimal", "proportionally": "proportional"}
 
+# Unit conversion factors: (from, to) → multiply. Exact ratios within a measurement family, so a quantity
+# stated in one unit folds into a rate/answer asked in another ("50 minutes" for an hourly rate).
+CONVERSIONS = {("minute", "hour"): 1 / 60, ("hour", "minute"): 60, ("second", "minute"): 1 / 60,
+               ("minute", "second"): 60, ("hour", "day"): 1 / 24, ("day", "hour"): 24,
+               ("day", "week"): 1 / 7, ("week", "day"): 7, ("gram", "kilogram"): 1 / 1000,
+               ("kilogram", "gram"): 1000, ("ounce", "pound"): 1 / 16, ("pound", "ounce"): 16,
+               ("inch", "foot"): 1 / 12, ("foot", "inch"): 12, ("foot", "yard"): 1 / 3, ("yard", "foot"): 3,
+               ("centimeter", "meter"): 1 / 100, ("meter", "centimeter"): 100,
+               ("meter", "kilometer"): 1 / 1000, ("kilometer", "meter"): 1000}
+
 # Coreference: a pronoun's grammatical gender, and a small name→gender lexicon used to pick a
 # compatible antecedent. Both grown deliberately (no guessing from spelling).
 PRONOUN_GENDER = {"he": "male", "she": "female", "it": "neuter", "they": "plural",
@@ -321,7 +331,9 @@ LEXICON: dict[str, list[str]] = {
     "one": ["number"], "two": ["number"], "three": ["number"],   # a number is a quantifier with a
     "four": ["number"], "five": ["number"], "six": ["number"], "seven": ["number"],   # VALUE (NUMBERS)
     "eight": ["number"], "nine": ["number"], "ten": ["number"], "eleven": ["number"], "twelve": ["number"],
-    "did": ["auxiliary"], "does": ["auxiliary"], "do": ["auxiliary"],  # yes/no question markers
+    "did": ["auxiliary", "verb"], "does": ["auxiliary", "verb"], "do": ["auxiliary", "verb"],
+    # ^ yes/no markers ("did she pass?") AND the main verb "do" ("she did 50 minutes of work");
+    #   disambiguation picks the verb reading when there's no other verb for the aux to ask about.
     "and": ["conjunction"],   # conjoins items ("Tom and Mary")
     "altogether": ["aggregator"], "total": ["aggregator"],   # fold a set of quantities (sum)
     "he": ["pronoun"], "she": ["pronoun"], "it": ["pronoun"], "they": ["pronoun"],  # coreference
@@ -704,6 +716,16 @@ def _find_target(need, u, i, units, pos):
 
     if need == "collection":      # a quantifier ranges over its HEAD: the nearest noun to its right
         r = right("noun")         # (not "the unique noun anywhere" — that broke on objects/complements)
+        if _key(u.surface) == "much":   # "how MUCH water" — the ADJACENT mass noun; else a money noun
+            if r and pos[id(r[0])] == i + 1:                                  # anywhere ("how much was the
+                return r[0]                                                  # MONEY shared"); else the
+            money = next((x for x in units if _key(x.surface) in _MONEY_WORDS  # result-measure verb (its
+                          and "noun" in x.features.get("senses", []) and pos[id(x)] > i), None)  # nominal-
+            if money is not None:                                            # isation: "how much did X EARN")
+                return money
+            rv = [x for x in units if has(x, "verb") and _lemma(x.surface) in RESULT_MEASURE
+                  and pos[id(x)] > i]
+            return rv[0] if rv else None
         return r[0] if r else None
     if need == "object":          # a preposition's object: the nearest noun OR NAME to its right
         r = right("noun", "name")  # (names too, so "than WILLIAM" binds — comparatives compare people)
@@ -1108,7 +1130,7 @@ VERB_LEMMA = {"passed": "pass", "wilted": "wilt", "rose": "rise", "failed": "fai
     "counting": "count", "paints": "paint", "painted": "paint", "painting": "paint",
     "playing": "play", "having": "have", "shopping": "shop", "practicing": "practice",
     "distributes": "distribute", "distributed": "distribute", "distributing": "distribute",
-    "spreads": "spread", "spreading": "spread"}
+    "spreads": "spread", "spreading": "spread", "does": "do", "did": "do"}
 
 def _lemma(surface: str) -> str:
     return VERB_LEMMA.get(_key(surface), _key(surface))
@@ -1272,6 +1294,12 @@ def _holdings(entity: str, measure: tuple, context: list):
 # verb is a CHANGE (a delta applied to the running value). The distinction only matters once values are
 # spread across an ordered timeline (`_holdings_at`); the timeless fold treats all as signed deltas.
 STATE_VERBS = {"have", "be"}
+
+# Verbs whose RESULT is itself a measure — their nominalisation is a quantity ("earn" → "earnings"). Lets
+# "how MUCH did X earn" bind `much` to the verb (the earnings) and read the measure off it, instead of a
+# blanket "much → MONEY" default. All money here; a future "weigh"→weight extends the same mechanism.
+RESULT_MEASURE = {v: MONEY for v in ("earn", "spend", "pay", "cost", "save", "make", "give", "get",
+                                     "receive", "sell", "buy", "charge", "collect", "win", "owe", "raise")}
 
 
 def _time_order(times: list, context: list):
@@ -1502,19 +1530,44 @@ class Rate:
 
 
 def _rate(reading: Reading):
-    """The rate a "<entity> <verb>s $R per <unit>" statement asserts, or None. Slice 1 is money rates
-    (the rate value carries its own MONEY measure); "N items per unit" comes later."""
-    per = next((u for u in reading.units if "per" in u.features.get("senses", [])), None)
-    if per is None:
+    """The rate a statement asserts — "$12 per hour" / "$12 an hour" / "20 pages a day" → Rate(entity,
+    amount, measure, per_unit, verb). The per-marker is "per", or "a"/"an" before a unit noun when it
+    sits right after a money value or a quantified measure-noun (so a plain article "a book" is NOT a
+    rate). The measure is a self-measuring money value, or the noun the rate value quantifies. Else None."""
+    units = reading.units
+    per = next((u for u in units if "per" in u.features.get("senses", [])), None)
+    rate_val = unit = None
+    if per is not None:                                  # explicit "per"
+        rate_val, unit = _follow(per, "rate"), _follow(per, "unit")
+    else:                                                # "a"/"an" as per — directly after the measure
+        for k in range(1, len(units) - 1):
+            if _key(units[k].surface) not in ("a", "an") \
+                    or "noun" not in units[k + 1].features.get("senses", []):
+                continue
+            prev = units[k - 1]
+            if "measure" in prev.features:               # "$12 an hour"
+                rate_val, unit = prev, units[k + 1]
+                break
+            if "noun" in prev.features.get("senses", []):   # "20 pages a day" — the value quantifying prev
+                v = next((x for x in units if "value" in x.features.get("senses", [])
+                          and _follow(x, "quantifies") is prev), None)
+                if v is not None:
+                    rate_val, unit = v, units[k + 1]
+                    break
+    if rate_val is None or unit is None:
         return None
-    rate_val, unit = _follow(per, "rate"), _follow(per, "unit")
-    if rate_val is None or unit is None or "measure" not in rate_val.features:
-        return None
-    verbs = [u for u in reading.units if "verb" in u.features.get("senses", [])]
+    verbs = [u for u in units if "verb" in u.features.get("senses", [])]
     subject = _follow(verbs[0], "subject") if len(verbs) == 1 else None
     if subject is None:
         return None
-    return Rate(_entity(subject), rate_val.features["value"], rate_val.features["measure"],
+    if "measure" in rate_val.features:                   # "$12" — a self-measuring money rate
+        measure = rate_val.features["measure"]
+    else:                                                # "20 PAGES a day" — the noun the value quantifies
+        mnoun = _follow(rate_val, "quantifies")
+        measure = _descriptor(mnoun) if mnoun is not None else None
+    if measure is None:
+        return None
+    return Rate(_entity(subject), rate_val.features["value"], measure,
                 _descriptor(unit)[0], _lemma(verbs[0].surface))
 
 
@@ -2043,11 +2096,14 @@ def answer(question: str, context: list, discourse: list = None):
     collection = _follow(_follow(interro, "queries"), "collection")   # how → many → its collection
     query = _descriptor(collection) if collection is not None else None
     much = next((u for u in r.units if _key(u.surface) == "much"), None)
-    if much is not None:                                 # "how much" → a MONEY question, UNLESS a mass
-        coll = _follow(much, "collection")               # noun sits immediately after it ("how much
-        mi = r.units.index(much)                         # WATER"); a non-adjacent noun ("how much did
-        if coll is None or r.units.index(coll) != mi + 1:   # GRANDPARENTS give") is the subject, not it
-            query = MONEY
+    if much is not None:                                 # "how much": read what `much` BOUND (no global
+        coll = _follow(much, "collection")               # MONEY default) — an adjacent mass noun, or a
+        if coll is not None and "verb" in coll.features.get("senses", []):   # result-measure verb ("how
+            query = RESULT_MEASURE.get(_lemma(coll.surface))   # much did X EARN" → the earnings = MONEY)
+        elif coll is not None:                           # "how much WATER" → that mass noun
+            query = _descriptor(coll)
+        else:                                            # bound nothing (e.g. "how much did he RUN") →
+            query = None                                 # can't tell what's asked → decline, not MONEY
     remainder = any(_key(u.surface) in _REMAINDER for u in r.units)
     if query is not None and any("verb" in u.features.get("senses", [])      # "How much <measure> was
                                  and _lemma(u.surface) in DISTRIBUTE_VERBS for u in r.units):  # shared?"
@@ -2115,6 +2171,18 @@ def answer(question: str, context: list, discourse: list = None):
                 rate = next((f for f in context if isinstance(f, Rate) and f.entity == ent     # rate ×
                              and f.measure == query and f.verb == q_verb), None)                # per-unit
                 per_qty = _holdings(ent, (rate.per_unit, frozenset()), context) if rate else None
+                if per_qty is None and rate is not None:    # "…write in 3 DAYS?" — per-unit count is in
+                    per_qty = next((u.features["value"] for u in r.units    # the QUESTION, not a premise
+                                    if "value" in u.features.get("senses", []) and _follow(u, "quantifies")
+                                    is not None and _descriptor(_follow(u, "quantifies"))[0] == rate.per_unit), None)
+                if per_qty is None and rate is not None:    # CONVERT: a premise quantity in another unit
+                    for f in context:                       # ("50 minutes" for an hourly rate → 50/60 hr)
+                        if isinstance(f, Quantity) and f.entity == ent and f.amount is not None \
+                                and (f.measure[0], rate.per_unit) in CONVERSIONS:
+                            base = _holdings(ent, f.measure, context)
+                            if base is not None:
+                                per_qty = base * CONVERSIONS[(f.measure[0], rate.per_unit)]
+                                break
                 if per_qty is None:
                     return "undetermined"                # no relevant quantity/rate for this conjunct
                 total += rate.amount * per_qty
@@ -2482,7 +2550,10 @@ def _facts_from(reading: Reading, context: list = None) -> list:
 
 
 def _has_verb(text: str) -> bool:
-    return any("verb" in u.features.get("senses", []) for u in analyze(text).units)
+    # do/does/did are PRIMARILY auxiliaries; a clause fragment shouldn't count as having its own verb on
+    # their account ("how many apples do Tom | and Mary have" must NOT split the "Tom and Mary" group).
+    return any("verb" in u.features.get("senses", []) and _key(u.surface) not in ("do", "does", "did")
+               for u in analyze(text).units)
 
 
 def _main_verb(text: str):

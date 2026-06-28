@@ -2071,5 +2071,39 @@ class TestIncrement73ParseNearWins(unittest.TestCase):
                          [reading.Quantity("tom", ("sticker", frozenset()), 12.0, "give")])
 
 
+class TestIncrement74RatesAndConversion(unittest.TestCase):
+    """#74 - rates + unit conversion + result-measure binding (start of the rates cluster). Non-money
+    rates and "a/an"=per ("20 pages a day"); the per-unit count read from the QUESTION ("in 3 days");
+    unit CONVERSION (minutes for an hourly rate); `much` BINDS the result-measure verb (the earnings) or
+    a money noun rather than a global MONEY default; and "do/did" as a main verb. Solves the real Weng."""
+
+    def test_non_money_rate_times_quantity(self):
+        self.assertEqual(reading.solve("John writes 20 pages a day. "
+                                       "How many pages does John write in 3 days?"), 60)
+
+    def test_an_as_per_money_rate(self):
+        self.assertEqual(reading.solve("Weng earns $12 an hour. She worked 3 hours. "
+                                       "How much did Weng earn?"), 36)
+
+    def test_rate_with_unit_conversion(self):
+        self.assertEqual(reading.solve("Weng earns $12 an hour for babysitting. Yesterday, she just did "
+                                       "50 minutes of babysitting. How much did she earn?"), 10)
+
+    def test_much_binds_the_result_verb(self):
+        r = reading.analyze("How much did Weng earn")
+        much = next(u for u in r.units if u.surface == "much")
+        self.assertEqual(reading._follow(much, "collection").surface, "earn")
+
+    def test_much_non_money_verb_declines(self):
+        self.assertNotIsInstance(reading.solve("Tom ran 5 miles. How much did Tom run?"), (int, float))
+
+    def test_did_as_main_verb(self):
+        self.assertEqual(reading.learn("She did 50 minutes of babysitting", ["weng"], []),
+                         [reading.Quantity("weng", ("minute", frozenset()), 50.0, "do")])
+
+    def test_did_aux_unaffected(self):
+        self.assertEqual(reading.answer("Did Bob pass?", reading.learn("Bob passed")), "yes")
+
+
 if __name__ == "__main__":
     unittest.main()

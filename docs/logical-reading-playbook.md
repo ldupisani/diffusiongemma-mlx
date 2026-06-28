@@ -610,7 +610,22 @@ already solve) and any "X will/can/has VERB" question. (b) "sold `<X>` to N `<pe
 "to") is the amount ("sold clips to 48 friends" → 48 clips, not 48 friends). Gated to a bare dobj (one with
 its own count is the each/distribution shape), so it's precise. **Solves the canonical Natalia #1 → 72.**
 SIX real GSM8K problems now solve end-to-end at 0 calls (Natalia, Sam, Tim/Harry, Paddington, Buddy, Susie).
-Precision 100%; 329 tests. Method: run the bench, find the shape we're CLOSEST to, fix the one gap.
+Precision 100%; 329 tests. Method: run the bench, find the shape we're CLOSEST to, fix the one gap.  ·
+81. **rates + unit conversion + result-measure binding** (cluster start; coverage 6→7, solves Weng).
+Four pieces. (a) NON-MONEY rates + "a/an"=per: `_rate` now reads a value quantifying a noun ("20 pages a
+day" → Rate(.., page, day)), and treats "a"/"an" before a unit noun as `per` when it sits right after a
+money value or a quantified measure-noun (so a plain article "a book" is not a rate). (b) The rate's
+per-unit count is read from the QUESTION ("…write in 3 DAYS?") when it's not a premise. (c) UNIT
+CONVERSION: a `CONVERSIONS` table (min↔hr, g↔kg, …) lets a premise quantity in one unit fold into a rate
+asked in another ("50 minutes" for an hourly rate → 50/60 hr → $10). (d) RESULT_MEASURE: the user's
+"earn ≈ earnings" insight — `much` now BINDS the result-measure verb (earn/spend/give/… → MONEY) or a
+money noun, read off the binding, REPLACING the global much→MONEY default. More faithful AND more precise:
+"how much did he RUN" (run ∉ RESULT_MEASURE, no money noun) now DECLINES instead of answering in dollars.
+Also: "do/does/did" is now multi-sense aux+verb ("she did 50 minutes of babysitting" → a `do` quantity) —
+`_has_verb` ignores them so clause-splitting never breaks a "Tom and Mary" group on a stray "do". SEVEN
+real GSM8K problems solve. Precision 100%; 336 tests. Follow-ons in this cluster: "N X of M each"
+multiplication (sugar, James-beef), rate INVERSION (Joy, John-writes: total ÷ rate → time), cross-entity
+rates ("$5.50/lb" applies to anyone's pounds), and "work" as a noun ("minutes of work").
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
