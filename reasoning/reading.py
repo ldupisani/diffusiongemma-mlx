@@ -2748,6 +2748,9 @@ def _facts_from(reading: Reading, context: list = None) -> list:
     rq = _rest_quantity(r, context)                      # "the REST failed" → total − Σ(stated subsets)?
     if rq is not None:
         return [rq]
+    if any(_key(u.surface) in REST_WORDS for u in r.units):
+        return []                                        # "the rest …" but no total yet → DEFER (the
+        # solve() fixpoint retries once the population total / subsets are learned, e.g. a trailing "if")
     pct = next((u for u in r.units if "percent" in u.features.get("senses", [])), None)
     if pct is not None and _follow(pct, "base") is None \
             and len([u for u in r.units if "verb" in u.features.get("senses", [])]) == 1 \
@@ -2816,7 +2819,7 @@ def _split_clauses(sentence: str) -> list:
     own verb AND the right either has one too OR is an elided clause that can BORROW the left's verb. A
     phrase-joining "and" ("3 apples and 2 oranges", "Tom and Mary") does NOT split. Recursive, so a
     chain of clauses (and a leading "If P, Q?" premise) all separate."""
-    for sep in ("; ", ", and ", ", but ", ", so ", " and ", ", "):
+    for sep in ("; ", ", and ", ", but ", ", so ", " if ", " and ", ", "):
         i = sentence.find(sep)
         while i != -1:
             left, right = sentence[:i].strip(), sentence[i + len(sep):].strip()
@@ -2840,7 +2843,12 @@ def solve(text: str):
     if not any(s.endswith("?") for s in sentences):
         return None
     clauses = [c for s in sentences for c in _split_clauses(s)]   # split into independent clauses
-    qpos = max((k for k, c in enumerate(clauses) if c.rstrip().endswith("?")), default=None)
+    # the QUESTION clause holds the interrogative ("How many …"); for "Q if P?" the trailing "?" lands on
+    # the condition P, so prefer an interrogative-bearing clause over the bare "?"-clause.
+    wh = {"how", "what", "which", "who", "whom", "whose", "why"}
+    interro = [k for k, c in enumerate(clauses) if {_key(w) for w in c.split()} & wh]
+    qpos = (interro[-1] if interro else
+            max((k for k, c in enumerate(clauses) if c.rstrip().endswith("?")), default=None))
     if qpos is None:
         return None
     question = clauses[qpos]                              # the question clause; the rest are premises

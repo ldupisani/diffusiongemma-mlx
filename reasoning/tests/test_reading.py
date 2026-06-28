@@ -2376,5 +2376,24 @@ class TestIncrement85TitleAbbreviation(unittest.TestCase):
         self.assertEqual(reading._sentences("The price is $5.50 today."), ["The price is $5.50 today."])
 
 
+class TestIncrement86TrailingConditional(unittest.TestCase):
+    """#86 - a trailing CONDITIONAL "Q if P?": "if" is a clause separator, so P becomes a premise and the
+    condition peels off FIRST — which also stops "B and above if he has 60 students" from mis-splitting on
+    "and" (left "above" is then verbless). The QUESTION clause is the interrogative-bearing one (the
+    trailing "?" lands on P). The complement clause DEFERS when no total yet, so the fixpoint resolves it."""
+
+    def test_trailing_conditional_feeds_complement(self):
+        self.assertEqual(reading.solve("40% of the students passed. The rest failed. "
+                                       "How many students failed if he has 60 students?"), 36)
+
+    def test_b_and_above_not_split_by_and(self):
+        self.assertEqual(reading._split_clauses("students got a grade of B and above if he has 60 students"),
+                         ["students got a grade of B and above", "he has 60 students"])
+
+    def test_leading_if_unchanged(self):
+        self.assertEqual(reading.solve("John has five more roommates than twice as many as Bob. "
+                                       "If Bob has 10 roommates, how many roommates does John have?"), 25)
+
+
 if __name__ == "__main__":
     unittest.main()

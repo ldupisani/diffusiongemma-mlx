@@ -742,7 +742,19 @@ the verb's subject) — the only bug was the sentence split; a first stab adding
 WRONG (redundant, and it broke the #69 title-sense test). So this is a one-line fix in `_sentences`, not a
 new mechanism. Removes one of Sanchez's five blockers (the other four: `that`-embedding, `and`-split of "B
 and above", forward-ref total, threshold complement). Precision 100%; 385 tests. LESSON: before adding a
-mechanism, check what already exists — the title machinery was there; only the tokenizer needed the fix.
+mechanism, check what already exists — the title machinery was there; only the tokenizer needed the fix.  ·
+93. **trailing conditional "Q if P?"** (Sanchez chain cont.; coverage unchanged at 15). `if` is now a
+clause separator, so a trailing condition becomes its own premise — and crucially it peels off BEFORE the
+"and" split, so "B and above if he has 60 students" → ["… B and above", "he has 60 students"] (left of
+"and" is then verbless → no mis-split). THREE interlocking fixes: (a) " if " added to the clause
+separators (placed before " and "); (b) the QUESTION clause is the interrogative-bearing one (`how`/`what`/
+`which`/…), not the bare "?"-clause — for "Q if P?" the "?" lands on the condition P; (c) the complement
+clause DEFERS (returns []) when there's a `rest` cue but no total yet, so the fixpoint resolves it once a
+later clause (a trailing "if") supplies the total. End-to-end: "40% passed; the rest failed; how many
+failed if he has 60 students?" → 36. Leading "If P, Q" (comma) unchanged. Precision 100%; 388 tests. Two
+Sanchez blockers remain: the `that`-clause embedding ("found out THAT 40% … got below B") and the THRESHOLD
+complement ("B and above" = not "below B"). LESSON: one structural cue (`if`) often fixes several symptoms
+at once — the trailing condition, the spurious "and" split, and the forward-ref total all dissolve together.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
