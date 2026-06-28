@@ -1613,6 +1613,8 @@ def _time_offset(reading: Reading) -> float:
                and _descriptor(_follow(u, "quantifies"))[0] == "year"), None)
     if "ago" in surf:                                    # "N years ago" (a bare "a year ago" → 1)
         return -(yv if yv is not None else 1)
+    if {"from", "now"} <= surf and yv is not None:       # "N years from now" → +N (a future displacement)
+        return yv
     if (surf & {"in", "after"}) and yv is not None:      # "in N years" / "after N years"
         return yv
     if "next" in attrs:                                  # "next year"
@@ -1735,6 +1737,10 @@ def _relational_age(reading: Reading, context: list):
     factor = _relational_age_factor(reading)
     if factor is None:
         return None
+    if _time_offset(reading) != 0:                        # GUARD: the relation holds at a SHIFTED time
+        return None                                       # ("In N years X will be k× as old as Y") — the
+        # present-time k×Y_age is wrong (X@(now+Δ) = k×Y@(now+Δ), then back-shift to now). We don't yet
+        # solve that, so DECLINE rather than commit a confident wrong. → falls to the defer at _facts_from.
     subj, _ = _copula_args(reading)                       # X — the copula's subject
     if subj is None:
         return None

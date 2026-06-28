@@ -2669,5 +2669,31 @@ class TestIncrement97NumericMultiplier(unittest.TestCase):
         self.assertEqual(reading.solve("What is 4 times 3?"), 12)
 
 
+class TestIncrement98AgeShiftGuard(unittest.TestCase):
+    """#98 - a RELATIONAL age under a TEMPORAL SHIFT ("In N years X will be k x as old as Y", "N years
+    from now") holds at the SHIFTED time, not now — so the present-time k x Y_age is wrong. We don't yet
+    solve the shifted algebra (Ophelia+2 = 4 x (Lennon+2)), so we DECLINE rather than commit a confident
+    wrong. Precision-first: turns the dominant confident-wrong family (10 on full dev) into honest
+    declines. The PRESENT-tense relational age and the shift-free multi-hop (Anne) are untouched."""
+
+    def test_present_tense_relational_age_unaffected(self):
+        self.assertEqual(reading.solve("Tom is three times as old as Sam. Sam is 8 years old. "
+                                       "How old is Tom?"), 24)
+
+    def test_in_n_years_shift_declines(self):
+        self.assertEqual(reading.solve("In two years, Tom will be three times as old as Sam. "
+                                       "Sam is currently 8 years old. How old is Tom?"), "undetermined")
+
+    def test_from_now_shift_declines(self):
+        self.assertEqual(reading.solve("Three years from now, Tom will be twice as old as Sam. "
+                                       "Sam is now 29 years old. How old is Tom now?"), "undetermined")
+
+    def test_shift_free_multihop_unaffected(self):
+        # Anne: "will be" with NO numeric offset is not a shift -> the multi-hop still solves
+        self.assertEqual(reading.solve("By the time Anne is two times as old as Emile, Emile will be "
+                                       "six times as old as Maude. If Maude will be 8 years old, "
+                                       "how old will Anne be?"), 96)
+
+
 if __name__ == "__main__":
     unittest.main()
