@@ -328,9 +328,11 @@ LEXICON: dict[str, list[str]] = {
     "sir": ["title"], "madam": ["title"],   # they don't compete to be a verb's subject ("Mr. Sam shared"
     # → Sam is the unique name). A `title` carries no obligation (it's an unforced, recognised modifier).
     "are": ["verb"], "is": ["verb"], "was": ["verb"], "were": ["verb"],   # copulas (also link a complement)
-    "one": ["number"], "two": ["number"], "three": ["number"],   # a number is a quantifier with a
-    "four": ["number"], "five": ["number"], "six": ["number"], "seven": ["number"],   # VALUE (NUMBERS)
-    "eight": ["number"], "nine": ["number"], "ten": ["number"], "eleven": ["number"], "twelve": ["number"],
+    "one": ["value"], "two": ["value"], "three": ["value"],   # word-numbers ARE values (like digits) so
+    "four": ["value"], "five": ["value"], "six": ["value"], "seven": ["value"],   # "three apples"/"three
+    "eight": ["value"], "nine": ["value"], "ten": ["value"], "eleven": ["value"], "twelve": ["value"],  # years
+    # younger" parse like "3 …". The value comes from NUMBERS (annotate_senses); count statements ("there
+    # are three X") are existential-gated in _facts_from / instances().
     "did": ["auxiliary", "verb"], "does": ["auxiliary", "verb"], "do": ["auxiliary", "verb"],
     # ^ yes/no markers ("did she pass?") AND the main verb "do" ("she did 50 minutes of work");
     #   disambiguation picks the verb reading when there's no other verb for the aux to ask about.
@@ -613,6 +615,8 @@ def annotate_senses(reading: Reading) -> Reading:
         u.features["senses"] = list(senses)
         if "value" in senses:
             u.features["value"] = _as_number(u.surface)
+            if u.features["value"] is None:                # a WORD-number ("three") — value from NUMBERS
+                u.features["value"] = NUMBERS.get(_key(u.surface))
             if u.surface.strip().startswith(("$", "£")):   # "$12" — a self-measuring money value
                 u.features["measure"] = MONEY
         if "operator" in senses:
@@ -1478,8 +1482,12 @@ def _relational_quantity(reading: Reading, context: list):
         referent = next((f for f in reversed(context or []) if isinstance(f, Quantity)), None)
     if referent is None:
         return None
-    return Quantity(_entity(subject), referent.measure,
-                    mult.features["value"] * referent.amount, _lemma(verbs[0].surface))
+    amount = mult.features["value"] * referent.amount
+    comp = next((u for u in reading.units if "comparative" in u.features.get("senses", [])), None)
+    offset = next((u for u in reading.units if "value" in u.features.get("senses", [])), None)
+    if comp is not None and offset is not None:          # "FIVE MORE than twice as many as Bob" → 2×Bob+5
+        amount += COMPARATIVE_SIGN.get(_key(comp.surface), 1) * offset.features["value"]
+    return Quantity(_entity(subject), referent.measure, amount, _lemma(verbs[0].surface))
 
 
 def _partitive_quantity(reading: Reading, context: list):
@@ -1547,7 +1555,7 @@ def _comparative_quantity(reading: Reading, context: list):
         if noun is None:
             return None
         measure = _descriptor(noun)
-    referent = _holdings(_entity(standard), measure, context)
+    referent = _holdings(_entity(standard), measure, context or [])
     if referent is None:
         return None                                      # standard's count unknown (e.g. forward ref)
     sign = COMPARATIVE_SIGN.get(_key(comp.surface), 1)   # "younger"/"less" → −, "older"/"more" → +
@@ -1658,10 +1666,10 @@ def _container_quantity(reading: Reading):
         return None
 
     v1, v2 = vpair(True), vpair(False)
-    if v1 is None or v2 is None:
-        return None
-    return Quantity(_entity(subject), _descriptor(_follow(v2, "quantifies")),
-                    v1.features["value"] * v2.features["value"],
+    if v1 is None or v2 is None or _follow(v1, "quantifies") is subject:
+        return None                                      # the container can't be the SUBJECT ("FOUR people
+    return Quantity(_entity(subject), _descriptor(_follow(v2, "quantifies")),   # lost a total of 103 kg" is
+                    v1.features["value"] * v2.features["value"],                 # not 4×103)
                     _lemma(verbs[0].surface), _time_at(reading, verbs[0]))
 
 
@@ -2312,12 +2320,11 @@ def instances(statement: str) -> list:
     Concatenate over several statements to build a context."""
     r = analyze(statement)
     for u in r.units:
-        value = NUMBERS.get(_key(u.surface))
-        if value is None:
+        if "value" not in u.features.get("senses", []):
             continue
-        collection = _follow(u, "collection")
+        collection = _follow(u, "quantifies")
         if collection is not None:
-            return [_descriptor(collection)] * value
+            return [_descriptor(collection)] * int(u.features["value"])
     return []
 
 
@@ -2579,11 +2586,12 @@ def _facts_from(reading: Reading, context: list = None) -> list:
         subj = _follow(verbs[0], "subject")              # 5 apples") is distributive/collective —
         if subj is not None and "members" in subj.features:   # ambiguous — so decline (no guessed fact)
             return []
-    for u in r.units:                                    # count statement?
-        value = NUMBERS.get(_key(u.surface))
-        coll = _follow(u, "collection") if value is not None else None
-        if coll is not None:
-            return [_descriptor(coll)] * value
+    if any("existential" in u.features.get("senses", []) for u in r.units):   # "there are N <coll>" → N
+        for u in r.units:                                # instances (existential-gated, so "Tom has three
+            if "value" in u.features.get("senses", []):  # apples"/"three years younger" stay arithmetic)
+                coll = _follow(u, "quantifies")
+                if coll is not None:
+                    return [_descriptor(coll)] * int(u.features["value"])
     mult = next((u for u in r.units if "multiplier" in u.features.get("senses", [])), None)
     scaled = _follow(mult, "scales") if mult is not None else None
     if scaled is not None and "quantifier" in scaled.features.get("senses", []):
@@ -2796,6 +2804,12 @@ def solve(text: str):
     times = {f.time for f in context if isinstance(f, Quantity) and f.time is not None}
     q_has_time = any("time" in u.features.get("senses", []) for u in readings[-1].units)
     if len(times) >= 2 and not q_has_time:
+        return "undetermined"
+    # GUARD 6 — "each OF the [subset]" is a per-MEMBER query over a restricted subset of a group; we hold
+    # no per-member or subset facts (only the group aggregate), so the per-member demand can't be met →
+    # decline (never match the group total). Distinct from "each <noun>" — the equal-split per-each we answer.
+    qu = readings[-1].units
+    if any(_key(u.surface) == "each" and _key(qu[j + 1].surface) == "of" for j, u in enumerate(qu[:-1])):
         return "undetermined"
     result = answer(question, context, discourse)
     if result == "undetermined" and _underspecified_distribution(context) is not None:

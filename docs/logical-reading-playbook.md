@@ -662,7 +662,22 @@ age at a shifted time = age@now + Δ. The age branch now reads `_time_offset` an
 "shift → decline" guard). So "Kris is 24 now; Herbert is 10 years younger; how old next year?" → 14 + 1 =
 15; "in 3 years" → +3; "5 years ago" → −5. (`ago`/`later`/`earlier` recognised.) Precision 100%; 355 tests.
 LESSON: a "shift" isn't a special case — it's the queried time's offset on the timeline, and age is the
-measure that tracks that axis. The same offset generalizes to any future time-dependent quantity.
+measure that tracks that axis. The same offset generalizes to any future time-dependent quantity.  ·
+86. **word-numbers ARE values + the compound relational** (coverage 11→12, solves John-roommates). A
+foundational unification: `one`..`twelve` are now `["value"]` (with the value from `NUMBERS`), so "three
+apples" parses exactly like "3 apples" (a Quantity, no longer 3 instances), and "three years younger"
+feeds the comparative. Count statements are now EXISTENTIAL-gated — `_facts_from` / `instances()` emit
+instances only for "there ARE N <coll>", so a bare subject-verb word-number stays arithmetic. This let the
+COMPOUND RELATIONAL land: `_relational_quantity` adds a comparative offset — "five MORE than twice as many
+as Bob" → 2×Bob + 5 = 25 (plain "twice as many as X" has no comparative/offset, unchanged). PRECISION
+fallout from the change, both fixed: (a) `_container` must not treat the SUBJECT as a container — "FOUR
+people lost a total of 103 kg" is not 4×103 (skip when v1's noun is the subject); (b) GUARD 6 — "each OF
+the [last two …]" is a per-MEMBER query over a restricted SUBSET of a group; we hold only the group
+aggregate, so decline rather than match the total (distinct from "each <noun>", the equal-split per-each we
+answer). Precision 100%; 362 tests. LESSON: a foundational re-typing (word-numbers) exposes latent
+over-eager extractors — the fix is to make each extractor state its real precondition (a container isn't
+the subject; a per-each isn't a group aggregate), not to revert the unification. Mel still needs "two
+dozen"=24; the real John-writes-style "how many hours" (Joy) needs the per-N-unit rate.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

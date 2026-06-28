@@ -2205,5 +2205,41 @@ class TestIncrement78TemporalAgeShift(unittest.TestCase):
         self.assertEqual(reading.solve("Tom is 20 years old. How old was Tom 5 years ago?"), 15)
 
 
+class TestIncrement79WordNumbersAndCompoundRelational(unittest.TestCase):
+    """#79 - WORD-NUMBERS ARE VALUES (one..twelve parse like digits): "three apples" → a Quantity (was
+    instances); count statements are existential-gated ("there are three X" → instances). Unblocks "three
+    years younger" and the COMPOUND RELATIONAL "five more than twice as many as Bob" (2×Bob+5). Precision
+    held: _container won't treat the SUBJECT as a container ("Four people lost a total of 103 kg" ≠ 4×103),
+    and GUARD 6 declines "each OF [a subset]" (per-member of a restricted group)."""
+
+    def test_word_number_is_a_quantity(self):
+        self.assertEqual(reading.learn("Tom has three apples"),
+                         [reading.Quantity("tom", ("apple", frozenset()), 3, "have")])
+
+    def test_there_are_still_instances(self):
+        self.assertEqual(len(reading.instances("there are three red apples")), 3)
+
+    def test_three_years_younger(self):
+        self.assertEqual(reading.solve("Mel is three years younger than Katherine. "
+                                       "Katherine is 24 years old. How old is Mel?"), 21)
+
+    def test_compound_relational(self):
+        self.assertEqual(reading.solve("John has five more roommates than twice as many as Bob. "
+                                       "If Bob has 10 roommates, how many roommates does John have?"), 25)
+
+    def test_relational_without_offset_unchanged(self):
+        self.assertEqual(reading.solve("Tim has 30 apples. Harry has twice as many apples as Tim. "
+                                       "How many apples does Harry have?"), 60)
+
+    def test_container_not_subject(self):
+        amounts = [getattr(f, "amount", None) for f in reading.learn("Four people lost a total of 103 kilograms")]
+        self.assertNotIn(412.0, amounts)
+
+    def test_each_of_subset_declines(self):
+        self.assertEqual(reading.solve("Four people lost a total of 103 kilograms. The first person lost "
+                                       "27 kilograms. How many kilograms did each of the last two people lose?"),
+                         "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()
