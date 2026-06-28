@@ -354,6 +354,15 @@ OPERATORS = {"plus": "+", "minus": "-", "times": "*", "divided": "/"}
 # referent quantity ("twice as many"). `half` is the ×0.5 case ("half as many").
 MULTIPLIERS = {"once": 1, "twice": 2, "thrice": 3, "half": 0.5, "double": 2, "triple": 3}
 
+# Fraction words as relational multipliers (num, denom) for "<frac> as many/far" — computed EXACTLY
+# (divide last) to dodge float drift. The partitive "<frac> OF X" is a DIFFERENT op (_partitive_quantity),
+# kept apart by the following "as" vs "of"; these carry their fraction so the scale stays exact.
+FRACTION_MULTIPLIERS = {"one-half": (1, 2), "one-third": (1, 3), "two-thirds": (2, 3),
+                        "one-fourth": (1, 4), "one-quarter": (1, 4), "three-fourths": (3, 4),
+                        "three-quarters": (3, 4), "one-fifth": (1, 5), "two-fifths": (2, 5),
+                        "three-fifths": (3, 5), "four-fifths": (4, 5), "one-sixth": (1, 6),
+                        "one-eighth": (1, 8)}
+
 # Count-NOUNS that, after a multiplier + article, denote "the count/quantity of X" — so "twice the
 # NUMBER (of X)" is the same relational quantity as "twice as MANY (as X)" (the noun plays the role of
 # the quantifier "many"; the referent X supplies the count). Kept tiny and specific to avoid over-firing.
@@ -366,6 +375,17 @@ DIMENSIONS = {"long", "far", "tall", "high", "wide", "deep", "fast", "heavy"}   
 
 # Unit-fraction words → their DENOMINATOR (for partitives "half/a third/a quarter OF …"). Stored as the
 # denominator so the fraction of a holding is `base / n` (exact when it divides — avoids 1/3 float drift).
+def _fraction_parts(word: str):
+    """(numerator, denominator) for a fraction word — non-unit via FRACTION_MULTIPLIERS ("two-thirds"
+    → (2,3)), unit via FRACTIONS ("third" → (1,3)). None if it isn't a fraction word."""
+    k = _key(word)
+    if k in FRACTION_MULTIPLIERS:
+        return FRACTION_MULTIPLIERS[k]
+    if k in FRACTIONS:
+        return (1, FRACTIONS[k])
+    return None
+
+
 FRACTIONS = {"half": 2, "third": 3, "fourth": 4, "quarter": 4, "fifth": 5, "sixth": 6,
              "eighth": 8, "tenth": 10,
              "one-half": 2, "one-third": 3, "one-quarter": 4, "one-fourth": 4, "one-fifth": 5}
@@ -658,8 +678,15 @@ LEXICON: dict[str, list[str]] = {
     "separate": ["adjective"], "original": ["adjective"], "favorite": ["adjective"], "daily": ["adjective"],
     "weekly": ["adjective"], "monthly": ["adjective"], "annual": ["adjective"], "enough": ["adjective"],
     # hyphenated unit fractions (recognised + usable as partitives; see FRACTIONS):
-    "one-half": ["adjective"], "one-third": ["adjective"], "one-quarter": ["adjective"],
-    "one-fourth": ["adjective"], "one-fifth": ["adjective"],
+    # fraction words: adjective + MULTIPLIER ("two-thirds as far" = ×2/3; "two-thirds OF X" stays the
+    # partitive, kept apart by the following "as" vs "of"). Multiplier last so a tie favours adjective.
+    "one-half": ["adjective", "multiplier"], "one-third": ["adjective", "multiplier"],
+    "one-quarter": ["adjective", "multiplier"], "one-fourth": ["adjective", "multiplier"],
+    "one-fifth": ["adjective", "multiplier"], "two-thirds": ["adjective", "multiplier"],
+    "three-quarters": ["adjective", "multiplier"], "three-fourths": ["adjective", "multiplier"],
+    "two-fifths": ["adjective", "multiplier"], "three-fifths": ["adjective", "multiplier"],
+    "four-fifths": ["adjective", "multiplier"], "one-sixth": ["adjective", "multiplier"],
+    "one-eighth": ["adjective", "multiplier"],
     # --- vocabulary push 2, batch 2 ---
     # family + role nouns:
     "girl": ["noun"], "boy": ["noun"], "brother": ["noun"], "sister": ["noun"], "son": ["noun"],
@@ -774,7 +801,12 @@ def annotate_senses(reading: Reading) -> Reading:
         if "pronoun" in senses:
             u.features["gender"] = PRONOUN_GENDER.get(_key(u.surface))
         if "multiplier" in senses:
-            u.features["value"] = MULTIPLIERS[_key(u.surface)]
+            key = _key(u.surface)
+            if key in FRACTION_MULTIPLIERS:                # "two-thirds" → exact (num, denom) + its value
+                u.features["fraction"] = FRACTION_MULTIPLIERS[key]
+                u.features["value"] = FRACTION_MULTIPLIERS[key][0] / FRACTION_MULTIPLIERS[key][1]
+            else:
+                u.features["value"] = MULTIPLIERS[key]
         if "percent" in senses:
             u.features["value"] = _as_percent(u.surface)
         reading.record("annotate", target=u, before=before, after=dict(u.features),
@@ -1821,7 +1853,11 @@ def _relational_quantity(reading: Reading, context: list):
         referent = next((f for f in reversed(context or []) if isinstance(f, Quantity)), None)
     if referent is None:
         return None
-    expr = f"{_num(mult.features['value'])} * {_num(referent.amount)}"
+    if "fraction" in mult.features:                       # exact: (referent × num) / denom, divide LAST
+        num, denom = mult.features["fraction"]            # ("12 × 2 / 3" = 8, dodging 0.666×12 float drift)
+        expr = f"{_num(referent.amount)} * {num} / {denom}"
+    else:
+        expr = f"{_num(mult.features['value'])} * {_num(referent.amount)}"
     comp = next((u for u in reading.units if "comparative" in u.features.get("senses", [])), None)
     offset = next((u for u in reading.units if "value" in u.features.get("senses", [])), None)
     if comp is not None and offset is not None:          # "FIVE MORE than twice as many as Bob" → 2×Bob+5
@@ -1836,7 +1872,7 @@ def _partitive_quantity(reading: Reading, context: list):
     decides the base: a verb + holder + time ("what he had on Tuesday") → `_holdings_at`; else the
     subject's own current set ("of them"). None if there's no base to take the fraction of."""
     units = reading.units
-    frac = next((u for u in units if _key(u.surface) in FRACTIONS), None)
+    frac = next((u for u in units if _fraction_parts(u.surface) is not None), None)   # unit OR non-unit
     fi = units.index(frac) if frac is not None else -1
     if frac is None or fi + 1 >= len(units) or _key(units[fi + 1].surface) != "of":   # "<frac> OF …"
         return None
@@ -1868,7 +1904,8 @@ def _partitive_quantity(reading: Reading, context: list):
         else _holdings(ref_ent, measure, context or [])
     if base is None:
         return None
-    return Quantity(ent, measure, _compute(f"{_num(base)} / {FRACTIONS[_key(frac.surface)]}"),
+    num, denom = _fraction_parts(frac.surface)            # exact: base × num / denom (divide last)
+    return Quantity(ent, measure, _compute(f"{_num(base)} * {num} / {denom}"),
                     _lemma(main_verb.surface), _time_at(reading, main_verb))
 
 
@@ -3072,7 +3109,7 @@ def _facts_from(reading: Reading, context: list = None) -> list:
                                or _key(scaled.surface) in (COUNT_NOUNS | DIMENSIONS)):  # the number / as long
         rq = _relational_quantity(r, context)            # "<entity> has twice as many" → derived, or
         return [rq] if rq is not None else []            # decline (no referent) — never a bare predication
-    frac = next((u for u in r.units if _key(u.surface) in FRACTIONS), None)
+    frac = next((u for u in r.units if _fraction_parts(u.surface) is not None), None)  # unit OR non-unit
     if frac is not None:                                  # "<fraction> OF <referent>" — a partitive part
         fi = r.units.index(frac)                          # of a holding ("loses half of them" → 0.5×held;
         if fi + 1 < len(r.units) and _key(r.units[fi + 1].surface) == "of":   # "a third of …"; NOT a Freq)

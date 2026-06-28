@@ -2792,5 +2792,29 @@ class TestIncrement102DimensionWords(unittest.TestCase):
         self.assertEqual(reading.solve("Amber worked 12 hours. How many hours did Amber work?"), 12)
 
 
+class TestIncrement103FractionMultipliers(unittest.TestCase):
+    """#103 - fraction words as relational MULTIPLIERS in the "as" frame ("one-third as many", "two-
+    thirds as far") = (num/denom) x the referent, computed EXACTLY (divide last, so 12*1/3 = 4 with no
+    float drift). Distinct from the partitive "one-third OF them" (handled by _partitive_quantity);
+    the following "as" vs "of" keeps them apart."""
+
+    def test_one_third_as_many(self):
+        self.assertEqual(reading.solve("Tom has 12 apples. Mary has one-third as many. "
+                                       "How many apples does Mary have?"), 4)
+
+    def test_two_thirds_as_far(self):
+        self.assertEqual(reading.solve("Anna ran 12 miles. Beth ran two-thirds as far. "
+                                       "How many miles did Beth run?"), 8)
+
+    def test_three_quarters_as_many(self):
+        self.assertEqual(reading.solve("Tom has 8 apples. Mary has three-quarters as many. "
+                                       "How many apples does Mary have?"), 6)
+
+    def test_partitive_of_still_declines_to_partitive(self):
+        # "one-third OF them" stays the partitive subtraction, not a relational multiplier
+        self.assertEqual(reading.solve("Tom has 12 apples. He loses one-third of them. "
+                                       "How many apples does Tom have?"), 8)
+
+
 if __name__ == "__main__":
     unittest.main()
