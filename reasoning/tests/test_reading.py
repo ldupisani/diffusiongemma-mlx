@@ -2414,5 +2414,25 @@ class TestIncrement87VocabularyPush(unittest.TestCase):
         self.assertEqual(reading.deficiencies(reading.analyze("Tom created 5 brownies")), [])
 
 
+class TestIncrement88CombinedGrandTotal(unittest.TestCase):
+    """#88 - "How many <unit> are all <X> COMBINED?" → the GRAND TOTAL: every quantity convertible to the
+    asked unit, summed IN that unit (cross-entity, cross-unit via CONVERSIONS). 2 feet + 16 in + 10 in =
+    50 inches. Gated to a GENERIC population (no NAMED entities — "Tom and Mary altogether" keeps the
+    per-entity fold, which declines if an entity's count is unknown)."""
+
+    def test_christina_combined_with_conversion(self):
+        self.assertEqual(reading.solve("Christina has 3 snakes. 1 snake is 2 feet long. Another snake is "
+                                       "16 inches long. The last snake is 10 inches. How many inches are "
+                                       "all snakes combined?"), 50)
+
+    def test_combined_same_unit(self):
+        self.assertEqual(reading.solve("One box has 5 apples. Another box has 7 apples. "
+                                       "How many apples are all boxes combined?"), 12)
+
+    def test_named_entities_still_per_entity(self):
+        self.assertEqual(reading.answer("How many apples do Tom and Mary have altogether?",
+                                        reading.learn("Tom has 3 apples")), "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -764,7 +764,17 @@ held at 100%. Coverage didn't move: the 8 newly-fully-read problems decline on S
 ceiling, structure is the next wall. The nearest unlocked target is Christina (3 snakes' lengths summed
 with feet→inch conversion) — but it needs multi-entity "all … combined" summation and its question parses
 as a `Subset`, so it's deferred (not a clean win). LESSON: a vocab push is a ceiling move, not a coverage
-move — measure it by `fully-read`, and expect the freed problems to surface the NEXT structural gaps.
+move — measure it by `fully-read`, and expect the freed problems to surface the NEXT structural gaps.  ·
+95. **combined / grand-total question** (coverage 15→16, solves Christina — the vocab-push target). "How
+many <unit> are all <X> COMBINED?" → the GRAND TOTAL: every Quantity convertible to the asked unit, summed
+IN that unit (cross-ENTITY and cross-UNIT via CONVERSIONS): 2 feet + 16 in + 10 in = 50 inches. Triggered
+by `combined`/`altogether`/`total`/`all … together`. GATED to a GENERIC population — `not named`: a
+question with NAMED entities ("Tom and Mary altogether") keeps the per-entity holdings fold, which DECLINES
+when an entity's count is unknown (the grand total would silently sum only the known one — a confident
+wrong). So the distinction is generic-population (sum everything of the measure-family) vs named-entities
+(check each). Precision 100%; 394 tests. SIXTEEN real GSM8K problems solve. LESSON: a "sum everything"
+branch must be fenced off from "sum these specific entities" — the cue is whether the question names them;
+the ceiling→coverage handoff worked exactly as predicted (vocab freed Christina, then structure solved it).
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

@@ -2354,6 +2354,20 @@ def answer(question: str, context: list, discourse: list = None):
         else:                                            # bound nothing (e.g. "how much did he RUN") →
             query = None                                 # can't tell what's asked → decline, not MONEY
     remainder = any(_key(u.surface) in _REMAINDER for u in r.units)
+    keys = {_key(u.surface) for u in r.units}
+    combined = bool(keys & {"combined", "altogether", "total"}) or {"all", "together"} <= keys
+    named = any("name" in u.features.get("senses", []) for u in r.units)   # NAMED entities ("Tom and Mary
+    if combined and query is not None and not named:     # altogether") need the per-entity fold, not this
+        # "How many INCHES are all snakes COMBINED?" — a generic population → the GRAND TOTAL
+        total, found = 0, False                          # GRAND TOTAL: every quantity convertible to the
+        for f in context:                                # asked unit, summed IN that unit (cross-entity,
+            if isinstance(f, Quantity) and f.amount is not None:   # cross-unit via CONVERSIONS)
+                if f.measure == query:
+                    total, found = total + f.amount, True
+                elif (f.measure[0], query[0]) in CONVERSIONS:
+                    total, found = total + f.amount * CONVERSIONS[(f.measure[0], query[0])], True
+        if found:
+            return int(total) if total == int(total) else total
     if query is not None and any("verb" in u.features.get("senses", [])      # "How much <measure> was
                                  and _lemma(u.surface) in DISTRIBUTE_VERBS for u in r.units):  # shared?"
         shared = [f.amount for f in context if isinstance(f, Quantity) and f.measure == query   # → the
