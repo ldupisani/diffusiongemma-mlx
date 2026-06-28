@@ -685,7 +685,18 @@ Runs right after `annotate_senses` (both are value units by then) and before obl
 merged value quantifies its noun normally. So "Mel is three years younger than Katherine; when Katherine
 is two dozen years old; how old will Mel be?" → 24 − 3 = 21. Precision 100%; 365 tests. THIRTEEN real
 GSM8K problems solve. (Remaining named gaps: Joy's per-N-unit rate + "how many hours"; percentage-of-total
-COMPLEMENT (Sanchez); "N times more" (Riku, declined for the 25× vs 26× ambiguity).)
+COMPLEMENT (Sanchez); "N times more" (Riku, declined for the 25× vs 26× ambiguity).)  ·
+88. **per-N-unit rate + cross-unit duration query** (coverage 13→14, solves Joy; completes the rates
+cluster). (a) `Rate` gains `per_amount` (default 1): "8 pages in 20 minutes" → `Rate(joy, 8, page, minute,
+read, per_amount=20)`. `_rate` parses "N <measure> in M <time-unit>" (the "in"-PP whose object is a
+TIME_UNIT) as the per. (b) The inversion branch now also fires on "how many <time-unit>" (not just "how
+long"), computes `target × per_amount ÷ amount` (120 × 20 ÷ 8 = 300 min), and CONVERTS to the asked unit
+(300 min → 5 hours). (c) `_container` no longer reaches across a second preposition — "8 pages of a book IN
+20 minutes" is not 8×20 (vpair(False) stops at the next preposition after "of", the "each" relative clause
+excepted); this latent misfire surfaced once word-numbers made more values live. (d) GUARD 3 counts
+`Rate.per_amount` as a used given. Precision 100%; 369 tests. FOURTEEN real GSM8K problems solve. LESSON:
+a rate is "amount per (per_amount × per_unit)"; once that shape is explicit, both the forward (×) and
+inverse (÷) directions and unit conversion compose from the same four numbers.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

@@ -2259,5 +2259,28 @@ class TestIncrement80NumberScales(unittest.TestCase):
                                        "two dozen years old, how old will Mel be in years?"), 21)
 
 
+class TestIncrement81PerNUnitRateAndDurationQuery(unittest.TestCase):
+    """#81 - per-N-unit rate + cross-unit duration query → Joy. "8 pages in 20 minutes" parses as a Rate
+    with per_amount=20 (8 pages per 20 min); "how many HOURS to read 120 pages" inverts (120 × 20 ÷ 8 =
+    300 min) and converts to the asked unit (300 min → 5 hours). Also _container no longer reaches across
+    a second preposition ("8 pages of a book IN 20 minutes" ≠ 8×20)."""
+
+    def test_per_n_unit_rate(self):
+        self.assertEqual(reading._rate(reading.analyze("Joy can read 8 pages of a book in 20 minutes")),
+                         reading.Rate("joy", 8.0, ("page", frozenset()), "minute", "read", 20.0))
+
+    def test_container_not_across_preposition(self):
+        amounts = [getattr(f, "amount", None) for f in reading.learn("Joy reads 8 pages of a book in 20 minutes")]
+        self.assertNotIn(160.0, amounts)
+
+    def test_joy_solves(self):
+        self.assertEqual(reading.solve("Joy can read 8 pages of a book in 20 minutes. "
+                                       "How many hours will it take her to read 120 pages?"), 5)
+
+    def test_per_n_unit_same_unit_no_conversion(self):
+        self.assertEqual(reading.solve("Sam writes 5 pages in 2 minutes. "
+                                       "How many minutes will it take to write 100 pages?"), 40)
+
+
 if __name__ == "__main__":
     unittest.main()

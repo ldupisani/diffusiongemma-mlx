@@ -611,6 +611,7 @@ NUMBERS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seve
 # Number-SCALE words: a bare scale is its value ("a dozen" → 12); "N scale" MULTIPLIES ("two dozen" → 24,
 # "three hundred" → 300), merged into one value unit by _merge_scales.
 SCALES = {"dozen": 12, "hundred": 100, "thousand": 1000, "million": 1000000, "billion": 1000000000}
+TIME_UNITS = {"second", "minute", "hour", "day", "week", "month", "year"}   # rate per_unit / duration query
 
 
 def annotate_senses(reading: Reading) -> Reading:
@@ -1596,6 +1597,7 @@ class Rate:
     measure: tuple
     per_unit: str
     verb: str
+    per_amount: float = 1            # "8 pages in 20 MINUTES" → amount=8, per_unit=minute, per_amount=20
 
 
 def _rate(reading: Reading):
@@ -1606,6 +1608,7 @@ def _rate(reading: Reading):
     units = reading.units
     per = next((u for u in units if "per" in u.features.get("senses", [])), None)
     rate_val = unit = None
+    per_amount = 1
     if per is not None:                                  # explicit "per"
         rate_val, unit = _follow(per, "rate"), _follow(per, "unit")
     else:                                                # "a"/"an" as per — directly after the measure
@@ -1623,6 +1626,17 @@ def _rate(reading: Reading):
                 if v is not None:
                     rate_val, unit = v, units[k + 1]
                     break
+    if rate_val is None:                                 # "N <measure> in M <time-unit>" — a per-M rate
+        inp = next((u for u in units if _key(u.surface) == "in"), None)
+        tu = _follow(inp, "object") if inp is not None else None
+        if tu is not None and _descriptor(tu)[0] in TIME_UNITS:
+            per_v = next((x for x in units if "value" in x.features.get("senses", [])
+                          and _follow(x, "quantifies") is tu), None)
+            mv = next((x for x in units if "value" in x.features.get("senses", [])
+                       and _follow(x, "quantifies") is not None
+                       and _descriptor(_follow(x, "quantifies"))[0] not in TIME_UNITS), None)
+            if per_v is not None and mv is not None:
+                rate_val, unit, per_amount = mv, tu, per_v.features["value"]
     if rate_val is None or unit is None:
         return None
     verbs = [u for u in units if "verb" in u.features.get("senses", [])]
@@ -1637,7 +1651,7 @@ def _rate(reading: Reading):
     if measure is None:
         return None
     return Rate(_entity(subject), rate_val.features["value"], measure,
-                _descriptor(unit)[0], _lemma(verbs[0].surface))
+                _descriptor(unit)[0], _lemma(verbs[0].surface), per_amount)
 
 
 def _percent_quantity(reading: Reading, context: list):
@@ -1674,6 +1688,12 @@ def _container_quantity(reading: Reading):
     if of is None:
         return None
     oi = units.index(of)
+    each_i = next((units.index(u) for u in units if _key(u.surface) == "each"), None)
+    # the of-PHRASE ends at the next preposition after "of" — a value beyond it ("8 pages of a book IN 20
+    # minutes") belongs to a different phrase, NOT the container (the "each" relative clause is allowed in)
+    next_prep = next((units.index(u) for u in units[oi + 1:]
+                      if "preposition" in u.features.get("senses", [])), len(units))
+    right_bound = max(next_prep, each_i + 1) if each_i is not None else next_prep
 
     def vpair(before: bool):
         for u in units:
@@ -1685,8 +1705,8 @@ def _container_quantity(reading: Reading):
             ui, ni = units.index(u), units.index(n)
             if before and ui < oi and ni < oi:          # "20 PACKETS of …" — count + noun both left
                 return u
-            if not before and ui > oi:                  # "… of 100 GRAMS" — count + noun right of "of"
-                return u
+            if not before and oi < ui < right_bound:    # "… of 100 GRAMS" — count + noun right of "of",
+                return u                                # within the of-phrase (or its "each" rel. clause)
         return None
 
     v1, v2 = vpair(True), vpair(False)
@@ -2200,9 +2220,12 @@ def answer(question: str, context: list, discourse: list = None):
     interro = next((u for u in r.units if "interrogative" in u.features.get("senses", [])), None)
     if interro is None:
         return [Deficiency("not-a-question", interro, "this is not a question I can answer")]
-    if any(_key(u.surface) == "long" for u in r.units):  # "How LONG … to <verb> <target>?" → RATE INVERSION:
-        rate = next((f for f in context if isinstance(f, Rate)), None)        # target ÷ rate, in per_unit
-        if rate is not None:                                                  # ("1200 pages ÷ 20/day = 60")
+    _coll0 = _follow(_follow(interro, "queries"), "collection")               # "how many HOURS" → (hour,…)
+    asked_unit = _descriptor(_coll0)[0] if _coll0 is not None else None
+    is_long = any(_key(u.surface) == "long" for u in r.units)
+    if is_long or asked_unit in TIME_UNITS:              # "How LONG / how many HOURS … to <verb> <target>?"
+        rate = next((f for f in context if isinstance(f, Rate)), None)        # → RATE INVERSION: target ÷
+        if rate is not None:                                                  # rate, in per_unit (convert if
             mv = next((u for u in r.units if "value" in u.features.get("senses", []) and _follow(u, "quantifies")
                        is not None and _descriptor(_follow(u, "quantifies")) == rate.measure), None)
             if mv is not None:
@@ -2211,9 +2234,13 @@ def answer(question: str, context: list, discourse: list = None):
                            and _follow(u, "quantifies") is not None), None)   # "3 BOOKS that are 400 pages"
                 if cv is not None:
                     amt *= cv.features["value"]
-                t = amt / rate.amount
+                t = amt * rate.per_amount / rate.amount   # "120 pages × 20 min ÷ 8 = 300 min"
+                if asked_unit in TIME_UNITS and asked_unit != rate.per_unit \
+                        and (rate.per_unit, asked_unit) in CONVERSIONS:        # 300 min → 5 hours
+                    t *= CONVERSIONS[(rate.per_unit, asked_unit)]
                 return int(t) if t == int(t) else t
-        return "undetermined"
+        if is_long:
+            return "undetermined"                        # a how-long question with no usable rate
     collection = _follow(_follow(interro, "queries"), "collection")   # how → many → its collection
     query = _descriptor(collection) if collection is not None else None
     much = next((u for u in r.units if _key(u.surface) == "much"), None)
@@ -2803,6 +2830,7 @@ def solve(text: str):
             continue                                      # are consumed into the product (2000)
         given |= {u.features["value"] for u in rp.units if "value" in u.features.get("senses", [])}
     used = {f.amount for f in context if isinstance(f, (Quantity, Rate))} \
+        | {f.per_amount for f in context if isinstance(f, Rate)} \
         | {f.count for f in context if isinstance(f, Frequency)}
     if given - used:
         return "undetermined"
