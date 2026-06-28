@@ -2356,5 +2356,25 @@ class TestIncrement84ComplementCategory(unittest.TestCase):
                          "undetermined")
 
 
+class TestIncrement85TitleAbbreviation(unittest.TestCase):
+    """#85 - a title's period ("Mr.", "Dr.") is NOT a sentence end. _sentences keeps "Mr. Sanchez ..." in
+    one sentence (TITLES derived from the lexicon's title words); decimals stay protected too. The existing
+    title-sense handling (the honorific frees the subject) is unchanged. Removes a Sanchez parse blocker."""
+
+    def test_title_does_not_split_sentence(self):
+        self.assertEqual(reading._sentences("Mr. Sanchez has 5 apples. How many does Mr. Sanchez have?"),
+                         ["Mr. Sanchez has 5 apples.", "How many does Mr. Sanchez have?"])
+
+    def test_mr_problem_solves(self):
+        self.assertEqual(reading.solve("Mr. Sanchez has 5 apples. "
+                                       "How many apples does Mr. Sanchez have?"), 5)
+
+    def test_mrs_problem_solves(self):
+        self.assertEqual(reading.solve("Mrs. Lee sold 12 cakes. How many cakes did Mrs. Lee sell?"), 12)
+
+    def test_decimal_still_not_split(self):
+        self.assertEqual(reading._sentences("The price is $5.50 today."), ["The price is $5.50 today."])
+
+
 if __name__ == "__main__":
     unittest.main()

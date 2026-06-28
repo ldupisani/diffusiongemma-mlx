@@ -733,7 +733,16 @@ embeds the category clause, "B and above" splits on "and", the total "60 student
 "if" clause, and "below B" ⊥ "B and above" is a THRESHOLD complement (not the lexical "rest" cue). The
 other real "rest" problems (tables, Henry) are 4–6 step. PRINCIPLE: build the requested model cleanly on
 its explicit signal; do NOT hack through Sanchez's parse thicket. Next: the abbreviation/embedding/and-split
-parse fixes (general, unblock many), then the threshold complement, would let Sanchez through.
+parse fixes (general, unblock many), then the threshold complement, would let Sanchez through.  ·
+92. **title abbreviation doesn't end a sentence** (parse fix; coverage unchanged at 15). A title's period
+("Mr.", "Dr.", "Prof.") is NOT a sentence terminator — `_sentences` now keeps "Mr. Sanchez …" whole
+(alongside the decimal exception). `TITLES` is DERIVED from the lexicon's title-sense words (single source
+of truth), not a second hardcoded list. NOTE: titles were ALREADY recognised (the #69 "title" sense frees
+the verb's subject) — the only bug was the sentence split; a first stab adding a `_drop_titles` step was
+WRONG (redundant, and it broke the #69 title-sense test). So this is a one-line fix in `_sentences`, not a
+new mechanism. Removes one of Sanchez's five blockers (the other four: `that`-embedding, `and`-split of "B
+and above", forward-ref total, threshold complement). Precision 100%; 385 tests. LESSON: before adding a
+mechanism, check what already exists — the title machinery was there; only the tokenizer needed the fix.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

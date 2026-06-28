@@ -609,6 +609,7 @@ LEXICON: dict[str, list[str]] = {
 COMPOUNDS = {k for k in LEXICON if " " in k}
 
 # Number words → their value, for "there are N <collection>" statements that introduce instances.
+TITLES = {w for w, s in LEXICON.items() if s == ["title"]}   # honorifics; a trailing "." is not a sentence end
 NUMBERS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
            "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12}
 # Number-SCALE words: a bare scale is its value ("a dozen" → 12); "N scale" MULTIPLIES ("two dozen" → 24,
@@ -2944,14 +2945,16 @@ def _obligation_summary(unit: "Unit") -> str:
 
 
 def _sentences(text: str) -> list:
-    """Split text into sentences on . ? ! (keeping the terminator). No regex — stdlib only. A "." flanked
-    by digits is a DECIMAL ("$5.50"), not a sentence end."""
+    """Split text into sentences on . ? ! (keeping the terminator). No regex — stdlib only. A "." is NOT a
+    sentence end when it is a DECIMAL ("$5.50") or a TITLE abbreviation ("Mr. Sanchez")."""
     out, cur = [], ""
     for i, ch in enumerate(text):
         cur += ch
         if ch in ".?!" and cur.strip():
             if ch == "." and i and text[i - 1].isdigit() and i + 1 < len(text) and text[i + 1].isdigit():
                 continue                             # decimal point, e.g. "5.50" — keep the token whole
+            if ch == "." and cur.strip().split()[-1].rstrip(".").lower() in TITLES:
+                continue                             # "Mr." / "Dr." — an honorific, not a sentence end
             out.append(cur.strip())
             cur = ""
     if cur.strip():
