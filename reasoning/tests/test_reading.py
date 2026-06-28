@@ -2330,5 +2330,31 @@ class TestIncrement83PercentOfCount(unittest.TestCase):
                                        "How many students failed?"), "undetermined")
 
 
+class TestIncrement84ComplementCategory(unittest.TestCase):
+    """#84 - the COMPLEMENT/category model: "the REST <verb>" → population total − Σ(stated subsets of the
+    same measure). "60 students; 40 passed; the rest failed" → 20; with a percent subset → 36. Summed by
+    MEASURE (plural-subject entity keying is inconsistent). The complement needs an EXPLICIT signal (rest/
+    remainder/others) and a known total — never assumed, else decline."""
+
+    def test_count_complement(self):
+        self.assertEqual(reading.solve("A class has 60 students. 40 students passed. The rest failed. "
+                                       "How many students failed?"), 20)
+
+    def test_percent_complement(self):
+        self.assertEqual(reading.solve("A class has 60 students. 40% of the students passed. The rest "
+                                       "failed. How many students failed?"), 36)
+
+    def test_rest_learn(self):
+        self.assertEqual(reading.learn("The rest failed", [],
+                                       [reading.Quantity("class", ("student", frozenset()), 60, "have"),
+                                        reading.Quantity("student", ("student", frozenset()), 40, "pass")]),
+                         [reading.Quantity("student", ("student", frozenset()), 20, "fail")])
+
+    def test_no_total_declines(self):
+        # no population total → no complement count → decline (never a guessed number)
+        self.assertEqual(reading.solve("40 students passed. The rest failed. How many students failed?"),
+                         "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()

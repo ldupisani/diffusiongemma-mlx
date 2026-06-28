@@ -719,7 +719,21 @@ COVERAGE: the real percent problems need MORE than the partitive — Sanchez wan
 ("B and above" = not "below B" = 100%−40%), Adam wants multi-class subtraction. We DECLINE those (no
 complement/category model) rather than guess — "how many failed" from "40% passed" → undetermined.
 PRINCIPLE: a correct, general, tested capability is a legitimate increment even when this slice's coverage
-doesn't move; forcing the complement would be a guess. The complement/category model is the next real step.
+doesn't move; forcing the complement would be a guess. The complement/category model is the next real step.  ·
+91. **complement/category model** (capability; coverage unchanged at 15 — honest). "The REST <verb>" → the
+population total − Σ(the stated subsets of the same MEASURE): "60 students; 40 passed; the rest failed" →
+20; with a percent subset → 36. `_rest_quantity` reads the population from a have/be total and sums the
+other (event) quantities of that measure — by MEASURE not entity (a plural subject like "40 students" is
+keyed "students", a percent-of-count "student" — an inconsistency the measure-sum sidesteps). The
+complement requires an EXPLICIT signal (`rest`/`remainder`/`others`) AND a known total — never assumed
+(no total → a non-numeric fact → decline; we don't infer "failed = total − passed" without the cue).
+Precision 100%; 381 tests. WHY NO COVERAGE: the motivating Sanchez has FIVE compounding parse blockers, of
+which the complement is one — "Mr." splits the sentence (abbreviation), "found out THAT 40% … got below B"
+embeds the category clause, "B and above" splits on "and", the total "60 students" is a forward-ref in an
+"if" clause, and "below B" ⊥ "B and above" is a THRESHOLD complement (not the lexical "rest" cue). The
+other real "rest" problems (tables, Henry) are 4–6 step. PRINCIPLE: build the requested model cleanly on
+its explicit signal; do NOT hack through Sanchez's parse thicket. Next: the abbreviation/embedding/and-split
+parse fixes (general, unblock many), then the threshold complement, would let Sanchez through.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

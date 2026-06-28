@@ -572,6 +572,7 @@ LEXICON: dict[str, list[str]] = {
     "their": ["pronoun"], "its": ["pronoun"],
     # "what remains" markers — route a count question to the holdings fold:
     "left": ["adjective"], "remaining": ["adjective"], "leftover": ["adjective"], "rest": ["noun"],
+    "remainder": ["noun"], "others": ["noun"],   # complement markers — "the REST/others <verb>" (_rest_quantity)
     "remain": ["verb"], "remains": ["verb"],
     "earn": ["verb"], "earns": ["verb"], "earned": ["verb"],
     "work": ["verb"], "works": ["verb"], "worked": ["verb"],
@@ -1656,6 +1657,35 @@ def _rate(reading: Reading):
                 _descriptor(unit)[0], _lemma(verbs[0].surface), per_amount)
 
 
+REST_WORDS = {"rest", "remainder", "others"}
+
+
+def _rest_quantity(reading: Reading, context: list):
+    """The COMPLEMENT category — "the REST <verb>" → the population total − Σ(the stated subsets of the same
+    measure). The population is a have/be quantity ("a class HAS 60 students"); the subsets are the other
+    quantities of that measure ("40 passed" / a percent-of-count). Summed by MEASURE (entity keying of a
+    plural subject is inconsistent), so e.g. "60 students; 40 passed; the rest failed" → 20 failed."""
+    units = reading.units
+    rest = next((u for u in units if _key(u.surface) in REST_WORDS), None)
+    if rest is None:
+        return None
+    verbs = [u for u in units if "verb" in u.features.get("senses", [])
+             and _key(u.surface) not in ("is", "are", "was", "were")]
+    if len(verbs) != 1:
+        return None
+    subj = _follow(verbs[0], "subject")
+    if subj is None or _key(subj.surface) not in REST_WORDS:   # "the rest" must BE the subject
+        return None
+    totals = [f for f in context if isinstance(f, Quantity)    # the population: a have/be total
+              and f.verb in ("have", "be") and f.amount is not None]
+    if not totals:
+        return None
+    total = totals[-1]
+    subs = [f.amount for f in context if isinstance(f, Quantity) and f.measure == total.measure
+            and f.verb not in ("have", "be") and f.amount is not None]
+    return Quantity(total.measure[0], total.measure, total.amount - sum(subs), _lemma(verbs[0].surface))
+
+
 def _percent_quantity(reading: Reading, context: list):
     """A percentage OF A HOLDING/COUNT. Two shapes: (a) NO explicit base — "puts 20% more money" → 0.2 ×
     the matching prior quantity (the portion; its base is the referent a noun here names). (b) base is a
@@ -2714,6 +2744,9 @@ def _facts_from(reading: Reading, context: list = None) -> list:
     pq = _percent_quantity(r, context)                   # "puts 20% more money" → 0.2 × holding?
     if pq is not None:
         return [pq]
+    rq = _rest_quantity(r, context)                      # "the REST failed" → total − Σ(stated subsets)?
+    if rq is not None:
+        return [rq]
     pct = next((u for u in r.units if "percent" in u.features.get("senses", [])), None)
     if pct is not None and _follow(pct, "base") is None \
             and len([u for u in r.units if "verb" in u.features.get("senses", [])]) == 1 \
