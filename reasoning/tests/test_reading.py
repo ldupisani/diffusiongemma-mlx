@@ -2132,5 +2132,38 @@ class TestIncrement75ContainerMultiplication(unittest.TestCase):
                           reading.Quantity("tom", ("orange", frozenset()), 2.0, "have")])
 
 
+class TestIncrement76RelativeClauseAndCrossEntityRate(unittest.TestCase):
+    """#76 - finishing James-beef. Relative-clause multiplication ("5 packs of beef THAT ARE 4 pounds
+    each" → 20; the copula no longer breaks it); a decimal "$5.50" no longer splits the sentence; "the
+    price OF beef is" binds price as subject (PP objects excluded); "on MONDAY" binds the time as the prep
+    object (name stays free); a CROSS-ENTITY money rate ($5.50/lb on James's pounds); and "he" prefers a
+    PERSON over a thing ("price")."""
+
+    def test_relative_clause_multiplication(self):
+        self.assertEqual(reading.learn("James buys 5 packs of beef that are 4 pounds each"),
+                         [reading.Quantity("james", ("pound", frozenset()), 20.0, "buy")])
+
+    def test_decimal_not_split(self):
+        self.assertEqual(reading._sentences("The price of beef is $5.50 per pound."),
+                         ["The price of beef is $5.50 per pound."])
+
+    def test_price_of_beef_subject(self):
+        r = reading.analyze("The price of beef is $5.50 per pound")
+        is_v = next(u for u in r.units if u.surface == "is")
+        self.assertEqual(reading._follow(is_v, "subject").surface, "price")
+
+    def test_on_monday_keeps_name_as_subject(self):
+        self.assertEqual(reading.learn("On Monday Tom has 30 apples"),
+                         [reading.Quantity("tom", ("apple", frozenset()), 30.0, "have", "monday")])
+
+    def test_cross_entity_rate_james_beef(self):
+        self.assertEqual(reading.solve("James buys 5 packs of beef that are 4 pounds each. "
+                                       "The price of beef is $5.50 per pound. How much did he pay?"), 110)
+
+    def test_he_prefers_person_over_thing(self):
+        self.assertEqual(reading.solve("James buys 4 pounds of beef. The price of beef is $5 per pound. "
+                                       "How much did he pay?"), 20)
+
+
 if __name__ == "__main__":
     unittest.main()

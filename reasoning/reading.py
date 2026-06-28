@@ -727,9 +727,9 @@ def _find_target(need, u, i, units, pos):
                   and pos[id(x)] > i]
             return rv[0] if rv else None
         return r[0] if r else None
-    if need == "object":          # a preposition's object: the nearest noun OR NAME to its right
-        r = right("noun", "name")  # (names too, so "than WILLIAM" binds — comparatives compare people)
-        return r[0] if r else None
+    if need == "object":          # a preposition's object: the nearest noun / NAME / TIME to its right
+        r = right("noun", "name", "time")   # name → "than WILLIAM"; time → "on MONDAY" (so the time, not
+        return r[0] if r else None          # a following name, is the object — keeps the name free as subj)
     if need == "determines":      # an article determines the NEAREST noun to its right ("a certain
         r = right("noun")         # amount of money" → amount, not "unique noun anywhere" which failed
         return r[0] if r else None   # when a following "of money"/object added a second noun)
@@ -748,7 +748,10 @@ def _find_target(need, u, i, units, pos):
                        and pos[id(x)] < pos[id(ax)]]                          # just before the aux, past
                 if bef:                                                      # the fronted "how much money"
                     return max(bef, key=lambda x: pos[id(x)])
-        ll = left("noun", "name", "pronoun")            # else the unique noun/name/pronoun to the LEFT
+        ll = left("noun", "name", "pronoun")            # else the unique noun/name/pronoun to the LEFT,
+        pp_obj = {id(_follow(p, "object")) for p in units    # EXCLUDING a preposition's object ("the price
+                  if has(p, "preposition") and _follow(p, "object") is not None}   # OF beef is …" → price,
+        ll = [x for x in ll if id(x) not in pp_obj]     # not beef, which sits inside the PP)
         if len(ll) == 1:
             return ll[0]
         if not ll:                                      # none to the left → fronted, take the first RIGHT
@@ -1197,12 +1200,23 @@ def _entity(unit) -> str:
     return _key(unit.surface)
 
 
+def _disc_pair(e):
+    """A discourse entry as (entity, is_name) — tolerating a bare entity string (treated as a name)."""
+    return e if isinstance(e, tuple) else (e, True)
+
+
 def _pick_antecedent(gender, discourse: list):
-    """The antecedent for a pronoun of `gender` from `discourse` (entity names, most-recent LAST): the
-    most recent gender-compatible entity, else the most recent. None if the discourse is empty."""
-    compatible = [n for n in discourse
-                  if gender in (None, "plural") or NAME_GENDER.get(n) in (None, gender)]
-    pool = compatible or discourse
+    """The antecedent for a pronoun of `gender` from `discourse` (a list of (entity, is_name) most-recent
+    LAST). A gendered pronoun ("he"/"she") prefers the most recent NAME of compatible gender — a PERSON,
+    not a thing like "price"; "it"/"they" take the most recent compatible entity. None if empty."""
+    pairs = [_disc_pair(e) for e in discourse]
+    ents = [e for e, _ in pairs]
+    if gender in ("masculine", "feminine"):              # he/she → a person (named), gender-compatible
+        names = [e for e, is_name in pairs if is_name and NAME_GENDER.get(e) in (None, gender)]
+        if names:
+            return names[-1]
+    compatible = [e for e in ents if gender in (None, "plural") or NAME_GENDER.get(e) in (None, gender)]
+    pool = compatible or ents
     return pool[-1] if pool else None
 
 
@@ -1241,8 +1255,8 @@ def _resolve_references(reading: Reading, discourse: list) -> None:
         if ref_ob is None or ref_ob.met:
             continue
         if u.features.get("gender") == "plural":         # "they"/"them" → the GROUP of all prior
-            members = list(dict.fromkeys(discourse))     # distinct entities (a collective, like a
-            if not members:                              # conjoined subject) → _question_subjects expands
+            members = list(dict.fromkeys(_disc_pair(e)[0] for e in discourse))   # distinct entities (a collective,
+            if not members:                              # like a conjoined subject) → _question_subjects expands
                 continue
             antecedent = " and ".join(members)
             before = dict(u.features)
@@ -1596,8 +1610,9 @@ def _container_quantity(reading: Reading):
     straddling "of" (N containers of M units each) multiply; the measure is the INNER unit. None unless a
     value quantifies a noun on EACH side of an "of"."""
     units = reading.units
-    verbs = [u for u in units if "verb" in u.features.get("senses", [])]
-    subject = _follow(verbs[0], "subject") if len(verbs) == 1 else None
+    verbs = [u for u in units if "verb" in u.features.get("senses", [])      # the MAIN verb — a relative-
+             and _key(u.surface) not in ("is", "are", "was", "were")]        # clause copula ("that ARE 4
+    subject = _follow(verbs[0], "subject") if len(verbs) == 1 else None       # pounds each") doesn't count
     if subject is None:
         return None
     of = next((u for u in units if _key(u.surface) == "of"), None)
@@ -1635,8 +1650,9 @@ def _distributed_quantity(reading: Reading):
     each = next((u for u in units if _key(u.surface) == "each"), None)
     if each is None:
         return None
-    verbs = [u for u in units if "verb" in u.features.get("senses", [])]
-    subject = _follow(verbs[0], "subject") if len(verbs) == 1 else None
+    verbs = [u for u in units if "verb" in u.features.get("senses", [])      # MAIN verb — a relative-clause
+             and _key(u.surface) not in ("is", "are", "was", "were")]        # copula ("books that ARE 400
+    subject = _follow(verbs[0], "subject") if len(verbs) == 1 else None       # pages each") doesn't count
     ei = units.index(each)
     if subject is None or ei == 0 or "noun" not in units[ei - 1].features.get("senses", []):
         return None
@@ -2210,6 +2226,9 @@ def answer(question: str, context: list, discourse: list = None):
                     continue
                 rate = next((f for f in context if isinstance(f, Rate) and f.entity == ent     # rate ×
                              and f.measure == query and f.verb == q_verb), None)                # per-unit
+                if rate is None and query == MONEY:         # CROSS-ENTITY price: "$5.50 per pound" (stated
+                    rate = next((f for f in context if isinstance(f, Rate) and f.measure == MONEY  # of beef/
+                                 and _holdings(ent, (f.per_unit, frozenset()), context) is not None), None)
                 per_qty = _holdings(ent, (rate.per_unit, frozenset()), context) if rate else None
                 if per_qty is None and rate is not None:    # "…write in 3 DAYS?" — per-unit count is in
                     per_qty = next((u.features["value"] for u in r.units    # the QUESTION, not a premise
@@ -2355,11 +2374,12 @@ def learn(statement: str, discourse: list = None, context: list = None) -> list:
     if discourse is not None:
         _resolve_references(r, discourse)
     facts = _facts_from(r, context)
-    if discourse is not None:                            # remember this statement's subject entity
-        verbs = [u for u in r.units if "verb" in u.features.get("senses", [])]
-        subj = _follow(verbs[0], "subject") if len(verbs) == 1 else None
-        if subj is not None:
-            discourse.append(_entity(subj))
+    if discourse is not None:                            # remember this statement's subject as a discourse
+        verbs = [u for u in r.units if "verb" in u.features.get("senses", [])   # entry (entity, is_name) —
+                 and _key(u.surface) not in ("is", "are", "was", "were")]       # MAIN verb (skip a relative
+        subj = _follow(verbs[0], "subject") if len(verbs) == 1 else None        # copula, so "James buys …
+        if subj is not None:                                                    # that are …" still records
+            discourse.append((_entity(subj), "name" in subj.features.get("senses", [])))   # James)
     return facts
 
 
@@ -2758,11 +2778,14 @@ def _obligation_summary(unit: "Unit") -> str:
 
 
 def _sentences(text: str) -> list:
-    """Split text into sentences on . ? ! (keeping the terminator). No regex — stdlib only."""
+    """Split text into sentences on . ? ! (keeping the terminator). No regex — stdlib only. A "." flanked
+    by digits is a DECIMAL ("$5.50"), not a sentence end."""
     out, cur = [], ""
-    for ch in text:
+    for i, ch in enumerate(text):
         cur += ch
         if ch in ".?!" and cur.strip():
+            if ch == "." and i and text[i - 1].isdigit() and i + 1 < len(text) and text[i + 1].isdigit():
+                continue                             # decimal point, e.g. "5.50" — keep the token whole
             out.append(cur.strip())
             cur = ""
     if cur.strip():

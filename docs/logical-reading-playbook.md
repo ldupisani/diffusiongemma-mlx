@@ -635,7 +635,17 @@ the asked measure, converts a held quantity in a same-family unit ("how many KIL
 held → grams×1/1000). So "20 packets of 100 grams of sugar … how many kilograms?" → 2000 g → 2 kg. EIGHT
 real GSM8K problems solve. Precision 100%; 341 tests. (The relative-clause forms "5 packs of beef THAT ARE
 4 pounds each" / "3 books that are 400 pages each" still decline — the "that are" adds a second verb;
-that's the next gap, alongside rate inversion.)
+that's the next gap, alongside rate inversion.)  ·
+83. **relative-clause multiplication + cross-entity rate → James-beef** (coverage 8→9). Five interlocking
+fixes, all flushed out by one problem. (a) RELATIVE-CLAUSE multiplication: `_container`/`_distributed` use
+the MAIN (non-copula) verb, so "5 packs of beef THAT ARE 4 pounds each" → 20 (the "that are" copula no
+longer breaks single-verb). (b) DECIMAL-aware `_sentences`: a "." flanked by digits ("$5.50") is not a
+sentence end. (c) PP-OBJECT exclusion from subjects: "the price OF beef is …" → subject `price`, not
+`beef` (a noun inside a PP can't be the subject). (d) Prep `object` accepts a TIME: "on MONDAY Tom …" →
+on→Monday (so the time, not the trailing name, is the object — Tom stays the subject). (e) CROSS-ENTITY
+money rate: "how much did he pay" applies a `$/unit` price (any entity) to the asker's units (James's 20
+lb × $5.50 = 110). And coreference now stores (entity, is_name): a gendered "he"/"she" prefers a PERSON
+name over a thing — "he" → James, not "price". NINE real GSM8K problems solve. Precision 100%; 347 tests.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
