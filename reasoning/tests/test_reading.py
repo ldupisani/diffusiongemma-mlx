@@ -2525,5 +2525,27 @@ class TestIncrement92HyphenCompounds(unittest.TestCase):
                                        "How long will it take him to write a 120-page book?"), 6)
 
 
+class TestIncrement93GrowthProjection(unittest.TestCase):
+    """#93 - GROWTH PROJECTION: a quantity growing at a RATE per year, valued at a future time → current +
+    rate × Δ (the explicit-rate generalization of the age shift, which is rate 1/year). "Haley grows 3
+    inches/year; currently 20; after 10 years?" → 20 + 3×10 = 50. "every <unit>" is a per-marker; "after N
+    years" is a +N time offset."""
+
+    def test_every_year_is_a_rate(self):
+        self.assertEqual(reading._rate(reading.analyze("Haley grows 3 inches every year")),
+                         reading.Rate("haley", 3.0, ("inch", frozenset()), "year", "grow", 1))
+
+    def test_after_n_years_offset(self):
+        self.assertEqual(reading._time_offset(reading.analyze("her height after 10 years")), 10)
+
+    def test_haley_growth_projection(self):
+        self.assertEqual(reading.solve("Haley grows at the rate of 3 inches every year. If she is "
+                                       "currently 20 inches tall, what will be her height after 10 years?"), 50)
+
+    def test_age_shift_unaffected(self):
+        self.assertEqual(reading.solve("Herbert is 10 years younger than Kris. If Kris is 24 years old "
+                                       "now, how old will Herbert be next year?"), 15)
+
+
 if __name__ == "__main__":
     unittest.main()

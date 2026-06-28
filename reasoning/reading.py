@@ -1519,6 +1519,7 @@ def _holdings(entity: str, measure: tuple, context: list):
 # verb is a CHANGE (a delta applied to the running value). The distinction only matters once values are
 # spread across an ordered timeline (`_holdings_at`); the timeless fold treats all as signed deltas.
 STATE_VERBS = {"have", "be"}
+GROWTH_VERBS = {"grow", "gain", "increase", "rise", "lengthen"}   # a rate of these advances a value over time
 
 # Verbs whose RESULT is itself a measure — their nominalisation is a quantity ("earn" → "earnings"). Lets
 # "how MUCH did X earn" bind `much` to the verb (the earnings) and read the measure off it, instead of a
@@ -1559,7 +1560,7 @@ def _time_offset(reading: Reading) -> float:
                and _descriptor(_follow(u, "quantifies"))[0] == "year"), None)
     if "ago" in surf:                                    # "N years ago" (a bare "a year ago" → 1)
         return -(yv if yv is not None else 1)
-    if "in" in surf and yv is not None:                  # "in N years"
+    if (surf & {"in", "after"}) and yv is not None:      # "in N years" / "after N years"
         return yv
     if "next" in attrs:                                  # "next year"
         return 1
@@ -1792,9 +1793,9 @@ def _rate(reading: Reading):
     per_amount = 1
     if per is not None:                                  # explicit "per"
         rate_val, unit = _follow(per, "rate"), _follow(per, "unit")
-    else:                                                # "a"/"an" as per — directly after the measure
+    else:                                                # "a"/"an"/"every"/"each" as per — after the measure
         for k in range(1, len(units) - 1):
-            if _key(units[k].surface) not in ("a", "an") \
+            if _key(units[k].surface) not in ("a", "an", "every", "each") \
                     or "noun" not in units[k + 1].features.get("senses", []):
                 continue
             prev = units[k - 1]
@@ -2343,6 +2344,15 @@ def answer(question: str, context: list, discourse: list = None):
         val = translate.run_program(
             f"answer = {percent.features['value']} * {base.features['value']}")
         return int(val) if val == int(val) else val
+    proj_offset = _time_offset(r)                        # GROWTH PROJECTION: a quantity that grows at a
+    if proj_offset:                                      # RATE per year, valued at a future time → current
+        growth = next((f for f in context if isinstance(f, Rate) and f.per_unit == "year"   # + rate×Δ. The
+                       and f.verb in GROWTH_VERBS), None)        # explicit-rate generalisation of the age
+        if growth is not None:                                   # shift ("grows 3 inches/yr; 20 now; after
+            base = _holdings(growth.entity, growth.measure, context)   # 10 yrs?" → 20 + 3×10 = 50)
+            if base is not None:
+                t = base + growth.amount * proj_offset
+                return int(t) if t == int(t) else t
     if any("interrogative" in u.features.get("senses", []) for u in r.units) \
             and any(_key(u.surface) == "old" for u in r.units):   # "How old is/will X be?" → age (years)
         offset = _time_offset(r)                         # the queried time vs now — age TRACKS the timeline:

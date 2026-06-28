@@ -817,7 +817,20 @@ values (worst case stays a decline, never a confident error). Composes immediate
 "John writes 20 pages a day; how long to write a 120-page book?" → 120 ÷ 20 = 6 (a synthetic; the real
 120-page/2-hour problems are multi-step, hence coverage held). Precision 100%; 410 tests. LESSON: the two
 tokenizer fixes (contractions, hyphens) share a shape — a single surface token standing for several words;
-fix it ONCE at the tokenizer seam and it composes with every downstream extractor, no per-site changes.
+fix it ONCE at the tokenizer seam and it composes with every downstream extractor, no per-site changes.  ·
+100. **growth projection** (coverage 16→17, solves Haley — mined from the now-larger fully-read set). A
+quantity growing at a RATE per year, valued at a FUTURE time → `current + rate × Δ`. This is the
+explicit-rate GENERALISATION of the age shift (age is just rate 1/year): "Haley grows 3 inches every year;
+currently 20 inches; her height after 10 years?" → 20 + 3×10 = 50. THREE coherent pieces: (a) `every`/`each
+<unit>` is a per-marker in `_rate` (like `a`/`an`), so "3 inches every year" → `Rate(.., inch, 3, year,
+grow)`; (b) `_time_offset` handles "after N years" (+N, like "in N years"); (c) a projection branch — when
+a future offset and a `GROWTH_VERBS` per-year rate both exist, return `_holdings(current) + rate×offset`.
+Gated on the grown rate existing, so age questions (no grow-rate) still take the age branch. The query word
+("height") is IGNORED — the structure (growth rate + current value + future offset) drives it, not the
+noun. Precision 100%; 414 tests. SEVENTEEN real GSM8K problems solve. LESSON: the ceiling→coverage handoff
+again — two vocab rounds + the tokenizer fixes raised fully-read to 22.7%, and mining that larger set
+surfaced Haley as the cleanest target (2/2 premises already parsed); the win was one new ASSEMBLY step
+(projection) over facts the parser already produced.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
