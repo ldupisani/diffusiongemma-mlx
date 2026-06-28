@@ -158,6 +158,33 @@ PLURALS = {
     "presents": "present", "plates": "plate", "bowls": "bowl", "spoons": "spoon", "forks": "fork",
     "pans": "pan", "pots": "pot", "dolphins": "dolphin", "steps": "step", "levels": "level",
     "scores": "score", "grades": "grade",
+    "mornings": "morning", "evenings": "evening", "afternoons": "afternoon", "nights": "night",
+    "weeks": "week", "weekends": "weekend", "months": "month", "hours": "hour", "minutes": "minute",
+    "pizzas": "pizza", "eggs": "egg", "cookies": "cookie", "cakes": "cake", "pies": "pie",
+    "sandwiches": "sandwich", "meals": "meal", "snacks": "snack", "drinks": "drink", "sodas": "soda",
+    "donuts": "donut", "muffins": "muffin", "discounts": "discount", "shoes": "shoe", "bills": "bill",
+    "coins": "coin", "prizes": "prize", "tickets": "ticket", "sales": "sale", "items": "item",
+    "stores": "store", "shops": "shop", "markets": "market", "tips": "tip", "fees": "fee",
+    "taxes": "tax", "bonuses": "bonus", "sizes": "size", "rates": "rate", "ratios": "ratio",
+    "machines": "machine", "packs": "pack", "containers": "container", "practices": "practice",
+    "seasons": "season", "computers": "computer", "libraries": "library", "plans": "plan",
+    "lessons": "lesson", "tests": "test", "exams": "exam", "quizzes": "quiz", "projects": "project",
+    "courses": "course", "movies": "movie", "bikes": "bike", "episodes": "episode", "games": "game",
+    "matches": "match", "songs": "song", "shows": "show", "races": "race", "recipes": "recipe",
+    "restaurants": "restaurant", "halls": "hall", "gallons": "gallon", "miles": "mile",
+    "pounds": "pound", "kilometers": "kilometer", "birthdays": "birthday", "gifts": "gift",
+    "boxes": "box", "jars": "jar", "bottles": "bottle", "cans": "can", "geckos": "gecko",
+    "pills": "pill", "pets": "pet", "shelves": "shelf", "bags": "bag", "baskets": "basket",
+    "girls": "girl", "boys": "boy", "brothers": "brother", "sisters": "sister", "sons": "son",
+    "daughters": "daughter", "uncles": "uncle", "aunts": "aunt", "cousins": "cousin",
+    "neighbors": "neighbor", "kids": "kid", "doctors": "doctor", "nurses": "nurse",
+    "managers": "manager", "drivers": "driver", "farmers": "farmer", "bakers": "baker",
+    "teachers": "teacher", "students": "student", "workers": "worker", "customers": "customer",
+    "employees": "employee", "puppies": "puppy", "kittens": "kitten", "classmates": "classmate",
+    "heights": "height", "lengths": "length", "widths": "width", "areas": "area", "lawns": "lawn",
+    "trucks": "truck", "offices": "office", "loads": "load", "goals": "goal", "plants": "plant",
+    "theaters": "theater", "packets": "packet", "weekdays": "weekday", "wages": "wage",
+    "salaries": "salary",
 }
 
 
@@ -202,7 +229,8 @@ MULTIPLIERS = {"once": 1, "twice": 2, "thrice": 3, "half": 0.5}
 # Unit-fraction words → their DENOMINATOR (for partitives "half/a third/a quarter OF …"). Stored as the
 # denominator so the fraction of a holding is `base / n` (exact when it divides — avoids 1/3 float drift).
 FRACTIONS = {"half": 2, "third": 3, "fourth": 4, "quarter": 4, "fifth": 5, "sixth": 6,
-             "eighth": 8, "tenth": 10}
+             "eighth": 8, "tenth": 10,
+             "one-half": 2, "one-third": 3, "one-quarter": 4, "one-fourth": 4, "one-fifth": 5}
 
 # Coreference: a pronoun's grammatical gender, and a small name→gender lexicon used to pick a
 # compatible antecedent. Both grown deliberately (no guessing from spelling).
@@ -282,7 +310,8 @@ LEXICON: dict[str, list[str]] = {
     "there": ["existential"],   # existential "there are …" — introduces instances into the context
     "are": ["verb"], "is": ["verb"], "was": ["verb"], "were": ["verb"],   # copulas (also link a complement)
     "one": ["number"], "two": ["number"], "three": ["number"],   # a number is a quantifier with a
-    "four": ["number"], "five": ["number"],                      # VALUE (see NUMBERS)
+    "four": ["number"], "five": ["number"], "six": ["number"], "seven": ["number"],   # VALUE (NUMBERS)
+    "eight": ["number"], "nine": ["number"], "ten": ["number"], "eleven": ["number"], "twelve": ["number"],
     "did": ["auxiliary"], "does": ["auxiliary"], "do": ["auxiliary"],  # yes/no question markers
     "and": ["conjunction"],   # conjoins items ("Tom and Mary")
     "altogether": ["aggregator"], "total": ["aggregator"],   # fold a set of quantities (sum)
@@ -371,6 +400,50 @@ LEXICON: dict[str, list[str]] = {
     "studied": ["verb"], "watch": ["verb"], "watches": ["verb"], "watched": ["verb"],
     "play": ["verb"], "plays": ["verb"], "played": ["verb"], "ride": ["verb"], "rides": ["verb"],
     "rode": ["verb"],
+    # verbs (vocabulary push 2):
+    "work": ["verb"], "works": ["verb"], "working": ["verb"], "worked": ["verb"],
+    "hold": ["verb"], "holds": ["verb"], "holding": ["verb"], "held": ["verb"],
+    "go": ["verb"], "goes": ["verb"], "going": ["verb"], "went": ["verb"], "gone": ["verb"],
+    "collect": ["verb"], "collects": ["verb"], "collecting": ["verb"], "collected": ["verb"],
+    "save": ["verb"], "saves": ["verb"], "saving": ["verb"], "saved": ["verb"],
+    "purchase": ["verb"], "purchases": ["verb"], "purchasing": ["verb"], "purchased": ["verb"],
+    "charge": ["verb"], "charges": ["verb"], "charging": ["verb"], "charged": ["verb"],
+    "share": ["verb"], "shares": ["verb"], "sharing": ["verb"], "shared": ["verb"],
+    "receive": ["verb"], "receives": ["verb"], "receiving": ["verb"], "received": ["verb"],
+    "pay": ["verb"], "pays": ["verb"], "paying": ["verb"], "paid": ["verb"],
+    "need": ["verb"], "needs": ["verb"], "needing": ["verb"], "needed": ["verb"],
+    "want": ["verb"], "wants": ["verb"], "wanting": ["verb"], "wanted": ["verb"],
+    "keep": ["verb"], "keeps": ["verb"], "keeping": ["verb"], "kept": ["verb"],
+    "bring": ["verb"], "brings": ["verb"], "bringing": ["verb"], "brought": ["verb"],
+    "send": ["verb"], "sends": ["verb"], "sending": ["verb"], "sent": ["verb"],
+    "fill": ["verb"], "fills": ["verb"], "filling": ["verb"], "filled": ["verb"],
+    "mix": ["verb"], "mixes": ["verb"], "mixing": ["verb"], "mixed": ["verb"],
+    "pour": ["verb"], "pours": ["verb"], "pouring": ["verb"], "poured": ["verb"],
+    "order": ["verb"], "orders": ["verb"], "ordering": ["verb"], "ordered": ["verb"],
+    "earn": ["verb"], "earns": ["verb"], "earning": ["verb"], "earned": ["verb"],
+    "make": ["verb"], "makes": ["verb"], "making": ["verb"], "made": ["verb"],
+    "take": ["verb"], "takes": ["verb"], "taking": ["verb"], "took": ["verb"], "taken": ["verb"],
+    "been": ["verb"],
+    # verbs (batch 2):
+    "compare": ["verb"], "compares": ["verb"], "compared": ["verb"], "comparing": ["verb"],
+    "plant": ["verb"], "plants": ["verb"], "planted": ["verb"], "planting": ["verb"],
+    "add": ["verb"], "adds": ["verb"], "added": ["verb"], "adding": ["verb"],
+    "manage": ["verb"], "manages": ["verb"], "managed": ["verb"], "managing": ["verb"],
+    "turn": ["verb"], "turns": ["verb"], "turned": ["verb"], "turning": ["verb"],
+    "split": ["verb"], "splits": ["verb"], "splitting": ["verb"],
+    "know": ["verb"], "knows": ["verb"], "knew": ["verb"], "knowing": ["verb"],
+    "come": ["verb"], "comes": ["verb"], "came": ["verb"], "coming": ["verb"],
+    "last": ["verb"], "lasts": ["verb"], "lasted": ["verb"], "lasting": ["verb"],
+    "teach": ["verb"], "teaches": ["verb"], "taught": ["verb"], "teaching": ["verb"],
+    "hit": ["verb"], "hits": ["verb"], "hitting": ["verb"], "wonder": ["verb"], "wonders": ["verb"],
+    "wondering": ["verb"], "grow": ["verb"], "grows": ["verb"], "grew": ["verb"], "growing": ["verb"],
+    "build": ["verb"], "builds": ["verb"], "built": ["verb"], "building": ["verb"],
+    "run": ["verb"], "runs": ["verb"], "ran": ["verb"], "running": ["verb"],
+    "walk": ["verb"], "walks": ["verb"], "walked": ["verb"], "walking": ["verb"],
+    "drive": ["verb"], "drives": ["verb"], "drove": ["verb"], "driving": ["verb"],
+    "count": ["verb"], "counts": ["verb"], "counted": ["verb"], "counting": ["verb"],
+    "paint": ["verb"], "paints": ["verb"], "painted": ["verb"], "painting": ["verb"],
+    "playing": ["verb"], "having": ["verb"], "shopping": ["verb"], "practicing": ["verb"],
     # nouns (units of measure + common GSM8K objects):
     "average": ["noun"], "trip": ["noun"], "water": ["noun"], "job": ["noun"], "home": ["noun"],
     "party": ["noun"], "field": ["noun"], "bank": ["noun"], "weight": ["noun"], "end": ["noun"],
@@ -384,6 +457,56 @@ LEXICON: dict[str, list[str]] = {
     "photo": ["noun"], "present": ["noun"], "plate": ["noun"], "bowl": ["noun"], "spoon": ["noun"],
     "fork": ["noun"], "pan": ["noun"], "pot": ["noun"], "dolphin": ["noun"], "step": ["noun"],
     "level": ["noun"], "score": ["noun"], "grade": ["noun"], "quarter": ["noun"],
+    # --- vocabulary push 2 (data-driven from reading_bench) ---
+    # nouns (time-of-day, food/drink, shopping, school, entertainment, misc):
+    "morning": ["noun"], "evening": ["noun"], "afternoon": ["noun"], "night": ["noun"],
+    "week": ["noun"], "weekend": ["noun"], "month": ["noun"], "hour": ["noun"], "minute": ["noun"],
+    "pizza": ["noun"], "food": ["noun"], "sugar": ["noun"], "flour": ["noun"], "egg": ["noun"],
+    "milk": ["noun"], "butter": ["noun"], "bread": ["noun"], "candy": ["noun"], "cookie": ["noun"],
+    "cake": ["noun"], "pie": ["noun"], "sandwich": ["noun"], "meal": ["noun"], "snack": ["noun"],
+    "drink": ["noun"], "soda": ["noun"], "juice": ["noun"], "coffee": ["noun"], "tea": ["noun"],
+    "meat": ["noun"], "rice": ["noun"], "salt": ["noun"], "donut": ["noun"], "muffin": ["noun"],
+    "discount": ["noun"], "budget": ["noun"], "shoe": ["noun"], "account": ["noun"], "savings": ["noun"],
+    "bill": ["noun"], "coin": ["noun"], "prize": ["noun"], "ticket": ["noun"], "sale": ["noun"],
+    "item": ["noun"], "store": ["noun"], "shop": ["noun"], "market": ["noun"], "cash": ["noun"],
+    "tip": ["noun"], "fee": ["noun"], "tax": ["noun"], "bonus": ["noun"], "size": ["noun"],
+    "rate": ["noun"], "ratio": ["noun"], "machine": ["noun"], "pack": ["noun"], "container": ["noun"],
+    "practice": ["noun"], "season": ["noun"], "computer": ["noun"], "library": ["noun"], "plan": ["noun"],
+    "lesson": ["noun"], "homework": ["noun"], "test": ["noun"], "exam": ["noun"], "quiz": ["noun"],
+    "project": ["noun"], "course": ["noun"], "movie": ["noun"], "bike": ["noun"], "episode": ["noun"],
+    "game": ["noun"], "match": ["noun"], "song": ["noun"], "show": ["noun"], "race": ["noun"],
+    "recipe": ["noun"], "restaurant": ["noun"], "hall": ["noun"], "fuel": ["noun"], "gallon": ["noun"],
+    "mile": ["noun"], "pound": ["noun"], "kilometer": ["noun"], "birthday": ["noun"], "gift": ["noun"],
+    "box": ["noun"], "jar": ["noun"], "bottle": ["noun"], "can": ["noun"], "gecko": ["noun"],
+    "pill": ["noun"], "pet": ["noun"], "shelf": ["noun"], "bag": ["noun"], "basket": ["noun"],
+    # adjectives:
+    "able": ["adjective"], "different": ["adjective"], "previous": ["adjective"], "final": ["adjective"],
+    "double": ["adjective"], "extra": ["adjective"], "worth": ["adjective"], "whole": ["adjective"],
+    "equal": ["adjective"], "entire": ["adjective"], "certain": ["adjective"], "various": ["adjective"],
+    "free": ["adjective"], "regular": ["adjective"], "normal": ["adjective"], "single": ["adjective"],
+    "separate": ["adjective"], "original": ["adjective"], "favorite": ["adjective"], "daily": ["adjective"],
+    "weekly": ["adjective"], "monthly": ["adjective"], "annual": ["adjective"], "enough": ["adjective"],
+    # hyphenated unit fractions (recognised + usable as partitives; see FRACTIONS):
+    "one-half": ["adjective"], "one-third": ["adjective"], "one-quarter": ["adjective"],
+    "one-fourth": ["adjective"], "one-fifth": ["adjective"],
+    # --- vocabulary push 2, batch 2 ---
+    # family + role nouns:
+    "girl": ["noun"], "boy": ["noun"], "brother": ["noun"], "sister": ["noun"], "son": ["noun"],
+    "daughter": ["noun"], "mom": ["noun"], "dad": ["noun"], "father": ["noun"], "mother": ["noun"],
+    "uncle": ["noun"], "aunt": ["noun"], "cousin": ["noun"], "neighbor": ["noun"], "kid": ["noun"],
+    "doctor": ["noun"], "nurse": ["noun"], "boss": ["noun"], "manager": ["noun"], "driver": ["noun"],
+    "farmer": ["noun"], "baker": ["noun"], "teacher": ["noun"], "student": ["noun"], "worker": ["noun"],
+    "customer": ["noun"], "employee": ["noun"], "puppy": ["noun"], "kitten": ["noun"], "classmate": ["noun"],
+    # misc nouns:
+    "height": ["noun"], "length": ["noun"], "width": ["noun"], "area": ["noun"], "lawn": ["noun"],
+    "profit": ["noun"], "truck": ["noun"], "office": ["noun"], "load": ["noun"], "goal": ["noun"],
+    "plant": ["noun"], "oil": ["noun"], "beef": ["noun"], "pork": ["noun"], "theater": ["noun"],
+    "packet": ["noun"], "weekday": ["noun"], "wage": ["noun"], "salary": ["noun"], "income": ["noun"],
+    # adjectives:
+    "expensive": ["adjective"], "cheap": ["adjective"], "additional": ["adjective"], "main": ["adjective"],
+    "following": ["adjective"], "square": ["adjective"], "fresh": ["adjective"], "fancy": ["adjective"],
+    # function words:
+    "your": ["pronoun"], "down": ["adverb"], "below": ["preposition"], "above": ["preposition"],
     # multi-word INDIVISIBLE compounds (merged into one unit before analysis — see _merge_compounds):
     "piggy bank": ["noun"], "ice cream": ["noun"], "high school": ["noun"], "credit card": ["noun"],
     # time-reference NODES — relational, NOT calendar-ranked (order is tracked as separate Before facts).
@@ -423,13 +546,18 @@ LEXICON: dict[str, list[str]] = {
     "uses": ["verb"], "used": ["verb"],
     "tall": ["adjective"], "old": ["adjective"], "small": ["adjective"], "happy": ["adjective"],
     "blue": ["adjective"], "yellow": ["adjective"],
+    # resolve duplicate-key collisions introduced by the vocab batches (last occurrence wins) — restore
+    # the words whose original sense a batch entry shadowed, as MULTI-sense where both readings are real:
+    "last": ["adjective", "verb"], "building": ["noun", "verb"], "drink": ["noun", "verb"],
+    "can": ["auxiliary", "noun"], "plant": ["noun", "verb"],
 }
 
 # Multi-word phrases that are ONE indivisible concept (merged before analysis by _merge_compounds).
 COMPOUNDS = {k for k in LEXICON if " " in k}
 
 # Number words → their value, for "there are N <collection>" statements that introduce instances.
-NUMBERS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5}
+NUMBERS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
+           "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12}
 
 
 def annotate_senses(reading: Reading) -> Reading:
@@ -927,7 +1055,33 @@ VERB_LEMMA = {"passed": "pass", "wilted": "wilt", "rose": "rise", "failed": "fai
     "combined": "combine", "travels": "travel", "traveled": "travel", "weighs": "weigh",
     "weighed": "weigh", "measures": "measure", "measured": "measure", "studies": "study",
     "studied": "study", "watches": "watch", "watched": "watch", "plays": "play", "played": "play",
-    "rides": "ride", "rode": "ride"}
+    "rides": "ride", "rode": "ride",
+    "works": "work", "working": "work", "worked": "work", "holds": "hold", "holding": "hold",
+    "held": "hold", "goes": "go", "going": "go", "went": "go", "gone": "go", "collects": "collect",
+    "collecting": "collect", "collected": "collect", "saves": "save", "saving": "save", "saved": "save",
+    "purchases": "purchase", "purchasing": "purchase", "purchased": "purchase", "charges": "charge",
+    "charging": "charge", "charged": "charge", "shares": "share", "sharing": "share", "shared": "share",
+    "receives": "receive", "receiving": "receive", "received": "receive", "pays": "pay", "paying": "pay",
+    "paid": "pay", "needs": "need", "needing": "need", "needed": "need", "wants": "want",
+    "wanting": "want", "wanted": "want", "keeps": "keep", "keeping": "keep", "kept": "keep",
+    "brings": "bring", "bringing": "bring", "brought": "bring", "sends": "send", "sending": "send",
+    "sent": "send", "fills": "fill", "filling": "fill", "filled": "fill", "mixes": "mix",
+    "mixing": "mix", "mixed": "mix", "pours": "pour", "pouring": "pour", "poured": "pour",
+    "orders": "order", "ordering": "order", "ordered": "order", "earns": "earn", "earning": "earn",
+    "earned": "earn", "makes": "make", "making": "make", "made": "make", "takes": "take",
+    "taking": "take", "took": "take", "taken": "take", "been": "be",
+    "compares": "compare", "compared": "compare", "comparing": "compare", "planted": "plant",
+    "planting": "plant", "adds": "add", "added": "add", "adding": "add", "manages": "manage",
+    "managed": "manage", "managing": "manage", "turns": "turn", "turned": "turn", "turning": "turn",
+    "splits": "split", "splitting": "split", "knows": "know", "knew": "know", "knowing": "know",
+    "comes": "come", "came": "come", "coming": "come", "lasts": "last", "lasted": "last",
+    "lasting": "last", "teaches": "teach", "taught": "teach", "teaching": "teach", "hits": "hit",
+    "hitting": "hit", "wonders": "wonder", "wondering": "wonder", "grows": "grow", "grew": "grow",
+    "growing": "grow", "builds": "build", "built": "build", "building": "build", "runs": "run",
+    "ran": "run", "running": "run", "walks": "walk", "walked": "walk", "walking": "walk",
+    "drives": "drive", "drove": "drive", "driving": "drive", "counts": "count", "counted": "count",
+    "counting": "count", "paints": "paint", "painted": "paint", "painting": "paint",
+    "playing": "play", "having": "have", "shopping": "shop", "practicing": "practice"}
 
 def _lemma(surface: str) -> str:
     return VERB_LEMMA.get(_key(surface), _key(surface))
@@ -1819,8 +1973,10 @@ def answer(question: str, context: list, discourse: list = None):
         return "undetermined"
     if query is None:
         return [Deficiency("unanswerable", interro, "I couldn't tell what to count")]
-    if not any(isinstance(inst, tuple) for inst in context):
-        return "undetermined"        # no instance data to count — we don't know (never a fabricated 0)
+    if not any(isinstance(inst, tuple) and inst[0] == query[0] for inst in context):
+        return "undetermined"        # the queried TYPE isn't present as instances (e.g. "how much money"
+        # when only `son` instances exist, or the amount lives in Quantities) — decline, never a bogus 0.
+        # (A type that IS present but with 0 matches — "how many RED apples", no red ones — stays a real 0.)
     return sum(1 for inst in context if isinstance(inst, tuple) and _matches(query, inst))
 
 

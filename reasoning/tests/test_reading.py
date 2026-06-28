@@ -1908,5 +1908,24 @@ class TestIncrement67AcrossTimesComparison(unittest.TestCase):
                                        "How much more money does Oliver have than William?"), 20)
 
 
+class TestIncrement68VocabularyPushTwo(unittest.TestCase):
+    """#68 - vocabulary push 2 (fully-read 7% -> 14.7%): common verbs/adjectives/nouns/family + number
+    words six..twelve + hyphenated unit fractions. Precision fix: the instance-count FALLBACK declines
+    when the queried TYPE isn't present as instances at all (was fabricating a 0)."""
+
+    def test_new_vocabulary_recognized(self):
+        self.assertEqual(reading.analyze("pizza").units[0].features.get("senses"), ["noun"])
+        self.assertEqual(reading.analyze("expensive").units[0].features.get("senses"), ["adjective"])
+        self.assertIn("verb", reading.analyze("collected").units[0].features.get("senses", []))
+
+    def test_count_of_absent_type_declines_not_zero(self):
+        ctx = reading.instances("there are two sons") + reading.learn("Ken got 1750 dollars")
+        self.assertEqual(reading.answer("how much was the money shared", ctx), "undetermined")
+
+    def test_count_of_present_type_zero_is_real(self):
+        ctx = reading.instances("there are three green apples")
+        self.assertEqual(reading.answer("how many red apples are there", ctx), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -534,7 +534,19 @@ question's `than` splits TWO times ("…on Tuesday than on Monday"), compare ONE
 times: `_holdings_at(E, m, t1)` (the time before `than`) vs `…(E, m, t2)` (after) → `more`: a−b, `fewer`:
 b−a. Slots into the existing comp branch before the entity-vs-entity case (which is unchanged — that one's
 standard is a name, this one's "than" referent is a time). "On Mon Tom had 30, On Tue 50 — how many more on
-Tue than on Mon?" → 20; composes with changes (state+buy). Precision 100%; 302 tests.
+Tue than on Mon?" → 20; composes with changes (state+buy). Precision 100%; 302 tests.  ·
+75. **vocabulary push 2** (`fully-read` 7%→14.7%, 21→44/300). Two data-driven batches in correct roles:
+common verbs (work/hold/go/collect/save/purchase/charge/share/receive/pay/keep/bring/send/fill/mix/order/
+earn/make/take + compare/plant/add/manage/turn/split/know/come/teach/grow/build/run/walk/drive/count),
+adjectives (able/different/previous/final/double/extra/expensive/…), nouns (food/shopping/school/family/
+role + time-of-day + units), number words six..twelve (NUMBERS), and hyphenated unit fractions
+(one-half/one-third/… → FRACTIONS). Tooling lesson: many additions COLLIDED with existing keys — a Python
+dict literal silently keeps the LAST, so an `ast` duplicate-key scan caught 6 sense changes (last/building/
+drink/can/plant) fixed via a multi-sense override block at the dict's end. PRECISION FIX exposed by the
+new coverage: the instance-count FALLBACK fabricated a 0 when the queried TYPE was absent as instances
+("how much money" amid only `son` instances) — now it declines unless the query's head noun is present as
+an instance (a present type with 0 matches — "how many RED apples", none red — stays a real 0). Precision
+100%; 305 tests.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
