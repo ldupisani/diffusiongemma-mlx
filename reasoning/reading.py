@@ -586,7 +586,9 @@ LEXICON: dict[str, list[str]] = {
     "ran": ["verb"], "swim": ["verb"], "swam": ["verb"], "sleep": ["verb"], "slept": ["verb"],
     "sing": ["verb"], "sang": ["verb"], "sell": ["verb"], "sold": ["verb"], "buy": ["verb"],
     "bought": ["verb"], "own": ["verb"], "owns": ["verb"], "owned": ["verb"],
-    "have": ["verb"], "has": ["verb"], "had": ["verb"],
+    # have/has/had: primarily the verb (own), but ALSO the perfect auxiliary ("has Brandon SOLD …"); verb
+    # sense first so "Tom has 5 apples" stays a main verb, auxiliary wins when a participle follows.
+    "have": ["verb", "auxiliary"], "has": ["verb", "auxiliary"], "had": ["verb", "auxiliary"],  # perfect aux
     # accumulation verbs (their lemma's polarity folds in _verb_sign): gains + losses
     "buy": ["verb"], "buys": ["verb"], "get": ["verb"], "gets": ["verb"], "got": ["verb"],
     "find": ["verb"], "finds": ["verb"], "found": ["verb"], "receive": ["verb"], "receives": ["verb"],

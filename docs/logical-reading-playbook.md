@@ -696,7 +696,17 @@ long"), computes `target × per_amount ÷ amount` (120 × 20 ÷ 8 = 300 min), an
 excepted); this latent misfire surfaced once word-numbers made more values live. (d) GUARD 3 counts
 `Rate.per_amount` as a used given. Precision 100%; 369 tests. FOURTEEN real GSM8K problems solve. LESSON:
 a rate is "amount per (per_amount × per_unit)"; once that shape is explicit, both the forward (×) and
-inverse (÷) directions and unit conversion compose from the same four numbers.
+inverse (÷) directions and unit conversion compose from the same four numbers.  ·
+89. **perfect auxiliary "has/have/had" + "twice that many"** (coverage 14→15, solves Brandon). "How many
+geckos HAS Brandon SOLD" is present-perfect — `has` is the AUXILIARY, `sold` (→ sell) the main verb. They
+were verb-only, so the question had two verbs and no aux → `_question_subjects` couldn't find the subject.
+Now `have/has/had` are multi-sense `["verb","auxiliary"]` (verb FIRST, so "Tom has 5 apples" stays a main
+verb; the auxiliary reading wins by coverage only when a participle follows). `_lemma` already maps
+sold→sell, so the question matches the context's sell-events: 86 + 172 = 258. ("twice that many" already
+worked — `_relational_quantity`'s unnamed branch takes the most recent Quantity as the referent: 2×86.)
+Precision 100%; 373 tests. FIFTEEN real GSM8K problems solve (5.0% of the dev slice). LESSON: the same
+auxiliary/verb multi-sense pattern as do/does/did — but verb-FIRST, because have is primarily a main verb;
+the obligation-coverage disambiguator flips it to the auxiliary reading exactly when a participle needs it.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

@@ -2282,5 +2282,29 @@ class TestIncrement81PerNUnitRateAndDurationQuery(unittest.TestCase):
                                        "How many minutes will it take to write 100 pages?"), 40)
 
 
+class TestIncrement82PerfectAuxiliary(unittest.TestCase):
+    """#82 - "has/have/had" as the PERFECT AUXILIARY: "How many geckos HAS Brandon SOLD" reads `sold` as
+    the main verb (lemma sell) and `has` as the aux, so it matches the context's sell-events. Multi-sense
+    (verb sense first) keeps "Tom has 5 apples" a main verb. Solves Brandon (with "twice that many")."""
+
+    def test_has_5_apples_still_main_verb(self):
+        self.assertEqual(reading.learn("Tom has 5 apples"),
+                         [reading.Quantity("tom", ("apple", frozenset()), 5.0, "have")])
+
+    def test_perfect_auxiliary_question(self):
+        ctx = [reading.Quantity("brandon", ("gecko", frozenset()), 86, "sell"),
+               reading.Quantity("brandon", ("gecko", frozenset()), 172, "sell")]
+        self.assertEqual(reading.answer("How many geckos has Brandon sold", ctx, []), 258)
+
+    def test_twice_that_many(self):
+        ctx = [reading.Quantity("brandon", ("gecko", frozenset()), 86, "sell")]
+        self.assertEqual(reading.learn("He sold twice that many", ["brandon"], ctx),
+                         [reading.Quantity("brandon", ("gecko", frozenset()), 172, "sell")])
+
+    def test_brandon_solves(self):
+        self.assertEqual(reading.solve("Brandon sold 86 geckos last year. He sold twice that many the "
+                                       "year before. How many geckos has Brandon sold in the last two years?"), 258)
+
+
 if __name__ == "__main__":
     unittest.main()
