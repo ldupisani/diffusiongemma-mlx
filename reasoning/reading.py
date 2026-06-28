@@ -413,6 +413,8 @@ LEXICON: dict[str, list[str]] = {
     "purchase": ["verb"], "purchases": ["verb"], "purchasing": ["verb"], "purchased": ["verb"],
     "charge": ["verb"], "charges": ["verb"], "charging": ["verb"], "charged": ["verb"],
     "share": ["verb"], "shares": ["verb"], "sharing": ["verb"], "shared": ["verb"],
+    "distribute": ["verb"], "distributes": ["verb"], "distributed": ["verb"], "distributing": ["verb"],
+    "spread": ["verb"], "spreads": ["verb"], "spreading": ["verb"],
     "receive": ["verb"], "receives": ["verb"], "receiving": ["verb"], "received": ["verb"],
     "pay": ["verb"], "pays": ["verb"], "paying": ["verb"], "paid": ["verb"],
     "need": ["verb"], "needs": ["verb"], "needing": ["verb"], "needed": ["verb"],
@@ -1086,7 +1088,9 @@ VERB_LEMMA = {"passed": "pass", "wilted": "wilt", "rose": "rise", "failed": "fai
     "ran": "run", "running": "run", "walks": "walk", "walked": "walk", "walking": "walk",
     "drives": "drive", "drove": "drive", "driving": "drive", "counts": "count", "counted": "count",
     "counting": "count", "paints": "paint", "painted": "paint", "painting": "paint",
-    "playing": "play", "having": "have", "shopping": "shop", "practicing": "practice"}
+    "playing": "play", "having": "have", "shopping": "shop", "practicing": "practice",
+    "distributes": "distribute", "distributed": "distribute", "distributing": "distribute",
+    "spreads": "spread", "spreading": "spread"}
 
 def _lemma(surface: str) -> str:
     return VERB_LEMMA.get(_key(surface), _key(surface))
@@ -1233,10 +1237,16 @@ def _verb_sign(lemma: str) -> int:
 _REMAINDER = {"left", "remaining", "leftover", "remain", "remains", "rest"}
 
 
+DISTRIBUTE_VERBS = {"share", "distribute", "split", "divide", "spread"}
+
+
 def _holdings(entity: str, measure: tuple, context: list):
     """The net holdings of `entity` for `measure` — baseline + gains − losses — or None if unknown.
-    Timeless / single-state fold (order-independent); the time-aware variant is `_holdings_at`."""
-    qs = [f for f in context if isinstance(f, Quantity) and f.entity == entity and f.measure == measure]
+    Timeless / single-state fold (order-independent); the time-aware variant is `_holdings_at`. Quantities
+    with an UNKNOWN value (`amount is None`, e.g. an unresolved shared total) are skipped — folding waits
+    until synthesis pins them."""
+    qs = [f for f in context if isinstance(f, Quantity) and f.entity == entity
+          and f.measure == measure and f.amount is not None]
     return sum(_verb_sign(f.verb) * f.amount for f in qs) if qs else None
 
 
@@ -1270,7 +1280,8 @@ def _holdings_at(entity: str, measure: tuple, context: list, at_time: str):
     verb SETS the running value (a known total), a CHANGE verb adds its signed delta. Events strictly
     after `at_time` are excluded; a timeless event is an always-present baseline. None (decline) if an
     event's order vs `at_time` is unknown, or the applicable times aren't linearly orderable."""
-    events = [f for f in context if isinstance(f, Quantity) and f.entity == entity and f.measure == measure]
+    events = [f for f in context if isinstance(f, Quantity) and f.entity == entity
+              and f.measure == measure and f.amount is not None]
     if not events:
         return None
     applicable = []
@@ -1316,6 +1327,18 @@ class Before:
     wrap. Transitive; the closure is derived by the synthesis loop, not assumed."""
     earlier: str
     later: str
+
+
+@dataclass(frozen=True)
+class Distribution:
+    """A DISTRIBUTION relation — "<distributor> shared <measure> between <recipients>". The whole (the
+    distributor's shared `measure`) is split among `recipients`; its value is the SUM of their shares.
+    Read off the obligation graph (share-verb + recipient group + the `of`-measure); the unknown whole
+    is carried as a `Quantity(distributor, measure, None, …)` node and PINNED by the synthesis loop
+    (back-linking to the recipients' holdings) — never assumed."""
+    distributor: str
+    recipients: tuple
+    measure: tuple
 
 
 @dataclass(frozen=True)
@@ -1525,6 +1548,36 @@ def _time_at(reading: Reading, verb_unit) -> str:
         if "time" in u.features.get("senses", []) and _follow(u, "associates") is verb_unit:
             return _key(u.surface)
     return None
+
+
+def _distribution(reading: Reading):
+    """The facts a distribution statement asserts — "<name> shared <amount> of <measure> between
+    <recipients>" → an UNKNOWN-valued `Quantity(distributor, measure, None, lemma)` (the "certain amount"
+    node) plus a `Distribution(distributor, recipients, measure)`. Recipients = a named group's members;
+    measure = the `of`-object (else a money word). None unless it's a distribute-verb with a named group."""
+    units = reading.units
+    verbs = [u for u in units if "verb" in u.features.get("senses", [])]
+    if len(verbs) != 1 or _lemma(verbs[0].surface) not in DISTRIBUTE_VERBS:
+        return None
+    subject = _follow(verbs[0], "subject")
+    if subject is None or "name" not in subject.features.get("senses", []):
+        return None
+    group = next((u for u in units if "members" in u.features), None)
+    if group is None:                                    # need the named recipients to sum their shares
+        return None
+    of_obj = next((_follow(u, "object") for u in units if _key(u.surface) == "of"
+                   and _follow(u, "object") is not None), None)
+    if of_obj is not None:
+        measure = _descriptor(of_obj)
+    elif any(_key(u.surface) in _MONEY_WORDS for u in units):
+        measure = MONEY
+    else:
+        return None
+    ent = _entity(subject)
+    val = next((u for u in units if "value" in u.features.get("senses", [])), None)
+    amount = val.features["value"] if val is not None else None   # an UNKNOWN total stays None
+    return [Quantity(ent, measure, amount, _lemma(verbs[0].surface)),
+            Distribution(ent, tuple(group.features["members"]), measure)]
 
 
 def _temporal_order(reading: Reading):
@@ -1925,6 +1978,13 @@ def answer(question: str, context: list, discourse: list = None):
         if coll is None or r.units.index(coll) != mi + 1:   # GRANDPARENTS give") is the subject, not it
             query = MONEY
     remainder = any(_key(u.surface) in _REMAINDER for u in r.units)
+    if query is not None and any("verb" in u.features.get("senses", [])      # "How much <measure> was
+                                 and _lemma(u.surface) in DISTRIBUTE_VERBS for u in r.units):  # shared?"
+        shared = [f.amount for f in context if isinstance(f, Quantity) and f.measure == query   # → the
+                  and f.verb in DISTRIBUTE_VERBS and f.amount is not None]   # PINNED distributed total
+        if shared:
+            return int(shared[0]) if shared[0] == int(shared[0]) else shared[0]
+        return "undetermined"
     aux = next((u for u in r.units if "auxiliary" in u.features.get("senses", [])), None)
     comp = next((u for u in r.units if "comparative" in u.features.get("senses", [])), None)
     if comp is not None and aux is not None and query is not None:    # "How much more <measure> does
@@ -2184,8 +2244,27 @@ def _synth_narrative_order(facts: list, readings: list, agenda: set) -> list:
     return out
 
 
+def _synth_distribution(facts: list, readings: list, agenda: set) -> list:
+    """PIN an unknown distributed total by back-linking through its `Distribution`: once EVERY recipient's
+    holding of the measure is known, the whole = their SUM → derive `Quantity(distributor, measure, sum,
+    "share")`. This is the unknown-node's `value` obligation discharged by inference (not a question-time
+    heuristic). Idempotent: skip a Distribution whose total is already resolved."""
+    out = []
+    for f in facts:
+        if not isinstance(f, Distribution):
+            continue
+        if any(isinstance(q, Quantity) and q.entity == f.distributor and q.measure == f.measure
+               and q.verb in DISTRIBUTE_VERBS and q.amount is not None for q in facts):
+            continue                                     # already pinned
+        shares = [_holdings(r, f.measure, facts) for r in f.recipients]
+        if shares and all(s is not None for s in shares):
+            out.append(Quantity(f.distributor, f.measure, sum(shares), "share"))
+    return out
+
+
 # obligation/fact KIND → derivation (facts, readings, agenda) -> new facts. Register here to add reasoning.
-SYNTHESIZERS = {"orders": _synth_transitive_order, "narrative": _synth_narrative_order}
+SYNTHESIZERS = {"orders": _synth_transitive_order, "narrative": _synth_narrative_order,
+                "distribution": _synth_distribution}
 
 
 def _outstanding(readings: list) -> set:
@@ -2217,6 +2296,9 @@ def _facts_from(reading: Reading, context: list = None) -> list:
     to = _temporal_order(r)                              # "<time> is after/before <time>" → Before fact
     if to is not None:
         return [to]
+    dist = _distribution(r)                              # "<name> shared <measure> between <recipients>"
+    if dist is not None:                                 # → unknown-amount node + a Distribution relation
+        return dist
     verbs = [u for u in r.units if "verb" in u.features.get("senses", [])]
     if len(verbs) == 1:                                  # a group-subject STATEMENT ("Tom and Mary have
         subj = _follow(verbs[0], "subject")              # 5 apples") is distributive/collective —

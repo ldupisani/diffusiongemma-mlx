@@ -1957,5 +1957,33 @@ class TestIncrement69TitlesArticlesPossessives(unittest.TestCase):
         self.assertIsNone(reading._follow(his, "refers"))
 
 
+class TestIncrement70DistributionUnknown(unittest.TestCase):
+    """#70 - Option 3, faithfully: "shared a certain amount of money between A and B" makes the unknown
+    total a FIRST-CLASS node (Quantity amount=None), the share-between a Distribution relation, and a
+    registered synthesizer BACK-LINKS the unknown to the SUM of the recipients' shares. The unknown's
+    value obligation is discharged by inference, not a question-time heuristic."""
+
+    def test_unknown_node_and_distribution_read_off(self):
+        facts = reading.learn("Mr. Sam shared a certain amount of money between his two sons, Ken and Tony.")
+        self.assertIn(reading.Quantity("sam", ("money", frozenset()), None, "share"), facts)
+        self.assertIn(reading.Distribution("sam", ("ken", "tony"), ("money", frozenset())), facts)
+
+    def test_synthesis_pins_the_unknown(self):
+        ctx = (reading.learn("Mr. Sam shared a certain amount of money between his two sons, Ken and Tony.")
+               + reading.learn("Ken got 1750 dollars") + reading.learn("Tony got 3500 dollars"))
+        self.assertIn(reading.Quantity("sam", ("money", frozenset()), 5250.0, "share"),
+                      reading.synthesize(ctx))
+
+    def test_full_shared_money_problem_solves(self):
+        self.assertEqual(reading.solve(
+            "Mr. Sam shared a certain amount of money between his two sons, Ken and Tony. "
+            "If Ken got $1750, and Tony got twice as much as Ken, how much was the money shared?"), 5250)
+
+    def test_declines_until_every_share_is_known(self):
+        self.assertEqual(reading.solve(
+            "Mr. Sam shared a certain amount of money between his two sons, Ken and Tony. "
+            "If Ken got $1750, how much was the money shared?"), "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()

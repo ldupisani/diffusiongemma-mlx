@@ -558,7 +558,20 @@ agent when the subject is a NAME ("Sam … his sons" → his→Sam); a non-name 
 for discourse. The sentence's meaningful obligations are now all discharged (subject/dobj/determines/of/
 refers). Precision 100%; 310 tests. NOT YET SOLVED: the aggregation "shared between A and B" ⇒ total = sum
 of the shares (the "certain amount" = Ken+Tony) — the next semantic step. (User's broader idea: infer an
-unmet obligation by BACK-LINKING through the obligation chain — possessive→agent is the first instance.)
+unmet obligation by BACK-LINKING through the obligation chain — possessive→agent is the first instance.)  ·
+77. **distribution + the UNKNOWN as a first-class node** (the Sam problem solves; coverage 3→4). The
+user's Option 3, chosen because it PRESERVES THE MOST INFORMATION and is most faithful to the obligation
+principle (vs a sum-all heuristic or a total-as-fact-field). "Mr. Sam shared a certain amount of money
+between his two sons, Ken and Tony" reads off TWO true facts: an UNKNOWN-valued node
+`Quantity(sam, money, None, share)` (the "certain amount" — its value is an unmet obligation) and
+`Distribution(sam, (ken,tony), money)` (the share-between relation; recipients = the named group's
+members; measure = the `of`-object). `_holdings`/`_holdings_at` SKIP `amount is None` (unknowns aren't
+folded until pinned). A registered synthesizer `_synth_distribution` BACK-LINKS the unknown: once every
+recipient's holding is known, derive `Quantity(sam, money, Σshares, share)` — the value obligation
+discharged by inference, exactly like `his`→agent one level up. The question "how much was the money
+shared?" reads the pinned total (declines until ALL shares are known — never a partial guess): 1750+3500
+= 5250. Precision 100%; 314 tests. The lesson: a genuine UNKNOWN deserves to be a node with an
+obligation, not a hole filled at question-time — then one synthesizer handles share/divide/remainder alike.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
