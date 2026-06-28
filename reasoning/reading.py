@@ -202,7 +202,7 @@ def _merge_times_multiplier(reading: Reading) -> Reading:
     for i in range(len(units) - 2):
         val, times, nxt = units[i], units[i + 1], units[i + 2]
         if _key(times.surface) == "times" and "value" in val.features.get("senses", []) \
-                and "measure" not in val.features and _key(nxt.surface) in ("as", "that"):
+                and "measure" not in val.features and _key(nxt.surface) in ("as", "that", "the"):
             merged = Unit(words=sorted(val.words + times.words, key=lambda w: w.index))
             merged.features["senses"] = ["multiplier"]
             merged.features["value"] = val.features["value"]
@@ -353,6 +353,11 @@ OPERATORS = {"plus": "+", "minus": "-", "times": "*", "divided": "/"}
 # Lexicalized multipliers: a value fused with "× N" — scales a verb's frequency ("jumps twice") or a
 # referent quantity ("twice as many"). `half` is the ×0.5 case ("half as many").
 MULTIPLIERS = {"once": 1, "twice": 2, "thrice": 3, "half": 0.5}
+
+# Count-NOUNS that, after a multiplier + article, denote "the count/quantity of X" — so "twice the
+# NUMBER (of X)" is the same relational quantity as "twice as MANY (as X)" (the noun plays the role of
+# the quantifier "many"; the referent X supplies the count). Kept tiny and specific to avoid over-firing.
+COUNT_NOUNS = {"number", "amount"}
 
 # Unit-fraction words → their DENOMINATOR (for partitives "half/a third/a quarter OF …"). Stored as the
 # denominator so the fraction of a holding is `base / n` (exact when it divides — avoids 1/3 float drift).
@@ -943,10 +948,13 @@ def _find_target(need, u, i, units, pos):
     if need == "quantifies":      # a value quantifies the nearest noun to its right ("3 apples")
         r = right("noun")
         return r[0] if r else None
-    if need == "scales":          # a multiplier scales a quantifier to its RIGHT ("twice as MANY"),
-        rq = right("quantifier")  # else the nearest verb to its LEFT ("jumps TWICE" — frequency)
-        if rq:
+    if need == "scales":          # a multiplier scales a quantifier to its RIGHT ("twice as MANY"), or a
+        rq = right("quantifier")  # count-noun "the NUMBER (of X)" (same role as "many"), else the nearest
+        if rq:                    # verb to its LEFT ("jumps TWICE" — frequency)
             return rq[0]
+        cn = [x for x in right("noun") if _key(x.surface) in COUNT_NOUNS]
+        if cn:
+            return cn[0]
         ll = left("verb")
         return max(ll, key=lambda x: pos[id(x)]) if ll else None
     if need == "rate":            # "per"'s rate value: the nearest value to its LEFT ("$12 per hour")
@@ -1762,8 +1770,9 @@ def _relational_quantity(reading: Reading, context: list):
     mult = next((u for u in reading.units if "multiplier" in u.features.get("senses", [])), None)
     if mult is None:
         return None
-    scaled = _follow(mult, "scales")                     # must scale "as many" (a quantifier), not a verb
-    if scaled is None or "quantifier" not in scaled.features.get("senses", []):
+    scaled = _follow(mult, "scales")                     # must scale "as many" (a quantifier) or "the
+    if scaled is None or not ("quantifier" in scaled.features.get("senses", [])   # number" (a count-noun) —
+                              or _key(scaled.surface) in COUNT_NOUNS):             # not a verb (frequency)
         return None
     verbs = [u for u in reading.units if "verb" in u.features.get("senses", [])]
     subject = _follow(verbs[0], "subject") if len(verbs) == 1 else None
@@ -3027,7 +3036,8 @@ def _facts_from(reading: Reading, context: list = None) -> list:
         # chains the multi-hop: Anne=2×Emile, Emile=6×Maude, Maude=8 → 96; never a bare predication)
     mult = next((u for u in r.units if "multiplier" in u.features.get("senses", [])), None)
     scaled = _follow(mult, "scales") if mult is not None else None
-    if scaled is not None and "quantifier" in scaled.features.get("senses", []):
+    if scaled is not None and ("quantifier" in scaled.features.get("senses", [])
+                               or _key(scaled.surface) in COUNT_NOUNS):  # "twice as many" / "twice the number"
         rq = _relational_quantity(r, context)            # "<entity> has twice as many" → derived, or
         return [rq] if rq is not None else []            # decline (no referent) — never a bare predication
     frac = next((u for u in r.units if _key(u.surface) in FRACTIONS), None)

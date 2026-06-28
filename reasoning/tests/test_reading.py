@@ -2695,5 +2695,35 @@ class TestIncrement98AgeShiftGuard(unittest.TestCase):
                                        "how old will Anne be?"), 96)
 
 
+class TestIncrement99NumberOfReferent(unittest.TestCase):
+    """#99 - "<multiplier> the number/amount (of X)" is the SAME relational quantity as
+    "<multiplier> as many (as X)": the multiplier scales the count-noun "number"/"amount" (not the
+    quantifier "many"), and the referent supplies the count. "twice the number of marbles" -> 2 x the
+    prior count. Found via the widened firewall (the 'twice/double the number of X' wrongs). The
+    trailing RELATIVE clause ("the number that X has") is a separate, harder parse (the relative-clause
+    verb mis-reads the matrix verb as an auxiliary) — left as a precision-safe DECLINE, not a wrong."""
+
+    def test_twice_the_number_implicit_referent(self):
+        self.assertEqual(reading.solve("Tom has 6 marbles. Megan owns twice the number of marbles. "
+                                       "How many marbles does Megan have?"), 12)
+
+    def test_twice_the_number_of_named(self):
+        self.assertEqual(reading.solve("Anna has 50 pencils. Harry has twice the number of Anna pencils. "
+                                       "How many pencils does Harry have?"), 100)
+
+    def test_n_times_the_number(self):
+        self.assertEqual(reading.solve("Frank has 36 apples. Susan has three times the number of apples. "
+                                       "How many apples does Susan have?"), 108)
+
+    def test_trailing_relative_clause_declines(self):
+        # "the number (that) X has" — the relative-clause verb isn't parsed yet; DECLINE, never a wrong
+        self.assertEqual(reading.solve("Tom has 6 marbles. Megan has twice the number Tom has. "
+                                       "How many marbles does Megan have?"), "undetermined")
+
+    def test_the_number_without_multiplier_unaffected(self):
+        # a plain "the number" with no multiplier is not a relational quantity (no spurious fact)
+        self.assertEqual(reading.solve("Tom has 6 marbles. How many marbles does Tom have?"), 6)
+
+
 if __name__ == "__main__":
     unittest.main()
