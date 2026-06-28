@@ -2395,5 +2395,24 @@ class TestIncrement86TrailingConditional(unittest.TestCase):
                                        "If Bob has 10 roommates, how many roommates does John have?"), 25)
 
 
+class TestIncrement87VocabularyPush(unittest.TestCase):
+    """#87 - fraction literals "N/M" parse as values (0.5, 0.75); a deliberate batch of frequent GSM8K
+    words is recognised, raising fully-read 44→52 on the dev slice. Senses are conservative — a wrong
+    guess declines, never a confident-wrong (precision stays 100%)."""
+
+    def test_fraction_literals(self):
+        self.assertEqual(reading._as_number("1/2"), 0.5)
+        self.assertEqual(reading._as_number("3/4"), 0.75)
+        self.assertEqual(reading._as_number("1/4"), 0.25)
+
+    def test_added_noun_recognised(self):
+        self.assertEqual(reading.learn("Tom has 5 mangoes"),
+                         [reading.Quantity("tom", ("mango", frozenset()), 5.0, "have")])
+
+    def test_added_verb_form_recognised(self):
+        self.assertEqual(reading._lemma("mows"), "mow")
+        self.assertEqual(reading.deficiencies(reading.analyze("Tom created 5 brownies")), [])
+
+
 if __name__ == "__main__":
     unittest.main()

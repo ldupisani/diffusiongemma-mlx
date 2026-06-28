@@ -754,7 +754,17 @@ later clause (a trailing "if") supplies the total. End-to-end: "40% passed; the 
 failed if he has 60 students?" → 36. Leading "If P, Q" (comma) unchanged. Precision 100%; 388 tests. Two
 Sanchez blockers remain: the `that`-clause embedding ("found out THAT 40% … got below B") and the THRESHOLD
 complement ("B and above" = not "below B"). LESSON: one structural cue (`if`) often fixes several symptoms
-at once — the trailing condition, the spurious "and" split, and the forward-ref total all dissolve together.
+at once — the trailing condition, the spurious "and" split, and the forward-ref total all dissolve together.  ·
+94. **vocabulary push** (ceiling raise; fully-read 44→52 / 14.7%→17.3%, coverage unchanged at 15). (a)
+`_as_number` parses FRACTION LITERALS "N/M" → N/M ("1/2" → 0.5) — 11 unrecognised values in the slice. (b)
+A deliberate, conservatively-typed batch of frequent unknown words (nouns/verbs+forms/adverbs/pronouns
+from the bench worklist), added to `LEXICON`/`PLURALS`/`VERB_LEMMA` — NO morphological guessing (the
+project's deliberate-vocab principle); a wrong sense yields a DECLINE, never a confident-wrong, so precision
+held at 100%. Coverage didn't move: the 8 newly-fully-read problems decline on STRUCTURE — vocab raises the
+ceiling, structure is the next wall. The nearest unlocked target is Christina (3 snakes' lengths summed
+with feet→inch conversion) — but it needs multi-entity "all … combined" summation and its question parses
+as a `Subset`, so it's deferred (not a clean win). LESSON: a vocab push is a ceiling move, not a coverage
+move — measure it by `fully-read`, and expect the freed problems to surface the NEXT structural gaps.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
