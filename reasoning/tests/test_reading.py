@@ -1740,9 +1740,10 @@ class TestIncrement62AgeQuestions(unittest.TestCase):
         self.assertEqual(reading.solve("Tom is 5 years older than Bob. Bob is 10 years old. "
                                        "How old will Tom be?"), 15)
 
-    def test_temporal_shift_declines(self):
+    def test_temporal_shift_computes_via_time_offset(self):
+        # "next year" is +1 on the timeline; age tracks it -> 14 + 1 = 15 (no per-word hack -- see _time_offset)
         self.assertEqual(reading.solve("Herbert is 10 years younger than Kris. Kris is 24 years old. "
-                                       "How old will Herbert be next year?"), "undetermined")
+                                       "How old will Herbert be next year?"), 15)
 
     def test_plain_membership_unaffected(self):
         self.assertEqual(reading.answer("Is Bob a student?", reading.learn("Bob is a student")), "yes")
@@ -2177,6 +2178,31 @@ class TestIncrement77RateInversion(unittest.TestCase):
     def test_inversion_with_relative_clause_target(self):
         self.assertEqual(reading.solve("John writes 20 pages a day. How long will it take him to "
                                        "write 3 books that are 400 pages each?"), 60)
+
+
+class TestIncrement78TemporalAgeShift(unittest.TestCase):
+    """#78 - age at a SHIFTED time, via the temporal model (NOT a per-word hack). A relative-time
+    reference has a position on the timeline (_time_offset: next year=+1, in N years=+N, N years ago=-N);
+    AGE is a time-tracking quantity (advances 1/year), so age@(now+Δ) = age@now + Δ. Solves Herbert."""
+
+    def test_time_offset_next_year(self):
+        self.assertEqual(reading._time_offset(reading.analyze("how old will X be next year")), 1)
+
+    def test_time_offset_in_n_years(self):
+        self.assertEqual(reading._time_offset(reading.analyze("how old will X be in 3 years")), 3)
+
+    def test_time_offset_n_years_ago(self):
+        self.assertEqual(reading._time_offset(reading.analyze("how old was X 5 years ago")), -5)
+
+    def test_herbert_next_year_solves(self):
+        self.assertEqual(reading.solve("Herbert is 10 years younger than Kris. If Kris is 24 years old "
+                                       "now, how old will Herbert be next year?"), 15)
+
+    def test_age_in_n_years(self):
+        self.assertEqual(reading.solve("Tom is 20 years old. How old will Tom be in 3 years?"), 23)
+
+    def test_age_n_years_ago(self):
+        self.assertEqual(reading.solve("Tom is 20 years old. How old was Tom 5 years ago?"), 15)
 
 
 if __name__ == "__main__":

@@ -360,6 +360,7 @@ LEXICON: dict[str, list[str]] = {
     # adverbs / conjunctions (recognised; no obligation — they don't block the parse):
     "then": ["adverb"], "just": ["adverb"], "also": ["adverb"], "only": ["adverb"], "now": ["time"],
     "still": ["adverb"], "again": ["adverb"], "already": ["adverb"], "if": ["conjunction"],
+    "ago": ["adverb"], "later": ["adverb"], "earlier": ["adverb"],   # relative-time markers (see _time_offset)
     "but": ["conjunction"], "or": ["conjunction"], "so": ["conjunction"], "less": ["comparative"],
     # ordinals + common adjectives:
     "first": ["adjective"], "second": ["adjective"], "third": ["adjective"], "fourth": ["adjective"],
@@ -1335,6 +1336,28 @@ def _time_order(times: list, context: list):
     return ordered
 
 
+def _time_offset(reading: Reading) -> float:
+    """A relative-time reference's POSITION on the timeline, in YEARS from 'now' (the reference point):
+    "next year" → +1, "last year" → −1, "in N years" → +N, "N years ago" → −N, else 0. The temporal
+    model's quantified ordering — a time-tracking quantity (AGE advances 1/year) reads it to value itself
+    at a shifted time: age@(now+Δ) = age@now + Δ."""
+    units = reading.units
+    surf = {_key(u.surface) for u in units}
+    attrs = {a for u in units for a in u.features.get("attributes", [])}
+    yv = next((u.features["value"] for u in units if "value" in u.features.get("senses", [])
+               and _follow(u, "quantifies") is not None
+               and _descriptor(_follow(u, "quantifies"))[0] == "year"), None)
+    if "ago" in surf:                                    # "N years ago" (a bare "a year ago" → 1)
+        return -(yv if yv is not None else 1)
+    if "in" in surf and yv is not None:                  # "in N years"
+        return yv
+    if "next" in attrs:                                  # "next year"
+        return 1
+    if "last" in attrs:                                  # "last year"
+        return -1
+    return 0
+
+
 def _holdings_at(entity: str, measure: tuple, context: list, at_time: str):
     """Holdings of `entity`/`measure` VALID AT time node `at_time`, folded along the timeline: a STATE
     verb SETS the running value (a known total), a CHANGE verb adds its signed delta. Events strictly
@@ -2037,23 +2060,23 @@ def answer(question: str, context: list, discourse: list = None):
         return int(val) if val == int(val) else val
     if any("interrogative" in u.features.get("senses", []) for u in r.units) \
             and any(_key(u.surface) == "old" for u in r.units):   # "How old is/will X be?" → age (years)
-        shift = ("next", "ago", "last", "later")         # a future/past age SHIFT we don't compute
-        if any(_key(u.surface) in shift or any(a in shift for a in u.features.get("attributes", []))
-               for u in r.units):                        # "next year" merges → "next" is an attribute
-            return "undetermined"
-        aux = next((u for u in r.units if "auxiliary" in u.features.get("senses", [])), None)
-        if aux is not None:
+        offset = _time_offset(r)                         # the queried time vs now — age TRACKS the timeline:
+        aux = next((u for u in r.units if "auxiliary" in u.features.get("senses", [])), None)   # age@(now+Δ)
+        if aux is not None:                                                                     # = age_now+Δ
             entities, _ = _question_subjects(r, aux)
         else:                                            # "How old is X?" — copula, subject is fronted
             subj, _ = _copula_args(r)
             entities = [_entity(subj)] if subj is not None else []
+        if not entities:
+            return "undetermined"
         total = 0
         for ent in entities:
             h = _holdings(ent, ("year", frozenset()), context)
             if h is None:
                 return "undetermined"
             total += h
-        return (int(total) if total == int(total) else total) if entities else "undetermined"
+        total += offset
+        return int(total) if total == int(total) else total
 
     who = next((u for u in r.units if "wh_subject" in u.features.get("senses", [])), None)
     if who is not None:                                  # "Who <predicate>?" → subjects with it

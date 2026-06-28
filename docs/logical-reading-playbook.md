@@ -653,7 +653,16 @@ amount = (value on the rate's measure) × (a container count if present): "3 boo
 matrix verbs ("it will TAKE him to WRITE …") since it reads values + the rate, not a single-verb clause.
 TEN real GSM8K problems solve. Precision 100%; 349 tests. (Joy — "8 pages in 20 minutes … how many hours
 to read 120 pages" — still declines: a per-N-unit rate "8 per 20 min" + "how many hours" (not "how long")
-+ min→hr; the remaining rate gaps are the per-N-unit rate form and cross-unit "how many <unit>" duration.)
++ min→hr; the remaining rate gaps are the per-N-unit rate form and cross-unit "how many <unit>" duration.)  ·
+85. **temporal age shift via the temporal model** (coverage 10→11, solves Herbert). The user vetoed a
+per-word "next→+1" hack — do it through the temporal model. A relative-time reference has a POSITION on the
+timeline relative to "now" (`_time_offset`: "next year"→+1, "last year"→−1, "in N years"→+N, "N years
+ago"→−N — one general parse, not per-word), and AGE is a TIME-TRACKING quantity (advances 1/year), so the
+age at a shifted time = age@now + Δ. The age branch now reads `_time_offset` and adds it (replacing the old
+"shift → decline" guard). So "Kris is 24 now; Herbert is 10 years younger; how old next year?" → 14 + 1 =
+15; "in 3 years" → +3; "5 years ago" → −5. (`ago`/`later`/`earlier` recognised.) Precision 100%; 355 tests.
+LESSON: a "shift" isn't a special case — it's the queried time's offset on the timeline, and age is the
+measure that tracks that axis. The same offset generalizes to any future time-dependent quantity.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
