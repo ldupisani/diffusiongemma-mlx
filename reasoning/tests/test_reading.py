@@ -2475,8 +2475,8 @@ class TestIncrement90VocabularyRound2(unittest.TestCase):
 class TestIncrement91Contractions(unittest.TestCase):
     """#91 - contractions are expanded at tokenization into their TWO words, each carrying its own
     obligation (no special-case flag): "what's" → what + is, "didn't" → did + not, "they're" → they are,
-    "won't" → will not. A NAME's possessive "'s" ("Tom's") is NOT a contraction — it stays one token for
-    the possessive resolver (only a pronoun/interrogative "'s" is the copula 'is')."""
+    "won't" → will not. A pronoun "'s" (he's/it's) is the copula 'is'; a NAME's genitive ("Tom's") splits
+    into the name + the possessive marker "'s" (so the name is recognised), distinct from the copula."""
 
     def test_pronoun_s_is_copula(self):
         self.assertEqual(reading._split_contraction("what's"), ["what", "is"])
@@ -2491,9 +2491,11 @@ class TestIncrement91Contractions(unittest.TestCase):
         self.assertEqual(reading._split_contraction("I'm"), ["I", "am"])
         self.assertEqual(reading._split_contraction("we've"), ["we", "have"])
 
-    def test_possessive_name_is_not_split(self):
-        self.assertEqual(reading._split_contraction("Tom's"), ["Tom's"])
-        self.assertEqual([u.surface for u in reading.analyze("Tom's apples").units], ["Tom's", "apples"])
+    def test_possessive_name_splits_to_genitive(self):
+        self.assertEqual(reading._split_contraction("Tom's"), ["Tom", "'s"])
+        self.assertEqual([u.surface for u in reading.analyze("Tom's apples").units], ["Tom", "'s", "apples"])
+        # the name is now recognised (no unknown-word), unlike the un-split "Tom's"
+        self.assertFalse(any(d.kind == "unknown-word" for d in reading.deficiencies(reading.analyze("Tom's age"))))
 
     def test_trailing_punctuation_rides_along(self):
         self.assertEqual(reading._split_contraction("what's?"), ["what", "is?"])

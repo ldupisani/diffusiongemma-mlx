@@ -92,9 +92,9 @@ class Reading:
 
 
 # Contractions are the surface form of TWO words — we restore both so each carries its own obligation
-# (no special-case flag): "what's" → what + is, "didn't" → did + not. A NAME's possessive "'s" ("Tom's")
-# is NOT a contraction — it stays one token for the possessive resolver; only a pronoun/interrogative
-# "'s" is the copula "is".
+# (no special-case flag): "what's" → what + is, "didn't" → did + not. The apostrophe-s splits two ways:
+# a PRONOUN/interrogative "'s" is the copula "is" ("he's", "what's"); a NAME's GENITIVE ("Leo's") → the
+# name + the possessive marker "'s" (so the name is recognised, not a stray unknown token).
 _NT_IRREGULAR = {"won't": "will", "can't": "can", "shan't": "shall"}
 _PRONOUN_S = {"what", "he", "she", "it", "that", "there", "who", "here", "where", "this", "how"}
 _CONTRACTION_SUFFIX = (("'re", "are"), ("'ve", "have"), ("'ll", "will"), ("'m", "am"))
@@ -118,8 +118,11 @@ def _split_contraction(tok: str) -> list:
     for suf, word in _CONTRACTION_SUFFIX:                 # they're / we've / he'll / I'm
         if low.endswith(suf):
             return two(core[:-len(suf)], word)
-    if low.endswith("'s") and low[:-2] in _PRONOUN_S:    # what's/he's/it's → IS (a name's "'s" stays)
-        return two(core[:-2], "is")
+    if low.endswith("'s") and len(low) > 2:
+        if low[:-2] in _PRONOUN_S:                        # what's / he's / it's → the copula IS
+            return two(core[:-2], "is")
+        if core[:1].isupper():                            # a NAME's genitive — "Leo's" → Leo + 's (the
+            return two(core[:-2], "'s")                   # possessive marker, so the name is recognised)
     return [tok]
 
 
@@ -653,6 +656,7 @@ LEXICON: dict[str, list[str]] = {
     # possessive / object pronouns (recognised, and they extend coreference — "his" → its antecedent):
     "him": ["pronoun"], "his": ["pronoun"], "her": ["pronoun"], "them": ["pronoun"],
     "their": ["pronoun"], "its": ["pronoun"],
+    "s": ["possessive"],   # the genitive marker from a split "Leo's" → Leo + 's (a NAME's possessive)
     # "what remains" markers — route a count question to the holdings fold:
     "left": ["adjective"], "remaining": ["adjective"], "leftover": ["adjective"], "rest": ["noun"],
     "remainder": ["noun"], "others": ["noun"],   # complement markers — "the REST/others <verb>" (_rest_quantity)

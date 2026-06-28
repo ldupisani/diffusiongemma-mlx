@@ -880,7 +880,21 @@ CLAUSE-splits and runs the same first-pass + deferred-retry + synthesize FIXPOIN
 multi-step problem resolves), keeping `--about` single-pass and the guard-free `answer()`. So `reading "Anne
 …"` now agrees with `reading.solve("Anne …")`. 427 tests; precision 100%. LESSON: adding observability (the
 trail) surfaced a latent correctness gap (CLI ≠ engine) — you can't audit what you can't see, and once you
-can see it the divergence is obvious.
+can see it the divergence is obvious.  ·
+105. **possessive genitive tokenization** (ceiling raise; fully-read 68→73 / 22.7%→24.3%, coverage
+unchanged). The third tokenizer in the family (contractions, hyphens, now genitives): a NAME's "'s" splits
+into the name + the possessive marker — "Leo's" → `Leo` + `'s`, so the name is RECOGNISED instead of a
+stray unknown `Leo's` token. The apostrophe-s now forks three ways in `_split_contraction`: a pronoun
+("he's"→is, copula), a name ("Leo's"→Leo + 's, genitive), else unchanged. `'s` (key `s`) is an inert
+`["possessive"]` marker — recognised (no unknown-word) but with NO obligation yet, so it can't misfire
+(precision held 100%). WHY NO COVERAGE: the five freed problems are multi-step and the possessive is
+INCIDENTAL — Leo's is a 3-part assignment sum, Ernesto's is temporal+relational, Matt's needs an INVERSE
+comparative ("Bush is younger than Matt by 3" → solve for Matt, which the directional comparative can't do).
+So this raises the ceiling (the documented mining loop) without a solve; the genitive OWNER-binding (Tom's
+apples → Tom owns) is future work, needed only when a possessive problem is otherwise solvable. LESSON: the
+≤2-step clean tier of the 300-slice is now EXHAUSTED (only Riku/Artemis/Sanchez remain — ambiguous or
+need world knowledge); further coverage needs foundational parsing (genitive semantics, noun-noun
+classifier compounds "mango trees", inverse comparatives) — each a real feature, not a quick win.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
