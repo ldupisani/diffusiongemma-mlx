@@ -1886,5 +1886,27 @@ class TestIncrement66TimeReferencedPartitive(unittest.TestCase):
                                        "How many apples does Tom have?"), 6)
 
 
+class TestIncrement67AcrossTimesComparison(unittest.TestCase):
+    """#67 - "how many more/fewer X did E have on T1 than on T2?" compares ONE entity's holdings at two
+    TIMES (split by "than") over the timeline: more -> hold(t1) - hold(t2); fewer -> the reverse. The
+    entity-vs-entity comparison ("more than William") is unaffected."""
+
+    def test_more_across_times(self):
+        self.assertEqual(reading.solve("On Monday Tom had 30 apples. On Tuesday Tom had 50 apples. "
+                                       "How many more apples did Tom have on Tuesday than on Monday?"), 20)
+
+    def test_fewer_across_times(self):
+        self.assertEqual(reading.solve("On Monday Tom had 30 apples. On Tuesday Tom had 50 apples. "
+                                       "How many fewer apples did Tom have on Monday than on Tuesday?"), 20)
+
+    def test_across_times_with_a_change(self):
+        self.assertEqual(reading.solve("On Monday Tom has 30 apples. On Tuesday Tom buys 20 apples. "
+                                       "How many more apples did Tom have on Tuesday than on Monday?"), 20)
+
+    def test_entity_comparison_still_works(self):
+        self.assertEqual(reading.solve("Oliver has 30 dollars. William has 10 dollars. "
+                                       "How much more money does Oliver have than William?"), 20)
+
+
 if __name__ == "__main__":
     unittest.main()

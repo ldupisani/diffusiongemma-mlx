@@ -528,7 +528,13 @@ embedded); if the of-clause has a verb + holder + time ("what he had on Tuesday"
 `_holdings_at(holder, measure, TIME)`, else the subject's current set ("of them"). So "buys a third of what
 he had on Tuesday" → (1/3)×15 = 5 at Thursday; the timeline folds 30−15+12+5 = 32. FIX along the way: the
 `solve()` fixpoint RETRY now passes `discourse` (was `None`), so a retried clause's "he" re-resolves —
-without it the Thursday clause's holder stayed unbound and it silently dropped. Precision 100%; 298 tests.
+without it the Thursday clause's holder stayed unbound and it silently dropped. Precision 100%; 298 tests.  ·
+74. **"how many more/fewer … than" ACROSS TIMES** — value comparison over the timeline. When the comp
+question's `than` splits TWO times ("…on Tuesday than on Monday"), compare ONE entity's holdings at the two
+times: `_holdings_at(E, m, t1)` (the time before `than`) vs `…(E, m, t2)` (after) → `more`: a−b, `fewer`:
+b−a. Slots into the existing comp branch before the entity-vs-entity case (which is unchanged — that one's
+standard is a name, this one's "than" referent is a time). "On Mon Tom had 30, On Tue 50 — how many more on
+Tue than on Mon?" → 20; composes with changes (state+buy). Precision 100%; 302 tests.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

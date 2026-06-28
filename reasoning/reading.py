@@ -1747,6 +1747,19 @@ def answer(question: str, context: list, discourse: list = None):
     if comp is not None and aux is not None and query is not None:    # "How much more <measure> does
         standard = _follow(comp, "standard")                         # A have than B?" → A's − B's
         subjects, _ = _question_subjects(r, aux)                     # A = the verb's bound subject
+        times = [u for u in r.units if "time" in u.features.get("senses", [])]
+        than = next((u for u in r.units if _key(u.surface) == "than"), None)
+        if len(subjects) == 1 and than is not None and len(times) == 2:   # ACROSS TIMES: one entity at
+            tp = r.units.index(than)                                       # two times split by "than" —
+            t1 = next((u for u in times if r.units.index(u) < tp), None)   # "…on Tuesday than on Monday"
+            t2 = next((u for u in times if r.units.index(u) > tp), None)
+            if t1 is not None and t2 is not None:
+                a = _holdings_at(subjects[0], query, context, _key(t1.surface))
+                b = _holdings_at(subjects[0], query, context, _key(t2.surface))
+                if a is not None and b is not None:
+                    diff = a - b if _key(comp.surface) == "more" else b - a
+                    return int(diff) if diff == int(diff) else diff
+            return "undetermined"
         if standard is not None and len(subjects) == 1:
             a = _holdings(subjects[0], query, context)
             b = _holdings(_entity(standard), query, context)
