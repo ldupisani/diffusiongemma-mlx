@@ -2165,5 +2165,19 @@ class TestIncrement76RelativeClauseAndCrossEntityRate(unittest.TestCase):
                                        "How much did he pay?"), 20)
 
 
+class TestIncrement77RateInversion(unittest.TestCase):
+    """#77 - rate INVERSION: "How LONG will it take to <verb> <target>?" → target ÷ rate, in the rate's
+    per_unit. The target may be an explicit "N <measure>" or a relative-clause mult ("3 books that are
+    400 pages each" → 1200). Solves John-writes."""
+
+    def test_inversion_explicit_target(self):
+        self.assertEqual(reading.solve("John writes 20 pages a day. "
+                                       "How long will it take John to write 1200 pages?"), 60)
+
+    def test_inversion_with_relative_clause_target(self):
+        self.assertEqual(reading.solve("John writes 20 pages a day. How long will it take him to "
+                                       "write 3 books that are 400 pages each?"), 60)
+
+
 if __name__ == "__main__":
     unittest.main()

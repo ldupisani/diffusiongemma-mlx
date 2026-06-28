@@ -645,7 +645,15 @@ sentence end. (c) PP-OBJECT exclusion from subjects: "the price OF beef is …" 
 on→Monday (so the time, not the trailing name, is the object — Tom stays the subject). (e) CROSS-ENTITY
 money rate: "how much did he pay" applies a `$/unit` price (any entity) to the asker's units (James's 20
 lb × $5.50 = 110). And coreference now stores (entity, is_name): a gendered "he"/"she" prefers a PERSON
-name over a thing — "he" → James, not "price". NINE real GSM8K problems solve. Precision 100%; 347 tests.
+name over a thing — "he" → James, not "price". NINE real GSM8K problems solve. Precision 100%; 347 tests.  ·
+84. **rate INVERSION** (coverage 9→10, solves John-writes). "How LONG will it take to <verb> <target>?"
+→ `target ÷ rate`, answered in the rate's per_unit. The "how long" branch finds a `Rate` and the target
+amount = (value on the rate's measure) × (a container count if present): "3 books that are 400 pages each"
+→ 400 × 3 = 1200 pages, ÷ 20 pages/day = 60 days; an explicit "1200 pages" → 1200 ÷ 20 = 60. Tolerates the
+matrix verbs ("it will TAKE him to WRITE …") since it reads values + the rate, not a single-verb clause.
+TEN real GSM8K problems solve. Precision 100%; 349 tests. (Joy — "8 pages in 20 minutes … how many hours
+to read 120 pages" — still declines: a per-N-unit rate "8 per 20 min" + "how many hours" (not "how long")
++ min→hr; the remaining rate gaps are the per-N-unit rate form and cross-unit "how many <unit>" duration.)
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

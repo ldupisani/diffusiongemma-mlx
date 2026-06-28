@@ -2145,6 +2145,20 @@ def answer(question: str, context: list, discourse: list = None):
     interro = next((u for u in r.units if "interrogative" in u.features.get("senses", [])), None)
     if interro is None:
         return [Deficiency("not-a-question", interro, "this is not a question I can answer")]
+    if any(_key(u.surface) == "long" for u in r.units):  # "How LONG … to <verb> <target>?" → RATE INVERSION:
+        rate = next((f for f in context if isinstance(f, Rate)), None)        # target ÷ rate, in per_unit
+        if rate is not None:                                                  # ("1200 pages ÷ 20/day = 60")
+            mv = next((u for u in r.units if "value" in u.features.get("senses", []) and _follow(u, "quantifies")
+                       is not None and _descriptor(_follow(u, "quantifies")) == rate.measure), None)
+            if mv is not None:
+                amt = mv.features["value"]
+                cv = next((u for u in r.units if "value" in u.features.get("senses", []) and u is not mv
+                           and _follow(u, "quantifies") is not None), None)   # "3 BOOKS that are 400 pages"
+                if cv is not None:
+                    amt *= cv.features["value"]
+                t = amt / rate.amount
+                return int(t) if t == int(t) else t
+        return "undetermined"
     collection = _follow(_follow(interro, "queries"), "collection")   # how → many → its collection
     query = _descriptor(collection) if collection is not None else None
     much = next((u for u in r.units if _key(u.surface) == "much"), None)
