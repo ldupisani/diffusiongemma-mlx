@@ -136,6 +136,31 @@ def _merge_scales(reading: Reading) -> Reading:
     return reading
 
 
+def _merge_labels(reading: Reading) -> Reading:
+    """A bare VALUE right after a NOUN is a LABEL/ordinal of it ("Grade 5", "Room 3"), NOT a quantity —
+    absorb it into the noun (the number becomes an attribute) so it is no longer a free value that would
+    spuriously quantify a neighbour, base a percent, or trip the unused-given guard."""
+    units = reading.units
+    for i in range(len(units) - 1):
+        noun, val = units[i], units[i + 1]
+        if "noun" in noun.features.get("senses", []) and "operator" not in noun.features.get("senses", []) \
+                and "value" in val.features.get("senses", []) \
+                and "measure" not in val.features:        # not "$5" (money), not "times 3" (operator+noun)
+            v = val.features["value"]
+            label = str(int(v)) if v == int(v) else str(v)
+            merged = Unit(words=sorted(noun.words + val.words, key=lambda w: w.index))
+            merged.features["senses"] = ["noun"]
+            merged.features["head"] = noun.features.get("head") or noun.features.get("singular") \
+                or _key(noun.surface)
+            merged.features["attributes"] = list(noun.features.get("attributes", [])) + [label]
+            reading.record("merge-label", target=merged,
+                           before={"merged_from": [noun, val], "at": i},
+                           after={"label": merged.features["head"]}, reason="noun + number label")
+            units[i:i + 2] = [merged]
+            return _merge_labels(reading)
+    return reading
+
+
 # --- annotation: number ---------------------------------------------------------------------
 # We do NOT guess at plurals. A unit is plural iff it appears in this definitive, curated
 # dictionary mapping a known plural to its singular. Irregulars ("children"→"child") cost nothing
@@ -1014,6 +1039,7 @@ def analyze(text: str) -> Reading:
     annotate_number(r)
     annotate_senses(r)
     _merge_scales(r)         # "two dozen" → one value unit (24) before obligations bind it
+    _merge_labels(r)         # "Grade 5" → a labeled noun (the number is an ordinal, not a quantity)
     disambiguate(r)          # collapse multi-sense words to the reading that covers best
     annotate_obligations(r)
     while condense(r):       # condense "red apple" → one noun unit; loop stacks "big red apple"
@@ -1751,7 +1777,14 @@ def _percent_quantity(reading: Reading, context: list):
         return None
     of = next((u for u in reading.units if _key(u.surface) == "of"            # "X% OF the <noun>" — a
                and _follow(u, "anchor") is pct), None)                        # percent of a COUNT
-    noun_base = _follow(of, "object") if of is not None else None
+    noun_base = None
+    if of is not None:                                   # the of-phrase HEAD = the LAST noun before a verb
+        units, oi = reading.units, reading.units.index(of)   # ("of his Grade-5 STUDENTS got …" → students,
+        for u in units[oi + 1:]:                             # the head, not the "Grade 5" classifier)
+            if "verb" in u.features.get("senses", []):
+                break
+            if "noun" in u.features.get("senses", []):
+                noun_base = u
     if noun_base is not None and "noun" in noun_base.features.get("senses", []):
         ref = next((f for f in reversed(context or [])
                     if isinstance(f, Quantity) and f.measure == _descriptor(noun_base)), None)

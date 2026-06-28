@@ -774,7 +774,19 @@ when an entity's count is unknown (the grand total would silently sum only the k
 wrong). So the distinction is generic-population (sum everything of the measure-family) vs named-entities
 (check each). Precision 100%; 394 tests. SIXTEEN real GSM8K problems solve. LESSON: a "sum everything"
 branch must be fenced off from "sum these specific entities" — the cue is whether the question names them;
-the ceiling→coverage handoff worked exactly as predicted (vocab freed Christina, then structure solved it).
+the ceiling→coverage handoff worked exactly as predicted (vocab freed Christina, then structure solved it).  ·
+96. **`Grade N` classifier label** (Sanchez chain; coverage unchanged at 16). A bare number right after a
+noun is a LABEL/ordinal ("Grade 5", "Room 3", "Type 2"), NOT a quantity. `_merge_labels` (a pre-pass beside
+`_merge_scales`) absorbs it — the number becomes an ATTRIBUTE of the noun — so it no longer (a) quantifies
+the next noun, (b) bases the percent ("40% of his Grade 5 students" was misreading as "40% of 5"), or (c)
+trips the unused-given guard. Gated to a PURE noun (skips `operator`-sense, so "4 TIMES 3" still
+multiplies; and `$5` is excluded as a self-measuring money value). With the free `5` gone, the percent
+of-object resolves to the of-phrase HEAD (the LAST noun before the verb — `students`, not the `Grade 5`
+classifier), so "40% of his Grade 5 students" → 24 of 60. Precision 100%; 398 tests. This was the
+SECOND-to-last Sanchez blocker — the percent clause now yields 24; only the THRESHOLD complement ("B and
+above" = not "below B") remains, which is specialized grade semantics (deferred). LESSON: word ORDER
+disambiguates number role — number-then-noun is a quantity ("5 students"), noun-then-number is a label
+("Grade 5"); the same digit, opposite meaning, read off position.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

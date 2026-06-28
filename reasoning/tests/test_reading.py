@@ -2434,5 +2434,28 @@ class TestIncrement88CombinedGrandTotal(unittest.TestCase):
                                         reading.learn("Tom has 3 apples")), "undetermined")
 
 
+class TestIncrement89ClassifierLabel(unittest.TestCase):
+    """#89 - a bare number right after a noun is a LABEL/ordinal ("Grade 5", "Room 3"), not a quantity:
+    _merge_labels absorbs it (the number → an attribute) so it no longer quantifies a neighbour, bases a
+    percent, or trips the unused-given guard. So "40% of his Grade 5 students" reads the percent-of-count
+    over STUDENTS (the of-phrase head) = 24 of 60. "4 times 3" is unaffected (times is an operator)."""
+
+    def test_grade_n_is_a_label(self):
+        r = reading.analyze("his Grade 5 students")
+        self.assertFalse(any("value" in u.features.get("senses", []) for u in r.units))
+
+    def test_percent_over_grade_n_head(self):
+        self.assertEqual(reading.learn("40% of his Grade 5 students got a final grade below B", [],
+                                       [reading.Quantity("he", ("student", frozenset()), 60, "have")]),
+                         [reading.Quantity("student", ("student", frozenset()), 24.0, "get")])
+
+    def test_times_operator_unaffected(self):
+        self.assertEqual(reading.answer("What is 4 times 3?", []), 12)
+
+    def test_number_first_quantity_unaffected(self):
+        self.assertEqual(reading.learn("Tom has 5 apples"),
+                         [reading.Quantity("tom", ("apple", frozenset()), 5.0, "have")])
+
+
 if __name__ == "__main__":
     unittest.main()
