@@ -2306,5 +2306,29 @@ class TestIncrement82PerfectAuxiliary(unittest.TestCase):
                                        "year before. How many geckos has Brandon sold in the last two years?"), 258)
 
 
+class TestIncrement83PercentOfCount(unittest.TestCase):
+    """#83 - percent OF A COUNT: "40% of the students passed" → 0.4 × the students' quantity (24 of 60).
+    The base is the "of"-object NOUN (distinct from _percent_quantity's portion, and from "20% of 50"
+    arithmetic). "How many students passed?" has no aux — the query noun is itself the subject. The
+    category COMPLEMENT ("how many failed" from "40% passed") is NOT inferred → honest decline."""
+
+    def test_percent_of_count_learn(self):
+        self.assertEqual(reading.learn("40% of the students passed", [],
+                                       [reading.Quantity("class", ("student", frozenset()), 60, "have")]),
+                         [reading.Quantity("student", ("student", frozenset()), 24.0, "pass")])
+
+    def test_percent_of_count_solves(self):
+        self.assertEqual(reading.solve("A class has 60 students. 40% of the students passed. "
+                                       "How many students passed?"), 24)
+
+    def test_portion_percent_unchanged(self):
+        self.assertEqual(reading.solve("Susie has $200. Susie puts 20% more money. "
+                                       "How much money does Susie have?"), 240)
+
+    def test_complement_declines(self):
+        self.assertEqual(reading.solve("A class has 60 students. 40% of the students passed. "
+                                       "How many students failed?"), "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()

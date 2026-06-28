@@ -1657,12 +1657,28 @@ def _rate(reading: Reading):
 
 
 def _percent_quantity(reading: Reading, context: list):
-    """A percentage OF A HOLDING — "puts 20% more money" → 0.2 × the matching prior quantity. The
-    percent has NO explicit base value (that case, "20% of 50", is arithmetic) — its base is the
-    referent: the most recent prior Quantity whose measure a noun here names."""
+    """A percentage OF A HOLDING/COUNT. Two shapes: (a) NO explicit base — "puts 20% more money" → 0.2 ×
+    the matching prior quantity (the portion; its base is the referent a noun here names). (b) base is a
+    NOUN — "40% OF the students passed" → 0.4 × the students' quantity (the count of students who passed).
+    A VALUE base ("20% of 50") is pure arithmetic, handled elsewhere."""
     pct = next((u for u in reading.units if "percent" in u.features.get("senses", [])), None)
-    if pct is None or _follow(pct, "base") is not None:
+    if pct is None:
         return None
+    if _follow(pct, "base") is not None:                  # "20% OF 50" — an explicit VALUE base: arithmetic
+        return None
+    of = next((u for u in reading.units if _key(u.surface) == "of"            # "X% OF the <noun>" — a
+               and _follow(u, "anchor") is pct), None)                        # percent of a COUNT
+    noun_base = _follow(of, "object") if of is not None else None
+    if noun_base is not None and "noun" in noun_base.features.get("senses", []):
+        ref = next((f for f in reversed(context or [])
+                    if isinstance(f, Quantity) and f.measure == _descriptor(noun_base)), None)
+        if ref is None:
+            return None
+        cverbs = [u for u in reading.units if "verb" in u.features.get("senses", [])
+                  and _key(u.surface) not in ("is", "are", "was", "were")]
+        cverb = _lemma(cverbs[0].surface) if cverbs else "have"
+        return Quantity(_descriptor(noun_base)[0], _descriptor(noun_base),
+                        pct.features["value"] * ref.amount, cverb)
     verbs = [u for u in reading.units if "verb" in u.features.get("senses", [])]
     subject = _follow(verbs[0], "subject") if len(verbs) == 1 else None
     if subject is None:
@@ -2295,9 +2311,21 @@ def answer(question: str, context: list, discourse: list = None):
             if counts:
                 return int(counts[0]) if counts[0] == int(counts[0]) else counts[0]
             return "undetermined"
-    if aux is not None and query is not None:            # "How many <measure> do <entities> <verb>?"
+    qverb_unit = next((u for u in r.units if "verb" in u.features.get("senses", [])
+                       and _key(u.surface) not in ("is", "are", "was", "were")), None)
+    # "How many STUDENTS passed?" — no aux; the query noun IS the subject. Only when a matching count-fact
+    # exists (so it never preempts the remainder / count-instances branches).
+    noaux_match = (aux is None and query is not None and qverb_unit is not None and not remainder
+                   and any(isinstance(f, Quantity) and f.entity == query[0] and f.measure == query
+                           and f.verb == _lemma(qverb_unit.surface) for f in context))
+    if noaux_match:
+        entities, q_verb, q_time = [query[0]], _lemma(qverb_unit.surface), None
+    elif aux is not None and query is not None:           # "How many <measure> do <entities> <verb>?"
         entities, q_verb = _question_subjects(r, aux)    # the verb's bound subject(s), structurally
         q_time = next((_key(u.surface) for u in r.units if "time" in u.features.get("senses", [])), None)
+    else:
+        entities = None
+    if query is not None and entities is not None:
         if entities:
             total = 0
             for ent in entities:

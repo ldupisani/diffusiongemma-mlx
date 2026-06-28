@@ -706,7 +706,20 @@ sold→sell, so the question matches the context's sell-events: 86 + 172 = 258. 
 worked — `_relational_quantity`'s unnamed branch takes the most recent Quantity as the referent: 2×86.)
 Precision 100%; 373 tests. FIFTEEN real GSM8K problems solve (5.0% of the dev slice). LESSON: the same
 auxiliary/verb multi-sense pattern as do/does/did — but verb-FIRST, because have is primarily a main verb;
-the obligation-coverage disambiguator flips it to the auxiliary reading exactly when a participle needs it.
+the obligation-coverage disambiguator flips it to the auxiliary reading exactly when a participle needs it.  ·
+90. **percent of a COUNT** (capability; coverage unchanged at 15 — honest). "40% OF the students passed"
+→ 0.4 × the students' quantity = 24 of 60 (the count of students who passed). `_percent_quantity` now
+forks on the percent's base: a VALUE base ("20% of 50") is arithmetic (decline here); the "of"-object NOUN
+("of the students") is a percent-of-count — the referent is the prior Quantity of that noun's measure, the
+result a `Quantity(<noun>, <noun>, 0.4×ref, <verb>)`. The "How many students passed?" question has NO aux
+(the query noun is itself the subject), so the holdings fold gained a no-aux path — gated on a matching
+count-fact existing, so it never preempts the remainder / count-instances branches. The portion percent
+("puts 20% more money") and "20% of 50" arithmetic are unchanged. Precision 100%; 377 tests. WHY NO
+COVERAGE: the real percent problems need MORE than the partitive — Sanchez wants the category COMPLEMENT
+("B and above" = not "below B" = 100%−40%), Adam wants multi-class subtraction. We DECLINE those (no
+complement/category model) rather than guess — "how many failed" from "40% passed" → undetermined.
+PRINCIPLE: a correct, general, tested capability is a legitimate increment even when this slice's coverage
+doesn't move; forcing the complement would be a guess. The complement/category model is the next real step.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
