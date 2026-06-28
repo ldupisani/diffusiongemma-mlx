@@ -91,10 +91,43 @@ class Reading:
         return d
 
 
+# Contractions are the surface form of TWO words — we restore both so each carries its own obligation
+# (no special-case flag): "what's" → what + is, "didn't" → did + not. A NAME's possessive "'s" ("Tom's")
+# is NOT a contraction — it stays one token for the possessive resolver; only a pronoun/interrogative
+# "'s" is the copula "is".
+_NT_IRREGULAR = {"won't": "will", "can't": "can", "shan't": "shall"}
+_PRONOUN_S = {"what", "he", "she", "it", "that", "there", "who", "here", "where", "this", "how"}
+_CONTRACTION_SUFFIX = (("'re", "are"), ("'ve", "have"), ("'ll", "will"), ("'m", "am"))
+
+
+def _split_contraction(tok: str) -> list:
+    """Expand one token if it is a contraction, else return it unchanged. Trailing punctuation rides on
+    the LAST expanded word so the sentence still reads ("what's?" → ["what", "is?"])."""
+    core, punct = tok.replace("’", "'"), ""
+    while core and core[-1] in ".,?!;:":
+        core, punct = core[:-1], core[-1] + punct
+    low = core.lower()
+
+    def two(first, second):
+        return [first, second + punct]
+
+    if low in _NT_IRREGULAR:                              # won't → will not, can't → can not
+        return two(_NT_IRREGULAR[low], "not")
+    if low.endswith("n't") and len(low) > 3:             # did|n't, is|n't, does|n't, could|n't, …
+        return two(core[:-3], "not")
+    for suf, word in _CONTRACTION_SUFFIX:                 # they're / we've / he'll / I'm
+        if low.endswith(suf):
+            return two(core[:-len(suf)], word)
+    if low.endswith("'s") and low[:-2] in _PRONOUN_S:    # what's/he's/it's → IS (a name's "'s" stays)
+        return two(core[:-2], "is")
+    return [tok]
+
+
 def read(text: str) -> Reading:
-    """Read text into a Reading: one Word per whitespace-separated token, each wrapped in its own
-    Unit, in order. No normalization or merging yet — those are later, decision-logged steps."""
-    words = [Word(surface=tok, index=i) for i, tok in enumerate(text.split())]
+    """Read text into a Reading: one Word per whitespace-separated token (contractions expanded to their
+    constituent words first), each wrapped in its own Unit, in order. No further normalization yet."""
+    toks = [t for tok in text.split() for t in _split_contraction(tok)]
+    words = [Word(surface=tok, index=i) for i, tok in enumerate(toks)]
     return Reading(units=[Unit(words=[w]) for w in words])
 
 

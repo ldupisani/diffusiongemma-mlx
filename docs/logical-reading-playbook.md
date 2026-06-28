@@ -796,7 +796,18 @@ splitting), deferred. Precision 100%; 400 tests. LESSON: `LEXICON.update()` OVER
 not shadow an existing MULTI-sense entry. "rose" was already `["noun","verb"]` (a disambiguation test
 relies on it); adding `"rose":["noun"]` silently narrowed it and broke 4 tests. The suite caught it — but
 when batch-adding vocab, scan for keys that are already multi-sense and leave them alone (a regression test
-now pins `LEXICON["rose"] == ["noun","verb"]`).
+now pins `LEXICON["rose"] == ["noun","verb"]`).  ·
+98. **contraction expansion at tokenization** (ceiling raise; fully-read 65→66, coverage unchanged at 16).
+A contraction is the surface form of TWO words — `read()` now restores both (`_split_contraction`), so each
+carries its OWN obligation and the existing machinery handles it; NO special-case flag. "what's" → what +
+is, "didn't" → did + not, "they're" → they are, "won't" → will not (irregular), "I'm" → I am, "we've" → we
+have, "he'll" → he will. Trailing punctuation rides on the last word ("what's?" → ["what", "is?"]). The KEY
+discrimination is the apostrophe-s: a PRONOUN/interrogative "'s" (what/he/it/that/there/who/…) is the copula
+"is", but a NAME's possessive ("Tom's") is NOT a contraction — it stays one token for the possessive
+resolver. Only +1 fully-read (the "what's" problems carry other unknowns) but it's a correct, GENERAL
+tokenization fix that composes with everything downstream. Precision 100%; 406 tests. LESSON: restore the
+underlying words rather than special-case the contraction — the obligation machinery then needs no change
+(the lexicalist principle: put the grammar back IN the words, don't bolt a rule onto the side).
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

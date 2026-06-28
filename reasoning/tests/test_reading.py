@@ -2472,5 +2472,36 @@ class TestIncrement90VocabularyRound2(unittest.TestCase):
         self.assertEqual(reading.LEXICON["rose"], ["noun", "verb"])
 
 
+class TestIncrement91Contractions(unittest.TestCase):
+    """#91 - contractions are expanded at tokenization into their TWO words, each carrying its own
+    obligation (no special-case flag): "what's" → what + is, "didn't" → did + not, "they're" → they are,
+    "won't" → will not. A NAME's possessive "'s" ("Tom's") is NOT a contraction — it stays one token for
+    the possessive resolver (only a pronoun/interrogative "'s" is the copula 'is')."""
+
+    def test_pronoun_s_is_copula(self):
+        self.assertEqual(reading._split_contraction("what's"), ["what", "is"])
+        self.assertEqual(reading._split_contraction("he's"), ["he", "is"])
+
+    def test_nt_is_not(self):
+        self.assertEqual(reading._split_contraction("didn't"), ["did", "not"])
+        self.assertEqual(reading._split_contraction("won't"), ["will", "not"])
+
+    def test_other_suffixes(self):
+        self.assertEqual(reading._split_contraction("they're"), ["they", "are"])
+        self.assertEqual(reading._split_contraction("I'm"), ["I", "am"])
+        self.assertEqual(reading._split_contraction("we've"), ["we", "have"])
+
+    def test_possessive_name_is_not_split(self):
+        self.assertEqual(reading._split_contraction("Tom's"), ["Tom's"])
+        self.assertEqual([u.surface for u in reading.analyze("Tom's apples").units], ["Tom's", "apples"])
+
+    def test_trailing_punctuation_rides_along(self):
+        self.assertEqual(reading._split_contraction("what's?"), ["what", "is?"])
+
+    def test_expanded_question_reads(self):
+        self.assertEqual([u.surface for u in reading.analyze("What's the answer?").units],
+                         ["What", "is", "the", "answer?"])
+
+
 if __name__ == "__main__":
     unittest.main()
