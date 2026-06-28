@@ -478,7 +478,24 @@ less/fewer); "how old is/will X be?" reads the year-holdings (entity via `_quest
 copula subject). FIX: `_membership` now skips when a VALUE is present ("Kris is 24 years old" is a
 QUANTITY, not Membership(kris, year)). PRECISION: a future/past SHIFT ("how old will X be NEXT YEAR")
 declines — caught by checking the shift word's ATTRIBUTE too, since "next year" condenses to year{next}.
-Precision 100% (the shift check turned a confident-wrong back into a decline). 274 tests.
+Precision 100% (the shift check turned a confident-wrong back into a decline). 274 tests.  ·
+70. **relational temporal foundation + the read–SYNTHESIZE loop** (a NEW architecture, user-designed).
+Two ideas. (a) TIME is RELATIONAL, not calendar: a time reference (`monday`..`sunday`, `yesterday`/
+`today`/months) is a NODE (lexicon sense `time`); ORDER is tracked as separate `Before(earlier, later)`
+facts read off the TEXT, never a calendar rank — days WRAP ("Tue → Sat → Mon" makes that Mon later than
+that Tue). Driven by OBLIGATIONS: a `time` word carries `associates` (the value it timestamps — nearest
+verb, reusing the `negates` resolver; `Quantity` gains `time` from this binding) and `orders` (its order
+vs another time, bound only when an after/before cue is present; direction read at fact-time). (b) The
+read–synthesize LOOP: reading BINDS what's present; some obligations have no word to bind (target exists
+only by IMPLICATION) → a `synthesize(facts)` driver derives implied facts to a FIXPOINT, dispatching a
+SYNTHESIZER REGISTRY (`SYNTHESIZERS`, keyed by fact kind; outstanding obligations are the agenda). First
+synthesizer = transitive ordering (`_before` closure: a<b ∧ b<c ⟹ a<c, iterated over rounds → multi-step
+reasoning front-loaded). `solve()`'s `while progress` fixpoint is GENERALIZED to call it (one loop). NEW
+capability = REGISTER a synthesizer, never a one-off check. PRECISION: making `Monday` a time removed an
+ambiguous-subject block, exposing Buddy ("Mon 30 + Wed 12", dropping the Tue halving → 42 wrong) → GUARD 5
+declines any problem whose value@time facts span ≥2 distinct times (time-aware FOLDING/querying is the
+next increment; the foundation only tracks the facts). Precision 100%; 284 tests. Memory:
+`temporal-model-relational`. Next: timeline assembly + time-aware querying (state vs change).
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

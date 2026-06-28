@@ -1748,5 +1748,61 @@ class TestIncrement62AgeQuestions(unittest.TestCase):
         self.assertEqual(reading.answer("Is Bob a student?", reading.learn("Bob is a student")), "yes")
 
 
+class TestIncrement63TemporalFoundation(unittest.TestCase):
+    """#63 - relational temporal foundation + the read-SYNTHESIZE loop. A time reference is a NODE; the
+    `time` word carries `associates` (the value it timestamps) and `orders` (its order vs other times,
+    via an after/before cue). value@time rides on Quantity; Before(earlier,later) carries order. Ordering
+    is RELATIONAL (days WRAP), and its transitive closure is DERIVED by synthesis, never assumed. The
+    no-guess contract holds: an order neither stated nor derivable is not invented, and a multi-time
+    problem (time-aware folding is a later increment) DECLINES rather than fold across times blindly."""
+
+    def test_time_is_recognized_as_a_node(self):
+        r = reading.analyze("Tom has 3 apples on Monday")
+        monday = next(u for u in r.units if u.surface == "Monday")
+        self.assertEqual(monday.features.get("senses"), ["time"])
+
+    def test_value_at_time(self):
+        self.assertEqual(reading.learn("Tom has 3 apples on Monday"),
+                         [reading.Quantity("tom", ("apple", frozenset()), 3.0, "have", "monday")])
+
+    def test_timeless_quantity_has_no_time(self):
+        self.assertEqual(reading.learn("Tom has 3 apples"),
+                         [reading.Quantity("tom", ("apple", frozenset()), 3.0, "have", None)])
+
+    def test_associates_binds_the_verb(self):
+        r = reading.analyze("Tom has 3 apples on Monday")
+        monday = next(u for u in r.units if u.surface == "Monday")
+        self.assertEqual(reading._follow(monday, "associates").surface, "has")
+
+    def test_before_fact_from_after_cue(self):
+        self.assertEqual(reading.learn("Tuesday is after Monday"),
+                         [reading.Before("monday", "tuesday")])
+
+    def test_before_fact_from_before_cue(self):
+        self.assertEqual(reading.learn("Saturday is before Monday"),
+                         [reading.Before("saturday", "monday")])
+
+    def test_synthesis_derives_transitive_order(self):
+        facts = reading.learn("Tuesday is after Monday") + reading.learn("Saturday is after Tuesday")
+        self.assertIn(reading.Before("monday", "saturday"), reading.synthesize(facts))
+
+    def test_order_is_relational_days_wrap(self):
+        # Tuesday -> Saturday -> Monday makes THIS Monday LATER than THIS Tuesday (not the calendar)
+        synth = reading.synthesize(reading.learn("Saturday is after Tuesday")
+                                   + reading.learn("Monday is after Saturday"))
+        self.assertTrue(reading._before("tuesday", "monday", synth))
+        self.assertFalse(reading._before("monday", "tuesday", synth))
+
+    def test_synthesis_does_not_invent_order(self):
+        synth = reading.synthesize([reading.Before("monday", "tuesday")])
+        self.assertFalse(reading._before("tuesday", "monday", synth))
+
+    def test_multi_time_problem_declines_not_guesses(self):
+        self.assertEqual(reading.solve(
+            "On Monday Buddy has 30 baseball cards. On Tuesday Buddy loses half of them. "
+            "On Wednesday Buddy buys 12 baseball cards. "
+            "How many baseball cards does Buddy have on Wednesday?"), "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()

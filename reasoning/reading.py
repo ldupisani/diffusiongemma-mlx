@@ -303,7 +303,7 @@ LEXICON: dict[str, list[str]] = {
     "will": ["auxiliary"], "can": ["auxiliary"], "would": ["auxiliary"], "should": ["auxiliary"],
     "could": ["auxiliary"], "must": ["auxiliary"], "may": ["auxiliary"], "might": ["auxiliary"],
     # adverbs / conjunctions (recognised; no obligation — they don't block the parse):
-    "then": ["adverb"], "just": ["adverb"], "also": ["adverb"], "only": ["adverb"], "now": ["adverb"],
+    "then": ["adverb"], "just": ["adverb"], "also": ["adverb"], "only": ["adverb"], "now": ["time"],
     "still": ["adverb"], "again": ["adverb"], "already": ["adverb"], "if": ["conjunction"],
     "but": ["conjunction"], "or": ["conjunction"], "so": ["conjunction"], "less": ["comparative"],
     # ordinals + common adjectives:
@@ -381,6 +381,14 @@ LEXICON: dict[str, list[str]] = {
     "level": ["noun"], "score": ["noun"], "grade": ["noun"],
     # multi-word INDIVISIBLE compounds (merged into one unit before analysis — see _merge_compounds):
     "piggy bank": ["noun"], "ice cream": ["noun"], "high school": ["noun"], "credit card": ["noun"],
+    # time-reference NODES — relational, NOT calendar-ranked (order is tracked as separate Before facts).
+    # A time carries `associates` (the value it timestamps) + `orders` (its order vs other times).
+    "monday": ["time"], "tuesday": ["time"], "wednesday": ["time"], "thursday": ["time"],
+    "friday": ["time"], "saturday": ["time"], "sunday": ["time"],
+    "yesterday": ["time"], "today": ["time"], "tomorrow": ["time"], "tonight": ["time"],
+    "january": ["time"], "february": ["time"], "march": ["time"], "april": ["time"],
+    "june": ["time"], "july": ["time"], "august": ["time"], "september": ["time"],
+    "october": ["time"], "november": ["time"], "december": ["time"],   # "may" deferred (modal conflict)
     # possessive / object pronouns (recognised, and they extend coreference — "his" → its antecedent):
     "him": ["pronoun"], "his": ["pronoun"], "her": ["pronoun"], "them": ["pronoun"],
     "their": ["pronoun"], "its": ["pronoun"],
@@ -496,13 +504,18 @@ ROLE_OBLIGATIONS: dict[str, list[str]] = {
     "multiplier": ["scales"],           # a frequency multiplier scales the verb to its left ("jumps TWICE")
     "per": ["rate", "unit"],            # "$12 per hour" — binds the rate value (left) and the unit (right)
     "percent": ["base"],                # "20% of 50" — binds the base the fraction applies to
+    "time": ["associates", "orders"],   # a time timestamps a value (`associates`) and orders against
+                                        # other times (`orders`); see the temporal model
 }
 
 # Obligations that are grammatically OPTIONAL: unmet is not a deficiency. A verb's direct object is
 # genuinely optional (intransitive use) — nothing else accounts for its absence. A value's
 # `quantifies` is NOT here: it's required, but FOREGONE when the value is an operand (see the
 # subordination forego in deficiencies) — being grabbed by an operator discharges its role.
-OPTIONAL_NEEDS = {"dobj"}
+# `associates`/`orders` are optional: a time may timestamp no value (a pure ordering statement) and a
+# lone time has nothing to order against. An unmet, DERIVABLE order is filled by the synthesis loop, not
+# flagged here; a stated order that's genuinely missing is a later (querying-time) precision concern.
+OPTIONAL_NEEDS = {"dobj", "associates", "orders"}
 
 
 def annotate_obligations(reading: Reading) -> Reading:
@@ -631,6 +644,13 @@ def _find_target(need, u, i, units, pos):
     if need == "negates":         # a negator scopes over the NEAREST verb (copula left, or main right)
         verbs = [x for x in units if has(x, "verb")]
         return min(verbs, key=lambda v: abs(pos[id(v)] - i)) if verbs else None
+    if need == "associates":      # a time timestamps the NEAREST verb (the value/event it describes)
+        verbs = [x for x in units if has(x, "verb")]
+        return min(verbs, key=lambda v: abs(pos[id(v)] - i)) if verbs else None
+    if need == "orders":          # a time orders against ANOTHER time, only when an after/before cue is
+        others = [x for x in units if has(x, "time") and x is not u]   # present (direction read at fact
+        cue = any(_key(x.surface) in ("after", "before") for x in units)  # time; else left for synthesis)
+        return others[0] if (cue and len(others) == 1) else None
     return None
 
 
@@ -1041,6 +1061,17 @@ class Quantity:
     measure: tuple
     amount: float
     verb: str = "have"
+    time: str = None      # the time NODE this value is valid at (a `time` unit's `associates` binding);
+                          # None = timeless / always-valid. Order between nodes lives in `Before` facts.
+
+
+@dataclass(frozen=True)
+class Before:
+    """A temporal ORDER fact: `Before("monday", "tuesday")` means the Monday-node is earlier than the
+    Tuesday-node. RELATIONAL (read off the text's after/before cues), never a calendar rank — days
+    wrap. Transitive; the closure is derived by the synthesis loop, not assumed."""
+    earlier: str
+    later: str
 
 
 @dataclass(frozen=True)
@@ -1199,6 +1230,31 @@ def _distributed_quantity(reading: Reading):
     return Quantity(_entity(subject), _descriptor(per_noun), total, _lemma(verbs[0].surface))
 
 
+def _time_at(reading: Reading, verb_unit) -> str:
+    """The time NODE a value under `verb_unit` is valid at — the `time` unit whose `associates`
+    obligation binds this verb (so value@time is read off the binding, not scanned ad-hoc). None if
+    no time timestamps this verb (a timeless value)."""
+    for u in reading.units:
+        if "time" in u.features.get("senses", []) and _follow(u, "associates") is verb_unit:
+            return _key(u.surface)
+    return None
+
+
+def _temporal_order(reading: Reading):
+    """The `Before` fact a "<timeA> is after/before <timeB>" statement asserts, or None — read off the
+    discharged `orders` binding plus the after/before cue (the cue fixes the direction). Contingent on
+    the obligation actually being met, so it stays a binding-derived fact."""
+    times = [u for u in reading.units if "time" in u.features.get("senses", [])]
+    if len(times) != 2 or _follow(times[0], "orders") is None:
+        return None
+    a, b = _key(times[0].surface), _key(times[1].surface)             # text order
+    if any(_key(u.surface) == "after" for u in reading.units):        # "A is after B" → B earlier
+        return Before(b, a)
+    if any(_key(u.surface) == "before" for u in reading.units):       # "A is before B" → A earlier
+        return Before(a, b)
+    return None
+
+
 def _quantity(reading: Reading):
     """The quantities a "<entity> <verb>s <amount> …" statement asserts — ONE per value: a
     self-measuring money value ("earns $12") or a value quantifying a noun ("buys 2 apples"). A list,
@@ -1215,17 +1271,17 @@ def _quantity(reading: Reading):
     vi = [k for k, u in enumerate(reading.units) if "value" in u.features.get("senses", [])]
     if any(b - a == 1 for a, b in zip(vi, vi[1:])):
         return []
-    ent, lemma = _entity(subject), _lemma(verbs[0].surface)
+    ent, lemma, when = _entity(subject), _lemma(verbs[0].surface), _time_at(reading, verbs[0])
     out = []
     for u in reading.units:
         if "value" not in u.features.get("senses", []):
             continue
         if "measure" in u.features:                      # "$12" — a self-measuring money value
-            out.append(Quantity(ent, u.features["measure"], u.features["value"], lemma))
+            out.append(Quantity(ent, u.features["measure"], u.features["value"], lemma, when))
         else:
             noun = _follow(u, "quantifies")              # "3 APPLES" — the value's measure noun
             if noun is not None:
-                out.append(Quantity(ent, _descriptor(noun), u.features["value"], lemma))
+                out.append(Quantity(ent, _descriptor(noun), u.features["value"], lemma, when))
     return out
 
 
@@ -1759,8 +1815,81 @@ def learn(statement: str, discourse: list = None, context: list = None) -> list:
     return facts
 
 
+# --- the read–SYNTHESIZE loop: reading BINDS what's present, synthesis DERIVES what's implied --------
+# Reading discharges obligations by binding to words that are THERE. Some obligations have no such word
+# — their target exists only by IMPLICATION (a time never explicitly ordered but derivable by
+# transitivity; later: an implied time, an "earlier value" standard). The synthesize() driver runs to a
+# fixpoint: it dispatches the registered synthesizers (keyed by the fact KIND they produce) over the
+# facts gathered so far, folds in whatever they derive, and repeats. The OUTSTANDING obligations are the
+# agenda (passed to each synthesizer). New reasoning is added by REGISTERING a synthesizer — never a
+# one-off check. Anything still unfilled after the fixpoint stays a deficiency, never a guess.
+def _before(a: str, b: str, facts: list) -> bool:
+    """True if time-node `a` is earlier than `b` under the TRANSITIVE closure of the Before facts
+    (relational order — no calendar rank). DFS over Before edges."""
+    adj = {}
+    for f in facts:
+        if isinstance(f, Before):
+            adj.setdefault(f.earlier, set()).add(f.later)
+    seen, stack = set(), [a]
+    while stack:
+        x = stack.pop()
+        for y in adj.get(x, ()):
+            if y == b:
+                return True
+            if y not in seen:
+                seen.add(y)
+                stack.append(y)
+    return False
+
+
+def _synth_transitive_order(facts: list, readings: list, agenda: set) -> list:
+    """One-hop transitive ordering: `a before b` ∧ `b before c` ⟹ `a before c`. Iterated to full
+    closure by the driver's fixpoint, so a chain (Tue→Sat→Mon→Wed) is filled over successive rounds —
+    front-loaded multi-step reasoning. (Registered for the `orders`/Before kind.)"""
+    befores = [f for f in facts if isinstance(f, Before)]
+    out = []
+    for f1 in befores:
+        for f2 in befores:
+            if f1.later == f2.earlier and f1.earlier != f2.later:
+                cand = Before(f1.earlier, f2.later)
+                if cand not in facts and cand not in out:
+                    out.append(cand)
+    return out
+
+
+# obligation/fact KIND → derivation (facts, readings, agenda) -> new facts. Register here to add reasoning.
+SYNTHESIZERS = {"orders": _synth_transitive_order}
+
+
+def _outstanding(readings: list) -> set:
+    """The set of still-UNMET obligation needs across the readings — the synthesis agenda (what KINDS of
+    fact we still need to try to derive)."""
+    return {o.need for r in (readings or []) for u in r.units
+            for o in u.features.get("obligations", []) if not o.met}
+
+
+def synthesize(facts: list, readings: list = None) -> list:
+    """The DERIVE step of the read–synthesize loop: to a fixpoint, run the registered synthesizers over
+    the facts gathered so far and fold in what they imply. Returns the augmented fact list (existing +
+    derived). Idempotent once closed."""
+    facts = list(facts)
+    changed = True
+    while changed:
+        changed = False
+        agenda = _outstanding(readings)
+        for fn in SYNTHESIZERS.values():
+            for f in fn(facts, readings, agenda):
+                if f not in facts:
+                    facts.append(f)
+                    changed = True
+    return facts
+
+
 def _facts_from(reading: Reading, context: list = None) -> list:
     r = reading
+    to = _temporal_order(r)                              # "<time> is after/before <time>" → Before fact
+    if to is not None:
+        return [to]
     verbs = [u for u in r.units if "verb" in u.features.get("senses", [])]
     if len(verbs) == 1:                                  # a group-subject STATEMENT ("Tom and Mary have
         subj = _follow(verbs[0], "subject")              # 5 apples") is distributive/collective —
@@ -1916,6 +2045,10 @@ def solve(text: str):
                 if f:
                     facts_of[i], progress = f, True
                     context += f
+        derived = [f for f in synthesize(context, readings) if f not in context]  # SYNTHESIZE step:
+        if derived:                                      # derive implied facts (transitive order, …) and
+            context += derived                           # keep looping — one unified read–synthesize loop
+            progress = True
     # GUARD 2 — a "than" comparison that collapsed to a FLAT quantity (a verbatim stated value, no
     # Relation, not a derived ±) means the relation ("25 times more stickers THAN Kristoff") was
     # dropped → we misread it. A comparative-derived quantity (amount ≠ any stated value) is OK.
@@ -1948,6 +2081,12 @@ def solve(text: str):
                for s in ("value", "percent", "multiplier")) \
                 and not any(isinstance(f, (Quantity, Rate, Frequency)) for f in (facts_of[i] or [])):
             return "undetermined"
+    # GUARD 5 — value@time facts spanning ≥2 distinct times need TIME-AWARE folding (which state holds
+    # when, what's valid at the queried time) — a later increment. Folding across times blindly drops the
+    # ones we don't model (Buddy: Mon 30 + Wed 12, losing the Tuesday halving → 42, wrong). So decline.
+    # Single-time / timeless problems are unaffected; this is the foundation's honest temporal boundary.
+    if len({f.time for f in context if isinstance(f, Quantity) and f.time is not None}) >= 2:
+        return "undetermined"
     return answer(question, context, discourse)
 
 

@@ -102,7 +102,12 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   epistemic square (yes/no/undetermined/conflict) plus count/wh/which/aggregation and **arithmetic**
   (values, operators, quantities, accumulation with signed verbs, coreference, relational quantities,
   question-relative polarity). `solve(text)` reads a whole word-problem paragraph (premises + trailing
-  question); arithmetic executes through `translate.run_program` (the audited safe evaluator). 0 model
+  question); arithmetic executes through `translate.run_program` (the audited safe evaluator). A
+  **relational temporal model**: time references are NODES (`time` sense) carrying `associates` (the
+  value they timestamp → `Quantity.time`) and `orders` obligations; ORDER is tracked as `Before` facts
+  read off the text (never a calendar rank — days wrap). A **read–synthesize loop** (`synthesize` +
+  the `SYNTHESIZERS` registry) derives implied facts to a fixpoint (first: transitive ordering),
+  generalizing `solve()`'s fixpoint — new reasoning is REGISTERED, never special-cased. 0 model
   calls; every step a reversible `Decision`, auditable via `--trace`. Strategy doc:
   `docs/logical-reading-playbook.md`; tests `reasoning/tests/test_reading.py` (curated/synthetic, never
   GSM8K). CLI: `python -m reasoning.reading "<text>" [--trace]`.
