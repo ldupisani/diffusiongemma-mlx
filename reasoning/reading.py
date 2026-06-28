@@ -352,7 +352,7 @@ OPERATORS = {"plus": "+", "minus": "-", "times": "*", "divided": "/"}
 
 # Lexicalized multipliers: a value fused with "× N" — scales a verb's frequency ("jumps twice") or a
 # referent quantity ("twice as many"). `half` is the ×0.5 case ("half as many").
-MULTIPLIERS = {"once": 1, "twice": 2, "thrice": 3, "half": 0.5}
+MULTIPLIERS = {"once": 1, "twice": 2, "thrice": 3, "half": 0.5, "double": 2, "triple": 3}
 
 # Count-NOUNS that, after a multiplier + article, denote "the count/quantity of X" — so "twice the
 # NUMBER (of X)" is the same relational quantity as "twice as MANY (as X)" (the noun plays the role of
@@ -646,7 +646,8 @@ LEXICON: dict[str, list[str]] = {
     "pill": ["noun"], "pet": ["noun"], "shelf": ["noun"], "bag": ["noun"], "basket": ["noun"],
     # adjectives:
     "able": ["adjective"], "different": ["adjective"], "previous": ["adjective"], "final": ["adjective"],
-    "double": ["adjective"], "extra": ["adjective"], "worth": ["adjective"], "whole": ["adjective"],
+    "double": ["adjective", "multiplier"],   # "a double room" (adj) vs "double the number" (×2)
+    "extra": ["adjective"], "worth": ["adjective"], "whole": ["adjective"],
     "equal": ["adjective"], "entire": ["adjective"], "certain": ["adjective"], "various": ["adjective"],
     "free": ["adjective"], "regular": ["adjective"], "normal": ["adjective"], "single": ["adjective"],
     "separate": ["adjective"], "original": ["adjective"], "favorite": ["adjective"], "daily": ["adjective"],
@@ -1346,7 +1347,9 @@ LEXICON.update({
     "rule": ["noun"], "chocolate": ["noun"], "guest": ["noun"], "fountain": ["noun"], "rent": ["noun"],
     "transport": ["noun"], "value": ["noun"],
     "borrow": ["verb"], "borrows": ["verb"], "borrowed": ["verb"], "borrowing": ["verb"],
-    "triple": ["verb"], "triples": ["verb"], "tripled": ["verb"],
+    "triple": ["multiplier", "verb"], "triples": ["verb"], "tripled": ["verb"],   # "triple the number" → ×3
+    # ("triple" before "verb": a tie ("He uses triple that number" — both cover) falls to the multiplier;
+    #  a bare "sales triple" leaves `scales` unmet so the verb reading wins on coverage)
     "drop": ["verb"], "drops": ["verb"], "dropped": ["verb"], "dropping": ["verb"],
     "attend": ["verb"], "attends": ["verb"], "attended": ["verb"],
     "download": ["verb"], "downloads": ["verb"], "downloaded": ["verb"],

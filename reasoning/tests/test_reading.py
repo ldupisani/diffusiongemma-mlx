@@ -2725,5 +2725,24 @@ class TestIncrement99NumberOfReferent(unittest.TestCase):
         self.assertEqual(reading.solve("Tom has 6 marbles. How many marbles does Tom have?"), 6)
 
 
+class TestIncrement100DoubleTriple(unittest.TestCase):
+    """#100 - "double"/"triple" as NUMERIC multipliers (x2 / x3), so "double the number of X" and
+    "triple that number" resolve like "twice"/"three times". Multi-sense (double: adjective|multiplier,
+    triple: verb|multiplier); coverage disambiguation picks multiplier when it scales a count-noun /
+    quantifier. Unlocks the real 'double the number of X' wrongs that #99 set up."""
+
+    def test_double_the_number_of_x(self):
+        self.assertEqual(reading.solve("Tom has 8 marbles. Megan owns double the number of marbles. "
+                                       "How many marbles does Megan have?"), 16)
+
+    def test_triple_that_number(self):
+        self.assertEqual(reading.solve("Tom has 4 apples. Jerry has triple that number. "
+                                       "How many apples does Jerry have?"), 12)
+
+    def test_double_as_many(self):
+        self.assertEqual(reading.solve("Tom has 7 apples. Jerry has double as many apples. "
+                                       "How many apples does Jerry have?"), 14)
+
+
 if __name__ == "__main__":
     unittest.main()
