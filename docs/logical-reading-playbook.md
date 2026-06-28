@@ -843,7 +843,18 @@ standard declines rather than guesses ("Anne is twice as old as Emile. How old i
 Precision 100%; 418 tests. EIGHTEEN real GSM8K problems (6.0% of the dev slice). LESSON: a multi-hop is NOT
 a new mechanism — each hop is one relational fact that DEFERS on a forward ref, and the existing fixpoint
 already chains forward refs; the work was the per-hop fact (relational age) + making it defer, not any
-chaining logic. OBLIGATION-aligned: the multiplier scales the age dimension, "as…as" binds the standard.
+chaining logic. OBLIGATION-aligned: the multiplier scales the age dimension, "as…as" binds the standard.  ·
+102. **James — gerund adjunct + implicit-standard comparative + query-less combined** (HARD TIER; coverage
+18→19, 6.3%). A 3-piece combine, each piece general: (a) a trailing GERUND adjunct ("spends 40 years
+TEACHING") is an unbound `-ing` verb — `_quantity` ignores it, so the finite verb stands alone and "40
+years" is a clean Quantity; (b) a comparative with an IMPLICIT standard ("10 years less" — no "than Y")
+takes the most recent Quantity OF THE MEASURE as referent (partner = 40−10 = 30), and `_comparative_quantity`
+now also tolerates the multi-verb "has been teaching" (subject from ANY bound verb); (c) a query-less
+"combined" question ("How long is their combined experience?") — the `how long` inversion no longer
+preempts a `combined` question, and the grand-total infers the measure as the ONE the context quantities
+share (40 + 30 = 70 years). Precision 100%; 422 tests. NINETEEN real GSM8K problems (6.3%). LESSON: a hard
+problem is often several INDEPENDENT general gaps stacked — fix each as its own principled piece (gerund,
+implicit standard, query-less combined) and the problem falls out; none was James-specific.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

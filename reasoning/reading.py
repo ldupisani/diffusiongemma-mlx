@@ -1788,8 +1788,8 @@ def _comparative_quantity(reading: Reading, context: list):
     standard = _follow(comp, "standard")
     value_unit = next((u for u in reading.units if "value" in u.features.get("senses", [])), None)
     verbs = [u for u in reading.units if "verb" in u.features.get("senses", [])]
-    subject = _follow(verbs[0], "subject") if len(verbs) == 1 else None
-    if standard is None or value_unit is None or subject is None:
+    subject = next((_follow(v, "subject") for v in verbs if _follow(v, "subject") is not None), None)
+    if value_unit is None or subject is None:            # multi-verb ("has been teaching") — any bound subj
         return None
     if "measure" in value_unit.features:                 # "$10 more than William" — money value
         measure = value_unit.features["measure"]
@@ -1798,12 +1798,17 @@ def _comparative_quantity(reading: Reading, context: list):
         if noun is None:
             return None
         measure = _descriptor(noun)
-    referent = _holdings(_entity(standard), measure, context or [])
+    if standard is not None:                             # explicit "… than Y" — Y's holdings
+        referent = _holdings(_entity(standard), measure, context or [])
+    else:                                                # IMPLICIT standard — "10 years less" (than the
+        referent = next((f.amount for f in reversed(context or [])   # value just stated): the most recent
+                         if isinstance(f, Quantity) and f.measure == measure   # Quantity of this measure
+                         and f.amount is not None), None)
     if referent is None:
         return None                                      # standard's count unknown (e.g. forward ref)
     sign = COMPARATIVE_SIGN.get(_key(comp.surface), 1)   # "younger"/"less" → −, "older"/"more" → +
     return Quantity(_entity(subject), measure, referent + sign * value_unit.features["value"],
-                    _lemma(verbs[0].surface))
+                    _lemma(verbs[-1].surface))
 
 
 @dataclass(frozen=True)
@@ -2121,8 +2126,9 @@ def _quantity(reading: Reading):
     self-measuring money value ("earns $12") or a value quantifying a noun ("buys 2 apples"). A list,
     so a CONJOINED object yields several ("has 3 apples and 2 oranges" → two). The verb lemma carries
     the polarity. [] if there's no single verb with a subject."""
-    verbs = [u for u in reading.units if "verb" in u.features.get("senses", [])]
-    if len(verbs) != 1:
+    verbs = [u for u in reading.units if "verb" in u.features.get("senses", [])   # a trailing GERUND
+             and not (_key(u.surface).endswith("ing") and _follow(u, "subject") is None)]   # adjunct
+    if len(verbs) != 1:                                  # ("spends 40 years TEACHING") is not a 2nd verb
         return []
     subject = _follow(verbs[0], "subject")
     if subject is None:
@@ -2501,8 +2507,10 @@ def answer(question: str, context: list, discourse: list = None):
         return [Deficiency("not-a-question", interro, "this is not a question I can answer")]
     _coll0 = _follow(_follow(interro, "queries"), "collection")               # "how many HOURS" → (hour,…)
     asked_unit = _descriptor(_coll0)[0] if _coll0 is not None else None
+    kys = {_key(u.surface) for u in r.units}
+    combined_q = bool(kys & {"combined", "altogether", "total"}) or {"all", "together"} <= kys
     is_long = any(_key(u.surface) == "long" for u in r.units)
-    if is_long or asked_unit in TIME_UNITS:              # "How LONG / how many HOURS … to <verb> <target>?"
+    if (is_long or asked_unit in TIME_UNITS) and not combined_q:   # "How LONG / how many HOURS … to <verb>?"
         rate = next((f for f in context if isinstance(f, Rate)), None)        # → RATE INVERSION: target ÷
         if rate is not None:                                                  # rate, in per_unit (convert if
             mv = next((u for u in r.units if "value" in u.features.get("senses", []) and _follow(u, "quantifies")
@@ -2532,20 +2540,22 @@ def answer(question: str, context: list, discourse: list = None):
         else:                                            # bound nothing (e.g. "how much did he RUN") →
             query = None                                 # can't tell what's asked → decline, not MONEY
     remainder = any(_key(u.surface) in _REMAINDER for u in r.units)
-    keys = {_key(u.surface) for u in r.units}
-    combined = bool(keys & {"combined", "altogether", "total"}) or {"all", "together"} <= keys
     named = any("name" in u.features.get("senses", []) for u in r.units)   # NAMED entities ("Tom and Mary
-    if combined and query is not None and not named:     # altogether") need the per-entity fold, not this
-        # "How many INCHES are all snakes COMBINED?" — a generic population → the GRAND TOTAL
-        total, found = 0, False                          # GRAND TOTAL: every quantity convertible to the
-        for f in context:                                # asked unit, summed IN that unit (cross-entity,
-            if isinstance(f, Quantity) and f.amount is not None:   # cross-unit via CONVERSIONS)
-                if f.measure == query:
-                    total, found = total + f.amount, True
-                elif (f.measure[0], query[0]) in CONVERSIONS:
-                    total, found = total + f.amount * CONVERSIONS[(f.measure[0], query[0])], True
-        if found:
-            return int(total) if total == int(total) else total
+    if combined_q and not named:                         # altogether") need the per-entity fold, not this
+        gq = query                                       # "How many INCHES are all snakes COMBINED?" — a
+        if gq is None:                                   # generic population → the GRAND TOTAL. A query-less
+            measures = {f.measure for f in context if isinstance(f, Quantity) and f.amount is not None}
+            gq = next(iter(measures)) if len(measures) == 1 else None   # "their combined experience" → the
+        if gq is not None:                               # one measure the context quantities share (years)
+            total, found = 0, False                      # sum every quantity convertible to it (cross-entity,
+            for f in context:                            # cross-unit via CONVERSIONS)
+                if isinstance(f, Quantity) and f.amount is not None:
+                    if f.measure == gq:
+                        total, found = total + f.amount, True
+                    elif (f.measure[0], gq[0]) in CONVERSIONS:
+                        total, found = total + f.amount * CONVERSIONS[(f.measure[0], gq[0])], True
+            if found:
+                return int(total) if total == int(total) else total
     if query is not None and any("verb" in u.features.get("senses", [])      # "How much <measure> was
                                  and _lemma(u.surface) in DISTRIBUTE_VERBS for u in r.units):  # shared?"
         shared = [f.amount for f in context if isinstance(f, Quantity) and f.measure == query   # → the

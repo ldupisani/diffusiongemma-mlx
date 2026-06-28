@@ -2572,5 +2572,31 @@ class TestIncrement94RelationalAge(unittest.TestCase):
         self.assertEqual(reading.solve("Anne is twice as old as Emile. How old is Anne?"), "undetermined")
 
 
+class TestIncrement95JamesCombined(unittest.TestCase):
+    """#95 - James, a 3-piece HARD-TIER combine. (a) a trailing GERUND adjunct ("spends 40 years TEACHING")
+    is not a second verb; (b) a comparative with an IMPLICIT standard ("10 years less" — than the value
+    just stated) takes the most recent Quantity of the measure as referent (partner = 40-10 = 30); (c) a
+    query-less "combined" question ("How long is their combined experience?") sums the one measure the
+    context quantities share (40 + 30 = 70 years)."""
+
+    def test_gerund_adjunct_not_a_verb(self):
+        self.assertEqual(reading.learn("James spends 40 years teaching"),
+                         [reading.Quantity("james", ("year", frozenset()), 40.0, "spend")])
+
+    def test_implicit_standard_comparative(self):
+        self.assertEqual(reading.learn("His partner has been teaching for 10 years less", ["james"],
+                                       [reading.Quantity("james", ("year", frozenset()), 40, "spend")]),
+                         [reading.Quantity("partner", ("year", frozenset()), 30.0, "teach")])
+
+    def test_james_combined_solves(self):
+        self.assertEqual(reading.solve("James spends 40 years teaching. His partner has been teaching for "
+                                       "10 years less. How long is their combined experience?"), 70)
+
+    def test_christina_combined_unaffected(self):
+        self.assertEqual(reading.solve("Christina has 3 snakes. 1 snake is 2 feet long. Another snake is "
+                                       "16 inches long. The last snake is 10 inches. How many inches are "
+                                       "all snakes combined?"), 50)
+
+
 if __name__ == "__main__":
     unittest.main()
