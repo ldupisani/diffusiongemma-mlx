@@ -2547,5 +2547,30 @@ class TestIncrement93GrowthProjection(unittest.TestCase):
                                        "now, how old will Herbert be next year?"), 15)
 
 
+class TestIncrement94RelationalAge(unittest.TestCase):
+    """#94 - RELATIONAL AGE: "X is N times as old as Y" → X's age = N × Y's age. The factor is a multiplier
+    ("twice") or "<value> times"; the standard Y is the last name; deferred until Y's age is known, so the
+    solve() fixpoint chains a MULTI-HOP (Anne=2×Emile, Emile=6×Maude, Maude=8 → 96). "will be"/"has been"
+    are copulas too now. GUARD 3 exempts the factor (consumed into the product)."""
+
+    def test_twice_as_old(self):
+        self.assertEqual(reading.learn("Anne is twice as old as Emile", [],
+                                       [reading.Quantity("emile", ("year", frozenset()), 48, "be")]),
+                         [reading.Quantity("anne", ("year", frozenset()), 96, "be")])
+
+    def test_n_times_as_old_with_will_be(self):
+        self.assertEqual(reading.learn("Emile will be six times as old as Maude", [],
+                                       [reading.Quantity("maude", ("year", frozenset()), 8, "be")]),
+                         [reading.Quantity("emile", ("year", frozenset()), 48, "be")])
+
+    def test_anne_multi_hop_solves(self):
+        self.assertEqual(reading.solve("By the time Anne is two times as old as Emile, Emile will be six "
+                                       "times as old as Maude. If Maude will be 8 years old, "
+                                       "how old will Anne be?"), 96)
+
+    def test_unknown_standard_declines(self):
+        self.assertEqual(reading.solve("Anne is twice as old as Emile. How old is Anne?"), "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1351,9 +1351,11 @@ def _lemma(surface: str) -> str:
 
 
 def _copula_unit(reading: Reading):
-    """The copula verb (is/are/was/were) unit, or None — the anchor a property/membership negates."""
+    """The copula verb unit, or None — the anchor a property/membership negates. Includes the bare/perfect
+    "be"/"been" ("Emile will BE …", "has BEEN …"), not just the finite is/are/was/were."""
     for u in reading.units:
-        if "verb" in u.features.get("senses", []) and _key(u.surface) in ("is", "are", "was", "were"):
+        if "verb" in u.features.get("senses", []) \
+                and _key(u.surface) in ("is", "are", "was", "were", "be", "been"):
             return u
     return None
 
@@ -1661,6 +1663,40 @@ def _frequency(reading: Reading):
     if subject is None:
         return None
     return Frequency(_entity(subject), _lemma(verb.surface), mult.features["value"])
+
+
+def _relational_age_factor(reading: Reading):
+    """The factor in an "as OLD as" comparison — "twice" / "<value> times" → its number, else None. (The
+    multiplier scales the AGE dimension; "two times" is value-then-"times".)"""
+    if not any(_key(u.surface) == "old" for u in reading.units):
+        return None
+    mult = next((u for u in reading.units if "multiplier" in u.features.get("senses", [])), None)
+    if mult is not None:
+        return mult.features["value"]
+    for i, u in enumerate(reading.units):                 # "<value> times as old" → the value is the factor
+        if _key(u.surface) == "times" and i and "value" in reading.units[i - 1].features.get("senses", []):
+            return reading.units[i - 1].features["value"]
+    return None
+
+
+def _relational_age(reading: Reading, context: list):
+    """A RELATIONAL AGE — "X is N times as old as Y" → X's age = N × Y's age (the year-Quantity of the
+    standard Y). None when Y's age isn't known yet — the solve() fixpoint then chains a multi-hop
+    (Anne = 2×Emile, Emile = 6×Maude, Maude = 8 → 96)."""
+    factor = _relational_age_factor(reading)
+    if factor is None:
+        return None
+    subj, _ = _copula_args(reading)                       # X — the copula's subject
+    if subj is None:
+        return None
+    standard = next((u for u in reversed(reading.units)   # Y — the LAST name ("as old as EMILE"), not X
+                     if "name" in u.features.get("senses", []) and u is not subj), None)
+    if standard is None:
+        return None
+    y_age = _holdings(_entity(standard), ("year", frozenset()), context)
+    if y_age is None:
+        return None                                       # Y's age unknown → defer (see _facts_from)
+    return Quantity(_entity(subj), ("year", frozenset()), factor * y_age, "be")
 
 
 def _relational_quantity(reading: Reading, context: list):
@@ -2912,6 +2948,12 @@ def _facts_from(reading: Reading, context: list = None) -> list:
                 coll = _follow(u, "quantifies")
                 if coll is not None:
                     return [_descriptor(coll)] * int(u.features["value"])
+    ra = _relational_age(r, context)                     # "X is N times as old as Y" → X_age = N × Y_age?
+    if ra is not None:
+        return [ra]
+    if _relational_age_factor(r) is not None and _copula_args(r)[0] is not None:
+        return []                                        # Y's age not yet known → DEFER (the fixpoint
+        # chains the multi-hop: Anne=2×Emile, Emile=6×Maude, Maude=8 → 96; never a bare predication)
     mult = next((u for u in r.units if "multiplier" in u.features.get("senses", [])), None)
     scaled = _follow(mult, "scales") if mult is not None else None
     if scaled is not None and "quantifier" in scaled.features.get("senses", []):
@@ -3106,8 +3148,10 @@ def solve(text: str):
         if any(s in u.features.get("senses", []) for u in rp.units for s in ("comparative", "multiplier")) \
                 or any(_key(u.surface) == "each" for u in rp.units) \
                 or any(isinstance(f, Distribution) for f in (facts_of[i] or [])) \
-                or _container_quantity(rp) is not None:   # "20 packets of 100 grams" — both values
-            continue                                      # are consumed into the product (2000)
+                or _relational_age_factor(rp) is not None \
+                or _container_quantity(rp) is not None:   # "20 packets of 100 grams" / "N times as old" —
+            continue                                      # the factor is consumed into the derived product
+        given |= {u.features["value"] for u in rp.units if "value" in u.features.get("senses", [])}
         given |= {u.features["value"] for u in rp.units if "value" in u.features.get("senses", [])}
     used = {f.amount for f in context if isinstance(f, (Quantity, Rate))} \
         | {f.per_amount for f in context if isinstance(f, Rate)} \

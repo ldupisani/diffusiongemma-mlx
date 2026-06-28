@@ -830,7 +830,20 @@ Gated on the grown rate existing, so age questions (no grow-rate) still take the
 noun. Precision 100%; 414 tests. SEVENTEEN real GSM8K problems solve. LESSON: the ceiling→coverage handoff
 again — two vocab rounds + the tokenizer fixes raised fully-read to 22.7%, and mining that larger set
 surfaced Haley as the cleanest target (2/2 premises already parsed); the win was one new ASSEMBLY step
-(projection) over facts the parser already produced.
+(projection) over facts the parser already produced.  ·
+101. **relational age + multi-hop chaining** (HARD TIER; coverage 17→18, solves Anne). "X is N times as
+old as Y" → X's age = N × Y's age. `_relational_age`: the factor is a multiplier ("twice") or "<value>
+times" (`_relational_age_factor`); the standard Y is the LAST name; the result is `Quantity(X, year,
+factor × Y_age, be)`, DEFERRED (returns []) until Y's age is known — so the solve() fixpoint CHAINS a
+multi-hop: Anne=2×Emile, Emile=6×Maude, Maude=8 → 48 → 96. THREE supporting fixes: (a) `_copula_unit` now
+recognises the bare/perfect "be"/"been" ("Emile will BE …", "has BEEN …"), so the relational subject binds;
+(b) GUARD 3 exempts a relational-age premise (the factor 2/6 is consumed into the product, never appears as
+a verbatim amount); (c) the defer is structural (factor + copula subject present) so a never-resolved
+standard declines rather than guesses ("Anne is twice as old as Emile. How old is Anne?" → undetermined).
+Precision 100%; 418 tests. EIGHTEEN real GSM8K problems (6.0% of the dev slice). LESSON: a multi-hop is NOT
+a new mechanism — each hop is one relational fact that DEFERS on a forward ref, and the existing fixpoint
+already chains forward refs; the work was the per-hop fact (relational age) + making it defer, not any
+chaining logic. OBLIGATION-aligned: the multiplier scales the age dimension, "as…as" binds the standard.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
