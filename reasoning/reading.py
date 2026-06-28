@@ -1777,6 +1777,13 @@ def _relational_quantity(reading: Reading, context: list):
     if scaled is None or not ("quantifier" in scaled.features.get("senses", [])   # number" (a count-noun) —
                               or _key(scaled.surface) in COUNT_NOUNS):             # not a verb (frequency)
         return None
+    # NOTE: a relative-clause referent ("twice the number (that) X has", "the number of flowers he
+    # sold") was prototyped here (read subject/referent off POSITION around the multiplier, to survive
+    # the relative clause's 2nd verb / the matrix "has" mis-reading as an auxiliary). It resolved the
+    # sub-fact correctly but was REVERTED: the problems that use it are predominantly multi-step
+    # (Monica's 3-year chain, Ali's multi-day shop) and fail downstream, so it traded +2 dev solves for
+    # +3 confident-wrongs — net precision-negative. Deferred until multi-step composition is stronger;
+    # such forms stay an honest DECLINE for now. See reading-bench-firewall-prefix memory.
     verbs = [u for u in reading.units if "verb" in u.features.get("senses", [])]
     subject = _follow(verbs[0], "subject") if len(verbs) == 1 else None
     if subject is None:
