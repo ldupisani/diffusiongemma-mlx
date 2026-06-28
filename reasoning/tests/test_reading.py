@@ -1797,12 +1797,9 @@ class TestIncrement63TemporalFoundation(unittest.TestCase):
         synth = reading.synthesize([reading.Before("monday", "tuesday")])
         self.assertFalse(reading._before("tuesday", "monday", synth))
 
-    def test_multi_time_problem_declines_not_guesses(self):
-        self.assertEqual(reading.solve(
-            "On Monday Buddy has 30 baseball cards. On Tuesday Buddy loses half of them. "
-            "On Wednesday Buddy buys 12 baseball cards. "
-            "On Thursday he buys a third of what he had on Tuesday. "
-            "How many baseball cards does he have on Thursday?"), "undetermined")
+    def test_multi_state_without_question_time_declines(self):
+        self.assertEqual(reading.solve("On Monday Tom has 30 apples. On Tuesday Tom has 40 apples. "
+                                       "How many apples does Tom have?"), "undetermined")
 
 
 class TestIncrement64TimelineQuerying(unittest.TestCase):
@@ -1840,12 +1837,9 @@ class TestIncrement64TimelineQuerying(unittest.TestCase):
         self.assertEqual(reading.solve("On Monday Tom has 30 apples. On Tuesday Tom has 40 apples. "
                                        "How many apples does Tom have?"), "undetermined")
 
-    def test_dropped_timed_event_declines(self):
-        self.assertEqual(reading.solve(
-            "On Monday Buddy has 30 baseball cards. On Tuesday Buddy loses half of them. "
-            "On Wednesday Buddy buys 12 baseball cards. "
-            "On Thursday he buys a third of what he had on Tuesday. "
-            "How many baseball cards does he have on Thursday?"), "undetermined")
+    def test_query_at_unrelated_time_declines(self):
+        self.assertEqual(reading.solve("On Monday Tom has 5 apples. "
+                                       "How many apples does Tom have on Friday?"), "undetermined")
 
 
 class TestIncrement65RelationalLosses(unittest.TestCase):
@@ -1869,6 +1863,27 @@ class TestIncrement65RelationalLosses(unittest.TestCase):
 
     def test_frequency_still_works_without_of(self):
         self.assertEqual(reading.learn("Mary jumps twice"), [reading.Frequency("mary", "jump", 2)])
+
+
+class TestIncrement66TimeReferencedPartitive(unittest.TestCase):
+    """#66 - time-referenced partitives + fraction words. "a third / a quarter OF X" -> a unit fraction
+    (FRACTIONS); the of-clause may name a holder + a TIME ("what he had on Tuesday") -> the base is that
+    holding AT that time (_holdings_at), not the current one. Closes the full Buddy problem end to end."""
+
+    def test_full_buddy_solves(self):
+        self.assertEqual(reading.solve(
+            "On Monday Buddy has 30 baseball cards. On Tuesday Buddy loses half of them. "
+            "On Wednesday Buddy buys 12 baseball cards. "
+            "On Thursday he buys a third of what he had on Tuesday. "
+            "How many baseball cards does he have on Thursday?"), 32)
+
+    def test_a_third_of_them_timeless(self):
+        self.assertEqual(reading.solve("Tom has 9 apples. Tom gives a third of them away. "
+                                       "How many apples does Tom have?"), 6)
+
+    def test_a_quarter_of_them(self):
+        self.assertEqual(reading.solve("Tom has 8 apples. Tom eats a quarter of them. "
+                                       "How many apples does Tom have?"), 6)
 
 
 if __name__ == "__main__":

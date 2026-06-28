@@ -518,7 +518,17 @@ subject's most-recent measure; verb-lemma sets gain/loss; carries the clause tim
 → `Quantity(.., 0.5×held, lose, <time>)`, a CHANGE the timeline folds. **Buddy now solves end-to-end**
 (30 − 15 + 12 = 27); "Tom gives half of them away" → 5 (timeless). `Mary jumps twice` stays a Frequency
 (no `of`). The full Buddy (with "a third of what he had on Tuesday") still declines — `third` isn't a
-multiplier and the Thursday clause is a TIME-REFERENCED partitive (next target). Precision 100%; 295 tests.
+multiplier and the Thursday clause is a TIME-REFERENCED partitive (next target). Precision 100%; 295 tests.  ·
+73. **time-referenced partitive — the full Buddy solves** (coverage 2→3, the real GSM8K item). Two parts.
+(a) FRACTION WORDS: `FRACTIONS` (denominators — `half`=2,`third`=3,`quarter`/`fourth`=4,…) so "a third of"
+is a unit fraction; the partitive trigger fires on any FRACTIONS word + `of` (not just a multiplier). Base
+is `holding / n` (exact when it divides — dodges `1/3` float drift). (b) The of-clause sets the BASE:
+`_partitive_quantity` takes the main verb to the LEFT of the fraction ("buys"; the of-clause's "had" is
+embedded); if the of-clause has a verb + holder + time ("what he had on Tuesday") the base is
+`_holdings_at(holder, measure, TIME)`, else the subject's current set ("of them"). So "buys a third of what
+he had on Tuesday" → (1/3)×15 = 5 at Thursday; the timeline folds 30−15+12+5 = 32. FIX along the way: the
+`solve()` fixpoint RETRY now passes `discourse` (was `None`), so a retried clause's "he" re-resolves —
+without it the Thursday clause's holder stayed unbound and it silently dropped. Precision 100%; 298 tests.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

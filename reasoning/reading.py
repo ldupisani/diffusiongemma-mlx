@@ -199,6 +199,11 @@ OPERATORS = {"plus": "+", "minus": "-", "times": "*", "divided": "/"}
 # referent quantity ("twice as many"). `half` is the ×0.5 case ("half as many").
 MULTIPLIERS = {"once": 1, "twice": 2, "thrice": 3, "half": 0.5}
 
+# Unit-fraction words → their DENOMINATOR (for partitives "half/a third/a quarter OF …"). Stored as the
+# denominator so the fraction of a holding is `base / n` (exact when it divides — avoids 1/3 float drift).
+FRACTIONS = {"half": 2, "third": 3, "fourth": 4, "quarter": 4, "fifth": 5, "sixth": 6,
+             "eighth": 8, "tenth": 10}
+
 # Coreference: a pronoun's grammatical gender, and a small name→gender lexicon used to pick a
 # compatible antecedent. Both grown deliberately (no guessing from spelling).
 PRONOUN_GENDER = {"he": "male", "she": "female", "it": "neuter", "they": "plural",
@@ -378,7 +383,7 @@ LEXICON: dict[str, list[str]] = {
     "garden": ["noun"], "park": ["noun"], "story": ["noun"], "chapter": ["noun"], "picture": ["noun"],
     "photo": ["noun"], "present": ["noun"], "plate": ["noun"], "bowl": ["noun"], "spoon": ["noun"],
     "fork": ["noun"], "pan": ["noun"], "pot": ["noun"], "dolphin": ["noun"], "step": ["noun"],
-    "level": ["noun"], "score": ["noun"], "grade": ["noun"],
+    "level": ["noun"], "score": ["noun"], "grade": ["noun"], "quarter": ["noun"],
     # multi-word INDIVISIBLE compounds (merged into one unit before analysis — see _merge_compounds):
     "piggy bank": ["noun"], "ice cream": ["noun"], "high school": ["noun"], "credit card": ["noun"],
     # time-reference NODES — relational, NOT calendar-ranked (order is tracked as separate Before facts).
@@ -1185,36 +1190,46 @@ def _relational_quantity(reading: Reading, context: list):
 
 
 def _partitive_quantity(reading: Reading, context: list):
-    """A PARTITIVE quantity — "loses half OF them" → `fraction × current holding`, a relational CHANGE
-    (not a Frequency: the "of" makes "half" a fraction of a set, not a verb multiplier). The referent is
-    a noun after "of", else (a pronoun like "them"/"it") the subject's most-recent measure; its current
-    holdings supply the base. None if there's no referent holding to take a fraction of."""
+    """A PARTITIVE quantity — `fraction × a holding`, a relational CHANGE (the "of" makes the fraction a
+    part of a SET, not a verb multiplier). "loses half OF them" → 0.5 × the subject's current holding;
+    "buys a third OF what he had on Tuesday" → (1/3) × that holder's holding AT Tuesday. The of-clause
+    decides the base: a verb + holder + time ("what he had on Tuesday") → `_holdings_at`; else the
+    subject's own current set ("of them"). None if there's no base to take the fraction of."""
     units = reading.units
-    mult = next((u for u in units if "multiplier" in u.features.get("senses", [])), None)
-    if mult is None:
+    frac = next((u for u in units if _key(u.surface) in FRACTIONS), None)
+    fi = units.index(frac) if frac is not None else -1
+    if frac is None or fi + 1 >= len(units) or _key(units[fi + 1].surface) != "of":   # "<frac> OF …"
         return None
-    mi = units.index(mult)
-    if mi + 1 >= len(units) or _key(units[mi + 1].surface) != "of":   # require "<multiplier> OF …"
-        return None
-    verbs = [u for u in units if "verb" in u.features.get("senses", [])]
-    subject = _follow(verbs[0], "subject") if len(verbs) == 1 else None
+    left_verbs = [u for k, u in enumerate(units) if k < fi and "verb" in u.features.get("senses", [])]
+    if not left_verbs:                                    # the partitive attaches to the verb on its LEFT
+        return None                                       # (a verb inside the of-clause is embedded)
+    main_verb = left_verbs[-1]
+    subject = _follow(main_verb, "subject")
     if subject is None:
         return None
     ent = _entity(subject)
-    noun = next((u for u in units[mi + 2:] if "noun" in u.features.get("senses", [])), None)
-    if noun is not None:                                  # "half of the APPLES" → that measure
-        measure = _descriptor(noun)
-    else:                                                 # "half of THEM" → the subject's latest measure
+    of = units[fi + 2:]
+    of_verb = next((u for u in of if "verb" in u.features.get("senses", [])), None)
+    of_pron = next((u for u in of if any(s in u.features.get("senses", []) for s in ("name", "pronoun"))), None)
+    of_noun = next((u for u in of if "noun" in u.features.get("senses", [])), None)
+    of_time = next((_key(u.surface) for u in of if "time" in u.features.get("senses", [])), None)
+    if of_verb is not None and of_pron is not None:       # "… what HE had on Tuesday" — a holder's value
+        ref_ent, ref_time = _entity(of_pron), of_time
+    else:                                                 # "… of THEM" — the subject's own current set
+        ref_ent, ref_time = ent, None
+    measure = _descriptor(of_noun) if of_noun is not None else None
+    if measure is None:                                   # no measure named → the referent's latest one
         recent = next((f for f in reversed(context or [])
-                       if isinstance(f, Quantity) and f.entity == ent), None)
+                       if isinstance(f, Quantity) and f.entity == ref_ent), None)
         measure = recent.measure if recent is not None else None
     if measure is None:
         return None
-    holding = _holdings(ent, measure, context or [])
-    if holding is None:
+    base = _holdings_at(ref_ent, measure, context or [], ref_time) if ref_time \
+        else _holdings(ref_ent, measure, context or [])
+    if base is None:
         return None
-    return Quantity(ent, measure, mult.features["value"] * holding,
-                    _lemma(verbs[0].surface), _time_at(reading, verbs[0]))
+    return Quantity(ent, measure, base / FRACTIONS[_key(frac.surface)],
+                    _lemma(main_verb.surface), _time_at(reading, main_verb))
 
 
 def _comparative_quantity(reading: Reading, context: list):
@@ -2019,9 +2034,10 @@ def _facts_from(reading: Reading, context: list = None) -> list:
     if scaled is not None and "quantifier" in scaled.features.get("senses", []):
         rq = _relational_quantity(r, context)            # "<entity> has twice as many" → derived, or
         return [rq] if rq is not None else []            # decline (no referent) — never a bare predication
-    if mult is not None:                                 # "<mult> OF <referent>" — a partitive fraction
-        mi = r.units.index(mult)                         # of a holding ("loses half of them" → 0.5×held,
-        if mi + 1 < len(r.units) and _key(r.units[mi + 1].surface) == "of":   # NOT a Frequency)
+    frac = next((u for u in r.units if _key(u.surface) in FRACTIONS), None)
+    if frac is not None:                                  # "<fraction> OF <referent>" — a partitive part
+        fi = r.units.index(frac)                          # of a holding ("loses half of them" → 0.5×held;
+        if fi + 1 < len(r.units) and _key(r.units[fi + 1].surface) == "of":   # "a third of …"; NOT a Freq)
             pq = _partitive_quantity(r, context)
             return [pq] if pq is not None else []        # unresolved → defer (fixpoint retries; else declines)
     s = _subset(r)                                       # "Every X is a Y" → universal membership?
@@ -2160,8 +2176,8 @@ def solve(text: str):
         progress = False
         for i, p in enumerate(premises):
             if facts_of[i] is None:
-                f = learn(p, None, context)              # discourse already built in the first pass
-                if f:
+                f = learn(p, discourse, context)         # re-resolve coreference too (a retried clause's
+                if f:                                    # "he" must still bind — recency-safe re-append)
                     facts_of[i], progress = f, True
                     context += f
         derived = [f for f in synthesize(context, readings) if f not in context]  # SYNTHESIZE step:
