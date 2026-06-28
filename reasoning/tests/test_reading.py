@@ -1804,5 +1804,47 @@ class TestIncrement63TemporalFoundation(unittest.TestCase):
             "How many baseball cards does Buddy have on Wednesday?"), "undetermined")
 
 
+class TestIncrement64TimelineQuerying(unittest.TestCase):
+    """#64 - timeline assembly + TIME-AWARE querying. A STATE verb (have/be) SETS the value at a time; a
+    CHANGE verb adds a signed delta. Holdings AT a queried time fold along the timeline (ordered by Before
+    + narrative order). A multi-time problem answers a time-NAMED question, but DECLINES a time-less one
+    (ambiguous which state) or one that dropped a time-tagged event (precision)."""
+
+    def test_state_then_change_at_later_time(self):
+        self.assertEqual(reading.solve("On Monday Tom has 30 apples. On Tuesday Tom buys 5 apples. "
+                                       "How many apples does Tom have on Tuesday?"), 35)
+
+    def test_value_at_earlier_time_is_the_state(self):
+        self.assertEqual(reading.solve("On Monday Tom has 30 apples. On Tuesday Tom buys 5 apples. "
+                                       "How many apples does Tom have on Monday?"), 30)
+
+    def test_loss_change_along_timeline(self):
+        self.assertEqual(reading.solve("On Monday Tom has 30 apples. On Tuesday Tom loses 10 apples. "
+                                       "How many apples does Tom have on Tuesday?"), 20)
+
+    def test_holdings_at_folds_state_and_change(self):
+        Q, B = reading.Quantity, reading.Before
+        ap = ("apple", frozenset())
+        ctx = [Q("t", ap, 30, "have", "monday"), Q("t", ap, 5, "buy", "tuesday"), B("monday", "tuesday")]
+        self.assertEqual(reading._holdings_at("t", ap, ctx, "tuesday"), 35)
+        self.assertEqual(reading._holdings_at("t", ap, ctx, "monday"), 30)
+
+    def test_unorderable_timeline_declines(self):
+        Q = reading.Quantity
+        ap = ("apple", frozenset())
+        ctx = [Q("t", ap, 3, "have", "monday"), Q("t", ap, 5, "have", "friday")]  # no order between them
+        self.assertIsNone(reading._holdings_at("t", ap, ctx, "friday"))
+
+    def test_multitime_question_without_a_time_declines(self):
+        self.assertEqual(reading.solve("On Monday Tom has 30 apples. On Tuesday Tom has 40 apples. "
+                                       "How many apples does Tom have?"), "undetermined")
+
+    def test_dropped_timed_event_declines(self):
+        self.assertEqual(reading.solve(
+            "On Monday Buddy has 30 baseball cards. On Tuesday Buddy loses half of them. "
+            "On Wednesday Buddy buys 12 baseball cards. "
+            "How many baseball cards does Buddy have on Wednesday?"), "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()

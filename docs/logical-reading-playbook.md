@@ -495,7 +495,21 @@ capability = REGISTER a synthesizer, never a one-off check. PRECISION: making `M
 ambiguous-subject block, exposing Buddy ("Mon 30 + Wed 12", dropping the Tue halving → 42 wrong) → GUARD 5
 declines any problem whose value@time facts span ≥2 distinct times (time-aware FOLDING/querying is the
 next increment; the foundation only tracks the facts). Precision 100%; 284 tests. Memory:
-`temporal-model-relational`. Next: timeline assembly + time-aware querying (state vs change).
+`temporal-model-relational`. Next: timeline assembly + time-aware querying (state vs change).  ·
+71. **timeline assembly + time-aware querying** (turns #70's GUARD-5 decline into an ANSWER). STATE vs
+CHANGE: a STATE verb (`STATE_VERBS` = have/be) SETS the running value at a time (a known total); every
+other verb is a CHANGE (signed delta). `_holdings_at(entity, measure, context, at_time)` folds along the
+timeline — events at-or-before `at_time` (timeless = always-on baseline; strictly-after excluded; UNKNOWN
+order vs the query → None/decline), linearised by `_time_order` (insertion sort over the `Before` closure;
+None if any pair incomparable), then state-sets / change-adds in chronological order. A SECOND synthesizer
+`_synth_narrative_order` (registered) gives the default "stated-in-sequence ⇒ chronological" — consecutive
+distinct value@time nodes → `Before`, UNLESS already ordered (explicit/transitive order always wins, never
+contradicted). `answer()`'s holdings branch: a HELD-question carrying a time → `_holdings_at`. GUARD 5
+reworked: (a) a TIMED premise stating a value/multiplier but yielding no Quantity dropped a time-tagged
+event ("loses half of them" → a misparsed Frequency) → decline; (b) ≥2 times but the question names none →
+ambiguous → decline. So "On Mon Tom has 30 apples. On Tue Tom buys 5. How many on Tue?" → 35 (state 30 +
+change 5); on Mon → 30; Buddy still declines (its Tuesday Frequency). Precision 100%; 291 tests. Next:
+relational losses ("loses half of them" → 0.5 × held, not a Frequency) would let Buddy-class problems solve.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

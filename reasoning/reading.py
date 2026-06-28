@@ -1046,9 +1046,65 @@ _REMAINDER = {"left", "remaining", "leftover", "remain", "remains", "rest"}
 
 
 def _holdings(entity: str, measure: tuple, context: list):
-    """The net holdings of `entity` for `measure` — baseline + gains − losses — or None if unknown."""
+    """The net holdings of `entity` for `measure` — baseline + gains − losses — or None if unknown.
+    Timeless / single-state fold (order-independent); the time-aware variant is `_holdings_at`."""
     qs = [f for f in context if isinstance(f, Quantity) and f.entity == entity and f.measure == measure]
     return sum(_verb_sign(f.verb) * f.amount for f in qs) if qs else None
+
+
+# A STATE verb asserts the value AT a time ("has 30 on Monday" — Monday's known total); every other
+# verb is a CHANGE (a delta applied to the running value). The distinction only matters once values are
+# spread across an ordered timeline (`_holdings_at`); the timeless fold treats all as signed deltas.
+STATE_VERBS = {"have", "be"}
+
+
+def _time_order(times: list, context: list):
+    """A linear (chronological) ordering of the given time nodes from the Before closure, or None if
+    they are NOT totally ordered (some pair's order is unknown — we never guess an order). Insertion
+    sort using `_before`."""
+    ordered = []
+    for t in dict.fromkeys(x for x in times if x is not None):
+        placed = False
+        for k, o in enumerate(ordered):
+            if _before(t, o, context):                   # t earlier than o → goes before it
+                ordered.insert(k, t)
+                placed = True
+                break
+            if not _before(o, t, context):               # neither before nor after → incomparable
+                return None
+        if not placed:
+            ordered.append(t)
+    return ordered
+
+
+def _holdings_at(entity: str, measure: tuple, context: list, at_time: str):
+    """Holdings of `entity`/`measure` VALID AT time node `at_time`, folded along the timeline: a STATE
+    verb SETS the running value (a known total), a CHANGE verb adds its signed delta. Events strictly
+    after `at_time` are excluded; a timeless event is an always-present baseline. None (decline) if an
+    event's order vs `at_time` is unknown, or the applicable times aren't linearly orderable."""
+    events = [f for f in context if isinstance(f, Quantity) and f.entity == entity and f.measure == measure]
+    if not events:
+        return None
+    applicable = []
+    for q in events:
+        if q.time is None or q.time == at_time or _before(q.time, at_time, context):
+            applicable.append(q)
+        elif _before(at_time, q.time, context):
+            continue                                     # strictly after the query time → not in effect
+        else:
+            return None                                  # order vs the query time unknown → can't place
+    order = _time_order([q.time for q in applicable], context)
+    if order is None:
+        return None
+    rank = {t: k for k, t in enumerate(order)}
+    chronological = sorted(applicable, key=lambda q: rank.get(q.time, -1))   # stable: None first
+    running = 0
+    for q in chronological:
+        if q.verb in STATE_VERBS:
+            running = _verb_sign(q.verb) * q.amount      # a stated state replaces the running total
+        else:
+            running += _verb_sign(q.verb) * q.amount     # a change accumulates onto it
+    return running
 
 
 @dataclass(frozen=True)
@@ -1660,9 +1716,16 @@ def answer(question: str, context: list, discourse: list = None):
             return "undetermined"
     if aux is not None and query is not None:            # "How many <measure> do <entities> <verb>?"
         entities, q_verb = _question_subjects(r, aux)    # the verb's bound subject(s), structurally
+        q_time = next((_key(u.surface) for u in r.units if "time" in u.features.get("senses", [])), None)
         if entities:
             total = 0
             for ent in entities:
+                if q_verb in ("have", "own") and q_time is not None:   # TIME-AWARE: the value VALID at
+                    h = _holdings_at(ent, query, context, q_time)      # the queried time, folded along
+                    if h is None:                                      # the timeline (state vs change)
+                        return "undetermined"
+                    total += h
+                    continue
                 qs = [f for f in context if isinstance(f, Quantity)
                       and f.entity == ent and f.measure == query]
                 # POLARITY IS RELATIVE TO THE QUESTION: "how many do you HAVE" folds holdings
@@ -1857,8 +1920,26 @@ def _synth_transitive_order(facts: list, readings: list, agenda: set) -> list:
     return out
 
 
+def _synth_narrative_order(facts: list, readings: list, agenda: set) -> list:
+    """Values stated in SEQUENCE are narrated chronologically: consecutive DISTINCT value@time nodes (in
+    the order their facts appear) → a Before edge — UNLESS those two times are already ordered (so an
+    explicit/transitive order always wins, and we never add a contradicting edge). The default that lets
+    "On Monday … On Tuesday … On Wednesday …" be queryable without an explicit "after" in every sentence."""
+    seq = []
+    for f in facts:
+        if isinstance(f, Quantity) and f.time is not None and f.time not in seq:
+            seq.append(f.time)
+    out = []
+    for a, b in zip(seq, seq[1:]):
+        if a != b and not _before(a, b, facts) and not _before(b, a, facts):
+            cand = Before(a, b)
+            if cand not in out:
+                out.append(cand)
+    return out
+
+
 # obligation/fact KIND → derivation (facts, readings, agenda) -> new facts. Register here to add reasoning.
-SYNTHESIZERS = {"orders": _synth_transitive_order}
+SYNTHESIZERS = {"orders": _synth_transitive_order, "narrative": _synth_narrative_order}
 
 
 def _outstanding(readings: list) -> set:
@@ -2081,11 +2162,20 @@ def solve(text: str):
                for s in ("value", "percent", "multiplier")) \
                 and not any(isinstance(f, (Quantity, Rate, Frequency)) for f in (facts_of[i] or [])):
             return "undetermined"
-    # GUARD 5 — value@time facts spanning ≥2 distinct times need TIME-AWARE folding (which state holds
-    # when, what's valid at the queried time) — a later increment. Folding across times blindly drops the
-    # ones we don't model (Buddy: Mon 30 + Wed 12, losing the Tuesday halving → 42, wrong). So decline.
-    # Single-time / timeless problems are unaffected; this is the foundation's honest temporal boundary.
-    if len({f.time for f in context if isinstance(f, Quantity) and f.time is not None}) >= 2:
+    # GUARD 5 — temporal safety (now that we FOLD along the timeline, not blanket-decline). (a) A TIMED
+    # premise that states a value/multiplier/percent but produced no Quantity dropped a time-tagged event
+    # ("On Tuesday loses half of them" → a misparsed Frequency) — folding would silently skip it → decline.
+    for i, rp in enumerate(readings[:len(premises)]):
+        if any("time" in u.features.get("senses", []) for u in rp.units) \
+                and any(s in u.features.get("senses", []) for u in rp.units
+                        for s in ("value", "percent", "multiplier")) \
+                and not any(isinstance(f, Quantity) for f in (facts_of[i] or [])):
+            return "undetermined"
+    # (b) ≥2 distinct times but the QUESTION names none → ambiguous which state to report → decline. With
+    # a named time the time-aware fold (`_holdings_at`) answers it; an unorderable timeline returns None.
+    times = {f.time for f in context if isinstance(f, Quantity) and f.time is not None}
+    q_has_time = any("time" in u.features.get("senses", []) for u in readings[-1].units)
+    if len(times) >= 2 and not q_has_time:
         return "undetermined"
     return answer(question, context, discourse)
 
