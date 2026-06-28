@@ -509,7 +509,16 @@ reworked: (a) a TIMED premise stating a value/multiplier but yielding no Quantit
 event ("loses half of them" → a misparsed Frequency) → decline; (b) ≥2 times but the question names none →
 ambiguous → decline. So "On Mon Tom has 30 apples. On Tue Tom buys 5. How many on Tue?" → 35 (state 30 +
 change 5); on Mon → 30; Buddy still declines (its Tuesday Frequency). Precision 100%; 291 tests. Next:
-relational losses ("loses half of them" → 0.5 × held, not a Frequency) would let Buddy-class problems solve.
+relational losses ("loses half of them" → 0.5 × held, not a Frequency) would let Buddy-class problems solve.  ·
+72. **relational losses / partitives ("loses half of them")** — the partitive `of` is the signal: a
+multiplier FOLLOWED BY `of` ("half **of** them") is a FRACTION of a set, not a verb multiplier (frequency).
+`_partitive_quantity` (runs before `_frequency`, gated on `<mult> of …`): fraction × the current holding
+of the referent measure — a noun after `of` ("half of the apples"), else a pronoun ("them"/"it") → the
+subject's most-recent measure; verb-lemma sets gain/loss; carries the clause time. So "loses half of them"
+→ `Quantity(.., 0.5×held, lose, <time>)`, a CHANGE the timeline folds. **Buddy now solves end-to-end**
+(30 − 15 + 12 = 27); "Tom gives half of them away" → 5 (timeless). `Mary jumps twice` stays a Frequency
+(no `of`). The full Buddy (with "a third of what he had on Tuesday") still declines — `third` isn't a
+multiplier and the Thursday clause is a TIME-REFERENCED partitive (next target). Precision 100%; 295 tests.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

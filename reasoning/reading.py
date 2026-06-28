@@ -1184,6 +1184,39 @@ def _relational_quantity(reading: Reading, context: list):
                     mult.features["value"] * referent.amount, _lemma(verbs[0].surface))
 
 
+def _partitive_quantity(reading: Reading, context: list):
+    """A PARTITIVE quantity — "loses half OF them" → `fraction × current holding`, a relational CHANGE
+    (not a Frequency: the "of" makes "half" a fraction of a set, not a verb multiplier). The referent is
+    a noun after "of", else (a pronoun like "them"/"it") the subject's most-recent measure; its current
+    holdings supply the base. None if there's no referent holding to take a fraction of."""
+    units = reading.units
+    mult = next((u for u in units if "multiplier" in u.features.get("senses", [])), None)
+    if mult is None:
+        return None
+    mi = units.index(mult)
+    if mi + 1 >= len(units) or _key(units[mi + 1].surface) != "of":   # require "<multiplier> OF …"
+        return None
+    verbs = [u for u in units if "verb" in u.features.get("senses", [])]
+    subject = _follow(verbs[0], "subject") if len(verbs) == 1 else None
+    if subject is None:
+        return None
+    ent = _entity(subject)
+    noun = next((u for u in units[mi + 2:] if "noun" in u.features.get("senses", [])), None)
+    if noun is not None:                                  # "half of the APPLES" → that measure
+        measure = _descriptor(noun)
+    else:                                                 # "half of THEM" → the subject's latest measure
+        recent = next((f for f in reversed(context or [])
+                       if isinstance(f, Quantity) and f.entity == ent), None)
+        measure = recent.measure if recent is not None else None
+    if measure is None:
+        return None
+    holding = _holdings(ent, measure, context or [])
+    if holding is None:
+        return None
+    return Quantity(ent, measure, mult.features["value"] * holding,
+                    _lemma(verbs[0].surface), _time_at(reading, verbs[0]))
+
+
 def _comparative_quantity(reading: Reading, context: list):
     """A DERIVED quantity from a comparison — "Tim has 30 less apples than Martha" → `referent ± N`,
     the referent being the NAMED standard's holdings (resolved by name via `than`). None unless there's
@@ -1986,6 +2019,11 @@ def _facts_from(reading: Reading, context: list = None) -> list:
     if scaled is not None and "quantifier" in scaled.features.get("senses", []):
         rq = _relational_quantity(r, context)            # "<entity> has twice as many" → derived, or
         return [rq] if rq is not None else []            # decline (no referent) — never a bare predication
+    if mult is not None:                                 # "<mult> OF <referent>" — a partitive fraction
+        mi = r.units.index(mult)                         # of a holding ("loses half of them" → 0.5×held,
+        if mi + 1 < len(r.units) and _key(r.units[mi + 1].surface) == "of":   # NOT a Frequency)
+            pq = _partitive_quantity(r, context)
+            return [pq] if pq is not None else []        # unresolved → defer (fixpoint retries; else declines)
     s = _subset(r)                                       # "Every X is a Y" → universal membership?
     if s is not None:
         return [s]

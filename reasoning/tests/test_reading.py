@@ -1801,7 +1801,8 @@ class TestIncrement63TemporalFoundation(unittest.TestCase):
         self.assertEqual(reading.solve(
             "On Monday Buddy has 30 baseball cards. On Tuesday Buddy loses half of them. "
             "On Wednesday Buddy buys 12 baseball cards. "
-            "How many baseball cards does Buddy have on Wednesday?"), "undetermined")
+            "On Thursday he buys a third of what he had on Tuesday. "
+            "How many baseball cards does he have on Thursday?"), "undetermined")
 
 
 class TestIncrement64TimelineQuerying(unittest.TestCase):
@@ -1843,7 +1844,31 @@ class TestIncrement64TimelineQuerying(unittest.TestCase):
         self.assertEqual(reading.solve(
             "On Monday Buddy has 30 baseball cards. On Tuesday Buddy loses half of them. "
             "On Wednesday Buddy buys 12 baseball cards. "
-            "How many baseball cards does Buddy have on Wednesday?"), "undetermined")
+            "On Thursday he buys a third of what he had on Tuesday. "
+            "How many baseball cards does he have on Thursday?"), "undetermined")
+
+
+class TestIncrement65RelationalLosses(unittest.TestCase):
+    """#65 - relational losses: "loses/gives half OF them" -> fraction x the current holding, a CHANGE
+    (not a Frequency -- the "of" makes it partitive). Lets a Buddy-class timeline solve end to end."""
+
+    def test_loses_half_is_a_relational_loss(self):
+        ctx = [reading.Quantity("buddy", ("baseball", frozenset()), 30, "have", "monday")]
+        self.assertEqual(reading.learn("On Tuesday Buddy loses half of them", None, ctx),
+                         [reading.Quantity("buddy", ("baseball", frozenset()), 15.0, "lose", "tuesday")])
+
+    def test_gives_half_away_timeless(self):
+        self.assertEqual(reading.solve("Tom has 10 apples. Tom gives half of them away. "
+                                       "How many apples does Tom have?"), 5)
+
+    def test_buddy_timeline_solves_end_to_end(self):
+        self.assertEqual(reading.solve(
+            "On Monday Buddy has 30 baseball cards. On Tuesday Buddy loses half of them. "
+            "On Wednesday Buddy buys 12 baseball cards. "
+            "How many baseball cards does Buddy have on Wednesday?"), 27)
+
+    def test_frequency_still_works_without_of(self):
+        self.assertEqual(reading.learn("Mary jumps twice"), [reading.Frequency("mary", "jump", 2)])
 
 
 if __name__ == "__main__":
