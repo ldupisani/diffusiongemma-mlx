@@ -1967,7 +1967,7 @@ class TestIncrement70DistributionUnknown(unittest.TestCase):
         facts = reading.learn("Mr. Sam shared a certain amount of money between his two sons, Ken and Tony.")
         self.assertIn(reading.Quantity("sam", ("money", frozenset()), None, "share"), facts)
         self.assertIn(reading.Distribution("sam", ("ken", "tony"), ("money", frozenset()),
-                                           count=2, equal=False, recipient_noun=("son", frozenset())), facts)
+                                           count=2, method=None, recipient_noun=("son", frozenset())), facts)
 
     def test_synthesis_pins_the_unknown(self):
         ctx = (reading.learn("Mr. Sam shared a certain amount of money between his two sons, Ken and Tony.")
@@ -2007,6 +2007,39 @@ class TestIncrement71EqualSplit(unittest.TestCase):
         self.assertEqual(reading.solve(
             "Mr. Sam shared a certain amount of money between his two sons, Ken and Tony. "
             "If Ken got $1750, and Tony got twice as much as Ken, how much was the money shared?"), 5250)
+
+
+class TestIncrement72MannerMethod(unittest.TestCase):
+    """#72 - the distribution METHOD is a manner adverb BOUND to its verb (`qualifies`), not a global
+    scan: a verb carries an operation; a manner adverb parametrizes it (like negation, one slot over).
+    "equally"/"evenly"/"uniformly" → an equal split (computable); "randomly"/"optimally" or NO method →
+    an under-specified Deficiency (ASK how it was shared), never a fabricated number."""
+
+    def test_method_binds_to_the_verb(self):
+        r = reading.analyze("Sam shared money equally among them")
+        equally = next(u for u in r.units if u.surface == "equally")
+        self.assertEqual(reading._follow(equally, "qualifies").surface, "shared")
+
+    def test_method_stored_on_distribution(self):
+        d = next(f for f in reading.learn("Sam shared $30 equally among his 3 sons.")
+                 if isinstance(f, reading.Distribution))
+        self.assertEqual(d.method, "equal")
+
+    def test_evenly_is_an_equal_split(self):
+        self.assertEqual(reading.solve("A teacher distributed 30 candies evenly among 5 students. "
+                                       "How many candies did each student get?"), 6)
+
+    def test_no_method_is_underspecified_deficiency(self):
+        r = reading.solve("Sam shared $30 among his 3 sons. How much did each son get?")
+        self.assertTrue(isinstance(r, list) and r and r[0].kind == "under-specified")
+
+    def test_random_method_is_underspecified_deficiency(self):
+        r = reading.solve("Sam shared $30 randomly among his 3 sons. How much did each son get?")
+        self.assertTrue(isinstance(r, list) and r and r[0].kind == "under-specified")
+
+    def test_subject_group_is_not_a_distribution(self):
+        self.assertFalse(any(isinstance(f, reading.Distribution)
+                             for f in reading.learn("Tom and Mary shared 10 apples")))
 
 
 if __name__ == "__main__":

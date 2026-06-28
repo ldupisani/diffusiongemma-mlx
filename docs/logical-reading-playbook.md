@@ -582,7 +582,23 @@ keyed to the recipient noun so "how much did each SON get" folds it). Two more "
 (same family as the article fix): the interrogative's `queries` binds the NEAREST quantifier ("how many
 candies … EACH student" — `each` was a 2nd quantifier), and distribution premises are GUARD-3-exempt (their
 total+count are consumed into the shares). "$5250 equally among 3 sons" → 1750; "30 candies among 5" → 6;
-"$30 between Ken and Tony" → 15 each; #77's unknown-total case still 5250. Precision 100%; 318 tests.
+"$30 between Ken and Tony" → 15 each; #77's unknown-total case still 5250. Precision 100%; 318 tests.  ·
+79. **manner adverb → verb (the method as an OBLIGATION, not a global scan)**. The #78 `equal` flag was a
+global `any("equally" in units)` scan — exactly the anti-pattern the core principle forbids. Refactored: a
+verb carries an OPERATION; a manner adverb PARAMETRIZES it (the same shape as negation, one slot over).
+Method words (`equally`/`evenly`/`uniformly`/`randomly`/`optimally`/`proportionally`) get a `manner` sense
+with a `qualifies → nearest verb` obligation (reusing the `negates` resolver); `DISTRIBUTION_METHODS` maps
+the surface → method ("equal" is computable, the rest aren't). `_distribution` reads the method BOUND to
+its own verb (`Distribution.method`, replacing `equal`); `_synth_equal_split` keys on `method=="equal"`.
+The method drives precision: a KNOWN total with method ≠ "equal" (none/random/…) and no explicit shares →
+an `under-specified` DEFICIENCY ("how was it shared?"), not a bogus number — `_underspecified_distribution`.
+Also fixed a latent bug: the recipient group must be AFTER the verb (else a SUBJECT group "Tom and Mary
+shared 10 apples" misfired as recipients); GUARD 3's distribution-exemption now keys on the premise
+actually producing a `Distribution` fact (precise), not a verb-lemma guess. Precision 100%; 324 tests.
+FUTURE (user, not now): when a verb is blocked for want of a manner word, instead of deficiency we could
+(a) fall back on a CONTEXT-DEPENDENT default method, or (b) enumerate an answer PER plausible manner.
+LESSON: a manner adverb is a modifier that parametrizes a verb's operation — bind it; let each operation
+read the modifiers it cares about (distribution reads its method; a future rate op might read "quickly").
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

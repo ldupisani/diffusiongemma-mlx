@@ -232,6 +232,11 @@ FRACTIONS = {"half": 2, "third": 3, "fourth": 4, "quarter": 4, "fifth": 5, "sixt
              "eighth": 8, "tenth": 10,
              "one-half": 2, "one-third": 3, "one-quarter": 4, "one-fourth": 4, "one-fifth": 5}
 
+# A distribution METHOD (a manner adverb modifying a distribute verb) → the kind of split. Only "equal"
+# is deterministically computable (total ÷ count); the others are recognised but unsolvable → decline.
+DISTRIBUTION_METHODS = {"equally": "equal", "evenly": "equal", "uniformly": "equal",
+                        "randomly": "random", "optimally": "optimal", "proportionally": "proportional"}
+
 # Coreference: a pronoun's grammatical gender, and a small name→gender lexicon used to pick a
 # compatible antecedent. Both grown deliberately (no guessing from spelling).
 PRONOUN_GENDER = {"he": "male", "she": "female", "it": "neuter", "they": "plural",
@@ -384,7 +389,11 @@ LEXICON: dict[str, list[str]] = {
     "among": ["preposition"], "within": ["preposition"], "across": ["preposition"],
     "while": ["conjunction"], "when": ["conjunction"], "because": ["conjunction"], "since": ["conjunction"],
     "up": ["adverb"], "out": ["adverb"], "off": ["adverb"], "away": ["adverb"], "back": ["adverb"],
-    "equally": ["adverb"], "together": ["adverb"], "instead": ["adverb"], "however": ["adverb"],
+    "together": ["adverb"], "instead": ["adverb"], "however": ["adverb"],
+    # MANNER adverbs — they modify a verb's OPERATION (its method), so they BIND it (`qualifies`), not
+    # orphaned like sentence adverbs. Distribution methods are looked up in DISTRIBUTION_METHODS.
+    "equally": ["manner"], "evenly": ["manner"], "uniformly": ["manner"], "randomly": ["manner"],
+    "optimally": ["manner"], "proportionally": ["manner"],
     # comparatives (age / size / speed / price):
     "younger": ["comparative"], "shorter": ["comparative"], "faster": ["comparative"],
     "slower": ["comparative"], "heavier": ["comparative"], "lighter": ["comparative"],
@@ -643,6 +652,7 @@ ROLE_OBLIGATIONS: dict[str, list[str]] = {
     "multiplier": ["scales"],           # a frequency multiplier scales the verb to its left ("jumps TWICE")
     "per": ["rate", "unit"],            # "$12 per hour" — binds the rate value (left) and the unit (right)
     "percent": ["base"],                # "20% of 50" — binds the base the fraction applies to
+    "manner": ["qualifies"],            # a manner adverb ("equally") modifies a verb's OPERATION (its method)
     "time": ["associates", "orders"],   # a time timestamps a value (`associates`) and orders against
                                         # other times (`orders`); see the temporal model
 }
@@ -781,6 +791,9 @@ def _find_target(need, u, i, units, pos):
         rr = right("value")
         return rr[0] if rr else None
     if need == "negates":         # a negator scopes over the NEAREST verb (copula left, or main right)
+        verbs = [x for x in units if has(x, "verb")]
+        return min(verbs, key=lambda v: abs(pos[id(v)] - i)) if verbs else None
+    if need == "qualifies":       # a manner adverb modifies the NEAREST verb (its operation's method)
         verbs = [x for x in units if has(x, "verb")]
         return min(verbs, key=lambda v: abs(pos[id(v)] - i)) if verbs else None
     if need == "associates":      # a time timestamps the NEAREST verb (the value/event it describes)
@@ -1335,12 +1348,13 @@ class Distribution:
     both resolved by the synthesis loop: (a) whole UNKNOWN, recipients NAMED, shares known → whole = Σ
     shares; (b) whole KNOWN and `equal` → each recipient gets whole ÷ `count`. Read off the obligation
     graph (share-verb + recipient group/noun + the measure). `recipients` = named members (may be empty);
-    `count` = recipient count; `recipient_noun` = the share-holder type for an unnamed equal split."""
+    `count` = recipient count; `recipient_noun` = the share-holder type for an unnamed equal split;
+    `method` = the split method bound from a manner adverb ("equal" is computable; others decline)."""
     distributor: str
     recipients: tuple
     measure: tuple
     count: int = None
-    equal: bool = False
+    method: str = None
     recipient_noun: tuple = None
 
 
@@ -1568,7 +1582,8 @@ def _distribution(reading: Reading):
         return None                                      # distributor may be a name ("Sam") or noun ("a teacher")
     prep = next((u for u in units if _key(u.surface) in ("between", "among")), None)
     rnoun = _follow(prep, "object") if prep is not None else None
-    group = next((u for u in units if "members" in u.features), None)
+    vpos = units.index(verbs[0])                         # recipients are OBJECTS — a group AFTER the verb
+    group = next((u for u in units if "members" in u.features and units.index(u) > vpos), None)
     recipients = tuple(group.features["members"]) if group is not None else ()
     if recipients:                                       # named ("Ken and Tony") → count is how many
         count = len(recipients)
@@ -1597,9 +1612,11 @@ def _distribution(reading: Reading):
     else:
         return None
     ent = _entity(subject)
-    equal = any(_key(u.surface) in ("equally", "evenly") for u in units)
+    manner = next((u for u in units if "manner" in u.features.get("senses", [])     # the method modifier
+                   and _follow(u, "qualifies") is verbs[0]), None)                  # BOUND to this verb
+    method = DISTRIBUTION_METHODS.get(_key(manner.surface)) if manner is not None else None
     return [Quantity(ent, measure, total, _lemma(verbs[0].surface)),
-            Distribution(ent, recipients, measure, count, equal,
+            Distribution(ent, recipients, measure, count, method,
                          _descriptor(rnoun) if rnoun is not None else None)]
 
 
@@ -2285,13 +2302,31 @@ def _synth_distribution(facts: list, readings: list, agenda: set) -> list:
     return out
 
 
+def _underspecified_distribution(context: list):
+    """A Distribution we can't resolve because the SPLIT METHOD is missing/non-computable: the whole is
+    KNOWN, but `method` isn't "equal" (None, or "randomly"/"optimally"…) AND no recipient has an explicit
+    share. Returns that Distribution (→ a "how was it shared?" deficiency) or None. NOTE (future, not now):
+    when a verb is blocked for want of a manner like this, instead of declining we could (a) fall back on a
+    CONTEXT-DEPENDENT default method, or (b) enumerate an answer PER plausible manner. For now: ask."""
+    for d in context:
+        if not isinstance(d, Distribution) or d.method == "equal":
+            continue
+        total_known = any(isinstance(q, Quantity) and q.entity == d.distributor and q.measure == d.measure
+                          and q.verb in DISTRIBUTE_VERBS and q.amount is not None for q in context)
+        holders = d.recipients or ((d.recipient_noun[0],) if d.recipient_noun else ())
+        has_shares = any(_holdings(h, d.measure, context) is not None for h in holders)
+        if total_known and not has_shares:
+            return d
+    return None
+
+
 def _synth_equal_split(facts: list, readings: list, agenda: set) -> list:
     """The EQUAL-SPLIT reading of a Distribution: a KNOWN whole shared `equally` among `count` recipients
     → each gets whole ÷ count. Derives a `get` Quantity per recipient — by name if named, else keyed to
     the recipient noun ("each son got …"). The per-share is inferred, not asked at question-time."""
     out = []
     for f in facts:
-        if not isinstance(f, Distribution) or not f.equal or not f.count:
+        if not isinstance(f, Distribution) or f.method != "equal" or not f.count:
             continue
         total = next((q.amount for q in facts if isinstance(q, Quantity) and q.entity == f.distributor
                       and q.measure == f.measure and q.verb in DISTRIBUTE_VERBS and q.amount is not None), None)
@@ -2523,12 +2558,11 @@ def solve(text: str):
     # A premise with a comparative/multiplier is exempt — its stated value is an offset/factor consumed
     # into a DERIVED amount ("30 less … than Martha" → 38), so it won't appear verbatim.
     given = set()
-    for rp in readings[:len(premises)]:
+    for i, rp in enumerate(readings[:len(premises)]):
         if any(s in u.features.get("senses", []) for u in rp.units for s in ("comparative", "multiplier")) \
                 or any(_key(u.surface) == "each" for u in rp.units) \
-                or any("verb" in u.features.get("senses", []) and _lemma(u.surface) in DISTRIBUTE_VERBS
-                       for u in rp.units):   # a distribution consumes its total+count into the shares
-            continue
+                or any(isinstance(f, Distribution) for f in (facts_of[i] or [])):   # its total+count are
+            continue                                                               # consumed into the shares
         given |= {u.features["value"] for u in rp.units if "value" in u.features.get("senses", [])}
     used = {f.amount for f in context if isinstance(f, (Quantity, Rate))} \
         | {f.count for f in context if isinstance(f, Frequency)}
@@ -2557,7 +2591,11 @@ def solve(text: str):
     q_has_time = any("time" in u.features.get("senses", []) for u in readings[-1].units)
     if len(times) >= 2 and not q_has_time:
         return "undetermined"
-    return answer(question, context, discourse)
+    result = answer(question, context, discourse)
+    if result == "undetermined" and _underspecified_distribution(context) is not None:
+        return [Deficiency("under-specified", None,                 # ask, don't silently decline: the
+                           "the total was shared, but no split method (e.g. 'equally') is given")]
+    return result
 
 
 # --- CLI -------------------------------------------------------------------------------------
