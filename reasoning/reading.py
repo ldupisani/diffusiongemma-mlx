@@ -219,9 +219,16 @@ def _key(surface: str) -> str:
 def _as_number(surface: str):
     """The numeric value of a digit/decimal/currency token ("48", "0.2", "1,000", "$12.50"), else
     None. A leading "$"/"£" is stripped (the currency is recorded separately as a money measure)."""
+    s = _key(surface).replace(",", "").lstrip("$£")
     try:
-        return float(_key(surface).replace(",", "").lstrip("$£"))
+        return float(s)
     except ValueError:
+        if "/" in s:                                      # a fraction literal "3/4" → 0.75, "1/2" → 0.5
+            a, _, b = s.partition("/")
+            try:
+                return float(a) / float(b) if a and b else None
+            except (ValueError, ZeroDivisionError):
+                return None
         return None
 
 
@@ -1168,6 +1175,51 @@ VERB_LEMMA = {"passed": "pass", "wilted": "wilt", "rose": "rise", "failed": "fai
     "playing": "play", "having": "have", "shopping": "shop", "practicing": "practice",
     "distributes": "distribute", "distributed": "distribute", "distributing": "distribute",
     "spreads": "spread", "spreading": "spread", "does": "do", "did": "do"}
+
+# --- vocabulary push: frequent GSM8K words (deliberate, conservatively-typed; a wrong sense → decline,
+# never a confident-wrong). Raises `fully-read` (the ceiling for coverage). ---
+LEXICON.update({
+    "experience": ["noun"], "collection": ["noun"], "section": ["noun"], "company": ["noun"],
+    "vacation": ["noun"], "lottery": ["noun"], "wallet": ["noun"], "jelly": ["noun"], "bean": ["noun"],
+    "brownie": ["noun"], "business": ["noun"], "shirt": ["noun"], "overtime": ["noun"],
+    "allowance": ["noun"], "farm": ["noun"], "mango": ["noun"], "coconut": ["noun"], "cheese": ["noun"],
+    "ingredient": ["noun"], "dinner": ["noun"], "hat": ["noun"], "stamp": ["noun"], "snake": ["noun"],
+    "forest": ["noun"], "summer": ["noun"], "grocery": ["noun"], "nickel": ["noun"], "dime": ["noun"],
+    "penny": ["noun"], "meeting": ["noun"], "reading": ["noun"], "top": ["noun"],
+    "stay": ["verb"], "stays": ["verb"], "stayed": ["verb"],
+    "serve": ["verb"], "serves": ["verb"], "served": ["verb"], "serving": ["verb"],
+    "mow": ["verb"], "mows": ["verb"], "mowed": ["verb"], "mowing": ["verb"],
+    "bike": ["verb"], "bikes": ["verb"], "biked": ["verb"], "biking": ["verb"],
+    "remove": ["verb"], "removes": ["verb"], "removed": ["verb"], "removing": ["verb"],
+    "create": ["verb"], "creates": ["verb"], "created": ["verb"], "creating": ["verb"],
+    "offer": ["verb"], "offers": ["verb"], "offered": ["verb"], "offering": ["verb"],
+    "given": ["verb"], "eaten": ["verb"], "buying": ["verb"], "spending": ["verb"], "using": ["verb"],
+    "starting": ["verb"], "care": ["verb"],
+    "currently": ["adverb"], "normally": ["adverb"], "finally": ["adverb"], "hard": ["adjective"],
+    "past": ["preposition"], "round": ["adjective"],
+    "everything": ["pronoun"], "you": ["pronoun"], "ones": ["pronoun"], "where": ["interrogative"],
+})
+PLURALS.update({
+    "collections": "collection", "sections": "section", "companies": "company", "wallets": "wallet",
+    "beans": "bean", "brownies": "brownie", "shirts": "shirt", "farms": "farm", "mangoes": "mango",
+    "mangos": "mango", "coconuts": "coconut", "ingredients": "ingredient", "dinners": "dinner",
+    "hats": "hat", "stamps": "stamp", "snakes": "snake", "forests": "forest", "groceries": "grocery",
+    "nickels": "nickel", "dimes": "dime", "pennies": "penny", "meetings": "meeting",
+    "vacations": "vacation", "lotteries": "lottery", "experiences": "experience",
+    "businesses": "business", "allowances": "allowance",
+})
+VERB_LEMMA.update({
+    "stays": "stay", "stayed": "stay", "staying": "stay",
+    "serves": "serve", "served": "serve", "serving": "serve",
+    "mows": "mow", "mowed": "mow", "mowing": "mow",
+    "bikes": "bike", "biked": "bike", "biking": "bike",
+    "removes": "remove", "removed": "remove", "removing": "remove",
+    "creates": "create", "created": "create", "creating": "create",
+    "offers": "offer", "offered": "offer", "offering": "offer",
+    "given": "give", "eaten": "eat", "buying": "buy", "spending": "spend", "using": "use",
+    "starting": "start",
+})
+
 
 def _lemma(surface: str) -> str:
     return VERB_LEMMA.get(_key(surface), _key(surface))
