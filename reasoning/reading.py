@@ -3282,7 +3282,8 @@ def _trace_lines(reading: Reading) -> list:
     return lines
 
 
-_USAGE = 'usage: python -m reasoning.reading "<text>" [--about "<phrase>" ...] [--trace]'
+_USAGE = ('usage: python -m reasoning.reading "<text>" [--about "<phrase>" ...] [--trace]\n'
+          '  --trace also prints the AUDITED arithmetic programs (each run through the safe evaluator).')
 
 
 def run_cli(args: list) -> str:
@@ -3293,15 +3294,18 @@ def run_cli(args: list) -> str:
     if not args:
         return _USAGE
     text = args[0]
-    if "--about" in args:                                  # explicit context
+    fixpoint = False
+    if "--about" in args:                                  # explicit context (single-pass)
         premises, question = args[args.index("--about") + 1:], text
-    else:                                                  # paragraph: split into sentences
-        sentences = _sentences(text)
-        qidx = [k for k, s in enumerate(sentences) if s.endswith("?")]
-        premises, question = (sentences[:qidx[-1]], sentences[qidx[-1]]) if qidx else ([], None)
-    discourse, context = [], []
-    for p in premises:                                     # thread coreference + the growing context
-        context += learn(p, discourse, context)
+    else:                                                  # paragraph: CLAUSE-split like solve(), so a
+        clauses = [c for s in _sentences(text) for c in _split_clauses(s)]   # multi-step problem resolves
+        wh = {"how", "what", "which", "who", "whom", "whose", "why"}
+        interro = [k for k, c in enumerate(clauses) if {_key(w) for w in c.split()} & wh]
+        qpos = (interro[-1] if interro else
+                max((k for k, c in enumerate(clauses) if c.rstrip().endswith("?")), default=None))
+        premises, question = ((clauses[:qpos] + clauses[qpos + 1:], clauses[qpos]) if qpos is not None
+                              else ([], None))
+        fixpoint = question is not None
 
     if question is None:                                   # a single statement → analyze it
         r = analyze(text)
@@ -3313,24 +3317,42 @@ def run_cli(args: list) -> str:
         return "\n".join([f"  {u.surface!r:14} {u.features.get('senses', '?')}"
                           f"{_obligation_summary(u)}" for u in r.units] + ["", verdict])
 
+    # Learn premises into context — to a FIXPOINT for a paragraph (forward refs / chains / synthesis all
+    # resolve) so the CLI reasons, and logs the audited arithmetic, exactly like solve(); single-pass --about.
+    ARITHMETIC_LOG.clear()
+    discourse, context = [], []
+    readings = [analyze(p) for p in premises]
+    facts_of = [None] * len(premises)
+    for i, p in enumerate(premises):
+        _resolve_references(readings[i], discourse)        # resolve coreference for the trace (same
+        f = learn(p, discourse, context)                   # discourse learn sees: prior subjects)
+        if f:
+            facts_of[i], context = f, context + f
+    while fixpoint:                                         # retry the deferred + synthesize, to a fixpoint
+        fixpoint = False
+        for i, p in enumerate(premises):
+            if facts_of[i] is None:
+                f = learn(p, discourse, context)
+                if f:
+                    facts_of[i], fixpoint, context = f, True, context + f
+        derived = [f for f in synthesize(context, readings) if f not in context]
+        if derived:
+            context, fixpoint = context + derived, True
+
     if not trace:                                          # just the answer
         return _answer_text(answer(question, context))
 
     out = []                                               # the full trace
-    disc, ctx = [], []
-    for s in premises:
-        rs = analyze(s)
-        _resolve_references(rs, disc)                      # resolve on THIS reading so trace shows it
-        learned = _facts_from(rs, ctx)
-        ctx += learned
-        verbs = [u for u in rs.units if "verb" in u.features.get("senses", [])]
-        subj = _follow(verbs[0], "subject") if len(verbs) == 1 else None
-        if subj is not None:
-            disc.append(_entity(subj))
-        out += [f'STATEMENT: "{s}"'] + _trace_lines(rs) + [f"  learned: {learned}", ""]
+    for i, p in enumerate(premises):
+        out += [f'STATEMENT: "{p}"'] + _trace_lines(readings[i]) + [f"  learned: {facts_of[i] or []}", ""]
     out += [f'QUESTION: "{question}"'] + _trace_lines(analyze(question)) + [""]
+    ans = answer(question, context)                        # logs the answer's arithmetic onto the premises'
+    programs = list(ARITHMETIC_LOG)                        # snapshot before explain() re-derives
     out += ["derivation:"] + ["  " + line for line in explain(question, context)]
-    out += [f"ANSWER: {_answer_text(answer(question, context))}"]
+    if programs:                                           # the AUDITED arithmetic — each a re-runnable
+        out += ["", "arithmetic (executed via the audited safe evaluator):"]   # whitelisted program
+        out += [f"  answer = {prog}   ->  {_num(res)}" for prog, res in programs]
+    out += ["", f"ANSWER: {_answer_text(ans)}"]
     return "\n".join(out)
 
 

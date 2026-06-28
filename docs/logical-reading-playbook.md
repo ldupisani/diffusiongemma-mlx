@@ -868,7 +868,19 @@ need (the engine's operands are its own, not untrusted LLM output) — the value
 re-executable program per answer, restoring the "correct-by-construction and auditable" guarantee the docs
 claim. 425 tests; precision 100%; 19 solves unchanged (every number identical, just produced via the
 evaluator). LESSON: a stated invariant ("arithmetic executes through the audited evaluator") silently rots
-as code grows around it — the fix is one seam every site funnels through, so the invariant can't drift again.
+as code grows around it — the fix is one seam every site funnels through, so the invariant can't drift again.  ·
+104. **surface the audit trail in `--trace` (+ fix the CLI/engine drift)** (tooling). `--trace` now prints
+an "arithmetic (executed via the audited safe evaluator)" section — every `(program, result)` from
+`ARITHMETIC_LOG`, so Anne reads `6 * 8 = 48`, `2 * 48 = 96`; James reads `40 - 10 = 30`, `40 + 30 = 70`.
+Surfacing it EXPOSED a pre-existing bug: the CLI's word-problem path did a single SENTENCE pass with no
+fixpoint, so it diverged from `solve()` — Anne gave `undetermined` from the CLI but `96` from `solve()`.
+Could NOT just route the CLI through `solve()` (its precision GUARDS decline things the CLI's guard-free
+`answer()` commits to — e.g. the logical "more red than green? → yes" case). Fix: the paragraph CLI now
+CLAUSE-splits and runs the same first-pass + deferred-retry + synthesize FIXPOINT as `solve()` (so a
+multi-step problem resolves), keeping `--about` single-pass and the guard-free `answer()`. So `reading "Anne
+…"` now agrees with `reading.solve("Anne …")`. 427 tests; precision 100%. LESSON: adding observability (the
+trail) surfaced a latent correctness gap (CLI ≠ engine) — you can't audit what you can't see, and once you
+can see it the divergence is obvious.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

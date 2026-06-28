@@ -2613,6 +2613,18 @@ class TestIncrement96AuditedArithmetic(unittest.TestCase):
         reading.solve("Tom has 3 apples. How many apples does Tom have?")
         self.assertEqual(reading.ARITHMETIC_LOG, [("1 * 3", 3)])      # reset, not accumulated across solves
 
+    def test_trace_surfaces_audited_arithmetic(self):
+        out = reading.run_cli(["James spends 40 years teaching. His partner has been teaching for 10 years "
+                               "less. How long is their combined experience?", "--trace"])
+        self.assertIn("answer = 40 - 10   ->  30", out)   # the programs, surfaced in --trace
+        self.assertIn("answer = 40 + 30   ->  70", out)
+        self.assertIn("ANSWER: 70", out)
+
+    def test_cli_fixpoints_like_solve(self):
+        out = reading.run_cli(["By the time Anne is two times as old as Emile, Emile will be six times as "
+                               "old as Maude. If Maude will be 8 years old, how old will Anne be?"])
+        self.assertEqual(out.strip(), "96")               # CLI clause-splits + fixpoints, matching solve()
+
     def test_compute_routes_through_safe_evaluator(self):
         self.assertEqual(reading._compute("2 * 48"), 96)
         with self.assertRaises(Exception):                            # run_program rejects non-arithmetic
