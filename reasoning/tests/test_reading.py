@@ -2670,23 +2670,14 @@ class TestIncrement97NumericMultiplier(unittest.TestCase):
 
 
 class TestIncrement98AgeShiftGuard(unittest.TestCase):
-    """#98 - a RELATIONAL age under a TEMPORAL SHIFT ("In N years X will be k x as old as Y", "N years
-    from now") holds at the SHIFTED time, not now — so the present-time k x Y_age is wrong. We don't yet
-    solve the shifted algebra (Ophelia+2 = 4 x (Lennon+2)), so we DECLINE rather than commit a confident
-    wrong. Precision-first: turns the dominant confident-wrong family (10 on full dev) into honest
-    declines. The PRESENT-tense relational age and the shift-free multi-hop (Anne) are untouched."""
+    """#98 - a RELATIONAL age under a TEMPORAL SHIFT was first DECLINED (precision-first), then SOLVED in
+    #101 (see TestIncrement101AgeShiftSolve for the shifted-algebra cases). These remaining cases pin the
+    Δ=0 invariants the shift work must never disturb: the present-tense relational age and the shift-free
+    multi-hop (Anne)."""
 
     def test_present_tense_relational_age_unaffected(self):
         self.assertEqual(reading.solve("Tom is three times as old as Sam. Sam is 8 years old. "
                                        "How old is Tom?"), 24)
-
-    def test_in_n_years_shift_declines(self):
-        self.assertEqual(reading.solve("In two years, Tom will be three times as old as Sam. "
-                                       "Sam is currently 8 years old. How old is Tom?"), "undetermined")
-
-    def test_from_now_shift_declines(self):
-        self.assertEqual(reading.solve("Three years from now, Tom will be twice as old as Sam. "
-                                       "Sam is now 29 years old. How old is Tom now?"), "undetermined")
 
     def test_shift_free_multihop_unaffected(self):
         # Anne: "will be" with NO numeric offset is not a shift -> the multi-hop still solves
@@ -2742,6 +2733,44 @@ class TestIncrement100DoubleTriple(unittest.TestCase):
     def test_double_as_many(self):
         self.assertEqual(reading.solve("Tom has 7 apples. Jerry has double as many apples. "
                                        "How many apples does Jerry have?"), 14)
+
+
+class TestIncrement101AgeShiftSolve(unittest.TestCase):
+    """#101 - SOLVE the shifted relational age that #98 declined. "In Δ years, X will be k x as old as
+    Y" puts BOTH at the future point by default: X+Δ = k(Y+Δ), so X_now = k(Y_now+Δ) - Δ. The variant
+    "as Y is NOW/today" anchors the standard to the present: X+Δ = k.Y_now, so X_now = k.Y_now - Δ
+    (else Kaylee-class problems would commit a confident wrong). A comparative OFFSET on top of the
+    factor ("N more than k x as old") is DECLINED (we'd drop the +N). Present-tense relational age and
+    the shift-free multi-hop (Anne) are unchanged (Δ=0)."""
+
+    def test_both_ages_shift(self):
+        # Tom+2 = 3(Sam+2) = 3*10 = 30 -> Tom_now = 28
+        self.assertEqual(reading.solve("In two years, Tom will be three times as old as Sam. "
+                                       "Sam is currently 8 years old. How old is Tom?"), 28)
+
+    def test_from_now_both_shift(self):
+        # Tom+3 = 2(Sam+3) = 2*32 = 64 -> Tom_now = 61
+        self.assertEqual(reading.solve("Three years from now, Tom will be twice as old as Sam. "
+                                       "Sam is now 29 years old. How old is Tom now?"), 61)
+
+    def test_standard_anchored_to_present(self):
+        # "as Sam is now": Tom+7 = 3*Sam_now = 3*5 = 15 -> Tom_now = 8
+        self.assertEqual(reading.solve("In 7 years, Tom will be 3 times as old as Sam is now. "
+                                       "Sam is currently 5 years old. How old is Tom now?"), 8)
+
+    def test_comparative_offset_on_factor_declines(self):
+        # "N more than k x as old" — an offset we don't fold into the age relation -> honest decline
+        self.assertEqual(reading.solve("Ty is currently 4 years more than two times as old as Carla. "
+                                       "Carla is currently 5 years old. How old is Ty?"), "undetermined")
+
+    def test_present_tense_relational_age_unchanged(self):
+        self.assertEqual(reading.solve("Tom is three times as old as Sam. Sam is 8 years old. "
+                                       "How old is Tom?"), 24)
+
+    def test_shift_free_multihop_unchanged(self):
+        self.assertEqual(reading.solve("By the time Anne is two times as old as Emile, Emile will be "
+                                       "six times as old as Maude. If Maude will be 8 years old, "
+                                       "how old will Anne be?"), 96)
 
 
 if __name__ == "__main__":

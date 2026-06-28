@@ -1748,10 +1748,10 @@ def _relational_age(reading: Reading, context: list):
     factor = _relational_age_factor(reading)
     if factor is None:
         return None
-    if _time_offset(reading) != 0:                        # GUARD: the relation holds at a SHIFTED time
-        return None                                       # ("In N years X will be k× as old as Y") — the
-        # present-time k×Y_age is wrong (X@(now+Δ) = k×Y@(now+Δ), then back-shift to now). We don't yet
-        # solve that, so DECLINE rather than commit a confident wrong. → falls to the defer at _facts_from.
+    if any(_key(u.surface) in ("more", "less", "older", "younger", "fewer") for u in reading.units):
+        return None                                       # "N more than k× as old as Y" — a comparative
+        # OFFSET on top of the factor that we don't fold into the age relation (we'd compute only k×Y and
+        # drop the +N). DECLINE rather than commit that wrong → defers, so a nested standard stays unknown.
     subj, _ = _copula_args(reading)                       # X — the copula's subject
     if subj is None:
         return None
@@ -1759,10 +1759,22 @@ def _relational_age(reading: Reading, context: list):
                      if "name" in u.features.get("senses", []) and u is not subj), None)
     if standard is None:
         return None
-    y_age = _holdings(_entity(standard), ("year", frozenset()), context)
-    if y_age is None:
+    y_now = _holdings(_entity(standard), ("year", frozenset()), context)
+    if y_now is None:
         return None                                       # Y's age unknown → defer (see _facts_from)
-    return Quantity(_entity(subj), ("year", frozenset()), _compute(f"{_num(factor)} * {_num(y_age)}"), "be")
+    delta = _time_offset(reading)
+    if delta == 0:                                        # present-tense relation: X = k × Y_now
+        return Quantity(_entity(subj), ("year", frozenset()),
+                        _compute(f"{_num(factor)} * {_num(y_now)}"), "be")
+    # SHIFTED relation "In Δ years, X will be k× as old as Y": BOTH are at the future point by default
+    # (X+Δ = k·(Y+Δ)), so X_now = k·(Y_now+Δ) − Δ. The variant "as Y is NOW/today" anchors the standard
+    # to the present (X+Δ = k·Y_now → X_now = k·Y_now − Δ) — else the Kaylee class commits a wrong.
+    si = reading.units.index(standard)                    # the present-anchor ("as Y is NOW") follows the
+    std_now = any(_key(u.surface) in ("now", "today")     # standard; the displacement "from NOW" precedes
+                  for u in reading.units[si + 1:])         # it — so look only to the RIGHT of the standard
+    y_future = _num(y_now) if std_now else f"({_num(y_now)} + {_num(delta)})"
+    x_now = _compute(f"{_num(factor)} * {y_future} - {_num(delta)}")
+    return Quantity(_entity(subj), ("year", frozenset()), x_now, "be")
 
 
 def _relational_quantity(reading: Reading, context: list):
