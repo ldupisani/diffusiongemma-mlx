@@ -2457,5 +2457,20 @@ class TestIncrement89ClassifierLabel(unittest.TestCase):
                          [reading.Quantity("tom", ("apple", frozenset()), 5.0, "have")])
 
 
+class TestIncrement90VocabularyRound2(unittest.TestCase):
+    """#90 - a second deliberate vocab batch (frequent + single-unknown-word GSM8K terms), raising
+    fully-read 52→65 on the dev slice. LESSON: .update() OVERRIDES, so an added word must NOT shadow an
+    existing MULTI-sense entry — "rose" was already ["noun","verb"] (the disambiguation test relies on it),
+    so it was excluded from the batch (the "roses"→"rose" plural is fine)."""
+
+    def test_round2_words_recognised(self):
+        defs = reading.deficiencies(reading.analyze("Tom borrowed 5 pencils and 3 gumballs"))
+        self.assertFalse(any(d.kind == "unknown-word" for d in defs))   # recognition, not structure
+        self.assertEqual(reading._lemma("borrowed"), "borrow")
+
+    def test_rose_stays_multi_sense(self):
+        self.assertEqual(reading.LEXICON["rose"], ["noun", "verb"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1246,6 +1246,54 @@ VERB_LEMMA.update({
     "starting": "start",
 })
 
+# --- vocabulary push, round 2 (frequent + single-unknown-word GSM8K terms; same conservative typing) ---
+LEXICON.update({
+    "teaspoon": ["noun"], "pencil": ["noun"], "partner": ["noun"], "gumball": ["noun"],
+    "seashell": ["noun"], "video": ["noun"], "debt": ["noun"], "purpose": ["noun"], "fabric": ["noun"],
+    "bedroom": ["noun"], "concert": ["noun"], "piano": ["noun"], "semester": ["noun"],
+    "assignment": ["noun"], "part": ["noun"], "chip": ["noun"], "aquarium": ["noun"], "hotel": ["noun"],
+    "guest": ["noun"], "performance": ["noun"], "history": ["noun"], "tank": ["noun"], "artist": ["noun"],
+    "bicycle": ["noun"], "lake": ["noun"], "bar": ["noun"], "grandmother": ["noun"], "desert": ["noun"],
+    "balance": ["noun"], "craft": ["noun"], "accident": ["noun"], "percentage": ["noun"], "supply": ["noun"],
+    "rule": ["noun"], "chocolate": ["noun"], "guest": ["noun"], "fountain": ["noun"], "rent": ["noun"],
+    "transport": ["noun"], "value": ["noun"],
+    "borrow": ["verb"], "borrows": ["verb"], "borrowed": ["verb"], "borrowing": ["verb"],
+    "triple": ["verb"], "triples": ["verb"], "tripled": ["verb"],
+    "drop": ["verb"], "drops": ["verb"], "dropped": ["verb"], "dropping": ["verb"],
+    "attend": ["verb"], "attends": ["verb"], "attended": ["verb"],
+    "download": ["verb"], "downloads": ["verb"], "downloaded": ["verb"],
+    "rents": ["verb"], "rented": ["verb"], "feed": ["verb"], "feeds": ["verb"], "fed": ["verb"],
+    "feeding": ["verb"], "repair": ["verb"], "repairs": ["verb"], "repaired": ["verb"],
+    "checks": ["verb"], "checked": ["verb"], "help": ["verb"], "helps": ["verb"], "helped": ["verb"],
+    "likes": ["verb"], "liked": ["verb"], "selling": ["verb"], "watching": ["verb"], "eating": ["verb"],
+    "getting": ["verb"], "cutting": ["verb"], "processing": ["verb"],
+    "far": ["adverb"], "little": ["adjective"], "fast": ["adjective"], "high": ["adjective"],
+    "quickly": ["adverb"], "entirely": ["adverb"], "inside": ["preposition"], "tired": ["adjective"],
+    "identical": ["adjective"], "limited": ["adjective"], "massive": ["adjective"], "until": ["preposition"],
+})
+PLURALS.update({
+    "teaspoons": "teaspoon", "pencils": "pencil", "partners": "partner", "gumballs": "gumball",
+    "seashells": "seashell", "videos": "video", "debts": "debt", "purposes": "purpose",
+    "bedrooms": "bedroom", "roses": "rose", "concerts": "concert", "pianos": "piano",
+    "semesters": "semester", "assignments": "assignment", "parts": "part", "chips": "chip",
+    "aquariums": "aquarium", "hotels": "hotel", "guests": "guest", "performances": "performance",
+    "tanks": "tank", "artists": "artist", "bicycles": "bicycle", "lakes": "lake", "bars": "bar",
+    "grandmothers": "grandmother", "deserts": "desert", "accidents": "accident", "supplies": "supply",
+    "rules": "rule", "fountains": "fountain", "rules": "rule",
+})
+VERB_LEMMA.update({
+    "borrows": "borrow", "borrowed": "borrow", "borrowing": "borrow",
+    "triples": "triple", "tripled": "triple",
+    "drops": "drop", "dropped": "drop", "dropping": "drop",
+    "attends": "attend", "attended": "attend",
+    "downloads": "download", "downloaded": "download",
+    "rents": "rent", "rented": "rent", "feeds": "feed", "fed": "feed", "feeding": "feed",
+    "repairs": "repair", "repaired": "repair", "checks": "check", "checked": "check",
+    "helps": "help", "helped": "help", "likes": "like", "liked": "like",
+    "selling": "sell", "watching": "watch", "eating": "eat", "getting": "get", "cutting": "cut",
+    "processing": "process",
+})
+
 
 def _lemma(surface: str) -> str:
     return VERB_LEMMA.get(_key(surface), _key(surface))

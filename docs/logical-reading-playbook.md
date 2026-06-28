@@ -786,7 +786,17 @@ classifier), so "40% of his Grade 5 students" → 24 of 60. Precision 100%; 398 
 SECOND-to-last Sanchez blocker — the percent clause now yields 24; only the THRESHOLD complement ("B and
 above" = not "below B") remains, which is specialized grade semantics (deferred). LESSON: word ORDER
 disambiguates number role — number-then-noun is a quantity ("5 students"), noun-then-number is a label
-("Grade 5"); the same digit, opposite meaning, read off position.
+("Grade 5"); the same digit, opposite meaning, read off position.  ·
+97. **vocabulary push, round 2** (ceiling raise; fully-read 52→65 / 17.3%→21.7%, coverage unchanged at 16).
+A second deliberate batch, prioritising the "exactly ONE unknown word" problems (each is one term from
+fully-read). Same conservative typing (a wrong sense → decline). Coverage held: the freed problems decline
+on structure (Sanchez's threshold complement, Anne's age multi-hop). CONTRACTIONS ("what's"×5) and
+hyphenated number-compounds ("120-page", "2-hour") are a separate PARSING concern (apostrophe/hyphen
+splitting), deferred. Precision 100%; 400 tests. LESSON: `LEXICON.update()` OVERRIDES — an added word must
+not shadow an existing MULTI-sense entry. "rose" was already `["noun","verb"]` (a disambiguation test
+relies on it); adding `"rose":["noun"]` silently narrowed it and broke 4 tests. The suite caught it — but
+when batch-adding vocab, scan for keys that are already multi-sense and leave them alone (a regression test
+now pins `LEXICON["rose"] == ["noun","verb"]`).
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
