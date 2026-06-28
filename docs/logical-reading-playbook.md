@@ -625,7 +625,17 @@ Also: "do/does/did" is now multi-sense aux+verb ("she did 50 minutes of babysitt
 `_has_verb` ignores them so clause-splitting never breaks a "Tom and Mary" group on a stray "do". SEVEN
 real GSM8K problems solve. Precision 100%; 336 tests. Follow-ons in this cluster: "N X of M each"
 multiplication (sugar, James-beef), rate INVERSION (Joy, John-writes: total ÷ rate → time), cross-entity
-rates ("$5.50/lb" applies to anyone's pounds), and "work" as a noun ("minutes of work").
+rates ("$5.50/lb" applies to anyone's pounds), and "work" as a noun ("minutes of work").  ·
+82. **containment multiplication + question-measure conversion** (cluster cont.; coverage 7→8, solves
+sugar). (a) `_container_quantity`: "N <container> OF M <unit>" → N×M of the INNER unit ("20 packets of 100
+grams" → 2000 grams) — two value-noun pairs straddling "of" multiply, measure = the inner unit. Runs
+before `_quantity` (which would otherwise emit two separate quantities); GUARD 3 exempts it (both values
+are consumed into the product). (b) Question-measure CONVERSION: the holdings fold, finding no quantity of
+the asked measure, converts a held quantity in a same-family unit ("how many KILOGRAMS … sell" with grams
+held → grams×1/1000). So "20 packets of 100 grams of sugar … how many kilograms?" → 2000 g → 2 kg. EIGHT
+real GSM8K problems solve. Precision 100%; 341 tests. (The relative-clause forms "5 packs of beef THAT ARE
+4 pounds each" / "3 books that are 400 pages each" still decline — the "that are" adds a second verb;
+that's the next gap, alongside rate inversion.)
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

@@ -2105,5 +2105,32 @@ class TestIncrement74RatesAndConversion(unittest.TestCase):
         self.assertEqual(reading.answer("Did Bob pass?", reading.learn("Bob passed")), "yes")
 
 
+class TestIncrement75ContainerMultiplication(unittest.TestCase):
+    """#75 - "N <container> of M <unit>" → N×M of the INNER unit (containment multiplication), plus
+    question-measure UNIT CONVERSION (kilograms asked while grams are held). Solves the sugar problem.
+    A plain conjoined object ("3 apples and 2 oranges", no "of") still stays two quantities."""
+
+    def test_container_multiplication(self):
+        self.assertEqual(reading.learn("A store sells 20 packets of 100 grams of sugar"),
+                         [reading.Quantity("store", ("gram", frozenset()), 2000.0, "sell")])
+
+    def test_how_many_grams(self):
+        self.assertEqual(reading.solve("A store sells 20 packets of 100 grams of sugar. "
+                                       "How many grams of sugar does it sell?"), 2000)
+
+    def test_sugar_with_kilogram_conversion(self):
+        self.assertEqual(reading.solve("A store sells 20 packets of 100 grams of sugar every week. "
+                                       "How many kilograms of sugar does it sell every week?"), 2)
+
+    def test_boxes_of_n_each(self):
+        self.assertEqual(reading.solve("Mary has 5 boxes of 6 apples each. "
+                                       "How many apples does Mary have?"), 30)
+
+    def test_conjoined_object_not_multiplied(self):
+        self.assertEqual(reading.learn("Tom has 3 apples and 2 oranges"),
+                         [reading.Quantity("tom", ("apple", frozenset()), 3.0, "have"),
+                          reading.Quantity("tom", ("orange", frozenset()), 2.0, "have")])
+
+
 if __name__ == "__main__":
     unittest.main()

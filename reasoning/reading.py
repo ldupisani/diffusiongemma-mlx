@@ -1591,6 +1591,42 @@ def _percent_quantity(reading: Reading, context: list):
                     pct.features["value"] * referent.amount, _lemma(verbs[0].surface))
 
 
+def _container_quantity(reading: Reading):
+    """A CONTAINMENT quantity — "20 packets OF 100 grams" → 20 × 100 = 2000 grams. Two value-noun pairs
+    straddling "of" (N containers of M units each) multiply; the measure is the INNER unit. None unless a
+    value quantifies a noun on EACH side of an "of"."""
+    units = reading.units
+    verbs = [u for u in units if "verb" in u.features.get("senses", [])]
+    subject = _follow(verbs[0], "subject") if len(verbs) == 1 else None
+    if subject is None:
+        return None
+    of = next((u for u in units if _key(u.surface) == "of"), None)
+    if of is None:
+        return None
+    oi = units.index(of)
+
+    def vpair(before: bool):
+        for u in units:
+            if "value" not in u.features.get("senses", []):
+                continue
+            n = _follow(u, "quantifies")
+            if n is None:
+                continue
+            ui, ni = units.index(u), units.index(n)
+            if before and ui < oi and ni < oi:          # "20 PACKETS of …" — count + noun both left
+                return u
+            if not before and ui > oi:                  # "… of 100 GRAMS" — count + noun right of "of"
+                return u
+        return None
+
+    v1, v2 = vpair(True), vpair(False)
+    if v1 is None or v2 is None:
+        return None
+    return Quantity(_entity(subject), _descriptor(_follow(v2, "quantifies")),
+                    v1.features["value"] * v2.features["value"],
+                    _lemma(verbs[0].surface), _time_at(reading, verbs[0]))
+
+
 def _distributed_quantity(reading: Reading):
     """A DISTRIBUTED quantity — "gave 4 stickers EACH to 3 friends" → 4 × 3 = 12. "each" makes the
     per-recipient amount (the value-noun just before it) multiply by the recipient count (the other
@@ -2159,6 +2195,10 @@ def answer(question: str, context: list, discourse: list = None):
                     continue
                 qs = [f for f in context if isinstance(f, Quantity)
                       and f.entity == ent and f.measure == query]
+                if not qs:                               # CONVERT: "how many KILOGRAMS" when we hold grams
+                    qs = [Quantity(ent, query, f.amount * CONVERSIONS[(f.measure[0], query[0])], f.verb)
+                          for f in context if isinstance(f, Quantity) and f.entity == ent
+                          and f.amount is not None and (f.measure[0], query[0]) in CONVERSIONS]
                 # POLARITY IS RELATIVE TO THE QUESTION: "how many do you HAVE" folds holdings
                 # (baseline + gains - losses); "how many did you SELL" COUNTS the sell events (+).
                 if q_verb in ("have", "own"):
@@ -2533,6 +2573,9 @@ def _facts_from(reading: Reading, context: list = None) -> list:
             and len([u for u in r.units if "verb" in u.features.get("senses", [])]) == 1 \
             and any("noun" in u.features.get("senses", []) for u in r.units):
         return []                                        # percent-of-holding, referent not yet known → defer
+    cq = _container_quantity(r)                          # "20 packets of 100 grams" → 20×100 = 2000?
+    if cq is not None:
+        return [cq]
     dq = _distributed_quantity(r)                        # "gave 4 stickers each to 3 friends" → 4×3?
     if dq is not None:
         return [dq]
@@ -2666,8 +2709,9 @@ def solve(text: str):
     for i, rp in enumerate(readings[:len(premises)]):
         if any(s in u.features.get("senses", []) for u in rp.units for s in ("comparative", "multiplier")) \
                 or any(_key(u.surface) == "each" for u in rp.units) \
-                or any(isinstance(f, Distribution) for f in (facts_of[i] or [])):   # its total+count are
-            continue                                                               # consumed into the shares
+                or any(isinstance(f, Distribution) for f in (facts_of[i] or [])) \
+                or _container_quantity(rp) is not None:   # "20 packets of 100 grams" — both values
+            continue                                      # are consumed into the product (2000)
         given |= {u.features["value"] for u in rp.units if "value" in u.features.get("senses", [])}
     used = {f.amount for f in context if isinstance(f, (Quantity, Rate))} \
         | {f.count for f in context if isinstance(f, Frequency)}
