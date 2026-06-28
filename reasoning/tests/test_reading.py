@@ -2633,5 +2633,36 @@ class TestIncrement96AuditedArithmetic(unittest.TestCase):
             reading._compute("__import__('os').system('echo hi')")
 
 
+class TestIncrement97NumericMultiplier(unittest.TestCase):
+    """#97 - "N times as many/much" (a NUMERIC multiplier) resolves like lexicalized "twice"/"thrice":
+    "N times" fuses into ONE multiplier unit (factor N) that scales the "as many" quantifier, so the
+    DERIVED quantity is N x the referent. Brings the quantity path to parity with the age path
+    ("N times as old", already handled). The `as` is the signal: "N times MORE than" stays DECLINED
+    (multiplicative ambiguity, the Riku trap). Found via the widened firewall: the dominant
+    confident-wrong family on full dev (a mis-resolved referent gave 1 x N instead of N x referent)."""
+
+    def test_n_times_as_many_resolves(self):
+        self.assertEqual(reading.solve("Tom has 7 apples. Jerry has three times as many apples. "
+                                       "How many apples does Jerry have?"), 21)
+
+    def test_n_times_as_many_by_name(self):
+        self.assertEqual(reading.solve("Stu has 9 books. Albert has four times as many books as Stu. "
+                                       "How many books does Albert have?"), 36)
+
+    def test_n_times_as_many_composes_with_total(self):
+        self.assertEqual(reading.solve("Stu has 9 books. Albert has four times as many books as Stu. "
+                                       "How many books do Stu and Albert have in total?"), 45)
+
+    def test_times_more_than_still_declines(self):
+        # "N times MORE than" has no `as` -> remains the multiplicative-ambiguity decline (Riku trap)
+        self.assertEqual(reading.solve("Riku has 25 times more stickers than Kristoff. "
+                                       "Kristoff has 85 stickers. How many stickers does Riku have?"),
+                         "undetermined")
+
+    def test_n_times_operator_unaffected(self):
+        # a bare "N times M" (no `as`) stays plain multiplication, not a multiplier merge
+        self.assertEqual(reading.solve("What is 4 times 3?"), 12)
+
+
 if __name__ == "__main__":
     unittest.main()

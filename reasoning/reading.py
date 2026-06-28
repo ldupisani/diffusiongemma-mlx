@@ -190,6 +190,29 @@ def _merge_scales(reading: Reading) -> Reading:
     return reading
 
 
+def _merge_times_multiplier(reading: Reading) -> Reading:
+    """Fuse a NUMERIC multiplier "<value> times" into ONE multiplier unit (factor N), but ONLY in the
+    relational "... as ..." frame ("three times as many", "four times as much") — so it scales a
+    quantifier exactly like the lexicalized "twice"/"thrice", bringing the quantity path to parity with
+    the age path ("N times as old"). Gated on a following "as": "N times M" (operator multiplication) and
+    "N times MORE than" (the multiplicative-ambiguity decline, the Riku trap) have no "as" and are left
+    untouched. Runs after senses, before obligations, so the merged multiplier carries its `scales`."""
+    units = reading.units
+    for i in range(len(units) - 2):
+        val, times, nxt = units[i], units[i + 1], units[i + 2]
+        if _key(times.surface) == "times" and "value" in val.features.get("senses", []) \
+                and "measure" not in val.features and _key(nxt.surface) == "as":
+            merged = Unit(words=sorted(val.words + times.words, key=lambda w: w.index))
+            merged.features["senses"] = ["multiplier"]
+            merged.features["value"] = val.features["value"]
+            reading.record("merge-times", target=merged,
+                           before={"merged_from": [val, times], "at": i},
+                           after={"value": merged.features["value"]}, reason="<value> times as → multiplier")
+            units[i:i + 2] = [merged]
+            return _merge_times_multiplier(reading)
+    return reading
+
+
 def _merge_labels(reading: Reading) -> Reading:
     """A bare VALUE right after a NOUN is a LABEL/ordinal of it ("Grade 5", "Room 3"), NOT a quantity —
     absorb it into the noun (the number becomes an attribute) so it is no longer a free value that would
@@ -1094,6 +1117,7 @@ def analyze(text: str) -> Reading:
     annotate_number(r)
     annotate_senses(r)
     _merge_scales(r)         # "two dozen" → one value unit (24) before obligations bind it
+    _merge_times_multiplier(r)  # "three times as" → one multiplier unit (×3), like "twice"
     _merge_labels(r)         # "Grade 5" → a labeled noun (the number is an ordinal, not a quantity)
     disambiguate(r)          # collapse multi-sense words to the reading that covers best
     annotate_obligations(r)
