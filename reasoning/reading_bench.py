@@ -10,7 +10,13 @@ benchmark's individual items (the overfitting firewall). Mirrors ``bench.py``'s 
 Runs ``reading.solve`` over a slice and scores against the gold (the number after ``####``). 0 model
 calls. The dataset lives in the gitignored data dir, so questions never enter version control.
 
-    python -m reasoning.reading_bench --slice dev  [--limit N]
+PRECISION is THE safety metric (commit a number ⇒ be right; ``wrong`` must be 0). It is only honest
+over the WHOLE slice — a habitual ``--limit 300`` silently turned the firewall into a 300-row prefix
+and hid 66 confident-wrongs that live past it (precision 100%@300 vs 30.5%@full). So ``--limit`` now
+prints a PARTIAL-FIREWALL warning, and ``--wrongs`` dumps every confident-wrong (the worklist to drive
+to zero). Default runs the full slice.
+
+    python -m reasoning.reading_bench --slice dev  [--limit N] [--show N] [--wrongs]
     python -m reasoning.reading_bench --slice test [--limit N]
 """
 import os
@@ -65,7 +71,7 @@ def _blocker(text: str, unknown: set) -> str:
     return "no-fact / unsupported structure"
 
 
-def run(slice_name: str = "dev", limit=None, show: int = 6) -> str:
+def run(slice_name: str = "dev", limit=None, show: int = 6, all_wrongs: bool = False) -> str:
     rows = _load(slice_name)
     if limit:
         rows = rows[:limit]
@@ -102,8 +108,12 @@ def run(slice_name: str = "dev", limit=None, show: int = 6) -> str:
            f"  wrong:     {len(wrong):4d}",
            f"  declined:  {len(declined):4d}",
            f"  errored:   {len(errored):4d}"]
+    if limit is not None:                                # the firewall is only honest on the WHOLE
+        out.append(f"  ⚠ PARTIAL FIREWALL: limited to the first {limit} rows — precision/wrong below "
+                   f"reflect a PREFIX, not all of {slice_name}. Run without --limit for the real number.")
     out.append(f"  committed: {answered:4d}"
-               + (f"  →  precision {100 * len(correct) / answered:.1f}%" if answered else ""))
+               + (f"  →  precision {100 * len(correct) / answered:.1f}%  (THE safety metric: "
+                  f"wrong must be 0)" if answered else ""))
     out.append(f"  coverage:  {100 * answered / n:.1f}%  (committed to a number)")
     out.append(f"  fully-read:{fully_read:4d}  ({100 * fully_read / n:.1f}%)  "
                f"— every word recognized (the vocabulary frontier; the ceiling for coverage)")
@@ -118,8 +128,12 @@ def run(slice_name: str = "dev", limit=None, show: int = 6) -> str:
             out.append("\n  ✓ solved (sample):")
             out += [f"    [{v:g}=={g:g}] {q[:96]}" for q, g, v in correct[:show]]
         if wrong:
-            out.append("\n  ✗ wrong number (sample — translation/structure slips):")
-            out += [f"    [got {v:g}, gold {g:g}] {q[:88]}" for q, g, v in wrong[:show]]
+            # The confident-wrongs ARE the precision worklist: every one violates the core invariant
+            # (commit a number ⇒ be right). `--wrongs` dumps the full list so none hide past the prefix.
+            shown = wrong if all_wrongs else wrong[:show]
+            head = "full list — the precision worklist" if all_wrongs else "sample — translation/structure slips"
+            out.append(f"\n  ✗ wrong number ({head}):")
+            out += [f"    [got {v:g}, gold {g:g}] {' '.join(q.split())[:96]}" for q, g, v in shown]
     return "\n".join(out)
 
 
@@ -127,4 +141,5 @@ if __name__ == "__main__":
     args = sys.argv[1:]
     slice_name = args[args.index("--slice") + 1] if "--slice" in args else "dev"
     limit = int(args[args.index("--limit") + 1]) if "--limit" in args else None
-    print(run(slice_name, limit))
+    show = int(args[args.index("--show") + 1]) if "--show" in args else 6
+    print(run(slice_name, limit, show=show, all_wrongs="--wrongs" in args))
