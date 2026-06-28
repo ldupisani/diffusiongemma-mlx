@@ -2773,5 +2773,24 @@ class TestIncrement101AgeShiftSolve(unittest.TestCase):
                                        "how old will Anne be?"), 96)
 
 
+class TestIncrement102DimensionWords(unittest.TestCase):
+    """#102 - dimension words ("as long/far/tall/...") act like the quantifier "many" in a relational
+    "<multiplier> as <dim>" phrase, so "twice as long" -> 2 x the referent's quantity (NOT a Frequency
+    of the verb). The referent supplies the measure. Generalizes the "as many/much" path to other
+    measured dimensions."""
+
+    def test_twice_as_long(self):
+        self.assertEqual(reading.solve("Amber worked 12 hours. Bob worked twice as long. "
+                                       "How many hours did Bob work?"), 24)
+
+    def test_twice_as_far(self):
+        self.assertEqual(reading.solve("Anna walked 9 kilometers. Beth walked three times as far. "
+                                       "How many kilometers did Beth walk?"), 27)
+
+    def test_plain_long_unaffected(self):
+        # "long" with no multiplier scaling it is not a relational quantity
+        self.assertEqual(reading.solve("Amber worked 12 hours. How many hours did Amber work?"), 12)
+
+
 if __name__ == "__main__":
     unittest.main()
