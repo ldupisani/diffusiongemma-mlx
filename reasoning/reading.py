@@ -184,7 +184,7 @@ PLURALS = {
     "heights": "height", "lengths": "length", "widths": "width", "areas": "area", "lawns": "lawn",
     "trucks": "truck", "offices": "office", "loads": "load", "goals": "goal", "plants": "plant",
     "theaters": "theater", "packets": "packet", "weekdays": "weekday", "wages": "wage",
-    "salaries": "salary",
+    "salaries": "salary", "candies": "candy", "puppies": "puppy",
 }
 
 
@@ -744,9 +744,9 @@ def _find_target(need, u, i, units, pos):
     if need == "predicate":       # a noun's predicate is the unique verb to its right
         r = right("verb")
         return r[0] if len(r) == 1 else None
-    if need in ("queries",):      # an interrogative asks about the unique quantifier to its right
-        r = right("quantifier")
-        return r[0] if len(r) == 1 else None
+    if need in ("queries",):      # an interrogative asks about the NEAREST quantifier to its right ("how
+        r = right("quantifier")   # MANY candies … each student" — "each" is a second quantifier, but the
+        return r[0] if r else None   # query is the adjacent "many", not "unique quantifier anywhere")
     if need in ("asks_predication", "asks_predicate"):   # auxiliary / "who": the unique verb to the right
         r = right("verb")
         return r[0] if len(r) == 1 else None
@@ -1331,14 +1331,17 @@ class Before:
 
 @dataclass(frozen=True)
 class Distribution:
-    """A DISTRIBUTION relation — "<distributor> shared <measure> between <recipients>". The whole (the
-    distributor's shared `measure`) is split among `recipients`; its value is the SUM of their shares.
-    Read off the obligation graph (share-verb + recipient group + the `of`-measure); the unknown whole
-    is carried as a `Quantity(distributor, measure, None, …)` node and PINNED by the synthesis loop
-    (back-linking to the recipients' holdings) — never assumed."""
+    """A DISTRIBUTION relation — "<distributor> shared <measure> between/among <recipients>". Two readings,
+    both resolved by the synthesis loop: (a) whole UNKNOWN, recipients NAMED, shares known → whole = Σ
+    shares; (b) whole KNOWN and `equal` → each recipient gets whole ÷ `count`. Read off the obligation
+    graph (share-verb + recipient group/noun + the measure). `recipients` = named members (may be empty);
+    `count` = recipient count; `recipient_noun` = the share-holder type for an unnamed equal split."""
     distributor: str
     recipients: tuple
     measure: tuple
+    count: int = None
+    equal: bool = False
+    recipient_noun: tuple = None
 
 
 @dataclass(frozen=True)
@@ -1551,33 +1554,53 @@ def _time_at(reading: Reading, verb_unit) -> str:
 
 
 def _distribution(reading: Reading):
-    """The facts a distribution statement asserts — "<name> shared <amount> of <measure> between
-    <recipients>" → an UNKNOWN-valued `Quantity(distributor, measure, None, lemma)` (the "certain amount"
-    node) plus a `Distribution(distributor, recipients, measure)`. Recipients = a named group's members;
-    measure = the `of`-object (else a money word). None unless it's a distribute-verb with a named group."""
+    """The facts a distribution statement asserts — "<name> shared <measure> between/among <recipients>".
+    The whole rides on `Quantity(distributor, measure, total, lemma)` (total None if unstated — "a certain
+    amount"); the relation on `Distribution`. Recipients are a NAMED group's members, or a COUNT on the
+    recipient noun ("among 3 sons"); measure = the `of`-object, a money value's measure, or a money word.
+    None unless it's a distribute-verb with an identifiable set of recipients."""
     units = reading.units
     verbs = [u for u in units if "verb" in u.features.get("senses", [])]
     if len(verbs) != 1 or _lemma(verbs[0].surface) not in DISTRIBUTE_VERBS:
         return None
     subject = _follow(verbs[0], "subject")
-    if subject is None or "name" not in subject.features.get("senses", []):
-        return None
+    if subject is None or not any(s in subject.features.get("senses", []) for s in ("name", "noun")):
+        return None                                      # distributor may be a name ("Sam") or noun ("a teacher")
+    prep = next((u for u in units if _key(u.surface) in ("between", "among")), None)
+    rnoun = _follow(prep, "object") if prep is not None else None
     group = next((u for u in units if "members" in u.features), None)
-    if group is None:                                    # need the named recipients to sum their shares
+    recipients = tuple(group.features["members"]) if group is not None else ()
+    if recipients:                                       # named ("Ken and Tony") → count is how many
+        count = len(recipients)
+    elif rnoun is not None:                              # unnamed ("3 sons") → the number on the noun
+        cv = next((u for u in units if "value" in u.features.get("senses", [])
+                   and _follow(u, "quantifies") is rnoun), None)
+        count = int(cv.features["value"]) if cv is not None and cv.features["value"] == int(cv.features["value"]) else None
+    else:
+        count = None
+    if not recipients and count is None:                 # no recipients we can name or count → no fact
         return None
     of_obj = next((_follow(u, "object") for u in units if _key(u.surface) == "of"
                    and _follow(u, "object") is not None), None)
-    if of_obj is not None:
-        measure = _descriptor(of_obj)
+    money_val = next((u for u in units if "measure" in u.features), None)
+    # a value quantifying a NON-recipient noun is the shared measure ("30 CANDIES among 5 students")
+    shared_q = next((u for u in units if "value" in u.features.get("senses", [])
+                     and _follow(u, "quantifies") is not None and _follow(u, "quantifies") is not rnoun), None)
+    if money_val is not None:                            # "$5250" — a self-measuring known total
+        measure, total = money_val.features["measure"], money_val.features["value"]
+    elif shared_q is not None:                           # "30 candies" — a known total of a counted noun
+        measure, total = _descriptor(_follow(shared_q, "quantifies")), shared_q.features["value"]
+    elif of_obj is not None:                             # "amount OF money" — measure named, total unstated
+        measure, total = _descriptor(of_obj), None
     elif any(_key(u.surface) in _MONEY_WORDS for u in units):
-        measure = MONEY
+        measure, total = MONEY, None
     else:
         return None
     ent = _entity(subject)
-    val = next((u for u in units if "value" in u.features.get("senses", [])), None)
-    amount = val.features["value"] if val is not None else None   # an UNKNOWN total stays None
-    return [Quantity(ent, measure, amount, _lemma(verbs[0].surface)),
-            Distribution(ent, tuple(group.features["members"]), measure)]
+    equal = any(_key(u.surface) in ("equally", "evenly") for u in units)
+    return [Quantity(ent, measure, total, _lemma(verbs[0].surface)),
+            Distribution(ent, recipients, measure, count, equal,
+                         _descriptor(rnoun) if rnoun is not None else None)]
 
 
 def _temporal_order(reading: Reading):
@@ -2262,9 +2285,30 @@ def _synth_distribution(facts: list, readings: list, agenda: set) -> list:
     return out
 
 
+def _synth_equal_split(facts: list, readings: list, agenda: set) -> list:
+    """The EQUAL-SPLIT reading of a Distribution: a KNOWN whole shared `equally` among `count` recipients
+    → each gets whole ÷ count. Derives a `get` Quantity per recipient — by name if named, else keyed to
+    the recipient noun ("each son got …"). The per-share is inferred, not asked at question-time."""
+    out = []
+    for f in facts:
+        if not isinstance(f, Distribution) or not f.equal or not f.count:
+            continue
+        total = next((q.amount for q in facts if isinstance(q, Quantity) and q.entity == f.distributor
+                      and q.measure == f.measure and q.verb in DISTRIBUTE_VERBS and q.amount is not None), None)
+        if total is None:
+            continue
+        per = total / f.count
+        holders = f.recipients or ((f.recipient_noun[0],) if f.recipient_noun else ())
+        for h in holders:
+            cand = Quantity(h, f.measure, per, "get")
+            if cand not in facts and cand not in out:
+                out.append(cand)
+    return out
+
+
 # obligation/fact KIND → derivation (facts, readings, agenda) -> new facts. Register here to add reasoning.
 SYNTHESIZERS = {"orders": _synth_transitive_order, "narrative": _synth_narrative_order,
-                "distribution": _synth_distribution}
+                "distribution": _synth_distribution, "equal_split": _synth_equal_split}
 
 
 def _outstanding(readings: list) -> set:
@@ -2481,7 +2525,9 @@ def solve(text: str):
     given = set()
     for rp in readings[:len(premises)]:
         if any(s in u.features.get("senses", []) for u in rp.units for s in ("comparative", "multiplier")) \
-                or any(_key(u.surface) == "each" for u in rp.units):   # "each" multiplies its values
+                or any(_key(u.surface) == "each" for u in rp.units) \
+                or any("verb" in u.features.get("senses", []) and _lemma(u.surface) in DISTRIBUTE_VERBS
+                       for u in rp.units):   # a distribution consumes its total+count into the shares
             continue
         given |= {u.features["value"] for u in rp.units if "value" in u.features.get("senses", [])}
     used = {f.amount for f in context if isinstance(f, (Quantity, Rate))} \

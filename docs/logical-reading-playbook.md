@@ -571,7 +571,18 @@ recipient's holding is known, derive `Quantity(sam, money, Σshares, share)` —
 discharged by inference, exactly like `his`→agent one level up. The question "how much was the money
 shared?" reads the pinned total (declines until ALL shares are known — never a partial guess): 1750+3500
 = 5250. Precision 100%; 314 tests. The lesson: a genuine UNKNOWN deserves to be a node with an
-obligation, not a hole filled at question-time — then one synthesizer handles share/divide/remainder alike.
+obligation, not a hole filled at question-time — then one synthesizer handles share/divide/remainder alike.  ·
+78. **equal split ("shared <total> equally among N")** — the INVERSE of #77 (total KNOWN, recipients a
+COUNT), reusing the SAME Distribution relation + synthesis loop, as predicted. `Distribution` gains
+`count`/`equal`/`recipient_noun`; `_distribution` now also reads an unnamed count ("among 3 sons" → the
+value on the recipient noun) and a non-money measure ("30 candies" → a value-quantified noun), and accepts
+a NOUN distributor ("a teacher"), not just a name. `_synth_equal_split` (registered): a KNOWN whole +
+`equally`/`evenly` + count → each gets whole ÷ count, derived as a `get` Quantity per recipient (named, else
+keyed to the recipient noun so "how much did each SON get" folds it). Two more "unique → nearest" relaxations
+(same family as the article fix): the interrogative's `queries` binds the NEAREST quantifier ("how many
+candies … EACH student" — `each` was a 2nd quantifier), and distribution premises are GUARD-3-exempt (their
+total+count are consumed into the shares). "$5250 equally among 3 sons" → 1750; "30 candies among 5" → 6;
+"$30 between Ken and Tony" → 15 each; #77's unknown-total case still 5250. Precision 100%; 318 tests.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

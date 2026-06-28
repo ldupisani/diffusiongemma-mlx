@@ -1966,7 +1966,8 @@ class TestIncrement70DistributionUnknown(unittest.TestCase):
     def test_unknown_node_and_distribution_read_off(self):
         facts = reading.learn("Mr. Sam shared a certain amount of money between his two sons, Ken and Tony.")
         self.assertIn(reading.Quantity("sam", ("money", frozenset()), None, "share"), facts)
-        self.assertIn(reading.Distribution("sam", ("ken", "tony"), ("money", frozenset())), facts)
+        self.assertIn(reading.Distribution("sam", ("ken", "tony"), ("money", frozenset()),
+                                           count=2, equal=False, recipient_noun=("son", frozenset())), facts)
 
     def test_synthesis_pins_the_unknown(self):
         ctx = (reading.learn("Mr. Sam shared a certain amount of money between his two sons, Ken and Tony.")
@@ -1983,6 +1984,29 @@ class TestIncrement70DistributionUnknown(unittest.TestCase):
         self.assertEqual(reading.solve(
             "Mr. Sam shared a certain amount of money between his two sons, Ken and Tony. "
             "If Ken got $1750, how much was the money shared?"), "undetermined")
+
+
+class TestIncrement71EqualSplit(unittest.TestCase):
+    """#71 - "shared <total> equally among N <noun>" → each gets total ÷ N (the inverse of #70: total
+    KNOWN, recipients a COUNT). Reuses the Distribution relation + the synthesis loop; _synth_equal_split
+    derives a `get` Quantity per recipient (named, else keyed to the recipient noun for "each son")."""
+
+    def test_equal_split_among_a_count(self):
+        self.assertEqual(reading.solve("Mr. Sam shared $5250 equally among his 3 sons. "
+                                       "How much did each son get?"), 1750)
+
+    def test_equal_split_nonmoney_measure(self):
+        self.assertEqual(reading.solve("A teacher distributed 30 candies equally among 5 students. "
+                                       "How many candies did each student get?"), 6)
+
+    def test_equal_split_among_named(self):
+        self.assertEqual(reading.solve("Sam shared $30 equally between Ken and Tony. "
+                                       "How much did Ken get?"), 15)
+
+    def test_unknown_total_distribution_still_solves(self):
+        self.assertEqual(reading.solve(
+            "Mr. Sam shared a certain amount of money between his two sons, Ken and Tony. "
+            "If Ken got $1750, and Tony got twice as much as Ken, how much was the money shared?"), 5250)
 
 
 if __name__ == "__main__":
