@@ -308,6 +308,10 @@ LEXICON: dict[str, list[str]] = {
     "who": ["wh_subject"], "what": ["wh_value"],   # wh-questions: each binds to what it asks about
     "which": ["wh_which"],   # "which <noun> …?" restricts to members of that noun
     "there": ["existential"],   # existential "there are …" — introduces instances into the context
+    "mr": ["title"], "mrs": ["title"], "ms": ["title"], "dr": ["title"],   # honorifics — recognised but
+    "mister": ["title"], "miss": ["title"], "prof": ["title"], "professor": ["title"],   # NOT names, so
+    "sir": ["title"], "madam": ["title"],   # they don't compete to be a verb's subject ("Mr. Sam shared"
+    # → Sam is the unique name). A `title` carries no obligation (it's an unforced, recognised modifier).
     "are": ["verb"], "is": ["verb"], "was": ["verb"], "were": ["verb"],   # copulas (also link a complement)
     "one": ["number"], "two": ["number"], "three": ["number"],   # a number is a quantifier with a
     "four": ["number"], "five": ["number"], "six": ["number"], "seven": ["number"],   # VALUE (NUMBERS)
@@ -692,9 +696,9 @@ def _find_target(need, u, i, units, pos):
     if need == "object":          # a preposition's object: the nearest noun OR NAME to its right
         r = right("noun", "name")  # (names too, so "than WILLIAM" binds — comparatives compare people)
         return r[0] if r else None
-    if need == "determines":      # an article determines the unique noun to its right
-        r = right("noun")
-        return r[0] if len(r) == 1 else None
+    if need == "determines":      # an article determines the NEAREST noun to its right ("a certain
+        r = right("noun")         # amount of money" → amount, not "unique noun anywhere" which failed
+        return r[0] if r else None   # when a following "of money"/object added a second noun)
     if need == "anchor":          # a preposition attaches to the unit on its immediate left
         return units[i - 1] if i > 0 else None   # (PP-attachment can be ambiguous; revisit later)
     if need == "subject":         # a verb's subject. In a fronted question "<aux> SUBJ <verb>" the
@@ -929,6 +933,7 @@ def analyze(text: str) -> Reading:
     while condense(r):       # condense "red apple" → one noun unit; loop stacks "big red apple"
         pass
     resolve(r)               # then bind quantifier/preposition obligations over the condensed units
+    _resolve_possessives(r)  # within-sentence: a possessive ("his") back-links to the clause's agent
     return r
 
 
@@ -1155,6 +1160,30 @@ def _pick_antecedent(gender, discourse: list):
                   if gender in (None, "plural") or NAME_GENDER.get(n) in (None, gender)]
     pool = compatible or discourse
     return pool[-1] if pool else None
+
+
+def _resolve_possessives(reading: Reading) -> None:
+    """Back-link an unresolved POSSESSIVE pronoun ("his"/"her"/"their"/"its") to the clause's SUBJECT
+    when that is a NAME — "Mr. Sam shared … his two sons" → his refers to Sam (the agent is the default
+    possessor). Within-sentence and discourse-free, so it runs in `analyze` and takes precedence over the
+    cross-sentence resolver; when the subject isn't a name ("his brother left") it leaves it for discourse."""
+    verbs = [u for u in reading.units if "verb" in u.features.get("senses", [])]
+    subj = _follow(verbs[0], "subject") if len(verbs) == 1 else None
+    if subj is None or "name" not in subj.features.get("senses", []):
+        return
+    for u in reading.units:
+        if "pronoun" not in u.features.get("senses", []) \
+                or _key(u.surface) not in ("his", "her", "their", "its"):
+            continue
+        obs = u.features.get("obligations", [])
+        ref = next((o for o in obs if o.need == "refers"), None)
+        if ref is None or ref.met:
+            continue
+        before = dict(u.features)
+        u.features["obligations"] = [Obligation(o.need, target=Referent(_entity(subj)))
+                                     if o is ref else o for o in obs]
+        reading.record("bind", target=u, before=before, after=dict(u.features),
+                       reason=f"{u.surface!r} (possessive) back-links to the agent {_entity(subj)!r}")
 
 
 def _resolve_references(reading: Reading, discourse: list) -> None:

@@ -546,7 +546,19 @@ drink/can/plant) fixed via a multi-sense override block at the dict's end. PRECI
 new coverage: the instance-count FALLBACK fabricated a 0 when the queried TYPE was absent as instances
 ("how much money" amid only `son` instances) — now it declines unless the query's head noun is present as
 an instance (a present type with 0 matches — "how many RED apples", none red — stays a real 0). Precision
-100%; 305 tests.
+100%; 305 tests.  ·
+76. **titles + article-nearest + possessive back-link** (parse fixes from "Mr. Sam shared a certain amount
+of money between his two sons, Ken and Tony"). (a) TITLES (`mr`/`mrs`/`dr`/… → a `title` sense, no
+obligation) — recognised but NOT names, so "Mr. Sam shared" leaves Sam the UNIQUE name and `shared` binds
+its `subject` (two competing names had left it unmet — the real blocker, not flagged in the eyeball trace).
+(b) An article's `determines` now binds the NEAREST noun, not a unique one ("a certain amount of money" → a
+determines `amount`, which was blocked by the second noun `money`). (c) `_resolve_possessives` (in
+`analyze`, before the discourse resolver): an unresolved possessive ("his") BACK-LINKS to the clause's
+agent when the subject is a NAME ("Sam … his sons" → his→Sam); a non-name subject ("his friend") is left
+for discourse. The sentence's meaningful obligations are now all discharged (subject/dobj/determines/of/
+refers). Precision 100%; 310 tests. NOT YET SOLVED: the aggregation "shared between A and B" ⇒ total = sum
+of the shares (the "certain amount" = Ken+Tony) — the next semantic step. (User's broader idea: infer an
+unmet obligation by BACK-LINKING through the obligation chain — possessive→agent is the first instance.)
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

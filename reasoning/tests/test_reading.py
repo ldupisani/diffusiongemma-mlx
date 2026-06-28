@@ -1927,5 +1927,35 @@ class TestIncrement68VocabularyPushTwo(unittest.TestCase):
         self.assertEqual(reading.answer("how many red apples are there", ctx), 0)
 
 
+class TestIncrement69TitlesArticlesPossessives(unittest.TestCase):
+    """#69 - parse fixes surfaced by "Mr. Sam shared a certain amount of money ... his two sons". A
+    `title` (Mr./Dr.) is recognised but is NOT a name, so the verb's subject is unambiguous; an article
+    binds the NEAREST noun (not a unique one); an unresolved possessive back-links to the clause's agent."""
+
+    def test_title_is_not_a_name(self):
+        mr = next(u for u in reading.analyze("Mr. Sam shared money").units if u.surface == "Mr.")
+        self.assertEqual(mr.features.get("senses"), ["title"])
+
+    def test_title_frees_the_subject(self):
+        r = reading.analyze("Mr. Sam shared money")
+        shared = next(u for u in r.units if u.surface == "shared")
+        self.assertEqual(reading._follow(shared, "subject").surface, "Sam")
+
+    def test_article_binds_nearest_noun(self):
+        r = reading.analyze("a certain amount of money")
+        a = next(u for u in r.units if u.surface == "a")
+        self.assertEqual(reading._follow(a, "determines").features.get("head"), "amount")
+
+    def test_possessive_backlinks_to_the_agent(self):
+        r = reading.analyze("Sam shared his money")
+        his = next(u for u in r.units if u.surface == "his")
+        self.assertEqual(reading._follow(his, "refers").surface, "sam")
+
+    def test_possessive_skips_when_subject_is_not_a_name(self):
+        r = reading.analyze("His friend left")          # subject "friend" is a noun, not a name →
+        his = next(u for u in r.units if u.surface == "His")   # within-sentence rule leaves it for discourse
+        self.assertIsNone(reading._follow(his, "refers"))
+
+
 if __name__ == "__main__":
     unittest.main()
