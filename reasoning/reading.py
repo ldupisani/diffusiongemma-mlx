@@ -118,6 +118,24 @@ def _merge_compounds(reading: Reading) -> Reading:
     return reading
 
 
+def _merge_scales(reading: Reading) -> Reading:
+    """Combine "N <scale>" into ONE value unit: "two dozen" → 24, "three hundred" → 300 (and chains like
+    "two hundred thousand"). Runs after senses are known so both are value units. Reversible."""
+    units = reading.units
+    for i in range(len(units) - 1):
+        if _key(units[i + 1].surface) in SCALES and "value" in units[i].features.get("senses", []):
+            scale = SCALES[_key(units[i + 1].surface)]
+            merged = Unit(words=sorted(units[i].words + units[i + 1].words, key=lambda w: w.index))
+            merged.features["senses"] = ["value"]
+            merged.features["value"] = units[i].features["value"] * scale
+            reading.record("merge-scale", target=merged,
+                           before={"merged_from": [units[i], units[i + 1]], "at": i},
+                           after={"value": merged.features["value"]}, reason="N × scale")
+            units[i:i + 2] = [merged]
+            return _merge_scales(reading)                 # recurse — "two hundred thousand" chains
+    return reading
+
+
 # --- annotation: number ---------------------------------------------------------------------
 # We do NOT guess at plurals. A unit is plural iff it appears in this definitive, curated
 # dictionary mapping a known plural to its singular. Irregulars ("children"→"child") cost nothing
@@ -333,6 +351,8 @@ LEXICON: dict[str, list[str]] = {
     "eight": ["value"], "nine": ["value"], "ten": ["value"], "eleven": ["value"], "twelve": ["value"],  # years
     # younger" parse like "3 …". The value comes from NUMBERS (annotate_senses); count statements ("there
     # are three X") are existential-gated in _facts_from / instances().
+    "dozen": ["value"], "hundred": ["value"], "thousand": ["value"],   # number-SCALES (value from SCALES);
+    "million": ["value"], "billion": ["value"],                        # "two dozen" → 24 via _merge_scales
     "did": ["auxiliary", "verb"], "does": ["auxiliary", "verb"], "do": ["auxiliary", "verb"],
     # ^ yes/no markers ("did she pass?") AND the main verb "do" ("she did 50 minutes of work");
     #   disambiguation picks the verb reading when there's no other verb for the aux to ask about.
@@ -588,6 +608,9 @@ COMPOUNDS = {k for k in LEXICON if " " in k}
 # Number words → their value, for "there are N <collection>" statements that introduce instances.
 NUMBERS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
            "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12}
+# Number-SCALE words: a bare scale is its value ("a dozen" → 12); "N scale" MULTIPLIES ("two dozen" → 24,
+# "three hundred" → 300), merged into one value unit by _merge_scales.
+SCALES = {"dozen": 12, "hundred": 100, "thousand": 1000, "million": 1000000, "billion": 1000000000}
 
 
 def annotate_senses(reading: Reading) -> Reading:
@@ -615,8 +638,8 @@ def annotate_senses(reading: Reading) -> Reading:
         u.features["senses"] = list(senses)
         if "value" in senses:
             u.features["value"] = _as_number(u.surface)
-            if u.features["value"] is None:                # a WORD-number ("three") — value from NUMBERS
-                u.features["value"] = NUMBERS.get(_key(u.surface))
+            if u.features["value"] is None:                # a WORD-number ("three") / SCALE ("dozen"→12)
+                u.features["value"] = NUMBERS.get(_key(u.surface)) or SCALES.get(_key(u.surface))
             if u.surface.strip().startswith(("$", "£")):   # "$12" — a self-measuring money value
                 u.features["measure"] = MONEY
         if "operator" in senses:
@@ -978,6 +1001,7 @@ def analyze(text: str) -> Reading:
     _merge_compounds(r)      # "piggy bank" → one indivisible unit before anything else reads it
     annotate_number(r)
     annotate_senses(r)
+    _merge_scales(r)         # "two dozen" → one value unit (24) before obligations bind it
     disambiguate(r)          # collapse multi-sense words to the reading that covers best
     annotate_obligations(r)
     while condense(r):       # condense "red apple" → one noun unit; loop stacks "big red apple"

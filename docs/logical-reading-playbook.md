@@ -677,7 +677,15 @@ aggregate, so decline rather than match the total (distinct from "each <noun>", 
 answer). Precision 100%; 362 tests. LESSON: a foundational re-typing (word-numbers) exposes latent
 over-eager extractors — the fix is to make each extractor state its real precondition (a container isn't
 the subject; a per-each isn't a group aggregate), not to revert the unification. Mel still needs "two
-dozen"=24; the real John-writes-style "how many hours" (Joy) needs the per-N-unit rate.
+dozen"=24; the real John-writes-style "how many hours" (Joy) needs the per-N-unit rate.  ·
+87. **number-scale words** (coverage 12→13, solves Mel). `dozen`/`hundred`/`thousand`/`million`/`billion`
+are value words (a bare "a dozen" → 12); `_merge_scales` combines "N scale" into ONE value unit by
+multiplying — "two dozen" → 24, "three hundred" → 300 — and recurses for chains ("two hundred thousand").
+Runs right after `annotate_senses` (both are value units by then) and before obligations bind, so the
+merged value quantifies its noun normally. So "Mel is three years younger than Katherine; when Katherine
+is two dozen years old; how old will Mel be?" → 24 − 3 = 21. Precision 100%; 365 tests. THIRTEEN real
+GSM8K problems solve. (Remaining named gaps: Joy's per-N-unit rate + "how many hours"; percentage-of-total
+COMPLEMENT (Sanchez); "N times more" (Riku, declined for the 25× vs 26× ambiguity).)
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

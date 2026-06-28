@@ -2241,5 +2241,23 @@ class TestIncrement79WordNumbersAndCompoundRelational(unittest.TestCase):
                          "undetermined")
 
 
+class TestIncrement80NumberScales(unittest.TestCase):
+    """#80 - number-SCALE words (dozen/hundred/thousand): "two dozen" → 24, "three hundred" → 300, via
+    _merge_scales (N × scale → ONE value unit, chaining for "two hundred thousand"). Solves the real Mel."""
+
+    def test_two_dozen(self):
+        r = reading.analyze("Katherine is two dozen years old")
+        v = next(u for u in r.units if "value" in u.features.get("senses", []))
+        self.assertEqual(v.features["value"], 24)
+
+    def test_three_hundred(self):
+        r = reading.analyze("She sold three hundred tickets")
+        self.assertIn(300, [u.features.get("value") for u in r.units])
+
+    def test_mel_two_dozen_solves(self):
+        self.assertEqual(reading.solve("Mel is three years younger than Katherine. When Katherine is "
+                                       "two dozen years old, how old will Mel be in years?"), 21)
+
+
 if __name__ == "__main__":
     unittest.main()
