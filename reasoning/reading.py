@@ -192,16 +192,17 @@ def _merge_scales(reading: Reading) -> Reading:
 
 def _merge_times_multiplier(reading: Reading) -> Reading:
     """Fuse a NUMERIC multiplier "<value> times" into ONE multiplier unit (factor N), but ONLY in the
-    relational "... as ..." frame ("three times as many", "four times as much") — so it scales a
-    quantifier exactly like the lexicalized "twice"/"thrice", bringing the quantity path to parity with
-    the age path ("N times as old"). Gated on a following "as": "N times M" (operator multiplication) and
+    relational frame — "three times as many", "four times as much", or "three times that many" (the
+    "that" pointing at the just-stated quantity) — so it scales a quantifier exactly like the lexicalized
+    "twice"/"thrice", bringing the quantity path to parity with the age path ("N times as old"). Gated on
+    a following "as"/"that": "N times M" (operator multiplication) and
     "N times MORE than" (the multiplicative-ambiguity decline, the Riku trap) have no "as" and are left
     untouched. Runs after senses, before obligations, so the merged multiplier carries its `scales`."""
     units = reading.units
     for i in range(len(units) - 2):
         val, times, nxt = units[i], units[i + 1], units[i + 2]
         if _key(times.surface) == "times" and "value" in val.features.get("senses", []) \
-                and "measure" not in val.features and _key(nxt.surface) == "as":
+                and "measure" not in val.features and _key(nxt.surface) in ("as", "that"):
             merged = Unit(words=sorted(val.words + times.words, key=lambda w: w.index))
             merged.features["senses"] = ["multiplier"]
             merged.features["value"] = val.features["value"]

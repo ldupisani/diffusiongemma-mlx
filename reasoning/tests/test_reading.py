@@ -2653,6 +2653,11 @@ class TestIncrement97NumericMultiplier(unittest.TestCase):
         self.assertEqual(reading.solve("Stu has 9 books. Albert has four times as many books as Stu. "
                                        "How many books do Stu and Albert have in total?"), 45)
 
+    def test_n_times_that_many_resolves(self):
+        # "N times THAT many" — the "that" points at the just-stated quantity (implicit referent)
+        self.assertEqual(reading.solve("Tom lost 8 pounds. Jerry lost three times that many pounds. "
+                                       "How many pounds did Jerry lose?"), 24)
+
     def test_times_more_than_still_declines(self):
         # "N times MORE than" has no `as` -> remains the multiplicative-ambiguity decline (Riku trap)
         self.assertEqual(reading.solve("Riku has 25 times more stickers than Kristoff. "
