@@ -807,7 +807,17 @@ discrimination is the apostrophe-s: a PRONOUN/interrogative "'s" (what/he/it/tha
 resolver. Only +1 fully-read (the "what's" problems carry other unknowns) but it's a correct, GENERAL
 tokenization fix that composes with everything downstream. Precision 100%; 406 tests. LESSON: restore the
 underlying words rather than special-case the contraction — the obligation machinery then needs no change
-(the lexicalist principle: put the grammar back IN the words, don't bolt a rule onto the side).
+(the lexicalist principle: put the grammar back IN the words, don't bolt a rule onto the side).  ·
+99. **hyphen number-compound split** (ceiling raise; fully-read 66→68, coverage unchanged at 16). Same move
+as contractions, same seam (`read()`): a DIGIT-led hyphen compound is an adjectival number-unit phrase, so
+restore its words — "120-page" → 120 + page, "2-hour" → 2 + hour — and the number quantifies the unit
+through the normal machinery. GATED to a digit FIRST part (`_as_number(parts[0])`): "fast-food",
+"twenty-five", "fourth-grade" stay one token, so a hyphenated number-WORD is never split into two wrong
+values (worst case stays a decline, never a confident error). Composes immediately with rate inversion:
+"John writes 20 pages a day; how long to write a 120-page book?" → 120 ÷ 20 = 6 (a synthetic; the real
+120-page/2-hour problems are multi-step, hence coverage held). Precision 100%; 410 tests. LESSON: the two
+tokenizer fixes (contractions, hyphens) share a shape — a single surface token standing for several words;
+fix it ONCE at the tokenizer seam and it composes with every downstream extractor, no per-site changes.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

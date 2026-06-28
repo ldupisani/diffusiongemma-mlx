@@ -2503,5 +2503,27 @@ class TestIncrement91Contractions(unittest.TestCase):
                          ["What", "is", "the", "answer?"])
 
 
+class TestIncrement92HyphenCompounds(unittest.TestCase):
+    """#92 - a DIGIT-led hyphen compound is an adjectival number-unit phrase, restored to its words at
+    tokenization: "120-page" → 120 + page, "2-hour" → 2 + hour (the number then quantifies the unit
+    normally). Non-digit-led compounds ("fast-food", "twenty-five", "fourth-grade") stay ONE token — never
+    split a number-word into two values. Enables the rate inversion over "a 120-page book"."""
+
+    def test_digit_led_splits(self):
+        self.assertEqual(reading._split_hyphen("120-page"), ["120", "page"])
+        self.assertEqual(reading._split_hyphen("2-hour"), ["2", "hour"])
+
+    def test_non_digit_led_intact(self):
+        self.assertEqual(reading._split_hyphen("fast-food"), ["fast-food"])
+        self.assertEqual(reading._split_hyphen("twenty-five"), ["twenty-five"])
+
+    def test_trailing_punct_rides(self):
+        self.assertEqual(reading._split_hyphen("5-pound,"), ["5", "pound,"])
+
+    def test_120_page_book_inversion(self):
+        self.assertEqual(reading.solve("John writes 20 pages a day. "
+                                       "How long will it take him to write a 120-page book?"), 6)
+
+
 if __name__ == "__main__":
     unittest.main()

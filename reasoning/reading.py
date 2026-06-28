@@ -123,10 +123,28 @@ def _split_contraction(tok: str) -> list:
     return [tok]
 
 
+def _split_hyphen(tok: str) -> list:
+    """A DIGIT-led hyphen compound is an adjectival number-unit phrase — restore its words: "120-page" →
+    120 + page, "2-hour" → 2 + hour (so the number quantifies the unit normally). Only when the FIRST part
+    is a NUMBER and the rest are words/numbers — so "twenty-five" / "fast-food" stay one token (never split
+    a number-word into two values, never a confident error)."""
+    if "-" not in tok:
+        return [tok]
+    core, punct = tok, ""
+    while core and core[-1] in ".,?!;:":
+        core, punct = core[:-1], core[-1] + punct
+    parts = core.split("-")
+    if len(parts) >= 2 and _as_number(parts[0]) is not None \
+            and all(p.isalpha() or _as_number(p) is not None for p in parts[1:]):
+        parts[-1] += punct
+        return parts
+    return [tok]
+
+
 def read(text: str) -> Reading:
-    """Read text into a Reading: one Word per whitespace-separated token (contractions expanded to their
-    constituent words first), each wrapped in its own Unit, in order. No further normalization yet."""
-    toks = [t for tok in text.split() for t in _split_contraction(tok)]
+    """Read text into a Reading: one Word per whitespace-separated token (contractions and digit-led hyphen
+    compounds expanded to their constituent words first), each wrapped in its own Unit. No further norm."""
+    toks = [t2 for tok in text.split() for t1 in _split_hyphen(tok) for t2 in _split_contraction(t1)]
     words = [Word(surface=tok, index=i) for i, tok in enumerate(toks)]
     return Reading(units=[Unit(words=[w]) for w in words])
 
