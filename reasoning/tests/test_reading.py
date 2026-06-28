@@ -2598,5 +2598,26 @@ class TestIncrement95JamesCombined(unittest.TestCase):
                                        "all snakes combined?"), 50)
 
 
+class TestIncrement96AuditedArithmetic(unittest.TestCase):
+    """#96 - every word-problem number is produced by EXECUTING a tiny arithmetic program through the
+    AUDITED safe evaluator (translate.run_program: ast.parse + an operator/function whitelist, never
+    eval/exec), recorded in ARITHMETIC_LOG. No answer is computed by a bare Python operator — restoring the
+    'correct-by-construction and auditable' guarantee the docs claim."""
+
+    def test_solve_logs_the_audited_programs(self):
+        reading.solve("James spends 40 years teaching. His partner has been teaching for 10 years less. "
+                      "How long is their combined experience?")
+        self.assertEqual(reading.ARITHMETIC_LOG, [("40 - 10", 30), ("40 + 30", 70)])
+
+    def test_log_resets_per_solve(self):
+        reading.solve("Tom has 3 apples. How many apples does Tom have?")
+        self.assertEqual(reading.ARITHMETIC_LOG, [("1 * 3", 3)])      # reset, not accumulated across solves
+
+    def test_compute_routes_through_safe_evaluator(self):
+        self.assertEqual(reading._compute("2 * 48"), 96)
+        with self.assertRaises(Exception):                            # run_program rejects non-arithmetic
+            reading._compute("__import__('os').system('echo hi')")
+
+
 if __name__ == "__main__":
     unittest.main()

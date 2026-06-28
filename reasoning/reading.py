@@ -1507,6 +1507,26 @@ _REMAINDER = {"left", "remaining", "leftover", "remain", "remains", "rest"}
 DISTRIBUTE_VERBS = {"share", "distribute", "split", "divide", "spread"}
 
 
+# Every word-problem number is produced by EXECUTING a tiny arithmetic program through the AUDITED safe
+# evaluator (translate.run_program: ast.parse + an operator/function whitelist, never eval/exec) — not by
+# an inline Python operator. So each answer's arithmetic is a recorded, re-executable, whitelisted program.
+ARITHMETIC_LOG: list = []                                # (program, result) per audited computation
+
+
+def _num(x) -> str:
+    """Format a number for an arithmetic program — drop the trailing .0 so the program reads cleanly."""
+    return str(int(x)) if isinstance(x, float) and x == int(x) else str(x)
+
+
+def _compute(expr: str):
+    """Evaluate a one-line arithmetic expression through the audited safe evaluator, LOG it, and return the
+    int/float. The single arithmetic seam — no answer number is computed by a bare Python operator."""
+    from reasoning import translate                       # lazy: avoid an import cycle
+    val = translate.run_program(f"answer = {expr}")
+    ARITHMETIC_LOG.append((expr, val))
+    return int(val) if val == int(val) else val
+
+
 def _holdings(entity: str, measure: tuple, context: list):
     """The net holdings of `entity` for `measure` — baseline + gains − losses — or None if unknown.
     Timeless / single-state fold (order-independent); the time-aware variant is `_holdings_at`. Quantities
@@ -1514,7 +1534,9 @@ def _holdings(entity: str, measure: tuple, context: list):
     until synthesis pins them."""
     qs = [f for f in context if isinstance(f, Quantity) and f.entity == entity
           and f.measure == measure and f.amount is not None]
-    return sum(_verb_sign(f.verb) * f.amount for f in qs) if qs else None
+    if not qs:
+        return None
+    return _compute(" + ".join(f"{_verb_sign(f.verb)} * {_num(f.amount)}" for f in qs))
 
 
 # A STATE verb asserts the value AT a time ("has 30 on Monday" — Monday's known total); every other
@@ -1593,13 +1615,11 @@ def _holdings_at(entity: str, measure: tuple, context: list, at_time: str):
         return None
     rank = {t: k for k, t in enumerate(order)}
     chronological = sorted(applicable, key=lambda q: rank.get(q.time, -1))   # stable: None first
-    running = 0
-    for q in chronological:
-        if q.verb in STATE_VERBS:
-            running = _verb_sign(q.verb) * q.amount      # a stated state replaces the running total
-        else:
-            running += _verb_sign(q.verb) * q.amount     # a change accumulates onto it
-    return running
+    running = "0"                                        # build the program as we fold: a STATE RESETS the
+    for q in chronological:                              # running expression, a CHANGE appends a signed term
+        term = f"{_verb_sign(q.verb)} * {_num(q.amount)}"
+        running = term if q.verb in STATE_VERBS else f"{running} + {term}"
+    return _compute(running)
 
 
 @dataclass(frozen=True)
@@ -1696,7 +1716,7 @@ def _relational_age(reading: Reading, context: list):
     y_age = _holdings(_entity(standard), ("year", frozenset()), context)
     if y_age is None:
         return None                                       # Y's age unknown → defer (see _facts_from)
-    return Quantity(_entity(subj), ("year", frozenset()), factor * y_age, "be")
+    return Quantity(_entity(subj), ("year", frozenset()), _compute(f"{_num(factor)} * {_num(y_age)}"), "be")
 
 
 def _relational_quantity(reading: Reading, context: list):
@@ -1725,12 +1745,12 @@ def _relational_quantity(reading: Reading, context: list):
         referent = next((f for f in reversed(context or []) if isinstance(f, Quantity)), None)
     if referent is None:
         return None
-    amount = mult.features["value"] * referent.amount
+    expr = f"{_num(mult.features['value'])} * {_num(referent.amount)}"
     comp = next((u for u in reading.units if "comparative" in u.features.get("senses", [])), None)
     offset = next((u for u in reading.units if "value" in u.features.get("senses", [])), None)
     if comp is not None and offset is not None:          # "FIVE MORE than twice as many as Bob" → 2×Bob+5
-        amount += COMPARATIVE_SIGN.get(_key(comp.surface), 1) * offset.features["value"]
-    return Quantity(_entity(subject), referent.measure, amount, _lemma(verbs[0].surface))
+        expr += f" + {COMPARATIVE_SIGN.get(_key(comp.surface), 1)} * {_num(offset.features['value'])}"
+    return Quantity(_entity(subject), referent.measure, _compute(expr), _lemma(verbs[0].surface))
 
 
 def _partitive_quantity(reading: Reading, context: list):
@@ -1772,7 +1792,7 @@ def _partitive_quantity(reading: Reading, context: list):
         else _holdings(ref_ent, measure, context or [])
     if base is None:
         return None
-    return Quantity(ent, measure, base / FRACTIONS[_key(frac.surface)],
+    return Quantity(ent, measure, _compute(f"{_num(base)} / {FRACTIONS[_key(frac.surface)]}"),
                     _lemma(main_verb.surface), _time_at(reading, main_verb))
 
 
@@ -1806,8 +1826,9 @@ def _comparative_quantity(reading: Reading, context: list):
                          and f.amount is not None), None)
     if referent is None:
         return None                                      # standard's count unknown (e.g. forward ref)
-    sign = COMPARATIVE_SIGN.get(_key(comp.surface), 1)   # "younger"/"less" → −, "older"/"more" → +
-    return Quantity(_entity(subject), measure, referent + sign * value_unit.features["value"],
+    op = "-" if COMPARATIVE_SIGN.get(_key(comp.surface), 1) < 0 else "+"   # younger/less → −, older/more → +
+    return Quantity(_entity(subject), measure,
+                    _compute(f"{_num(referent)} {op} {_num(value_unit.features['value'])}"),
                     _lemma(verbs[-1].surface))
 
 
@@ -1903,7 +1924,8 @@ def _rest_quantity(reading: Reading, context: list):
     total = totals[-1]
     subs = [f.amount for f in context if isinstance(f, Quantity) and f.measure == total.measure
             and f.verb not in ("have", "be") and f.amount is not None]
-    return Quantity(total.measure[0], total.measure, total.amount - sum(subs), _lemma(verbs[0].surface))
+    expr = _num(total.amount) + "".join(f" - {_num(s)}" for s in subs)   # total − sub1 − sub2 …
+    return Quantity(total.measure[0], total.measure, _compute(expr), _lemma(verbs[0].surface))
 
 
 def _percent_quantity(reading: Reading, context: list):
@@ -1935,7 +1957,7 @@ def _percent_quantity(reading: Reading, context: list):
                   and _key(u.surface) not in ("is", "are", "was", "were")]
         cverb = _lemma(cverbs[0].surface) if cverbs else "have"
         return Quantity(_descriptor(noun_base)[0], _descriptor(noun_base),
-                        pct.features["value"] * ref.amount, cverb)
+                        _compute(f"{_num(pct.features['value'])} * {_num(ref.amount)}"), cverb)
     verbs = [u for u in reading.units if "verb" in u.features.get("senses", [])]
     subject = _follow(verbs[0], "subject") if len(verbs) == 1 else None
     if subject is None:
@@ -1946,7 +1968,8 @@ def _percent_quantity(reading: Reading, context: list):
     if referent is None:
         return None
     return Quantity(_entity(subject), referent.measure,
-                    pct.features["value"] * referent.amount, _lemma(verbs[0].surface))
+                    _compute(f"{_num(pct.features['value'])} * {_num(referent.amount)}"),
+                    _lemma(verbs[0].surface))
 
 
 def _container_quantity(reading: Reading):
@@ -1988,7 +2011,7 @@ def _container_quantity(reading: Reading):
     if v1 is None or v2 is None or _follow(v1, "quantifies") is subject:
         return None                                      # the container can't be the SUBJECT ("FOUR people
     return Quantity(_entity(subject), _descriptor(_follow(v2, "quantifies")),   # lost a total of 103 kg" is
-                    v1.features["value"] * v2.features["value"],                 # not 4×103)
+                    _compute(f"{_num(v1.features['value'])} * {_num(v2.features['value'])}"),   # not 4×103)
                     _lemma(verbs[0].surface), _time_at(reading, verbs[0]))
 
 
@@ -2013,7 +2036,7 @@ def _distributed_quantity(reading: Reading):
                       and _follow(u, "quantifies") is not None), None)   # "to 3 FRIENDS" — the count
     if per_val is None or count_val is None:
         return None
-    total = per_val.features["value"] * count_val.features["value"]
+    total = _compute(f"{_num(per_val.features['value'])} * {_num(count_val.features['value'])}")
     return Quantity(_entity(subject), _descriptor(per_noun), total, _lemma(verbs[0].surface))
 
 
@@ -2393,8 +2416,7 @@ def answer(question: str, context: list, discourse: list = None):
         if growth is not None:                                   # shift ("grows 3 inches/yr; 20 now; after
             base = _holdings(growth.entity, growth.measure, context)   # 10 yrs?" → 20 + 3×10 = 50)
             if base is not None:
-                t = base + growth.amount * proj_offset
-                return int(t) if t == int(t) else t
+                return _compute(f"{_num(base)} + {_num(growth.amount)} * {_num(proj_offset)}")
     if any("interrogative" in u.features.get("senses", []) for u in r.units) \
             and any(_key(u.surface) == "old" for u in r.units):   # "How old is/will X be?" → age (years)
         offset = _time_offset(r)                         # the queried time vs now — age TRACKS the timeline:
@@ -2406,14 +2428,15 @@ def answer(question: str, context: list, discourse: list = None):
             entities = [_entity(subj)] if subj is not None else []
         if not entities:
             return "undetermined"
-        total = 0
+        parts = []
         for ent in entities:
             h = _holdings(ent, ("year", frozenset()), context)
             if h is None:
                 return "undetermined"
-            total += h
-        total += offset
-        return int(total) if total == int(total) else total
+            parts.append(_num(h))
+        if offset:
+            parts.append(_num(offset))
+        return _compute(" + ".join(parts))               # Σ(ages) + the timeline offset
 
     who = next((u for u in r.units if "wh_subject" in u.features.get("senses", [])), None)
     if who is not None:                                  # "Who <predicate>?" → subjects with it
@@ -2516,16 +2539,16 @@ def answer(question: str, context: list, discourse: list = None):
             mv = next((u for u in r.units if "value" in u.features.get("senses", []) and _follow(u, "quantifies")
                        is not None and _descriptor(_follow(u, "quantifies")) == rate.measure), None)
             if mv is not None:
-                amt = mv.features["value"]
+                target = _num(mv.features["value"])
                 cv = next((u for u in r.units if "value" in u.features.get("senses", []) and u is not mv
                            and _follow(u, "quantifies") is not None), None)   # "3 BOOKS that are 400 pages"
                 if cv is not None:
-                    amt *= cv.features["value"]
-                t = amt * rate.per_amount / rate.amount   # "120 pages × 20 min ÷ 8 = 300 min"
+                    target += f" * {_num(cv.features['value'])}"
+                expr = f"({target}) * {_num(rate.per_amount)} / {_num(rate.amount)}"   # "120 × 20 ÷ 8"
                 if asked_unit in TIME_UNITS and asked_unit != rate.per_unit \
                         and (rate.per_unit, asked_unit) in CONVERSIONS:        # 300 min → 5 hours
-                    t *= CONVERSIONS[(rate.per_unit, asked_unit)]
-                return int(t) if t == int(t) else t
+                    expr = f"({expr}) * {_num(CONVERSIONS[(rate.per_unit, asked_unit)])}"
+                return _compute(expr)
         if is_long:
             return "undetermined"                        # a how-long question with no usable rate
     collection = _follow(_follow(interro, "queries"), "collection")   # how → many → its collection
@@ -2547,15 +2570,15 @@ def answer(question: str, context: list, discourse: list = None):
             measures = {f.measure for f in context if isinstance(f, Quantity) and f.amount is not None}
             gq = next(iter(measures)) if len(measures) == 1 else None   # "their combined experience" → the
         if gq is not None:                               # one measure the context quantities share (years)
-            total, found = 0, False                      # sum every quantity convertible to it (cross-entity,
+            terms = []                                   # sum every quantity convertible to it (cross-entity,
             for f in context:                            # cross-unit via CONVERSIONS)
                 if isinstance(f, Quantity) and f.amount is not None:
                     if f.measure == gq:
-                        total, found = total + f.amount, True
+                        terms.append(_num(f.amount))
                     elif (f.measure[0], gq[0]) in CONVERSIONS:
-                        total, found = total + f.amount * CONVERSIONS[(f.measure[0], gq[0])], True
-            if found:
-                return int(total) if total == int(total) else total
+                        terms.append(f"{_num(f.amount)} * {_num(CONVERSIONS[(f.measure[0], gq[0])])}")
+            if terms:
+                return _compute(" + ".join(terms))
     if query is not None and any("verb" in u.features.get("senses", [])      # "How much <measure> was
                                  and _lemma(u.surface) in DISTRIBUTE_VERBS for u in r.units):  # shared?"
         shared = [f.amount for f in context if isinstance(f, Quantity) and f.measure == query   # → the
@@ -2612,28 +2635,29 @@ def answer(question: str, context: list, discourse: list = None):
         entities = None
     if query is not None and entities is not None:
         if entities:
-            total = 0
+            terms = []                                   # each conjunct's contribution, summed once at the end
             for ent in entities:
                 if q_verb in ("have", "own") and q_time is not None:   # TIME-AWARE: the value VALID at
                     h = _holdings_at(ent, query, context, q_time)      # the queried time, folded along
                     if h is None:                                      # the timeline (state vs change)
                         return "undetermined"
-                    total += h
+                    terms.append(_num(h))
                     continue
                 qs = [f for f in context if isinstance(f, Quantity)
                       and f.entity == ent and f.measure == query]
                 if not qs:                               # CONVERT: "how many KILOGRAMS" when we hold grams
-                    qs = [Quantity(ent, query, f.amount * CONVERSIONS[(f.measure[0], query[0])], f.verb)
+                    qs = [Quantity(ent, query, _compute(f"{_num(f.amount)} * "
+                                   f"{_num(CONVERSIONS[(f.measure[0], query[0])])}"), f.verb)
                           for f in context if isinstance(f, Quantity) and f.entity == ent
                           and f.amount is not None and (f.measure[0], query[0]) in CONVERSIONS]
                 # POLARITY IS RELATIVE TO THE QUESTION: "how many do you HAVE" folds holdings
                 # (baseline + gains - losses); "how many did you SELL" COUNTS the sell events (+).
                 if q_verb in ("have", "own"):
-                    folded = [_verb_sign(f.verb) * f.amount for f in qs]
+                    folded = [f"{_verb_sign(f.verb)} * {_num(f.amount)}" for f in qs]
                 else:
-                    folded = [f.amount for f in qs if f.verb == q_verb]   # events of THIS verb
+                    folded = [_num(f.amount) for f in qs if f.verb == q_verb]   # events of THIS verb
                 if folded:
-                    total += sum(folded)
+                    terms.extend(folded)
                     continue
                 rate = next((f for f in context if isinstance(f, Rate) and f.entity == ent     # rate ×
                              and f.measure == query and f.verb == q_verb), None)                # per-unit
@@ -2651,12 +2675,13 @@ def answer(question: str, context: list, discourse: list = None):
                                 and (f.measure[0], rate.per_unit) in CONVERSIONS:
                             base = _holdings(ent, f.measure, context)
                             if base is not None:
-                                per_qty = base * CONVERSIONS[(f.measure[0], rate.per_unit)]
+                                per_qty = _compute(f"{_num(base)} * "
+                                                   f"{_num(CONVERSIONS[(f.measure[0], rate.per_unit)])}")
                                 break
                 if per_qty is None:
                     return "undetermined"                # no relevant quantity/rate for this conjunct
-                total += rate.amount * per_qty
-            return int(total) if total == int(total) else total
+                terms.append(f"{_num(rate.amount)} * {_num(per_qty)}")
+            return _compute(" + ".join(terms)) if terms else "undetermined"
     if remainder:                                        # "How many [<measure>] are left?" → the net
         measure = query                                  # HOLDINGS of the (implicit) owner — no aux/entity
         if measure is None:                              # "how many are left" — measure from the latest qty
@@ -2867,7 +2892,8 @@ def _synth_distribution(facts: list, readings: list, agenda: set) -> list:
             continue                                     # already pinned
         shares = [_holdings(r, f.measure, facts) for r in f.recipients]
         if shares and all(s is not None for s in shares):
-            out.append(Quantity(f.distributor, f.measure, sum(shares), "share"))
+            out.append(Quantity(f.distributor, f.measure,
+                                _compute(" + ".join(_num(s) for s in shares)), "share"))
     return out
 
 
@@ -2901,7 +2927,7 @@ def _synth_equal_split(facts: list, readings: list, agenda: set) -> list:
                       and q.measure == f.measure and q.verb in DISTRIBUTE_VERBS and q.amount is not None), None)
         if total is None:
             continue
-        per = total / f.count
+        per = _compute(f"{_num(total)} / {_num(f.count)}")
         holders = f.recipients or ((f.recipient_noun[0],) if f.recipient_noun else ())
         for h in holders:
             cand = Quantity(h, f.measure, per, "get")
@@ -3098,7 +3124,9 @@ def solve(text: str):
     """Read a whole word-problem paragraph (premises + a trailing question) and answer the question —
     threading coreference (`discourse`) and the growing `context` across the premises (split into
     independent CLAUSES first, so the fixpoint sees each fact separately). Returns the raw `answer()`
-    result. The programmatic entry the GSM8K coverage harness scores. None if there's no question."""
+    result. The programmatic entry the GSM8K coverage harness scores. None if there's no question.
+    `ARITHMETIC_LOG` is reset here, so after a solve it holds exactly the audited programs this answer ran."""
+    ARITHMETIC_LOG.clear()
     sentences = _sentences(text)
     if not any(s.endswith("?") for s in sentences):
         return None

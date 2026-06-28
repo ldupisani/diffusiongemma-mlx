@@ -854,7 +854,21 @@ now also tolerates the multi-verb "has been teaching" (subject from ANY bound ve
 preempts a `combined` question, and the grand-total infers the measure as the ONE the context quantities
 share (40 + 30 = 70 years). Precision 100%; 422 tests. NINETEEN real GSM8K problems (6.3%). LESSON: a hard
 problem is often several INDEPENDENT general gaps stacked — fix each as its own principled piece (gerund,
-implicit standard, query-less combined) and the problem falls out; none was James-specific.
+implicit standard, query-less combined) and the problem falls out; none was James-specific.  ·
+103. **all word-problem arithmetic routed through the AUDITED evaluator** (no coverage change — an
+auditability refactor). The engine had DRIFTED from its stated design: only the two explicit-arithmetic
+questions ("What is 3 plus 2?") went through `translate.run_program` (the safe evaluator); every word-
+problem number was a bare inline Python operator. Now a single seam — `_compute(expr)` — builds a one-line
+program and EXECUTES it through `run_program` (ast.parse + operator/function whitelist), logging
+`(program, result)` to `ARITHMETIC_LOG` (reset per `solve()`). Every extractor and the answer fold emit an
+expression string instead of computing inline: `_holdings` → `"1 * 30 + -1 * 10"`, relational age → `"6 *
+8"`, comparative → `"40 - 10"`, the combined sum → `"40 + 30"`, rate inversion → `"((120) * 20 / 8) *
+0.01666…"`. So Anne's `ARITHMETIC_LOG` reads `6*8=48, 2*48=96` — the multi-hop is legible. NOT a security
+need (the engine's operands are its own, not untrusted LLM output) — the value is AUDITABILITY: a recorded,
+re-executable program per answer, restoring the "correct-by-construction and auditable" guarantee the docs
+claim. 425 tests; precision 100%; 19 solves unchanged (every number identical, just produced via the
+evaluator). LESSON: a stated invariant ("arithmetic executes through the audited evaluator") silently rots
+as code grows around it — the fix is one seam every site funnels through, so the invariant can't drift again.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
