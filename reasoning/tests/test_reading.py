@@ -2042,5 +2042,34 @@ class TestIncrement72MannerMethod(unittest.TestCase):
                              for f in reading.learn("Tom and Mary shared 10 apples")))
 
 
+class TestIncrement73ParseNearWins(unittest.TestCase):
+    """#73 - two parse near-wins from the bench (math we already had, blocked by one mis-parse).
+    (a) SUBJ AUX VERB subject binding: "how much money she WILL have" (subject sits before the aux).
+    (b) "sold <X> to N <people>" → N of X (the bare-plural dobj is the measure; the recipient count is
+    the amount). The latter solves the canonical GSM8K #1 (Natalia)."""
+
+    def test_subj_aux_verb_subject(self):
+        r = reading.analyze("how much money she will have")
+        have = next(u for u in r.units if u.surface == "have")
+        self.assertEqual(reading._follow(have, "subject").surface, "she")
+
+    def test_will_have_solves(self):
+        self.assertEqual(reading.solve("Susie has $200 in her piggy bank. If she puts 20% more money "
+                                       "into her piggy bank, how much money she will have?"), 240)
+
+    def test_sold_to_n_people_is_n_of_the_object(self):
+        self.assertEqual(reading.learn("Natalia sold clips to 48 of her friends in April"),
+                         [reading.Quantity("natalia", ("clip", frozenset()), 48.0, "sell", "april")])
+
+    def test_natalia_canonical_solves(self):
+        self.assertEqual(reading.solve(
+            "Natalia sold clips to 48 of her friends in April, and then she sold half as many clips "
+            "in May. How many clips did Natalia sell altogether in April and May?"), 72)
+
+    def test_bare_dobj_required_for_transfer(self):
+        self.assertEqual(reading.learn("Tom gave 4 stickers each to 3 friends"),
+                         [reading.Quantity("tom", ("sticker", frozenset()), 12.0, "give")])
+
+
 if __name__ == "__main__":
     unittest.main()

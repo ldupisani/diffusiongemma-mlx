@@ -598,7 +598,19 @@ actually producing a `Distribution` fact (precise), not a verb-lemma guess. Prec
 FUTURE (user, not now): when a verb is blocked for want of a manner word, instead of deficiency we could
 (a) fall back on a CONTEXT-DEPENDENT default method, or (b) enumerate an answer PER plausible manner.
 LESSON: a manner adverb is a modifier that parametrizes a verb's operation — bind it; let each operation
-read the modifiers it cares about (distribution reads its method; a future rate op might read "quickly").
+read the modifiers it cares about (distribution reads its method; a future rate op might read "quickly").  ·
+80. **two parse near-wins from the bench (coverage 4→6, incl. GSM8K #1)**. The bench diagnostic showed
+relational+aggregation ALREADY works (72 on a clean "48 in April, half as many in May, altogether"), so
+several declines were math we had, blocked by ONE mis-parse. Fixed two. (a) SUBJ-AUX-VERB subject binding:
+"how much money she WILL have" left `have`'s subject unbound — we handled `AUX SUBJ VERB` ("does she have")
+but not the declarative `SUBJ AUX VERB` (subject before the aux). The resolver now, when the aux→verb gap
+is empty, takes the nearest noun/pronoun LEFT of the aux → recovers Susie (a percentage-of-holding we
+already solve) and any "X will/can/has VERB" question. (b) "sold `<X>` to N `<people>`" → N of X:
+`_transfer_quantity` (before `_quantity`) — a BARE-plural dobj is the measure, the recipient count (via
+"to") is the amount ("sold clips to 48 friends" → 48 clips, not 48 friends). Gated to a bare dobj (one with
+its own count is the each/distribution shape), so it's precise. **Solves the canonical Natalia #1 → 72.**
+SIX real GSM8K problems now solve end-to-end at 0 calls (Natalia, Sam, Tim/Harry, Paddington, Buddy, Susie).
+Precision 100%; 329 tests. Method: run the bench, find the shape we're CLOSEST to, fix the one gap.
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same

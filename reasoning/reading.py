@@ -721,6 +721,11 @@ def _find_target(need, u, i, units, pos):
                        and pos[id(ax)] < pos[id(x)] < i]                      # the fronted "money"
             if len(between) == 1:
                 return between[0]
+            if not between:                              # "she WILL have" — SUBJ AUX VERB (declarative
+                bef = [x for x in units if has(x, "noun", "name", "pronoun")  # order): the subject sits
+                       and pos[id(x)] < pos[id(ax)]]                          # just before the aux, past
+                if bef:                                                      # the fronted "how much money"
+                    return max(bef, key=lambda x: pos[id(x)])
         ll = left("noun", "name", "pronoun")            # else the unique noun/name/pronoun to the LEFT
         if len(ll) == 1:
             return ll[0]
@@ -1635,6 +1640,32 @@ def _temporal_order(reading: Reading):
     return None
 
 
+def _transfer_quantity(reading: Reading):
+    """ "<entity> sold CLIPS to 48 of her friends" → 48 of CLIPS (one item per recipient). The bare-plural
+    direct object is the measure; the RECIPIENT count (via "to") is the amount. None unless the dobj is
+    bare (carries no count of its own) and a value quantifies the "to"-object."""
+    units = reading.units
+    verbs = [u for u in units if "verb" in u.features.get("senses", [])]
+    subject = _follow(verbs[0], "subject") if len(verbs) == 1 else None
+    if subject is None:
+        return None
+    dobj = _follow(verbs[0], "dobj")
+    if dobj is None or "noun" not in dobj.features.get("senses", []):
+        return None
+    if any("value" in u.features.get("senses", []) and _follow(u, "quantifies") is dobj for u in units):
+        return None                                      # dobj has its OWN count → not the to-N shape
+    to = next((u for u in units if _key(u.surface) == "to" and "preposition" in u.features.get("senses", [])), None)
+    to_obj = _follow(to, "object") if to is not None else None
+    if to_obj is None or to_obj is dobj:
+        return None
+    n = next((u for u in units if "value" in u.features.get("senses", [])
+              and _follow(u, "quantifies") is to_obj), None)
+    if n is None:
+        return None
+    return [Quantity(_entity(subject), _descriptor(dobj), n.features["value"],
+                     _lemma(verbs[0].surface), _time_at(reading, verbs[0]))]
+
+
 def _quantity(reading: Reading):
     """The quantities a "<entity> <verb>s <amount> …" statement asserts — ONE per value: a
     self-measuring money value ("earns $12") or a value quantifying a noun ("buys 2 apples"). A list,
@@ -2437,6 +2468,9 @@ def _facts_from(reading: Reading, context: list = None) -> list:
     dq = _distributed_quantity(r)                        # "gave 4 stickers each to 3 friends" → 4×3?
     if dq is not None:
         return [dq]
+    tq = _transfer_quantity(r)                           # "sold clips to 48 friends" → 48 clips (one each)
+    if tq is not None:
+        return tq
     q = _quantity(r)                                     # "<entity> has 3 apples and 2 oranges" → list
     if q:
         return q
