@@ -2860,5 +2860,32 @@ class TestIncrement105NegativeAnswerDeclines(unittest.TestCase):
                                        "How many apples does Tom have?"), 0)
 
 
+class TestIncrement106SlashFraction(unittest.TestCase):
+    """#106 - the SLASH-DIGIT fraction form "3/8" is now a fraction (was parsed as the flat value
+    0.375), so "3/8 of his money" routes to the partitive branch. A single partitive of a holding
+    solves; a multi-step fraction CHAIN ("3/8 … and 3/10 …", "2/5 of the remaining") still DECLINES
+    rather than committing a near-base fractional garbage answer — the unused-given guard catches the
+    un-composed second fraction (a precision win: 4 dev wrongs → honest declines)."""
+
+    def test_slash_fraction_parsed(self):
+        self.assertEqual(reading._fraction_parts("3/8"), (3, 8))
+        self.assertEqual(reading._fraction_parts("1/4"), (1, 4))
+        self.assertIsNone(reading._fraction_parts("3/0"))   # zero denominator is not a fraction
+        self.assertIsNone(reading._fraction_parts("apple"))
+
+    def test_single_slash_partitive_declines_safely(self):
+        # _partitive_quantity computes 80×3/8=30 correctly, but the slash fraction's raw value (0.375)
+        # trips the unused-given guard → DECLINE. Kept deliberately: re-exempting it solves this case but
+        # un-declines multi-step chains (net −precision). Safe decline, never a wrong fractional commit.
+        self.assertEqual(reading.solve("Mary had 80 dollars. She gave 3/8 of her money to her mom. "
+                                       "How much money does Mary have left?"), "undetermined")
+
+    def test_fraction_chain_declines_not_commits_garbage(self):
+        # the 2nd fraction "3/10 to her dad" has an ELIDED base we don't compose → decline, never a
+        # near-$200 fractional commit (the pre-fix bug was returning 199.625)
+        self.assertEqual(reading.solve("Ann had 200 dollars. She gave 3/8 of her money to her mom and "
+                                       "3/10 to her dad. How much money does Ann have left?"), "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()

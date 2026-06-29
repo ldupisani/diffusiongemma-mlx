@@ -377,12 +377,16 @@ DIMENSIONS = {"long", "far", "tall", "high", "wide", "deep", "fast", "heavy"}   
 # denominator so the fraction of a holding is `base / n` (exact when it divides — avoids 1/3 float drift).
 def _fraction_parts(word: str):
     """(numerator, denominator) for a fraction word — non-unit via FRACTION_MULTIPLIERS ("two-thirds"
-    → (2,3)), unit via FRACTIONS ("third" → (1,3)). None if it isn't a fraction word."""
+    → (2,3)), unit via FRACTIONS ("third" → (1,3)), or the SLASH-DIGIT form ("3/8" → (3,8)). None if it
+    isn't a fraction. The slash form keeps its exact integer parts so a partitive divides last."""
     k = _key(word)
     if k in FRACTION_MULTIPLIERS:
         return FRACTION_MULTIPLIERS[k]
     if k in FRACTIONS:
         return (1, FRACTIONS[k])
+    a, slash, b = k.partition("/")                        # "3/8" → ("3", "/", "8"); "" if no slash
+    if slash and a.isdigit() and b.isdigit() and int(b) != 0:
+        return (int(a), int(b))
     return None
 
 
@@ -3313,6 +3317,12 @@ def solve(text: str):
                 or _relational_age_factor(rp) is not None \
                 or _container_quantity(rp):   # "20 packets of 100 grams" / "N times as old" —
             continue                                      # the factor is consumed into the derived product
+            # NOTE: a slash-fraction partitive ("3/8 of his money") is deliberately NOT exempt here — its
+            # raw value (0.375) being flagged as an unused given is what makes a multi-step fraction CHAIN
+            # ("3/8 … and 3/10 …", "2/5 of the remaining") DECLINE instead of committing a partial product.
+            # Exempting it solved the single-partitive case (+1) but un-declined the chains (+3 wrong) →
+            # net precision-negative. Re-exempt only once the chain composition (elided 2nd base, remainder)
+            # is handled; until then the single partitive declines (safe), the chains decline (safe).
         given |= {u.features["value"] for u in rp.units if "value" in u.features.get("senses", [])}
         given |= {u.features["value"] for u in rp.units if "value" in u.features.get("senses", [])}
     used = {f.amount for f in context if isinstance(f, (Quantity, Rate))} \
