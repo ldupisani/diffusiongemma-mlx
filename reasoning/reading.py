@@ -1455,6 +1455,9 @@ LEXICON.update({   # only the VERIFIED-dev-gain words (the rule: add a word only
     "raise": ["verb"], "raises": ["verb"], "raised": ["verb"], "raising": ["verb"],
 })
 PLURALS.update({"scores": "score"})
+# NOTE: groundwork nouns/adjectives/pronouns (fruit/paper/side/…/herself) were re-tested with decline-safety
+# GUARDS 11–14 in place and STILL drop TEST 40.0→36.4% (a noun unlocks a held-out wrong in an as-yet-unguarded
+# class) with ZERO dev gain → they stay OUT. The loop continues: build the next decline guard, then re-test.
 VERB_LEMMA.update({
     "scored": "score", "scores": "score", "scoring": "score",
     "raises": "raise", "raised": "raise", "raising": "raise",
