@@ -1909,6 +1909,12 @@ def _relational_quantity(reading: Reading, context: list):
     subject = _follow(verbs[0], "subject") if len(verbs) == 1 else None
     if subject is None:
         return None
+    # a subject that sits right after "as" is really the STANDARD, not the subject — the real subject was
+    # elided from a prior conjunct ("[Jennifer bought] three times as many as BOB bought"). We'd mis-read
+    # it as "Bob = 3 × recent" and commit garbage; the elided-subject inverse is unresolved → DECLINE.
+    si = reading.units.index(subject)
+    if si > 0 and _key(reading.units[si - 1].surface) == "as":
+        return None
     # the referent: a NAMED quantity ("half as many as TIM" — a name other than the subject), else the
     # most recent prior quantity ("twice as many" — implicit, like coreference).
     named = [u for u in reading.units if "name" in u.features.get("senses", []) and u is not subject]

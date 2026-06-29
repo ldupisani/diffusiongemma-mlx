@@ -3445,5 +3445,30 @@ class TestIncrement129CombinedRemainder(unittest.TestCase):
             "her apples, and Tom sold a third of his, how many in total do they have left?"), 50)
 
 
+class TestIncrement130ElidedStandardDecline(unittest.TestCase):
+    """#130 - ELIDED-SUBJECT inverse relational → DECLINE (precision guard). "Jennifer bought twice as many
+    as Emily and three times as many as Bob bought" — the second conjunct's real subject (Jennifer) is
+    elided, so `_relational_quantity` mis-reads the post-"as" STANDARD (Bob) as the subject and would
+    commit "Bob = 3 × recent" (18). A name sitting right after "as" is a standard, not a subject → DECLINE
+    (the elided-subject inverse "Jennifer = 3 × Bob ⇒ Bob = Jennifer/3" is unresolved). Jennifer-candies
+    18→decline. The forward "X bought twice as many as Y" still resolves. SYNTHETIC strings only."""
+
+    def test_elided_standard_declines(self):
+        ctx = [reading.Quantity("emily", ("candy", frozenset()), 6.0, "buy")]
+        self.assertIsNone(reading._relational_quantity(
+            reading.analyze("three times as many as Bob bought."), ctx))
+
+    def test_forward_relational_still_resolves(self):
+        ctx = [reading.Quantity("emily", ("candy", frozenset()), 6.0, "buy")]
+        self.assertEqual(reading._relational_quantity(
+            reading.analyze("Jennifer bought twice as many candies as Emily"), ctx),
+            reading.Quantity("jennifer", ("candy", frozenset()), 12, "buy", derived=True))
+
+    def test_elided_standard_problem_declines(self):
+        self.assertEqual(reading.solve(
+            "Jennifer bought twice as many candies as Emily and three times as many as Bob bought. "
+            "If Emily bought 6 candies, how many candies did Bob buy?"), "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()
