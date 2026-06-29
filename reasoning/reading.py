@@ -3353,6 +3353,38 @@ def _split_clauses(sentence: str) -> list:
     return [sentence]
 
 
+def _question_durations(reading: Reading, context: list) -> list:
+    """Time-unit quantities stated in the QUESTION clause ("…how many pages does he read in 7 DAYS?").
+    Question values are normally read at answer-time, but a rate×duration CHAIN whose duration lives in
+    the question (not a premise) needs the duration as a synth SEED so the chain can compose: Tom's "10
+    hours over 5 days" (2 h/day) × the question's "7 days" → 14 hours, then "50 pages/hour" × 14 → 700.
+    The rate_duration synth chains the two rates once the day-seed is in context. Gated tightly — a seed
+    is emitted ONLY when the question time-value's measure matches some rate's per_unit (the sole legit
+    consumer), so a stray time value ("in 5 years" with no per-year rate) injects nothing. Carries the
+    rate's entity+verb so the synth matches; derived-flagged so it never trips unused-given / equality."""
+    seeds = []
+    # GROWTH rates (grow/gain/…) are handled by the offset growth-projection path (baseline + rate×Δ);
+    # seeding their duration would double-count (the derived total folds into the baseline). Only seed
+    # from-scratch PRODUCTION rates (read/make/earn/…), whose total is the standalone rate×duration.
+    rates = [f for f in context if isinstance(f, Rate) and f.verb not in GROWTH_VERBS]
+    if not rates:
+        return seeds
+    for u in reading.units:
+        if "value" not in u.features.get("senses", []):
+            continue
+        qn = _follow(u, "quantifies")
+        if qn is None or _descriptor(qn)[0] not in TIME_UNITS:
+            continue
+        meas, amt = _descriptor(qn), u.features["value"]
+        for rt in rates:
+            if meas[0] != rt.per_unit:
+                continue
+            cand = Quantity(rt.entity, meas, amt, rt.verb, derived=True)
+            if cand not in seeds and cand not in context:
+                seeds.append(cand)
+    return seeds
+
+
 def solve(text: str):
     """Read a whole word-problem paragraph (premises + a trailing question) and answer the question —
     threading coreference (`discourse`) and the growing `context` across the premises (split into
@@ -3426,6 +3458,9 @@ def solve(text: str):
         if f:
             facts_of[i] = f
             context += f
+    context += _question_durations(readings[-1], context)   # SEED a question-clause duration ("…in 7
+    # days?") so a rate×duration chain whose duration is in the QUESTION (not a premise) composes via the
+    # rate_duration synth in the fixpoint below (Tom: 2 h/day × 7 days → 14 h, then 50 pg/h × 14 → 700).
     progress = True                                      # FIXPOINT: retry the unresolved (forward refs,
     while progress:                                      # chains) against the growing context
         progress = False

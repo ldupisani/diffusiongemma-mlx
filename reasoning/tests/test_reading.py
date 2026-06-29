@@ -3167,10 +3167,33 @@ class TestIncrement119OverTimeRate(unittest.TestCase):
         # "over" with a non-time object must NOT trip the time-over-time branch
         self.assertIsNone(reading._rate(reading.analyze("Sam scored 30 points over 5 games.")))
 
-    def test_tom_declines_without_chain(self):
+    def test_over_rate_alone_declines(self):
+        # the time-over-time rate parses, but with no usable duration the answer still declines
+        self.assertEqual(reading.solve(
+            "Tom reads 10 hours over 5 days. He can read 50 pages per hour. "
+            "How many pages does he read?"), "undetermined")
+
+
+class TestIncrement120QuestionDurationChain(unittest.TestCase):
+    """#120 - the rate-cluster FOUNDATION: a rate×duration chain whose duration lives in the QUESTION
+    clause. solve() seeds the question-clause duration ("…in 7 days?") into the synth context so the
+    existing rate_duration synth CHAINS two rates through the fixpoint — Tom's 2 h/day × 7 days → 14 h,
+    then 50 pg/h × 14 h → 700. Gated on the question time-value matching a rate's per_unit, so non-rate
+    time values inject nothing."""
+
+    def test_tom_question_duration_chain(self):
         self.assertEqual(reading.solve(
             "Tom reads 10 hours over 5 days. He can read 50 pages per hour. Assuming he reads the same "
-            "amount every day how many pages does he read in 7 days?"), "undetermined")
+            "amount every day how many pages does he read in 7 days?"), 700)
+
+    def test_single_rate_question_duration_unaffected(self):
+        # plain single-rate × question-duration still solves (Adam, no first-year override)
+        self.assertEqual(reading.solve("Adam teaches 50 students a year. "
+                                       "How many students will Adam teach in 10 years?"), 500)
+
+    def test_no_rate_no_seed(self):
+        # a question time-value with no rate to consume it injects nothing → the holding is unperturbed
+        self.assertEqual(reading.solve("Tom has 5 apples. How many apples will he have in 7 days?"), 5)
 
 
 if __name__ == "__main__":
