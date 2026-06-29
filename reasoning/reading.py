@@ -2141,6 +2141,53 @@ def _rate_relations(reading: Reading):
     return rels or None
 
 
+def _per_occurrence_rate(reading: Reading):
+    """A per-OCCURRENCE rate fronted by "For every/each <noun> …, <subject> <verb>s N <measure>": "For every
+    sandwich that he eats, Sam eats four apples" → Rate(sam, 4, apple, per_unit=sandwich, eat). The leading
+    "for every <noun>" names the per_unit (a non-time occurrence); the main clause gives the amount/measure/
+    subject. The rate_duration synth then takes it × an occurrence COUNT (70 sandwiches → 280 apples)."""
+    units = reading.units
+    keys = [_key(u.surface) for u in units]
+    if not (len(units) > 2 and keys[0] == "for" and keys[1] in ("every", "each")
+            and "noun" in units[2].features.get("senses", [])):
+        return None
+    per_unit = _descriptor(units[2])[0]
+    val = next((u for u in units if "value" in u.features.get("senses", [])              # "four apples"
+                and _follow(u, "quantifies") is not None
+                and _descriptor(_follow(u, "quantifies"))[0] != per_unit), None)
+    if val is None:
+        return None
+    measure = _descriptor(_follow(val, "quantifies"))
+    name = next((u for u in units if "name" in u.features.get("senses", [])), None)       # main subject (Sam)
+    # the main verb is the one nearest the value (skip the relative-clause verb "that he eats")
+    verbs = [u for u in units if "verb" in u.features.get("senses", [])]
+    if name is None or not verbs:
+        return None
+    vi = units.index(val)
+    verb = min(verbs, key=lambda v: abs(units.index(v) - vi))
+    return Rate(_entity(name), val.features["value"], measure, per_unit, _lemma(verb.surface), 1)
+
+
+def _for_duration(reading: Reading, rate: "Rate"):
+    """A trailing "for <value> <time-unit>" duration ("…every day FOR ONE WEEK") → a Quantity counting that
+    unit, so the rate_duration synth can accumulate the rate over it. Emitted ALONGSIDE the rate (the rate
+    parse alone drops it). SKIPS a unit that is the rate's own MEASURE ("for 8 HOURS a day" — the 8 hours
+    is the rate value, not a duration), which would double-count. Returns None if there's none."""
+    units = reading.units
+    for i, u in enumerate(units):
+        if _key(u.surface) != "for":
+            continue
+        v = next((units[j] for j in range(i + 1, len(units))
+                  if "value" in units[j].features.get("senses", [])), None)
+        if v is None:
+            continue
+        qn = _follow(v, "quantifies")
+        if qn is not None and _descriptor(qn)[0] in TIME_UNITS \
+                and _descriptor(qn)[0] != rate.measure[0]:
+            return Quantity(rate.entity, _descriptor(qn), v.features["value"], rate.verb)
+    return None
+
+
 REST_WORDS = {"rest", "remainder", "others"}
 
 
@@ -3113,6 +3160,13 @@ def learn(statement: str, discourse: list = None, context: list = None) -> list:
         subj = _follow(verbs[0], "subject") if len(verbs) == 1 else None        # copula, so "James buys …
         if subj is not None:                                                    # that are …" still records
             discourse.append((_entity(subj), "name" in subj.features.get("senses", [])))   # James)
+        elif facts and len(r.units) > 1 and _key(r.units[0].surface) == "for" \
+                and _key(r.units[1].surface) in ("every", "each"):   # the per-occurrence construct "For
+            ent = next((f.entity for f in facts if getattr(f, "entity", None)   # every X, Sam eats N Y" —
+                        and any(_entity(u) == f.entity                          # the generic finder skips it
+                        and "name" in u.features.get("senses", []) for u in r.units)), None)  # (2 verbs), so
+            if ent is not None:                          # register the fact's NAME entity for a later pronoun.
+                discourse.append((ent, True))            # Scoped to this construct to keep coref blast radius small.
     return facts
 
 
@@ -3247,6 +3301,15 @@ def _synth_rate_duration(facts: list, readings: list, agenda: set) -> list:
         dur = next((q.amount for q in facts if isinstance(q, Quantity) and q.entity == rt.entity
                     and q.measure[0] == rt.per_unit and q.amount is not None
                     and q.measure != rt.measure), None)
+        if dur is None:                                  # a CONVERTIBLE-unit duration ("one WEEK" for a
+            rate_units = {x.per_unit for x in facts if isinstance(x, Rate)}   # per-DAY rate → 7 days). Skip
+            conv = next(((q.amount, CONVERSIONS[(q.measure[0], rt.per_unit)]) for q in facts  # a quantity
+                         if isinstance(q, Quantity) and q.entity == rt.entity and q.amount is not None
+                         and q.measure != rt.measure and (q.measure[0], rt.per_unit) in CONVERSIONS
+                         and q.measure[0] not in rate_units), None)   # whose unit is some rate's EXACT
+            if conv is not None:                          # per_unit (it's THAT rate's duration — e.g. Tom's
+                dur = _compute(f"{_num(conv[0])} * {_num(conv[1])}")   # 7 days feeds the per-day rate, not
+                                                          # the per-hour one via a day→hour conversion)
         if dur is None:
             continue
         total = _compute(f"{_num(rt.amount)} * {_num(dur)} / {_num(rt.per_amount)}")
@@ -3391,9 +3454,13 @@ def _facts_from(reading: Reading, context: list = None) -> list:
     trr = _time_range_rate(r)                            # "writes from 1 PM to 4 PM every night" → 3 h/day?
     if trr is not None:
         return [trr]
+    por = _per_occurrence_rate(r)                        # "for every sandwich … eats 4 apples" → 4/sandwich?
+    if por is not None:
+        return [por]
     rate = _rate(r, context)                             # "<entity> earns $12 per hour" → rate?
-    if rate is not None:
-        return [rate]
+    if rate is not None:                                 # a trailing "for one week" → a duration alongside it
+        dur = _for_duration(r, rate)
+        return [rate, dur] if dur is not None else [rate]
     cq = _comparative_quantity(r, context)               # "<A> has 30 less <X> than <B>" → derived?
     if cq is not None:
         return [cq]
@@ -3484,6 +3551,9 @@ def _split_clauses(sentence: str) -> list:
         i = sentence.find(sep)
         while i != -1:
             left, right = sentence[:i].strip(), sentence[i + len(sep):].strip()
+            if left.lower().startswith(("for every", "for each")):
+                i = sentence.find(sep, i + 1)            # "For every X, <main>" is ONE per-occurrence
+                continue                                 # clause (the rate's per_unit + the main amount)
             if _has_verb(left):
                 if _has_verb(right):
                     # NOTE: SUBJECT elision ("She gave X and bought Y" → the right clause's verb has no
