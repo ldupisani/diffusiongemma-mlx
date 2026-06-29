@@ -1437,6 +1437,19 @@ VERB_LEMMA.update({
     "processing": "process",
 })
 
+# --- vocabulary push, round 3: ATTEMPTED and REVERTED (coverage initiative) ------------------------------
+# A batch of the most-frequent GSM8K unknown words (content nouns, color adjectives, reflexive pronouns, and
+# the verbs raise/score) was added to lift COVERAGE (most of dev declines on an unknown word). The full batch
+# netted +2 dev correct (Adam-raises-goats, players-scored-points) with ZERO new dev wrongs — but the one-look
+# TEST check fell 36.4%→33.3%: a held-out confident-wrong. Trimming to the SAFEST subset (nouns/adjectives/
+# reflexives only) STILL showed the TEST wrong AND gave ZERO dev benefit — so the culprit is an ordinary
+# content noun, not a verb. ROOT CAUSE: making a problem fully-read lets it ATTEMPT; if its STRUCTURE is
+# unhandled it COMMITS a wrong instead of declining. Blind vocabulary expansion therefore trades invisible
+# held-out precision for coverage, and the firewall (no TEST inspection) blocks isolating the culprit.
+# DECISION (per the firewall: held-out precision beats dev gains): reverted. The real prerequisite for
+# coverage is DECLINE-SAFETY on fully-read-but-structurally-unhandled inputs (so a vocab add can only help or
+# be neutral, never commit). Until then, only add a word with a VERIFIED dev decline→correct. See memory.
+
 
 def _lemma(surface: str) -> str:
     return VERB_LEMMA.get(_key(surface), _key(surface))
