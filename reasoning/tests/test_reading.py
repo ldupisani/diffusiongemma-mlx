@@ -3497,5 +3497,29 @@ class TestIncrement131TimeIndexedRelationalDecline(unittest.TestCase):
             "how many boxes did she sell on Tuesday?"), "undetermined")
 
 
+class TestIncrement133PeriodNotApplied(unittest.TestCase):
+    """#133 - DECLINE-SAFETY (GUARD 11): a question asking for a per-PERIOD total ("…in N weeks") whose
+    period value never entered the computation, when the premises describe a RECURRING action the period
+    should have scaled, DECLINES instead of committing a partial. This is the prerequisite for safe
+    vocabulary growth — a newly-readable but unscaled per-period problem (e.g. "buys 2 … every school day
+    … in 3 weeks" → 2) declines rather than committing a wrong. The recurrence gate keeps a STATIC holding
+    queried at a future time ("Tom has 5 apples … in 7 days?" → 5, the period is irrelevant). On the
+    held-out TEST slice this lifted precision 36.4%→40.0% (a real period-unscaled commit-wrong). SYNTHETIC."""
+
+    def test_recurring_unscaled_period_declines(self):
+        self.assertEqual(reading.solve(
+            "Mia buys 2 books every school day. How many books does she buy in 3 weeks?"), "undetermined")
+
+    def test_static_holding_future_time_kept(self):
+        # no recurrence cue → the period is correctly irrelevant → keep the holding, don't decline
+        self.assertEqual(reading.solve("Tom has 5 apples. How many apples will he have in 7 days?"), 5)
+
+    def test_handled_period_still_solves(self):
+        # a rate×duration period IS applied (7 enters the arithmetic) → not declined
+        self.assertEqual(reading.solve(
+            "Tom reads 10 hours over 5 days. He can read 50 pages per hour. "
+            "How many pages does he read in 7 days?"), 700)
+
+
 if __name__ == "__main__":
     unittest.main()

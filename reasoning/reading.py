@@ -12,6 +12,7 @@ from the cases rather than being designed up front, so this file grows one incre
 from __future__ import annotations
 
 import copy
+import re
 from dataclasses import dataclass, field
 from itertools import product
 from typing import Optional
@@ -3822,6 +3823,32 @@ def _queried_measure(question: str):
     return _descriptor(coll) if coll is not None else None
 
 
+def _period_unapplied(question_reading: Reading, premise_readings: list, context: list) -> bool:
+    """DECLINE-SAFETY: True when the question asks for a per-PERIOD total ("…how many in N weeks/days?")
+    but the period value N never entered the computation (absent from ARITHMETIC_LOG) AND the premises
+    describe a RECURRING action the period should have scaled — i.e. we committed a number without applying
+    the demanded period scaling, so the structure is unhandled. Only TIME-unit-quantifying question values
+    count as periods (enumeration counts "the 3 PEOPLE" quantify non-time nouns → ignored). The recurrence
+    gate is essential: "Tom HAS 5 apples … in 7 days?" is a static holding the period correctly leaves at 5
+    (no recurrence → don't decline); "buys 2 … EVERY school day … in 3 weeks?" recurs → the unapplied
+    period means we dropped the scaling → decline. The prerequisite for safe vocabulary growth."""
+    periods = {round(float(u.features["value"]), 6) for u in question_reading.units
+               if "value" in u.features.get("senses", []) and u.features.get("value") is not None
+               and _follow(u, "quantifies") is not None
+               and _descriptor(_follow(u, "quantifies"))[0] in TIME_UNITS}
+    if not periods:
+        return False
+    recurs = any(_key(u.surface) in ("every", "per", "each") or _key(u.surface) in DAYPARTS
+                 for rp in premise_readings for u in rp.units) \
+        or any(isinstance(f, (Rate, Frequency)) for f in context)
+    if not recurs:
+        return False
+    computed = set()
+    for prog, _res in ARITHMETIC_LOG:
+        computed |= {round(float(m), 6) for m in re.findall(r"\d+\.?\d*", prog)}
+    return any(p not in computed for p in periods)
+
+
 def _container_giveaway(premises: list, question: str, context: list):
     """EQUAL-SPLIT into containers, then GIVE some containers away → the contents lost. "28 marbles … into
     4 bags … the same number in each bag … gives one bag away … how many marbles left?" → per-bag = 28/4 =
@@ -4046,6 +4073,14 @@ def solve(text: str):
     # (you can't hold −3 apples or −$5): it always means a term was dropped or mis-signed in the fold, so
     # DECLINE rather than commit. Pure precision guard — correct GSM8K answers are never negative.
     if isinstance(result, (int, float)) and not isinstance(result, bool) and result < 0:
+        return "undetermined"
+    # GUARD 11 — PERIOD NOT APPLIED (decline-safety): the question asks for a per-period total ("…in N
+    # weeks") but N never entered the computation → the period scaling is unhandled → DECLINE rather than
+    # commit a partial. Checked AFTER the ×7 period-scaling above (so an applied scaling counts as used).
+    # The prerequisite for safe vocabulary growth — a fully-read but unscaled per-period problem declines
+    # instead of committing (e.g. "buys 2 … every school day … how many in 3 weeks?" → 2 would be wrong).
+    if isinstance(result, (int, float)) and not isinstance(result, bool) \
+            and _period_unapplied(readings[-1], readings[:len(premises)], context):
         return "undetermined"
     if result == "undetermined" and _underspecified_distribution(context) is not None:
         return [Deficiency("under-specified", None,                 # ask, don't silently decline: the
