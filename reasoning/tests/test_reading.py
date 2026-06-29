@@ -3196,5 +3196,31 @@ class TestIncrement120QuestionDurationChain(unittest.TestCase):
         self.assertEqual(reading.solve("Tom has 5 apples. How many apples will he have in 7 days?"), 5)
 
 
+class TestIncrement121TimeRangeRateChain(unittest.TestCase):
+    """#121 - James-writes: a clock TIME-RANGE done every period composes through two rates with a unit
+    conversion. "from 1 PM to 4 PM every night" → 3 h/day (_time_range_rate); 3 h/day × 5 pg/h → 15 pg/day
+    (_synth_rate_chain, the hour cancels); "how many weeks to finish 735 pages" inverts → 735 ÷ 15 = 49
+    days → 7 weeks (the inversion now picks the rate whose per_unit converts to the asked unit)."""
+
+    def test_time_range_rate_parse(self):
+        self.assertEqual(reading._time_range_rate(reading.analyze("James writes from 1 PM to 4 PM every night.")),
+                         reading.Rate("james", 3.0, ("hour", frozenset()), "day", "write", 1))
+
+    def test_rate_chain_synth(self):
+        facts = [reading.Rate("james", 3.0, ("hour", frozenset()), "day", "write", 1),
+                 reading.Rate("james", 5.0, ("page", frozenset()), "hour", "write", 1)]
+        out = reading._synth_rate_chain(facts, [], set())
+        self.assertIn(reading.Rate("james", 15.0, ("page", frozenset()), "day", "write", 1), out)
+
+    def test_james_writes_solves(self):
+        self.assertEqual(reading.solve(
+            "James writes from 1 PM to 4 PM every night.  He can write 5 pages per hour.  "
+            "How many weeks will it take to finish his 735-page book?"), 7)
+
+    def test_non_time_range_not_a_rate(self):
+        # no AM/PM meridiems → not a time-range rate
+        self.assertIsNone(reading._time_range_rate(reading.analyze("James writes 3 pages every night.")))
+
+
 if __name__ == "__main__":
     unittest.main()

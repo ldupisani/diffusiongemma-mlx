@@ -2059,6 +2059,42 @@ def _rate(reading: Reading, context: list = None):
                 _descriptor(unit)[0], _lemma(verbs[0].surface), per_amount)
 
 
+def _time_range_rate(reading: Reading):
+    """A clock TIME-RANGE done every period is an hours-per-period Rate: "writes from 1 PM to 4 PM every
+    night" → 4PM−1PM = 3 hours, "every night" → per day (a night is a daily occurrence) → Rate(3 hours
+    per day). Needs a "from <clock> to <clock>" pair (a value + AM/PM meridiem each) and an "every/each
+    <period>". Returns None unless the whole shape is present, so it never steals a plain quantity."""
+    units = reading.units
+    merid = [(i, _key(u.surface)) for i, u in enumerate(units) if _key(u.surface) in ("am", "pm")]
+    if len(merid) != 2:
+        return None
+    hours = []                                           # the two clock times as 24-hour values
+    for mi, mk in merid:
+        v = next((units[j] for j in range(mi - 1, -1, -1)               # nearest preceding value
+                  if "value" in units[j].features.get("senses", [])), None)
+        if v is None:
+            return None
+        h = v.features["value"] % 12 + (12 if mk == "pm" else 0)        # 1 PM → 13, 4 PM → 16
+        hours.append(h)
+    span = hours[1] - hours[0]                            # text order = chronological (from … to …)
+    if span <= 0:
+        return None
+    per = next((units[k + 1] for k in range(len(units) - 1)             # "every/each <period>"
+                if _key(units[k].surface) in ("every", "each")
+                and "noun" in units[k + 1].features.get("senses", [])), None)
+    if per is None:
+        return None
+    per_unit = _descriptor(per)[0]
+    per_unit = "day" if per_unit in ("night", "day") else per_unit      # a night is a daily occurrence
+    if per_unit not in TIME_UNITS:
+        return None
+    verbs = [u for u in units if "verb" in u.features.get("senses", [])]
+    subject = _follow(verbs[0], "subject") if verbs else None
+    if subject is None:
+        return None
+    return Rate(_entity(subject), span, ("hour", frozenset()), per_unit, _lemma(verbs[0].surface), 1)
+
+
 REST_WORDS = {"rest", "remainder", "others"}
 
 
@@ -2724,10 +2760,20 @@ def answer(question: str, context: list, discourse: list = None):
     combined_q = bool(kys & {"combined", "altogether", "total"}) or {"all", "together"} <= kys
     is_long = any(_key(u.surface) == "long" for u in r.units)
     if (is_long or asked_unit in TIME_UNITS) and not combined_q:   # "How LONG / how many HOURS … to <verb>?"
-        rate = next((f for f in context if isinstance(f, Rate)), None)        # → RATE INVERSION: target ÷
+        rates = [f for f in context if isinstance(f, Rate)]                   # → RATE INVERSION: target ÷
+        def _inv_target(rate):                                               # rate, in per_unit (convert if
+            return next((u for u in r.units if "value" in u.features.get("senses", [])   # asked). The target
+                         and _follow(u, "quantifies") is not None                        # value quantifies
+                         and _descriptor(_follow(u, "quantifies")) == rate.measure), None)  # the rate's measure
+        # prefer a rate whose per_unit IS / converts to the asked unit, so a composed "15 pages/DAY" beats
+        # "5 pages/HOUR" for a "how many WEEKS" question (day→week converts, hour→week doesn't); else the
+        # first rate the target quantifies (preserves single-rate Joy/Sam).
+        rate = next((f for f in rates if _inv_target(f) is not None and asked_unit is not None
+                     and (asked_unit == f.per_unit or (f.per_unit, asked_unit) in CONVERSIONS)), None) \
+            or next((f for f in rates if _inv_target(f) is not None), None) \
+            or (rates[0] if rates else None)
         if rate is not None:                                                  # rate, in per_unit (convert if
-            mv = next((u for u in r.units if "value" in u.features.get("senses", []) and _follow(u, "quantifies")
-                       is not None and _descriptor(_follow(u, "quantifies")) == rate.measure), None)
+            mv = _inv_target(rate)
             if mv is not None:
                 target = _num(mv.features["value"])
                 cv = next((u for u in r.units if "value" in u.features.get("senses", []) and u is not mv
@@ -3161,10 +3207,29 @@ def _synth_rate_duration(facts: list, readings: list, agenda: set) -> list:
     return out
 
 
+def _synth_rate_chain(facts: list, readings: list, agenda: set) -> list:
+    """Two same-entity rates that share a unit COMPOSE into one: "3 hours per DAY" × "5 pages per HOUR"
+    → 15 pages per day (the HOUR cancels). Fires when r1.measure == r2.per_unit; the product carries r2's
+    measure over r1's per_unit and r2's verb. Derived; the inversion/duration paths then consume it
+    (James: 15 pg/day, then 735 ÷ 15 = 49 days → 7 weeks)."""
+    out = []
+    rates = [f for f in facts if isinstance(f, Rate)]
+    for r1 in rates:
+        for r2 in rates:
+            if r1 is r2 or r1.entity != r2.entity or r1.measure[0] != r2.per_unit:
+                continue
+            amt = _compute(f"{_num(r2.amount)} * {_num(r1.amount)} / {_num(r1.per_amount)} "
+                           f"/ {_num(r2.per_amount)}")
+            cand = Rate(r1.entity, amt, r2.measure, r1.per_unit, r2.verb, 1)
+            if cand not in facts and cand not in out:
+                out.append(cand)
+    return out
+
+
 # obligation/fact KIND → derivation (facts, readings, agenda) -> new facts. Register here to add reasoning.
 SYNTHESIZERS = {"orders": _synth_transitive_order, "narrative": _synth_narrative_order,
                 "distribution": _synth_distribution, "equal_split": _synth_equal_split,
-                "rate_duration": _synth_rate_duration}
+                "rate_duration": _synth_rate_duration, "rate_chain": _synth_rate_chain}
 
 
 def _outstanding(readings: list) -> set:
@@ -3243,6 +3308,9 @@ def _facts_from(reading: Reading, context: list = None) -> list:
     fr = _frequency(r)                                   # "<entity> <verb>s twice" → frequency?
     if fr is not None:
         return [fr]
+    trr = _time_range_rate(r)                            # "writes from 1 PM to 4 PM every night" → 3 h/day?
+    if trr is not None:
+        return [trr]
     rate = _rate(r, context)                             # "<entity> earns $12 per hour" → rate?
     if rate is not None:
         return [rate]
@@ -3499,7 +3567,11 @@ def solve(text: str):
         comp_consumed = any(s in u.features.get("senses", []) for u in rp.units
                             for s in ("comparative", "multiplier")) \
             and any(isinstance(f, (Quantity, Rate)) for f in facts_i)
-        if comp_consumed \
+        # a TIME-RANGE rate ("1 PM to 4 PM") consumes its two clock values into the span (4−1=3), so they
+        # won't appear verbatim — exempt when the premise has two AM/PM meridiems and produced a Rate.
+        time_range = len([u for u in rp.units if _key(u.surface) in ("am", "pm")]) == 2 \
+            and any(isinstance(f, Rate) for f in facts_i)
+        if comp_consumed or time_range \
                 or any(_key(u.surface) == "each" for u in rp.units) \
                 or any(isinstance(f, Distribution) for f in facts_i) \
                 or _relational_age_factor(rp) is not None \
