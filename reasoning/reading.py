@@ -2320,6 +2320,12 @@ def _quantity(reading: Reading):
         else:
             noun = _follow(u, "quantifies")              # "3 APPLES" — the value's measure noun
             if noun is not None:
+                if lemma == "turn" and _descriptor(noun)[0] == "year" and _time_offset(reading):
+                    continue                              # "turned 3 a year ago" is a TIME-SHIFTED age we
+                    # can't reliably read: the age (3) and the offset's "year" share the one 'year' token,
+                    # so _time_offset can't separate them. Don't emit a (wrong) current-age fact — leave it
+                    # unknown so a relational age over it DECLINES rather than committing off a stale age
+                    # (Diana "twice as old as Grace … turned 3 a year ago" was committing 2×3=6).
                 out.append(Quantity(ent, _descriptor(noun), u.features["value"], lemma, when))
     return out
 

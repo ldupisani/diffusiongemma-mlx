@@ -3064,5 +3064,26 @@ class TestIncrement114ForwardRefPercentChainDefersAndSnaps(unittest.TestCase):
                                        "50 minutes of babysitting. How much did she earn?"), 10)
 
 
+class TestIncrement115AgeShiftTurnedAgo(unittest.TestCase):
+    """#115 - "X turned N a year ago" is a TIME-SHIFTED age we can't reliably read: the age (3) and the
+    offset's "year" share the one 'year' token, so the offset can't be separated from the age. Rather than
+    emit a wrong current-age fact, we skip it — so a relational age over it DECLINES rather than committing
+    off a stale age (Diana "twice as old as Grace … turned 3 a year ago" was committing 2×3=6)."""
+
+    def test_turned_ago_emits_no_age_fact(self):
+        quants = [q for q in reading.learn("Grace turned 3 a year ago", [], []) if isinstance(q, reading.Quantity)]
+        self.assertEqual(quants, [])                     # no (wrong) current-age fact emitted
+
+    def test_relational_age_over_shifted_declines(self):
+        self.assertEqual(reading.solve("Diana is twice as old as Grace is today. "
+                                       "If Grace turned 3 a year ago, how old is Diana today?"),
+                         "undetermined")
+
+    def test_plain_turned_age_fact_unaffected(self):
+        # no time offset → "turned 5 years old" still emits the age fact (amount 5)
+        quants = [q.amount for q in reading.learn("Tom turned 5 years old", [], []) if isinstance(q, reading.Quantity)]
+        self.assertEqual(quants, [5.0])
+
+
 if __name__ == "__main__":
     unittest.main()
