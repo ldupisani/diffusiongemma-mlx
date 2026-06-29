@@ -3110,5 +3110,21 @@ class TestIncrement116RateDuration(unittest.TestCase):
                                        "with Cooper?"), "undetermined")
 
 
+class TestIncrement117RelationalRate(unittest.TestCase):
+    """#117 - a RELATIONAL rate: "Sarah makes 5 times more money per hour than Connor" = 5 × Connor's
+    rate. Detected by a "times" operator + a comparative whose standard is a NAME; resolved against that
+    entity's known rate (same measure/per_unit), deferring to the fixpoint if it isn't known yet. The
+    rate×duration synth then takes it × the 8-hour day → 5×7.20×8 = 288."""
+
+    def test_relational_rate_times_duration(self):
+        self.assertEqual(reading.solve(
+            "Sarah makes 5 times more money per hour than Connor does. If Connor earns $7.20 per hour, "
+            "how much does Sarah make in an 8-hour day?"), 288)
+
+    def test_plain_rate_unaffected(self):
+        rate = reading._rate(reading.analyze("Connor earns $7.20 per hour."))
+        self.assertEqual((rate.amount, rate.per_unit), (7.2, "hour"))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1974,7 +1974,7 @@ class Rate:
     per_amount: float = 1            # "8 pages in 20 MINUTES" → amount=8, per_unit=minute, per_amount=20
 
 
-def _rate(reading: Reading):
+def _rate(reading: Reading, context: list = None):
     """The rate a statement asserts — "$12 per hour" / "$12 an hour" / "20 pages a day" → Rate(entity,
     amount, measure, per_unit, verb). The per-marker is "per", or "a"/"an" before a unit noun when it
     sits right after a money value or a quantified measure-noun (so a plain article "a book" is NOT a
@@ -2027,7 +2027,21 @@ def _rate(reading: Reading):
         measure = _descriptor(mnoun) if mnoun is not None else None
     if measure is None:
         return None
-    return Rate(_entity(subject), rate_val.features["value"], measure,
+    amount = rate_val.features["value"]
+    # RELATIONAL RATE — "Sarah makes 5 times more money per hour THAN Connor": the rate is N × another
+    # entity's rate ("times" operator + a comparative whose standard is a NAME). Resolve against that
+    # entity's known rate of the same measure/per_unit; DEFER (None) if it isn't known yet (forward ref).
+    comp = next((u for u in reading.units if "comparative" in u.features.get("senses", [])), None)
+    std = _follow(comp, "standard") if comp is not None else None
+    if std is not None and "name" in std.features.get("senses", []) \
+            and any(_key(u.surface) == "times" for u in reading.units):
+        base = next((f for f in reversed(context or []) if isinstance(f, Rate)
+                     and f.entity == _entity(std) and f.measure == measure
+                     and f.per_unit == _descriptor(unit)[0]), None)
+        if base is None:
+            return None                                  # standard's rate unknown yet — defer to the fixpoint
+        amount = _compute(f"{_num(amount)} * {_num(base.amount)}")
+    return Rate(_entity(subject), amount, measure,
                 _descriptor(unit)[0], _lemma(verbs[0].surface), per_amount)
 
 
@@ -3198,7 +3212,7 @@ def _facts_from(reading: Reading, context: list = None) -> list:
     fr = _frequency(r)                                   # "<entity> <verb>s twice" → frequency?
     if fr is not None:
         return [fr]
-    rate = _rate(r)                                      # "<entity> earns $12 per hour" → rate?
+    rate = _rate(r, context)                             # "<entity> earns $12 per hour" → rate?
     if rate is not None:
         return [rate]
     cq = _comparative_quantity(r, context)               # "<A> has 30 less <X> than <B>" → derived?
