@@ -2982,6 +2982,12 @@ def answer(question: str, context: list, discourse: list = None):
         if gq is None:                                   # generic population → the GRAND TOTAL. A query-less
             measures = {f.measure for f in context if isinstance(f, Quantity) and f.amount is not None}
             gq = next(iter(measures)) if len(measures) == 1 else None   # "their combined experience" → the
+        if gq is not None and remainder:                 # "how many do they have LEFT in total" → Σ each
+            owners = {f.entity for f in context           # owner's NET holdings (signed: picked − gave −
+                      if isinstance(f, Quantity) and f.measure == gq and f.amount is not None}  # sold),
+            hs = [_holdings(o, gq, context) for o in owners]   # not the raw sum (which double-counts the
+            if hs and all(h is not None for h in hs):          # gross alongside its own losses → Frank 210)
+                return _compute(" + ".join(_num(h) for h in hs))
         if gq is not None:                               # one measure the context quantities share (years)
             terms = []                                   # sum every quantity convertible to it (cross-entity,
             for f in context:                            # cross-unit via CONVERSIONS)

@@ -3431,5 +3431,19 @@ class TestIncrement128ContainerGiveaway(unittest.TestCase):
             [reading.Quantity("he", ("marble", frozenset()), 28.0, "have")]))
 
 
+class TestIncrement129CombinedRemainder(unittest.TestCase):
+    """#129 - COMBINED REMAINDER over multiple owners: "how many in total do they have LEFT?" sums each
+    owner's NET holdings (picked − gave − sold), not the raw sum of every quantity (which double-counts a
+    gross alongside its own losses). "Frank picked 36; Susan picked 3× as many (108); Susan gave half (54);
+    Frank sold a third (12)" → Susan 108−54=54, Frank 36−12=24, total 78 (was 210 = 36+108+54+12). Fires
+    only when the combined question carries a remainder cue ("left"). SYNTHETIC strings only."""
+
+    def test_combined_remainder_two_owners(self):
+        # Jane 2×30=60, gave half (30) → 30; Tom 30, sold a third (10) → 20; total 50
+        self.assertEqual(reading.solve(
+            "Tom picked 30 apples. Jane picked 2 times as many apples as Tom. If Jane gave out half of "
+            "her apples, and Tom sold a third of his, how many in total do they have left?"), 50)
+
+
 if __name__ == "__main__":
     unittest.main()
