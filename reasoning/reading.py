@@ -3350,6 +3350,11 @@ def solve(text: str):
     if any(_key(u.surface) == "each" and _key(qu[j + 1].surface) == "of" for j, u in enumerate(qu[:-1])):
         return "undetermined"
     result = answer(question, context, discourse)
+    # GUARD 7 — a NEGATIVE number is a nonsensical answer to a "how many/how much" count/amount question
+    # (you can't hold −3 apples or −$5): it always means a term was dropped or mis-signed in the fold, so
+    # DECLINE rather than commit. Pure precision guard — correct GSM8K answers are never negative.
+    if isinstance(result, (int, float)) and not isinstance(result, bool) and result < 0:
+        return "undetermined"
     if result == "undetermined" and _underspecified_distribution(context) is not None:
         return [Deficiency("under-specified", None,                 # ask, don't silently decline: the
                            "the total was shared, but no split method (e.g. 'equally') is given")]

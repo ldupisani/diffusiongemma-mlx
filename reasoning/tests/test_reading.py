@@ -2841,5 +2841,24 @@ class TestIncrement104ConjoinedContainers(unittest.TestCase):
                          [reading.Quantity("store", ("gram", frozenset()), 2000.0, "sell")])
 
 
+class TestIncrement105NegativeAnswerDeclines(unittest.TestCase):
+    """#105 - a NEGATIVE final answer to a count/amount question is nonsensical (you can't hold −3
+    apples): it always means a term was dropped or mis-signed, so DECLINE rather than commit. Pure
+    precision guard — a decline is always safe, and correct GSM8K answers are never negative."""
+
+    def test_negative_count_declines(self):
+        self.assertEqual(reading.solve("Tom has 5 apples. He gives away 8 apples. "
+                                       "How many apples does Tom have?"), "undetermined")
+
+    def test_positive_answer_unaffected(self):
+        self.assertEqual(reading.solve("Tom has 5 apples. He gives away 2 apples. "
+                                       "How many apples does Tom have?"), 3)
+
+    def test_zero_answer_still_commits(self):
+        # zero is a legitimate answer (gave away exactly what he had) — only NEGATIVE declines
+        self.assertEqual(reading.solve("Tom has 5 apples. He gives away 5 apples. "
+                                       "How many apples does Tom have?"), 0)
+
+
 if __name__ == "__main__":
     unittest.main()
