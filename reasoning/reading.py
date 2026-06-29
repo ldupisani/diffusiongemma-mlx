@@ -2017,6 +2017,17 @@ def _rate(reading: Reading, context: list = None):
                        and _descriptor(_follow(x, "quantifies"))[0] not in TIME_UNITS), None)
             if per_v is not None and mv is not None:
                 rate_val, unit, per_amount = mv, tu, per_v.features["value"]
+    if rate_val is None:                                 # "N <time-unit> over M <time-unit>" — a
+        ov = next((u for u in units if _key(u.surface) == "over"), None)   # time-over-time rate ("reads
+        tu = _follow(ov, "object") if ov is not None else None             # 10 hours over 5 days" = 2 h/day).
+        if tu is not None and _descriptor(tu)[0] in TIME_UNITS:            # BOTH sides must be time units
+            per_v = next((x for x in units if "value" in x.features.get("senses", [])   # (a non-time
+                          and _follow(x, "quantifies") is tu), None)                     # measure "30 points
+            mv = next((x for x in units if "value" in x.features.get("senses", [])       # over 5 games" is
+                       and _follow(x, "quantifies") is not None and x is not per_v        # not a duration
+                       and _descriptor(_follow(x, "quantifies"))[0] in TIME_UNITS), None)  # rate — declines)
+            if per_v is not None and mv is not None:
+                rate_val, unit, per_amount = mv, tu, per_v.features["value"]
     if rate_val is None or unit is None:
         return None
     verbs = [u for u in units if "verb" in u.features.get("senses", [])]

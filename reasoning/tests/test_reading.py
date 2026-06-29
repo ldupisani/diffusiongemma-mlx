@@ -3147,5 +3147,31 @@ class TestIncrement118FirstYearException(unittest.TestCase):
                                        "How many students will Adam teach in 10 years?"), 500)
 
 
+class TestIncrement119OverTimeRate(unittest.TestCase):
+    """#119 - "N <time-unit> over M <time-unit>" parses as a time-over-time Rate (Tom: "reads 10 hours
+    over 5 days" → 10 hours per 5 days = 2 h/day). The existing per/in branches can't reach it: "over"
+    isn't a per-marker and the "in" branch requires a NON-time measure. Parsing it as a Rate suppresses
+    the two stray quantities (10 hours, 5 days); without a usable hour-duration the full Tom problem then
+    DECLINES (wrong→decline) — the chained question-duration composition that greens it lands in #120."""
+
+    def test_over_time_rate_parse(self):
+        self.assertEqual(reading._rate(reading.analyze("Tom reads 10 hours over 5 days.")),
+                         reading.Rate("tom", 10.0, ("hour", frozenset()), "day", "read", 5.0))
+
+    def test_over_rate_suppresses_quantities(self):
+        facts = reading.learn("Tom reads 10 hours over 5 days.", [], [])
+        self.assertTrue(any(isinstance(f, reading.Rate) for f in facts))
+        self.assertFalse(any(isinstance(f, reading.Quantity) for f in facts))
+
+    def test_non_time_over_is_not_a_time_rate(self):
+        # "over" with a non-time object must NOT trip the time-over-time branch
+        self.assertIsNone(reading._rate(reading.analyze("Sam scored 30 points over 5 games.")))
+
+    def test_tom_declines_without_chain(self):
+        self.assertEqual(reading.solve(
+            "Tom reads 10 hours over 5 days. He can read 50 pages per hour. Assuming he reads the same "
+            "amount every day how many pages does he read in 7 days?"), "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()
