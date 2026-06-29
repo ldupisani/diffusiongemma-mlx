@@ -3041,5 +3041,28 @@ class TestIncrement113CrossEntityPercentComparative(unittest.TestCase):
                                        "into her piggy bank, how much money will she have?"), 240)
 
 
+class TestIncrement114ForwardRefPercentChainDefersAndSnaps(unittest.TestCase):
+    """#114 - a cross-entity percent comparative whose named standard isn't known YET ("John has 20% more
+    than Jules" before Jules resolves) must DEFER (return None) so the fixpoint resolves it after the
+    standard — never off a measure-matched stand-in (it was committing 100×1.2=120 off Stan). Plus the
+    FINAL answer snaps binary-float drift to a clean value (a percent chain lands on 29.999…93, not 30)."""
+
+    def test_forward_ref_percent_chain(self):
+        self.assertEqual(reading.solve(
+            "John has 20% more boxes than Jules. Jules has 5 more boxes than Joseph. "
+            "Joseph has 80% fewer boxes than Stan. If Stan has 100 boxes, "
+            "how many boxes does John have?"), 30)
+
+    def test_final_answer_snaps_float_drift(self):
+        # 100 × (1 − 0.8) = 29.999999999999993 in binary float → snapped to a clean 30
+        self.assertEqual(reading.solve("Stan has 100 boxes. Joseph has 80% fewer boxes than Stan. "
+                                       "How many boxes does Joseph have?"), 20)
+
+    def test_intermediate_precision_preserved(self):
+        # the snap is on the FINAL answer only — a 1/60 conversion keeps full precision mid-chain
+        self.assertEqual(reading.solve("Weng earns $12 an hour for babysitting. Yesterday, she just did "
+                                       "50 minutes of babysitting. How much did she earn?"), 10)
+
+
 if __name__ == "__main__":
     unittest.main()

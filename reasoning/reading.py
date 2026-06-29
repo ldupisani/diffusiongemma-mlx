@@ -2106,10 +2106,12 @@ def _percent_quantity(reading: Reading, context: list):
     if std is not None and "name" in std.features.get("senses", []):   # standard is ANOTHER ENTITY ("than
         op = "-" if COMPARATIVE_SIGN.get(_key(comp.surface), 1) < 0 else "+"   # Eric"), not the measure noun
         ref = next((f for f in reversed(context or [])                 # ("20% more MONEY"): the full derived
-                    if isinstance(f, Quantity) and f.entity == _entity(std)), referent)   # amount X×(1±pct)
-        return Quantity(_entity(subject), referent.measure,
-                        _compute(f"{_num(ref.amount)} * (1 {op} {_num(pct.features['value'])})"),
-                        _lemma(verbs[0].surface), derived=True)
+                    if isinstance(f, Quantity) and f.entity == _entity(std)), None)   # amount X×(1±pct)
+        if ref is None:                                  # the named standard's value isn't known YET (a
+            return None                                  # forward ref: "John …than Jules" before Jules) —
+        return Quantity(_entity(subject), referent.measure,   # DEFER so the fixpoint resolves it after the
+                        _compute(f"{_num(ref.amount)} * (1 {op} {_num(pct.features['value'])})"),  # standard,
+                        _lemma(verbs[0].surface), derived=True)   # never off a measure-matched stand-in (Stan)
     return Quantity(_entity(subject), referent.measure,
                     _compute(f"{_num(pct.features['value'])} * {_num(referent.amount)}"),
                     _lemma(verbs[0].surface))
@@ -3434,6 +3436,10 @@ def solve(text: str):
     if any(_key(u.surface) == "each" and _key(qu[j + 1].surface) == "of" for j, u in enumerate(qu[:-1])):
         return "undetermined"
     result = answer(question, context, discourse)
+    if isinstance(result, float) and not isinstance(result, bool):   # snap binary-float drift on the FINAL
+        snapped = round(result, 9)                                   # answer only (intermediates keep full
+        result = int(snapped) if snapped == int(snapped) else snapped   # precision): "100 × (1 − 0.8)" → 30,
+        # not 29.999999999999993. Rounding intermediates instead would lose precision (a 1/60 conversion).
     # GUARD 7 — a NEGATIVE number is a nonsensical answer to a "how many/how much" count/amount question
     # (you can't hold −3 apples or −$5): it always means a term was dropped or mis-signed in the fold, so
     # DECLINE rather than commit. Pure precision guard — correct GSM8K answers are never negative.
