@@ -3781,6 +3781,42 @@ def _partition(premises: list, question: str):
     return total
 
 
+def _queried_measure(question: str):
+    """The measure a 'how many/much <measure>' question asks about, or None."""
+    qr = analyze(question)
+    interro = next((u for u in qr.units if "interrogative" in u.features.get("senses", [])), None)
+    if interro is None:
+        return None
+    coll = _follow(_follow(interro, "queries"), "collection")
+    return _descriptor(coll) if coll is not None else None
+
+
+def _container_giveaway(premises: list, question: str, context: list):
+    """EQUAL-SPLIT into containers, then GIVE some containers away → the contents lost. "28 marbles … into
+    4 bags … the same number in each bag … gives one bag away … how many marbles left?" → per-bag = 28/4 =
+    7, lose 1×7 = 7, answer 28−7 = 21. The contents and the containers are DIFFERENT measures; the give is
+    counted in CONTAINERS but the question asks the CONTENTS, so the give converts via the per-container
+    share. Tightly gated: an equal-split marker ("same … each"), a whole of the asked measure, a container
+    count (a `put` of a different measure), and a `give` of that container measure. None otherwise."""
+    if not any("same" in p.lower() and "each" in p.lower() for p in premises):
+        return None
+    target = _queried_measure(question)
+    if target is None:
+        return None
+    whole = next((f for f in context if isinstance(f, Quantity) and f.measure == target
+                  and f.verb in ("have", "put") and f.amount is not None), None)
+    container = next((f for f in context if isinstance(f, Quantity) and f.measure != target
+                      and f.verb == "put" and f.amount is not None), None)
+    if whole is None or container is None or not container.amount:
+        return None
+    give = next((f for f in context if isinstance(f, Quantity) and f.measure == container.measure
+                 and f.verb == "give" and f.amount is not None), None)
+    if give is None:
+        return None
+    per = _compute(f"{_num(whole.amount)} / {_num(container.amount)}")    # contents per container
+    return _compute(f"{_num(whole.amount)} - {_num(give.amount)} * {_num(per)}")
+
+
 def solve(text: str):
     """Read a whole word-problem paragraph (premises + a trailing question) and answer the question —
     threading coreference (`discourse`) and the growing `context` across the premises (split into
@@ -3953,7 +3989,9 @@ def solve(text: str):
     # each holding a per-member quantity → Σ (count × per_member). Tries before the generic fold (which
     # would sum the per-member values without their subgroup counts). None ⇒ not this shape → fall through.
     part = _partition(premises, question)
-    result = part if part is not None else answer(question, context, discourse)
+    if part is None:                                     # EQUAL-SPLIT into containers then give some away
+        part = _container_giveaway(premises, question, context)   # ("…4 bags … same number each … gives
+    result = part if part is not None else answer(question, context, discourse)   # one bag away" → 28−7)
     # PERIOD SCALING: events that recur DAILY (dayparts "morning/afternoon/evening", or "every/each day")
     # are summed into a per-DAY total, but the question asks "every/per/a WEEK" → ×7. Gated on BOTH the
     # daily cue in a premise AND the weekly period in the question, AND no "week" stated in a premise (else

@@ -3398,5 +3398,38 @@ class TestIncrement127Purchase(unittest.TestCase):
             reading.analyze("He buys 4 candy bars that cost $2 each."), []))
 
 
+class TestIncrement128ContainerGiveaway(unittest.TestCase):
+    """#128 - EQUAL-SPLIT into containers, then GIVE some containers away → the contents are lost. "28
+    marbles … into 4 bags … the same number in each bag … gives one bag away … how many marbles left?"
+    → per-bag = 28/4 = 7, lose 1×7, answer 28−7 = 21. The give is counted in CONTAINERS but the question
+    asks the CONTENTS, so it converts via the per-container share. Resolves James-marbles 21. Tightly
+    gated: a "same … each" equal-split marker, a whole of the asked measure, a container `put`-count of a
+    different measure, and a `give` of that container. SYNTHETIC strings only."""
+
+    def test_container_giveaway_one(self):
+        self.assertEqual(reading.solve(
+            "Anna has 30 coins. She puts them into 5 jars. She puts the same number in each jar. "
+            "She then gives one jar away. How many coins does she have left?"), 24)
+
+    def test_container_giveaway_multiple(self):
+        # give TWO containers → lose 2 × per-container (30/5 = 6) = 12 → 18
+        self.assertEqual(reading.solve(
+            "Anna has 30 coins. She puts them into 5 jars. She puts the same number in each jar. "
+            "She then gives two jars away. How many coins does she have left?"), 18)
+
+    def test_container_giveaway_helper(self):
+        per_split = reading._container_giveaway(
+            ["He has 28 marbles", "He puts them into 4 bags", "He puts the same number in each bag",
+             "He gives one bag away"], "How many marbles does he have left?",
+            [reading.Quantity("he", ("marble", frozenset()), 28.0, "have"),
+             reading.Quantity("he", ("bag", frozenset()), 4.0, "put"),
+             reading.Quantity("he", ("bag", frozenset()), 1.0, "give")])
+        self.assertEqual(per_split, 21)
+        # no "same … each" marker → not this shape → None
+        self.assertIsNone(reading._container_giveaway(
+            ["He has 28 marbles", "He puts them into 4 bags"], "How many marbles does he have left?",
+            [reading.Quantity("he", ("marble", frozenset()), 28.0, "have")]))
+
+
 if __name__ == "__main__":
     unittest.main()
