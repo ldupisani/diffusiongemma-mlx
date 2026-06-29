@@ -1898,6 +1898,12 @@ def _relational_quantity(reading: Reading, context: list):
     if scaled is None or not ("quantifier" in scaled.features.get("senses", [])   # (a count-noun), or "as
                               or _key(scaled.surface) in (COUNT_NOUNS | DIMENSIONS)):  # long/far" (a
         return None                                                               # dimension) — not a verb
+    # TIME-INDEXED relational ("twice as many boxes on Tuesday as she did on Wednesday") — the referent is
+    # the SAME entity at a DIFFERENT time, identified by the 2nd "on <day>". We resolve the referent by
+    # ENTITY (recency), not time, so we'd grab the wrong day's value and chain garbage → DECLINE. (A full
+    # solve needs time-tagged relational quantities + a per-day referent + time-aware answer fold.)
+    if sum(1 for u in reading.units if "time" in u.features.get("senses", [])) >= 2:
+        return None
     # NOTE: a relative-clause referent ("twice the number (that) X has", "the number of flowers he
     # sold") was prototyped here (read subject/referent off POSITION around the multiplier, to survive
     # the relative clause's 2nd verb / the matrix "has" mis-reading as an auxiliary). It resolved the

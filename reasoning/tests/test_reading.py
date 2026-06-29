@@ -3470,5 +3470,32 @@ class TestIncrement130ElidedStandardDecline(unittest.TestCase):
             "If Emily bought 6 candies, how many candies did Bob buy?"), "undetermined")
 
 
+class TestIncrement131TimeIndexedRelationalDecline(unittest.TestCase):
+    """#131 - TIME-INDEXED relational chain → DECLINE (precision guard). "She sold twice as many boxes on
+    Tuesday as she did on Wednesday … twice as many on Wednesday as on Thursday … Thursday=1200 … how many
+    on Tuesday?" — the referent is the SAME entity at a DIFFERENT time (the 2nd "on <day>"), but
+    `_relational_quantity` resolves the referent by ENTITY (recency), not time, so it would chain the wrong
+    day's value and commit garbage (6000). A relational multiplier-on-quantifier clause with ≥2 time
+    references → DECLINE. The full solve (time-tagged relational quantities + per-day referent + time-aware
+    answer fold) is deferred. Kim-boxes 6000→decline. SYNTHETIC strings only."""
+
+    def test_time_indexed_relational_declines(self):
+        ctx = [reading.Quantity("kim", ("box", frozenset()), 100.0, "sell", time="wednesday")]
+        self.assertIsNone(reading._relational_quantity(
+            reading.analyze("She sold twice as many boxes on Tuesday as she did on Wednesday"), ctx))
+
+    def test_single_time_relational_still_resolves(self):
+        ctx = [reading.Quantity("kim", ("box", frozenset()), 100.0, "sell")]
+        self.assertEqual(reading._relational_quantity(
+            reading.analyze("Mary sold twice as many boxes as Kim"), ctx),
+            reading.Quantity("mary", ("box", frozenset()), 200, "sell", derived=True))
+
+    def test_time_indexed_problem_declines(self):
+        self.assertEqual(reading.solve(
+            "She sold twice as many boxes on Tuesday as she did on Wednesday, and she sold twice as many "
+            "boxes on Wednesday as she did on Thursday. If Kim sold 1200 boxes of cupcakes on Thursday, "
+            "how many boxes did she sell on Tuesday?"), "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()
