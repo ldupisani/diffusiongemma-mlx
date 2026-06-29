@@ -2955,5 +2955,24 @@ class TestIncrement109LossFrameComparative(unittest.TestCase):
                                        "How many apples does Tim have?"), 38)
 
 
+class TestIncrement110DerivedReferentBaseline(unittest.TestCase):
+    """#110 - an IMPLICIT relational referent ("Ella worked twice as long") scales the most-recent
+    NON-derived baseline, not a just-derived sibling sitting between them. Quantity carries a `derived`
+    flag (set by the relational/comparative/partitive producers, compare=False so equality is unchanged);
+    the implicit referent in _relational_quantity skips derived quantities."""
+
+    def test_implicit_referent_picks_baseline_not_derived_sibling(self):
+        # Armand = 12/3 = 4 (derived); Ella = "twice as long" must scale AMBER (12), not Armand (4) →
+        # 2×12=24, total 12+4+24=40 (was 8, total 24, when Ella scaled the derived Armand).
+        self.assertEqual(reading.solve(
+            "Amber worked for 12 hours. Armand worked one-third as long and Ella worked twice as long. "
+            "How many hours did the 3 people work in total?"), 40)
+
+    def test_derived_flag_excluded_from_equality(self):
+        a = reading.Quantity("x", ("apple", frozenset()), 5.0, "have")
+        b = reading.Quantity("x", ("apple", frozenset()), 5.0, "have", derived=True)
+        self.assertEqual(a, b)        # compare=False — a derived and a stated quantity are still equal
+
+
 if __name__ == "__main__":
     unittest.main()

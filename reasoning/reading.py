@@ -1727,6 +1727,10 @@ class Quantity:
     verb: str = "have"
     time: str = None      # the time NODE this value is valid at (a `time` unit's `associates` binding);
                           # None = timeless / always-valid. Order between nodes lives in `Before` facts.
+    derived: bool = field(default=False, compare=False)   # True when COMPUTED from a relation/comparative/
+                          # multiplier (Armand = 1/3 × Amber), not stated outright. An implicit referent
+                          # ("Ella worked twice as long") prefers the most-recent NON-derived baseline over
+                          # a just-derived sibling. compare=False so fact equality (and tests) ignore it.
 
 
 @dataclass(frozen=True)
@@ -1858,10 +1862,11 @@ def _relational_quantity(reading: Reading, context: list):
         ref_ent = _entity(named[-1])
         referent = next((f for f in reversed(context or [])
                          if isinstance(f, Quantity) and f.entity == ref_ent), None)
-    else:
-        referent = next((f for f in reversed(context or []) if isinstance(f, Quantity)), None)
-    if referent is None:
-        return None
+    else:                                                 # IMPLICIT referent: prefer the most-recent
+        quants = [f for f in reversed(context or []) if isinstance(f, Quantity)]   # NON-derived baseline
+        referent = next((f for f in quants if not f.derived), None) or next(iter(quants), None)
+    if referent is None:                                  # ("Ella worked twice as long" scales AMBER, not
+        return None                                       # the just-derived Armand sitting between them)
     if "fraction" in mult.features:                       # exact: (referent × num) / denom, divide LAST
         num, denom = mult.features["fraction"]            # ("12 × 2 / 3" = 8, dodging 0.666×12 float drift)
         expr = f"{_num(referent.amount)} * {num} / {denom}"
@@ -1871,7 +1876,8 @@ def _relational_quantity(reading: Reading, context: list):
     offset = next((u for u in reading.units if "value" in u.features.get("senses", [])), None)
     if comp is not None and offset is not None:          # "FIVE MORE than twice as many as Bob" → 2×Bob+5
         expr += f" + {COMPARATIVE_SIGN.get(_key(comp.surface), 1)} * {_num(offset.features['value'])}"
-    return Quantity(_entity(subject), referent.measure, _compute(expr), _lemma(verbs[0].surface))
+    return Quantity(_entity(subject), referent.measure, _compute(expr), _lemma(verbs[0].surface),
+                    derived=True)
 
 
 def _partitive_quantity(reading: Reading, context: list):
@@ -1915,7 +1921,7 @@ def _partitive_quantity(reading: Reading, context: list):
         return None
     num, denom = _fraction_parts(frac.surface)            # exact: base × num / denom (divide last)
     return Quantity(ent, measure, _compute(f"{_num(base)} * {num} / {denom}"),
-                    _lemma(main_verb.surface), _time_at(reading, main_verb))
+                    _lemma(main_verb.surface), _time_at(reading, main_verb), derived=True)
 
 
 def _comparative_quantity(reading: Reading, context: list):
@@ -1953,7 +1959,7 @@ def _comparative_quantity(reading: Reading, context: list):
     op = "-" if COMPARATIVE_SIGN.get(_key(comp.surface), 1) < 0 else "+"   # younger/less → −, older/more → +
     return Quantity(_entity(subject), measure,
                     _compute(f"{_num(referent)} {op} {_num(value_unit.features['value'])}"),
-                    _lemma(verbs[-1].surface))
+                    _lemma(verbs[-1].surface), derived=True)
 
 
 @dataclass(frozen=True)
