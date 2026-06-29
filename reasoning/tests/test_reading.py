@@ -3222,5 +3222,35 @@ class TestIncrement121TimeRangeRateChain(unittest.TestCase):
         self.assertIsNone(reading._time_range_rate(reading.analyze("James writes 3 pages every night.")))
 
 
+class TestIncrement122RelationalSpeedChain(unittest.TestCase):
+    """#122 - Anna: a relational-SPEED chain resolved bidirectionally. "Carole reads as fast as Anna (×1)
+    but at half the speed of Brianna (×0.5)" → RateRel facts; the synth resolves forward (Anna 1/min →
+    Carole 1/min) then INVERSE (Carole known → Brianna = 1 ÷ 0.5 = 2/min). "How long does it take Brianna
+    to read a 100-page book?" inverts on Brianna's rate (entity named in the question) → 100 ÷ 2 = 50."""
+
+    def test_rate_relations_parse(self):
+        rels = reading._rate_relations(reading.analyze(
+            "Carole can read as fast as Anna but at half the speed of Brianna."))
+        self.assertEqual(rels, [reading.RateRel("carole", 1.0, "anna", "read"),
+                                reading.RateRel("carole", 0.5, "brianna", "read")])
+
+    def test_rate_relation_synth_bidirectional(self):
+        facts = [reading.Rate("anna", 1.0, ("page", frozenset()), "minute", "read", 1.0),
+                 reading.RateRel("carole", 1.0, "anna", "read"),
+                 reading.RateRel("carole", 0.5, "brianna", "read")]
+        out = reading.synthesize(facts)
+        self.assertIn(reading.Rate("carole", 1.0, ("page", frozenset()), "minute", "read", 1.0), out)
+        self.assertIn(reading.Rate("brianna", 2.0, ("page", frozenset()), "minute", "read", 1.0), out)
+
+    def test_anna_solves(self):
+        self.assertEqual(reading.solve(
+            "Anna can read 1 page in 1 minute. Carole can read as fast as Anna but at half the speed of "
+            "Brianna. How long does it take Brianna to read a 100-page book?"), 50)
+
+    def test_no_speed_cue_no_relation(self):
+        # a plain comparative without a speed word/noun must NOT become a RateRel
+        self.assertIsNone(reading._rate_relations(reading.analyze("Carole reads as much as Anna.")))
+
+
 if __name__ == "__main__":
     unittest.main()

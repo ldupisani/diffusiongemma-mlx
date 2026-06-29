@@ -1977,6 +1977,18 @@ class Rate:
     per_amount: float = 1            # "8 pages in 20 MINUTES" → amount=8, per_unit=minute, per_amount=20
 
 
+@dataclass(frozen=True)
+class RateRel:
+    """A pending RELATIONAL rate: `subject`'s rate (of `verb`) = `factor` × `reference`'s rate. Resolved by
+    the synthesis loop in EITHER direction — forward (reference's rate known → subject = factor × ref) or
+    inverse (subject's rate known → reference = subject ÷ factor). So "Carole reads as fast as Anna (×1)
+    but at half the speed of Brianna (×0.5)" chains Anna(1/min) → Carole(1/min) → Brianna(2/min)."""
+    subject: str
+    factor: float
+    reference: str
+    verb: str
+
+
 def _rate(reading: Reading, context: list = None):
     """The rate a statement asserts — "$12 per hour" / "$12 an hour" / "20 pages a day" → Rate(entity,
     amount, measure, per_unit, verb). The per-marker is "per", or "a"/"an" before a unit noun when it
@@ -2093,6 +2105,40 @@ def _time_range_rate(reading: Reading):
     if subject is None:
         return None
     return Rate(_entity(subject), span, ("hour", frozenset()), per_unit, _lemma(verbs[0].surface), 1)
+
+
+SPEED_WORDS = {"fast", "quick", "slow"}                   # manner adjectives that compare a rate
+SPEED_NOUNS = {"speed", "pace"}                           # "half the SPEED of X"
+
+
+def _rate_relations(reading: Reading):
+    """Relational rate(s) keyed off a SPEED cue: "Carole reads as fast as Anna but at half the speed of
+    Brianna" → [RateRel(carole, 1.0, anna), RateRel(carole, 0.5, brianna)]. Two shapes: "as <speed-adj>
+    as <NAME>" (equality, ×1) and "<multiplier> the <speed-noun> of <NAME>" (×multiplier). Gated on a
+    speed word/noun so it never hijacks a plain comparative; the synth resolves them bidirectionally."""
+    units = reading.units
+    if not any(_key(u.surface) in SPEED_WORDS or _key(u.surface) in SPEED_NOUNS for u in units):
+        return None
+    verbs = [u for u in units if "verb" in u.features.get("senses", [])]
+    subject = _follow(verbs[0], "subject") if verbs else None
+    if subject is None:
+        return None
+    subj, verb = _entity(subject), _lemma(verbs[0].surface)
+    keys = [_key(u.surface) for u in units]
+    rels = []
+    for i, u in enumerate(units):
+        if keys[i] in SPEED_WORDS and 0 < i < len(units) - 2 \
+                and keys[i - 1] == "as" and keys[i + 1] == "as" \
+                and "name" in units[i + 2].features.get("senses", []):   # "as fast as Anna" → ×1
+            rels.append(RateRel(subj, 1.0, _entity(units[i + 2]), verb))
+        if keys[i] in SPEED_NOUNS:                                        # "half the speed of Brianna"
+            mult = next((units[j] for j in range(i - 1, -1, -1)
+                         if "multiplier" in units[j].features.get("senses", [])), None)
+            of = next((units[j] for j in range(i + 1, len(units)) if keys[j] == "of"), None)
+            ref = _follow(of, "object") if of is not None else None
+            if mult is not None and ref is not None and "name" in ref.features.get("senses", []):
+                rels.append(RateRel(subj, mult.features["value"], _entity(ref), verb))
+    return rels or None
 
 
 REST_WORDS = {"rest", "remainder", "others"}
@@ -2765,10 +2811,13 @@ def answer(question: str, context: list, discourse: list = None):
             return next((u for u in r.units if "value" in u.features.get("senses", [])   # asked). The target
                          and _follow(u, "quantifies") is not None                        # value quantifies
                          and _descriptor(_follow(u, "quantifies")) == rate.measure), None)  # the rate's measure
-        # prefer a rate whose per_unit IS / converts to the asked unit, so a composed "15 pages/DAY" beats
-        # "5 pages/HOUR" for a "how many WEEKS" question (day→week converts, hour→week doesn't); else the
-        # first rate the target quantifies (preserves single-rate Joy/Sam).
-        rate = next((f for f in rates if _inv_target(f) is not None and asked_unit is not None
+        # SELECT among rates (each must have a target the question quantifies): (1) one OWNED by a name in
+        # the question ("how long does it take BRIANNA" → Brianna's 2 pg/min, not Anna's); (2) one whose
+        # per_unit IS / converts to the asked unit ("15 pages/DAY" beats "5 pages/HOUR" for "how many
+        # WEEKS"); (3) the first target-matching rate (preserves single-rate Joy/Sam).
+        qnames = {_entity(u) for u in r.units if "name" in u.features.get("senses", [])}
+        rate = next((f for f in rates if _inv_target(f) is not None and f.entity in qnames), None) \
+            or next((f for f in rates if _inv_target(f) is not None and asked_unit is not None
                      and (asked_unit == f.per_unit or (f.per_unit, asked_unit) in CONVERSIONS)), None) \
             or next((f for f in rates if _inv_target(f) is not None), None) \
             or (rates[0] if rates else None)
@@ -3226,10 +3275,38 @@ def _synth_rate_chain(facts: list, readings: list, agenda: set) -> list:
     return out
 
 
+def _synth_rate_relation(facts: list, readings: list, agenda: set) -> list:
+    """Resolve a RateRel into a concrete Rate, EITHER direction (so a chain resolves across fixpoint
+    rounds): forward — reference's rate known → subject = factor × reference; inverse — subject's rate
+    known → reference = subject ÷ factor. Anna(1/min) → Carole = 1×Anna → Brianna = Carole ÷ 0.5 = 2/min.
+    The derived rate copies the known rate's measure/per_unit/verb (only the amount scales)."""
+    out = []
+    def rate_of(ent):
+        return next((f for f in facts if isinstance(f, Rate) and f.entity == ent), None)
+    for rel in facts:
+        if not isinstance(rel, RateRel):
+            continue
+        subj_rate, ref_rate = rate_of(rel.subject), rate_of(rel.reference)
+        if ref_rate is not None and subj_rate is None:               # forward
+            amt = _compute(f"{_num(rel.factor)} * {_num(ref_rate.amount)}")
+            cand = Rate(rel.subject, amt, ref_rate.measure, ref_rate.per_unit, ref_rate.verb,
+                        ref_rate.per_amount)
+        elif subj_rate is not None and ref_rate is None and rel.factor != 0:   # inverse
+            amt = _compute(f"{_num(subj_rate.amount)} / {_num(rel.factor)}")
+            cand = Rate(rel.reference, amt, subj_rate.measure, subj_rate.per_unit, subj_rate.verb,
+                        subj_rate.per_amount)
+        else:
+            continue
+        if cand not in facts and cand not in out:
+            out.append(cand)
+    return out
+
+
 # obligation/fact KIND → derivation (facts, readings, agenda) -> new facts. Register here to add reasoning.
 SYNTHESIZERS = {"orders": _synth_transitive_order, "narrative": _synth_narrative_order,
                 "distribution": _synth_distribution, "equal_split": _synth_equal_split,
-                "rate_duration": _synth_rate_duration, "rate_chain": _synth_rate_chain}
+                "rate_duration": _synth_rate_duration, "rate_chain": _synth_rate_chain,
+                "rate_relation": _synth_rate_relation}
 
 
 def _outstanding(readings: list) -> set:
@@ -3305,6 +3382,9 @@ def _facts_from(reading: Reading, context: list = None) -> list:
     rel = _relation(r)                                   # "<A> is <comparative> than <B>" → relation?
     if rel is not None:
         return [rel]
+    rr = _rate_relations(r)                              # "Carole reads as fast as Anna but half Brianna's
+    if rr is not None:                                    # speed" → relational rate(s) (resolved bidirectionally)
+        return rr
     fr = _frequency(r)                                   # "<entity> <verb>s twice" → frequency?
     if fr is not None:
         return [fr]
@@ -3596,7 +3676,7 @@ def solve(text: str):
     for i, rp in enumerate(readings[:len(premises)]):
         if any(s in u.features.get("senses", []) for u in rp.units
                for s in ("value", "percent", "multiplier")) \
-                and not any(isinstance(f, (Quantity, Rate, Frequency)) for f in (facts_of[i] or [])):
+                and not any(isinstance(f, (Quantity, Rate, Frequency, RateRel)) for f in (facts_of[i] or [])):
             return "undetermined"
     # GUARD 5 — temporal safety (now that we FOLD along the timeline, not blanket-decline). (a) A TIMED
     # premise that states a value/multiplier/percent but produced no Quantity dropped a time-tagged event
