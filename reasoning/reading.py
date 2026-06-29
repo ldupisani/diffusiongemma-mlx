@@ -2478,6 +2478,36 @@ def _temporal_order(reading: Reading):
     return None
 
 
+def _purchase(reading: Reading, context: list = None):
+    """A PURCHASE — "buys 4 candy bars that cost $2 each" → spends 4 × $2 = $8, a money LOSS. Two facts
+    fold differently for one "buy" verb (you GAIN the items but LOSE the money), and `_verb_sign` is
+    measure-agnostic, so the money outflow is emitted with the LOSS verb 'spend' (−) while the items keep
+    'buy' (+). Gated to "buy/purchase <count> <items> … $P each": a buy verb, EXACTLY ONE 'each' marker,
+    one money price, one item count, AND the buyer already holds money in context (the baseline the spend
+    is netted against — "Todd has $20 … how much LEFT"). The baseline gate keeps it off a MULTI-item buy
+    ("5 apples … and 2 oranges …", clause-split into single-purchase fragments), which has no prior
+    holding and must DECLINE (we'd commit only one fragment's product). Returns None otherwise."""
+    units = reading.units
+    verb = next((u for u in units if "verb" in u.features.get("senses", [])
+                 and _lemma(u.surface) in ("buy", "purchase")), None)
+    if verb is None or sum(1 for u in units if _key(u.surface) == "each") != 1:
+        return None                                      # exactly one "each" — a SINGLE purchase
+    subject = _follow(verb, "subject")
+    prices = [u for u in units if "value" in u.features.get("senses", []) and u.features.get("measure") == MONEY]
+    counts = [u for u in units if "value" in u.features.get("senses", [])
+              and _follow(u, "quantifies") is not None and _descriptor(_follow(u, "quantifies")) != MONEY]
+    if subject is None or len(prices) != 1 or len(counts) != 1:
+        return None                                      # multi-item → DECLINE (only one pair's product)
+    if not any(isinstance(f, Quantity) and f.entity == _entity(subject) and f.measure == MONEY
+               for f in (context or [])):
+        return None                                      # no money baseline to net against → DECLINE
+    price, count = prices[0], counts[0]
+    item = _descriptor(_follow(count, "quantifies"))
+    spent = _compute(f"{_num(count.features['value'])} * {_num(price.features['value'])}")
+    return [Quantity(_entity(subject), item, count.features["value"], "buy"),
+            Quantity(_entity(subject), MONEY, spent, "spend")]   # money out = count × price (a loss)
+
+
 def _transfer_quantity(reading: Reading):
     """ "<entity> sold CLIPS to 48 of her friends" → 48 of CLIPS (one item per recipient). The bare-plural
     direct object is the measure; the RECIPIENT count (via "to") is the amount. None unless the dobj is
@@ -3544,6 +3574,9 @@ def _facts_from(reading: Reading, context: list = None) -> list:
     cq = _container_quantity(r)                          # "20 packets of 100 grams" → 20×100 = 2000?
     if cq:                                               # (conjoined of-phrases → a product each)
         return cq
+    pu = _purchase(r, context)                           # "buys 4 candy bars that cost $2 each" → −$8?
+    if pu is not None:
+        return pu
     dq = _distributed_quantity(r)                        # "gave 4 stickers each to 3 friends" → 4×3?
     if dq is not None:
         return [dq]

@@ -3371,5 +3371,32 @@ class TestIncrement126PartitionAggregate(unittest.TestCase):
             ["3 of the apples are red", "4 of the apples are green"], "How many apples are there?"))
 
 
+class TestIncrement127Purchase(unittest.TestCase):
+    """#127 - PURCHASE as a measure-aware money LOSS: "buys 4 candy bars that cost $2 each" → spends
+    4 × $2 = $8, netted against a money baseline ("Todd has $20 … how much LEFT" → 12). One "buy" verb
+    yields two facts that fold oppositely (gain the items +, lose the money −); `_verb_sign` is measure-
+    agnostic, so the money outflow carries the LOSS verb 'spend'. Resolves Todd 12. Tightly gated: a buy
+    verb, exactly one 'each', one price + one count, AND a prior money holding for the buyer (so a
+    multi-item buy clause-split into fragments, which has no baseline, DECLINES). SYNTHETIC strings only."""
+
+    def test_purchase_nets_against_baseline(self):
+        self.assertEqual(reading.solve(
+            "Maya has $30. She buys 3 books that cost $4 each. How much money does she have left?"), 18)
+
+    def test_purchase_multi_item_declines(self):
+        # two purchases ("3 apples … and 2 toys …") → we'd commit only one pair's product → DECLINE
+        self.assertEqual(reading.solve(
+            "Maya has $30. She buys 3 apples for $1 each and 2 toys for $2 each. "
+            "How much does she spend?"), "undetermined")
+
+    def test_purchase_helper_money_loss(self):
+        # the money fact is count × price with the LOSS verb 'spend'; gated on a baseline in context
+        ctx = [reading.Quantity("he", reading.MONEY, 20.0, "have")]
+        facts = reading._purchase(reading.analyze("He buys 4 candy bars that cost $2 each."), ctx)
+        self.assertIn(reading.Quantity("he", reading.MONEY, 8, "spend"), facts)
+        self.assertIsNone(reading._purchase(   # no baseline → None
+            reading.analyze("He buys 4 candy bars that cost $2 each."), []))
+
+
 if __name__ == "__main__":
     unittest.main()
