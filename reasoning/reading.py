@@ -2086,27 +2086,31 @@ def _percent_quantity(reading: Reading, context: list):
 
 
 def _container_quantity(reading: Reading):
-    """A CONTAINMENT quantity — "20 packets OF 100 grams" → 20 × 100 = 2000 grams. Two value-noun pairs
-    straddling "of" (N containers of M units each) multiply; the measure is the INNER unit. None unless a
-    value quantifies a noun on EACH side of an "of"."""
+    """CONTAINMENT quantities — "20 packets OF 100 grams" → 20 × 100 = 2000 grams. A value-noun pair
+    straddles each side of an "of" (N containers of M units each); the product's measure is the INNER unit.
+    CONJOINED of-phrases ("four books of 10 stamps AND six books of 15 stamps") each yield a product,
+    summed at fold time — every "of" pairs with its NEAREST value-noun on each side. A NESTED "of" with no
+    inner count ("100 grams OF sugar") contributes nothing (no value on its right). Returns a LIST (empty
+    if no "of" has a value-noun pair on BOTH sides)."""
     units = reading.units
     verbs = [u for u in units if "verb" in u.features.get("senses", [])      # the MAIN verb — a relative-
              and _key(u.surface) not in ("is", "are", "was", "were")]        # clause copula ("that ARE 4
     subject = _follow(verbs[0], "subject") if len(verbs) == 1 else None       # pounds each") doesn't count
     if subject is None:
-        return None
-    of = next((u for u in units if _key(u.surface) == "of"), None)
-    if of is None:
-        return None
-    oi = units.index(of)
+        return []
+    ofs = [units.index(u) for u in units if _key(u.surface) == "of"]
+    if not ofs:
+        return []
     each_i = next((units.index(u) for u in units if _key(u.surface) == "each"), None)
-    # the of-PHRASE ends at the next preposition after "of" — a value beyond it ("8 pages of a book IN 20
-    # minutes") belongs to a different phrase, NOT the container (the "each" relative clause is allowed in)
-    next_prep = next((units.index(u) for u in units[oi + 1:]
-                      if "preposition" in u.features.get("senses", [])), len(units))
-    right_bound = max(next_prep, each_i + 1) if each_i is not None else next_prep
-
-    def vpair(before: bool):
+    out = []
+    for oi in ofs:
+        # the of-PHRASE ends at the next preposition after THIS "of" (a later "of" bounds it) — a value
+        # beyond it ("8 pages of a book IN 20 minutes") belongs to a different phrase, NOT the container
+        # (the "each" relative clause is allowed in)
+        next_prep = next((units.index(u) for u in units[oi + 1:]
+                          if "preposition" in u.features.get("senses", [])), len(units))
+        right_bound = max(next_prep, each_i + 1) if each_i is not None else next_prep
+        left = right = None
         for u in units:
             if "value" not in u.features.get("senses", []):
                 continue
@@ -2114,18 +2118,18 @@ def _container_quantity(reading: Reading):
             if n is None:
                 continue
             ui, ni = units.index(u), units.index(n)
-            if before and ui < oi and ni < oi:          # "20 PACKETS of …" — count + noun both left
-                return u
-            if not before and oi < ui < right_bound:    # "… of 100 GRAMS" — count + noun right of "of",
-                return u                                # within the of-phrase (or its "each" rel. clause)
-        return None
-
-    v1, v2 = vpair(True), vpair(False)
-    if v1 is None or v2 is None or _follow(v1, "quantifies") is subject:
-        return None                                      # the container can't be the SUBJECT ("FOUR people
-    return Quantity(_entity(subject), _descriptor(_follow(v2, "quantifies")),   # lost a total of 103 kg" is
-                    _compute(f"{_num(v1.features['value'])} * {_num(v2.features['value'])}"),   # not 4×103)
-                    _lemma(verbs[0].surface), _time_at(reading, verbs[0]))
+            if ui < oi and ni < oi:                      # "20 PACKETS of …" — count + noun both left;
+                if left is None or ui > units.index(left):    # keep the one NEAREST "of"
+                    left = u
+            elif oi < ui < right_bound:                  # "… of 100 GRAMS" — count + noun right of "of",
+                if right is None or ui < units.index(right):  # within the of-phrase; keep NEAREST "of"
+                    right = u
+        if left is None or right is None or _follow(left, "quantifies") is subject:
+            continue                                     # the container can't be the SUBJECT ("FOUR people
+        out.append(Quantity(_entity(subject), _descriptor(_follow(right, "quantifies")),   # lost a total of
+                            _compute(f"{_num(left.features['value'])} * {_num(right.features['value'])}"),
+                            _lemma(verbs[0].surface), _time_at(reading, verbs[0])))   # 103 kg" is not 4×103)
+    return out
 
 
 def _distributed_quantity(reading: Reading):
@@ -3157,8 +3161,8 @@ def _facts_from(reading: Reading, context: list = None) -> list:
             and any("noun" in u.features.get("senses", []) for u in r.units):
         return []                                        # percent-of-holding, referent not yet known → defer
     cq = _container_quantity(r)                          # "20 packets of 100 grams" → 20×100 = 2000?
-    if cq is not None:
-        return [cq]
+    if cq:                                               # (conjoined of-phrases → a product each)
+        return cq
     dq = _distributed_quantity(r)                        # "gave 4 stickers each to 3 friends" → 4×3?
     if dq is not None:
         return [dq]
@@ -3301,7 +3305,7 @@ def solve(text: str):
                 or any(_key(u.surface) == "each" for u in rp.units) \
                 or any(isinstance(f, Distribution) for f in (facts_of[i] or [])) \
                 or _relational_age_factor(rp) is not None \
-                or _container_quantity(rp) is not None:   # "20 packets of 100 grams" / "N times as old" —
+                or _container_quantity(rp):   # "20 packets of 100 grams" / "N times as old" —
             continue                                      # the factor is consumed into the derived product
         given |= {u.features["value"] for u in rp.units if "value" in u.features.get("senses", [])}
         given |= {u.features["value"] for u in rp.units if "value" in u.features.get("senses", [])}

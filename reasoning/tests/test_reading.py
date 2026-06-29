@@ -2816,5 +2816,30 @@ class TestIncrement103FractionMultipliers(unittest.TestCase):
                                        "How many apples does Tom have?"), 8)
 
 
+class TestIncrement104ConjoinedContainers(unittest.TestCase):
+    """#104 - CONJOINED container phrases: "N1 C of M1 and N2 C of M2" yields a PRODUCT per "of"
+    (N1xM1 and N2xM2), summed at fold time. Each "of" pairs with its NEAREST value-noun on each
+    side, so the second group is no longer dropped. A NESTED "of" with no inner count
+    ("100 grams of sugar") still produces a SINGLE product (the inner "of" has no right value)."""
+
+    def test_two_count_groups_sum(self):
+        self.assertEqual(reading.solve("Nora has 3 boxes of 8 apples and 2 boxes of 5 apples. "
+                                       "How many apples does Nora have?"), 34)
+
+    def test_two_money_groups_sum(self):
+        self.assertEqual(reading.solve("Leo has 4 bills of 5 dollars and 2 bills of 10 dollars. "
+                                       "How much money does Leo have?"), 40)
+
+    def test_conjoined_learn_yields_two_quantities(self):
+        facts = reading.learn("Nora has 3 boxes of 8 apples and 2 boxes of 5 apples")
+        amounts = sorted(f.amount for f in facts if isinstance(f, reading.Quantity))
+        self.assertEqual(amounts, [10.0, 24.0])
+
+    def test_nested_of_still_single_product(self):
+        # the nested "of sugar" has no count on its right → still one product, unchanged from #75
+        self.assertEqual(reading.learn("A store sells 20 packets of 100 grams of sugar"),
+                         [reading.Quantity("store", ("gram", frozenset()), 2000.0, "sell")])
+
+
 if __name__ == "__main__":
     unittest.main()
