@@ -3280,6 +3280,21 @@ def solve(text: str):
     # didn't fully read).
     if any(d.kind == "unknown-word" for r in readings for d in deficiencies(r)):
         return "undetermined"
+    # GUARD 8 — INVERSION / COUNTERFACTUAL: two shapes the forward fold structurally cannot solve, so it
+    # would fold the literal numbers and commit garbage. Both are honest DECLINES (the safe "only-declines"
+    # shape, like GUARD 7).
+    #  (a) BACKWARD-initial: the question asks for an ORIGINAL value ("how much did she have at first?")
+    #      while premises describe a chain of changes ending in a KNOWN final ("$51 left") — an inversion
+    #      (solve-for-initial), not a forward accumulation. Gold: Isabel 204, Randy 3000.
+    #  (b) COUNTERFACTUAL: a premise in the irrealis mood ("if X had $N more, she WOULD have $M") states a
+    #      HYPOTHETICAL state, not an asserted holding; folding its numbers as real quantities is unsound.
+    #      Gold: Beth/Jan 150, Sally/Jolly 150. The modal "would" is the irrealis marker.
+    ql = question.lower()
+    if any(p in ql for p in ("at first", "to begin with", "to start with",
+                             "originally", "at the start", "in the beginning")):
+        return "undetermined"
+    if any("would" in [_key(w) for w in p.lower().split()] for p in premises):
+        return "undetermined"
     discourse, context = [], []
     facts_of = [None] * len(premises)                    # per-premise facts (None = not yet resolved)
     for i, p in enumerate(premises):                     # first pass: sequential, builds the discourse

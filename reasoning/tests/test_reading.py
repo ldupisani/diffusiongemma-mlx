@@ -2887,5 +2887,32 @@ class TestIncrement106SlashFraction(unittest.TestCase):
                                        "3/10 to her dad. How much money does Ann have left?"), "undetermined")
 
 
+class TestIncrement107InversionCounterfactualDeclines(unittest.TestCase):
+    """#107 - GUARD 8: two shapes the forward fold structurally cannot solve, so it would commit garbage.
+    Both are honest DECLINES (the only-ever-declines shape, like the negative-answer guard).
+    (a) BACKWARD-initial: the question asks for an ORIGINAL value ("how much did she have at first?")
+        given a KNOWN final state — an inversion (solve-for-initial), not a forward accumulation.
+    (b) COUNTERFACTUAL: a premise in the irrealis mood ("if X had $N more, she WOULD have $M") states a
+        hypothetical, not an asserted holding; folding its numbers as real quantities is unsound."""
+
+    def test_backward_initial_question_declines(self):
+        self.assertEqual(reading.solve("Mary had some money. She spent 5 dollars and gave away 3 dollars. "
+                                       "She has 10 dollars left. How much money did Mary have at first?"),
+                         "undetermined")
+
+    def test_originally_phrasing_declines(self):
+        self.assertEqual(reading.solve("Tom had some apples. He ate 4 apples. He has 6 apples left. "
+                                       "How many apples did Tom have originally?"), "undetermined")
+
+    def test_counterfactual_would_have_declines(self):
+        self.assertEqual(reading.solve("If Mary had 5 dollars more, she would have 20 dollars. "
+                                       "How much money does Mary have?"), "undetermined")
+
+    def test_forward_question_unaffected(self):
+        # a plain forward accumulation that says neither "at first" nor "would" still commits
+        self.assertEqual(reading.solve("Tom has 5 apples. He buys 4 apples. "
+                                       "How many apples does Tom have?"), 9)
+
+
 if __name__ == "__main__":
     unittest.main()
