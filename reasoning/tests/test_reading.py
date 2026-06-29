@@ -3126,5 +3126,26 @@ class TestIncrement117RelationalRate(unittest.TestCase):
         self.assertEqual((rate.amount, rate.per_unit), (7.2, "hour"))
 
 
+class TestIncrement118FirstYearException(unittest.TestCase):
+    """#118 - a FIRST-PERIOD exception: "teaches 50 students a year … in 10 years … in the first year he
+    only teaches 40" → 40 + 50×(10−1) = 490. The "first <time-unit>" override Quantity is flagged
+    first_period; the answer's rate×duration path uses override + rate×(duration−1) instead of rate×N."""
+
+    def test_first_year_exception(self):
+        self.assertEqual(reading.solve(
+            "Adam teaches 50 students a year. How many students will Adam teach in 10 years "
+            "if in the first year he only teaches 40 students?"), 490)
+
+    def test_first_period_flag_set(self):
+        quants = [q for q in reading.learn("in the first year he only teaches 40 students", [], [])
+                  if isinstance(q, reading.Quantity)]
+        self.assertTrue(quants and quants[0].first_period)
+
+    def test_plain_rate_duration_no_exception(self):
+        # no "first year" override → plain rate×duration
+        self.assertEqual(reading.solve("Adam teaches 50 students a year. "
+                                       "How many students will Adam teach in 10 years?"), 500)
+
+
 if __name__ == "__main__":
     unittest.main()

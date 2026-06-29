@@ -1731,6 +1731,9 @@ class Quantity:
                           # multiplier (Armand = 1/3 × Amber), not stated outright. An implicit referent
                           # ("Ella worked twice as long") prefers the most-recent NON-derived baseline over
                           # a just-derived sibling. compare=False so fact equality (and tests) ignore it.
+    first_period: bool = field(default=False, compare=False)   # True for a "in the FIRST <time-unit> …"
+                          # override ("in the first year he only teaches 40") — year 1 differs from the
+                          # rate, so a rate×duration answer becomes override + rate×(duration−1).
 
 
 @dataclass(frozen=True)
@@ -2328,6 +2331,8 @@ def _quantity(reading: Reading):
     if any(b - a == 1 for a, b in zip(vi, vi[1:])):
         return []
     ent, lemma, when = _entity(subject), _lemma(verbs[0].surface), _time_at(reading, verbs[0])
+    first = any("noun" in u.features.get("senses", []) and _descriptor(u)[0] in TIME_UNITS   # "in the FIRST
+               and "first" in u.features.get("attributes", []) for u in reading.units)       # year …" override
     out = []
     for u in reading.units:
         if "value" not in u.features.get("senses", []):
@@ -2343,7 +2348,9 @@ def _quantity(reading: Reading):
                     # so _time_offset can't separate them. Don't emit a (wrong) current-age fact — leave it
                     # unknown so a relational age over it DECLINES rather than committing off a stale age
                     # (Diana "twice as old as Grace … turned 3 a year ago" was committing 2×3=6).
-                out.append(Quantity(ent, _descriptor(noun), u.features["value"], lemma, when))
+                fp = first and _descriptor(noun)[0] not in TIME_UNITS   # flag the OVERRIDDEN count (40
+                out.append(Quantity(ent, _descriptor(noun), u.features["value"], lemma, when,   # students),
+                                    first_period=fp))                                           # not a duration
     return out
 
 
@@ -2828,6 +2835,19 @@ def answer(question: str, context: list, discourse: list = None):
                     folded = [f"{_verb_sign(f.verb)} * {_num(f.amount)}" for f in qs]
                 else:
                     folded = [_num(f.amount) for f in qs if f.verb == q_verb]   # events of THIS verb
+                # FIRST-PERIOD EXCEPTION: "teaches 50 a year … in 10 years … the FIRST year only 40" →
+                # override + rate×(duration−1) = 40 + 50×9. The override (40) is year 1; the rate covers
+                # the rest. (Without an override the rate×duration path below handles the plain case.)
+                override = next((f for f in qs if f.verb == q_verb and f.first_period), None)
+                rate = next((f for f in context if isinstance(f, Rate) and f.entity == ent
+                             and f.measure == query and f.verb == q_verb), None)
+                if override is not None and rate is not None:
+                    dur = next((u.features["value"] for u in r.units if "value" in u.features.get("senses", [])
+                                and _follow(u, "quantifies") is not None
+                                and _descriptor(_follow(u, "quantifies"))[0] == rate.per_unit), None)
+                    if dur is not None:
+                        terms.append(f"{_num(override.amount)} + {_num(rate.amount)} * ({_num(dur)} - 1)")
+                        continue
                 if folded:
                     terms.extend(folded)
                     continue
