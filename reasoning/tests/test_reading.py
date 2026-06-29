@@ -3303,5 +3303,30 @@ class TestIncrement124DaypartWeekScaling(unittest.TestCase):
         self.assertEqual(reading.solve(self._DROID + "How many bags of coffee beans does he use?"), 18)
 
 
+class TestIncrement125FutureAndComparativeAge(unittest.TestCase):
+    """#125 - age-shift: a FUTURE age with a time displacement + an additive comparative age. "In two
+    years, Claire will be 20 years old" → Claire_now = 20−2 = 18 (the offset and the age share 'year', so
+    the offset is read off the "in"-preposition's object, not _time_offset). "Jessica is six years older
+    than Claire" → 18+6 = 24. Resolves Jessica (was 28: it folded 2+20+6)."""
+
+    def test_future_age_offset_first(self):
+        self.assertEqual(reading._future_age(reading.analyze("In two years, Claire will be 20 years old.")),
+                         reading.Quantity("claire", ("year", frozenset()), 18, "be"))
+
+    def test_future_age_offset_last(self):
+        self.assertEqual(reading._future_age(reading.analyze("Jennifer will be 30 years old in ten years.")),
+                         reading.Quantity("jennifer", ("year", frozenset()), 20, "be"))
+
+    def test_comparative_age(self):
+        ctx = [reading.Quantity("claire", ("year", frozenset()), 18, "be")]
+        self.assertEqual(reading._comparative_age(reading.analyze("Jessica is six years older than Claire."), ctx),
+                         reading.Quantity("jessica", ("year", frozenset()), 24, "be"))
+
+    def test_jessica_solves(self):
+        self.assertEqual(reading.solve(
+            "Jessica is six years older than Claire. In two years, Claire will be 20 years old. "
+            "How old is Jessica now?"), 24)
+
+
 if __name__ == "__main__":
     unittest.main()

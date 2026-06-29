@@ -1836,6 +1836,56 @@ def _relational_age(reading: Reading, context: list):
     return Quantity(_entity(subj), ("year", frozenset()), x_now, "be")
 
 
+def _future_age(reading: Reading):
+    """A FUTURE age stated with a time displacement: "(In N years,) E will be X years old" / "E will be X
+    years old in N years" → E's age NOW = X − N. The offset and the age share the 'year' token (so
+    _time_offset can't separate them); the offset is the value quantifying the "in"/"after" preposition's
+    object, the age is the OTHER year-value (by 'old'). Future tense ("will") required."""
+    units = reading.units
+    if not any(_key(u.surface) == "old" for u in units) \
+            or not any(_key(u.surface) == "will" and "auxiliary" in u.features.get("senses", []) for u in units):
+        return None
+    off_prep = next((u for u in units if "preposition" in u.features.get("senses", [])
+                     and _key(u.surface) in ("in", "after")), None)
+    off_obj = _follow(off_prep, "object") if off_prep is not None else None
+    if off_obj is None or _descriptor(off_obj)[0] != "year":
+        return None
+    off_val = next((u.features["value"] for u in units if "value" in u.features.get("senses", [])
+                    and _follow(u, "quantifies") is off_obj), None)
+    age_val = next((u.features["value"] for u in units if "value" in u.features.get("senses", [])
+                    and _follow(u, "quantifies") is not None and _follow(u, "quantifies") is not off_obj
+                    and _descriptor(_follow(u, "quantifies"))[0] == "year"), None)
+    subj = next((u for u in units if "name" in u.features.get("senses", [])), None)
+    if off_val is None or age_val is None or subj is None:
+        return None
+    return Quantity(_entity(subj), ("year", frozenset()),
+                    _compute(f"{_num(age_val)} - {_num(off_val)}"), "be")
+
+
+def _comparative_age(reading: Reading, context: list):
+    """A COMPARATIVE age — "X is N years older/younger than Y" → X's age = Y's age ± N. Defers (None) until
+    Y's age is known (the fixpoint then resolves it). Distinct from _relational_age's MULTIPLICATIVE "N
+    times as old"; this is the ADDITIVE year-offset form."""
+    units = reading.units
+    comp = next((u for u in units if "comparative" in u.features.get("senses", [])
+                 and _key(u.surface) in ("older", "younger")), None)
+    than = next((u for u in units if _key(u.surface) == "than"), None)
+    y = _follow(than, "object") if than is not None else None
+    val = next((u.features["value"] for u in units if "value" in u.features.get("senses", [])
+                and _follow(u, "quantifies") is not None
+                and _descriptor(_follow(u, "quantifies"))[0] == "year"), None)
+    subj, _ = _copula_args(reading)
+    if comp is None or y is None or val is None or subj is None \
+            or "name" not in y.features.get("senses", []):
+        return None
+    y_age = _holdings(_entity(y), ("year", frozenset()), context)
+    if y_age is None:
+        return None                                       # Y's age unknown → defer to the fixpoint
+    op = "+" if _key(comp.surface) == "older" else "-"
+    return Quantity(_entity(subj), ("year", frozenset()),
+                    _compute(f"{_num(y_age)} {op} {_num(val)}"), "be")
+
+
 def _relational_quantity(reading: Reading, context: list):
     """A DERIVED quantity — "Mary has twice as many" → `factor × referent`, the referent being the most
     recent prior Quantity (resolved like coreference, but for a quantity). The referent supplies the
@@ -3416,6 +3466,12 @@ def _facts_from(reading: Reading, context: list = None) -> list:
                 coll = _follow(u, "quantifies")
                 if coll is not None:
                     return [_descriptor(coll)] * int(u.features["value"])
+    fa = _future_age(r)                                  # "(in N years) E will be X years old" → E_now=X−N?
+    if fa is not None:
+        return [fa]
+    ca = _comparative_age(r, context)                    # "X is N years older than Y" → Y_age ± N?
+    if ca is not None:
+        return [ca]
     ra = _relational_age(r, context)                     # "X is N times as old as Y" → X_age = N × Y_age?
     if ra is not None:
         return [ra]
@@ -3726,7 +3782,9 @@ def solve(text: str):
                 or any(_key(u.surface) == "each" for u in rp.units) \
                 or any(isinstance(f, Distribution) for f in facts_i) \
                 or _relational_age_factor(rp) is not None \
-                or _container_quantity(rp):   # "20 packets of 100 grams" / "N times as old" —
+                or _future_age(rp) is not None \
+                or _container_quantity(rp):   # "20 packets of 100 grams" / "N times as old" /
+                # "in 2 years … 20 years old" (20−2 — offset+age consumed into the now-age) —
             continue                                      # the factor is consumed into the derived product
             # NOTE: a slash-fraction partitive ("3/8 of his money") is deliberately NOT exempt here — its
             # raw value (0.375) being flagged as an unused given is what makes a multi-step fraction CHAIN
