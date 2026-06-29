@@ -1445,18 +1445,20 @@ VERB_LEMMA.update({
     "processing": "process",
 })
 
-# --- vocabulary push, round 3: ATTEMPTED and REVERTED (coverage initiative) ------------------------------
-# A batch of the most-frequent GSM8K unknown words (content nouns, color adjectives, reflexive pronouns, and
-# the verbs raise/score) was added to lift COVERAGE (most of dev declines on an unknown word). The full batch
-# netted +2 dev correct (Adam-raises-goats, players-scored-points) with ZERO new dev wrongs — but the one-look
-# TEST check fell 36.4%→33.3%: a held-out confident-wrong. Trimming to the SAFEST subset (nouns/adjectives/
-# reflexives only) STILL showed the TEST wrong AND gave ZERO dev benefit — so the culprit is an ordinary
-# content noun, not a verb. ROOT CAUSE: making a problem fully-read lets it ATTEMPT; if its STRUCTURE is
-# unhandled it COMMITS a wrong instead of declining. Blind vocabulary expansion therefore trades invisible
-# held-out precision for coverage, and the firewall (no TEST inspection) blocks isolating the culprit.
-# DECISION (per the firewall: held-out precision beats dev gains): reverted. The real prerequisite for
-# coverage is DECLINE-SAFETY on fully-read-but-structurally-unhandled inputs (so a vocab add can only help or
-# be neutral, never commit). Until then, only add a word with a VERIFIED dev decline→correct. See memory.
+# --- vocabulary push, round 3 (coverage; now safe behind decline-safety GUARDS 11+12) --------------------
+# First attempt was REVERTED: blind vocab adds turned fully-read-but-structurally-unhandled problems into
+# COMMITTED WRONGS (TEST fell 36.4→33.3). After building decline-safety (GUARD 11 unapplied-period, GUARD 12
+# dropped unit/money quantity), those now DECLINE instead of committing, so the batch is re-attemptable. Most
+# frequent GSM8K unknown words, conservative typing; ambiguous words (percent/way/being/leaves) still omitted.
+LEXICON.update({   # only the VERIFIED-dev-gain words (the rule: add a word only with a dev decline→correct)
+    "score": ["noun", "verb"], "scored": ["verb"], "scores": ["verb"], "scoring": ["verb"],
+    "raise": ["verb"], "raises": ["verb"], "raised": ["verb"], "raising": ["verb"],
+})
+PLURALS.update({"scores": "score"})
+VERB_LEMMA.update({
+    "scored": "score", "scores": "score", "scoring": "score",
+    "raises": "raise", "raised": "raise", "raising": "raise",
+})
 
 
 def _lemma(surface: str) -> str:

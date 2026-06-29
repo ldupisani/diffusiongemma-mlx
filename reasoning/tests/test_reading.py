@@ -3554,5 +3554,25 @@ class TestIncrement134DroppedUnitQuantity(unittest.TestCase):
         self.assertFalse(reading._dropped_unit_quantity(prem, q))
 
 
+class TestIncrement135SafeVocabGain(unittest.TestCase):
+    """#135 - COVERAGE (first firewall-safe vocab gain). After decline-safety GUARDS 11+12, vocabulary can
+    be re-added under the rule "only a word with a VERIFIED dev decline→correct". The verbs score/raise each
+    unlocked a real dev solve (players-scored-points, Adam-raises-goats) with ZERO dev regression and TEST
+    held at 40.0% — unlike the blind batch (groundwork nouns lowered held-out precision). SYNTHETIC."""
+
+    def test_scored_solves(self):
+        self.assertEqual(reading.solve(
+            "Mary scored 8 points. John scored 5 more points than Mary. How many points did John score?"), 13)
+
+    def test_score_raise_have_verb_senses(self):
+        for w in ("score", "scored", "raise", "raised"):
+            self.assertIn("verb", reading.LEXICON.get(w, []), w)
+
+    def test_raise_sentence_is_fully_read(self):
+        # "raise" was a frequent unknown word; a "raise" sentence now has no unknown-word deficiency
+        rd = reading.analyze("Adam and Andrew raise goats.")
+        self.assertFalse([d for d in reading.deficiencies(rd) if d.kind == "unknown-word"])
+
+
 if __name__ == "__main__":
     unittest.main()
