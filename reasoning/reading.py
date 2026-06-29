@@ -2097,6 +2097,19 @@ def _percent_quantity(reading: Reading, context: list):
                      if isinstance(f, Quantity) and f.measure in measures), None)
     if referent is None:
         return None
+    # CROSS-ENTITY "N% more/less THAN X" ("Mark has 50% more points than Eric") → the FULL derived amount
+    # X × (1 ± pct) = 6 × 1.5 = 9, not just the portion (0.5×6=3). Gated on a comparative WITH a "than"
+    # standard: a SAME-entity "puts 20% more money" (comparative, NO than-standard) keeps the portion
+    # reading below, since its base is the entity's own holding that the fold already carries.
+    comp = next((u for u in reading.units if "comparative" in u.features.get("senses", [])), None)
+    std = _follow(comp, "standard") if comp is not None else None
+    if std is not None and "name" in std.features.get("senses", []):   # standard is ANOTHER ENTITY ("than
+        op = "-" if COMPARATIVE_SIGN.get(_key(comp.surface), 1) < 0 else "+"   # Eric"), not the measure noun
+        ref = next((f for f in reversed(context or [])                 # ("20% more MONEY"): the full derived
+                    if isinstance(f, Quantity) and f.entity == _entity(std)), referent)   # amount X×(1±pct)
+        return Quantity(_entity(subject), referent.measure,
+                        _compute(f"{_num(ref.amount)} * (1 {op} {_num(pct.features['value'])})"),
+                        _lemma(verbs[0].surface), derived=True)
     return Quantity(_entity(subject), referent.measure,
                     _compute(f"{_num(pct.features['value'])} * {_num(referent.amount)}"),
                     _lemma(verbs[0].surface))

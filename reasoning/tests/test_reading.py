@@ -3019,5 +3019,27 @@ class TestIncrement112ElidedTransferObjectDeclines(unittest.TestCase):
                                        "How many apples does Tom have?"), 7)
 
 
+class TestIncrement113CrossEntityPercentComparative(unittest.TestCase):
+    """#113 - "Mark has 50% more points than Eric" (Eric=6) is a CROSS-ENTITY comparative → the FULL
+    derived amount 6×(1+0.5)=9, not just the portion 0.5×6=3. Gated on the comparative's standard being
+    a NAME (another entity), so the SAME-entity "puts 20% more money" (standard = the measure noun) keeps
+    its portion reading (the base is the entity's own holding the fold already carries)."""
+
+    def test_cross_entity_percent_more(self):
+        self.assertEqual(reading.solve("Eric has 6 points. Mark has 50% more points than Eric. "
+                                       "How many points does Mark have?"), 9)
+
+    def test_cross_entity_percent_chain_total(self):
+        self.assertEqual(reading.solve(
+            "Samanta has 8 more points than Mark, and Mark has 50% more points than Eric. "
+            "Eric has 6 points. How many points do Samanta, Mark, and Eric have in total?"), 32)
+
+    def test_same_entity_percent_more_unchanged(self):
+        # "puts 20% more money" — standard is the measure noun, not another entity → portion folded onto
+        # the existing $200 holding: 200 + 0.2×200 = 240
+        self.assertEqual(reading.solve("Susie has $200 in her piggy bank. If she puts 20% more money "
+                                       "into her piggy bank, how much money will she have?"), 240)
+
+
 if __name__ == "__main__":
     unittest.main()
