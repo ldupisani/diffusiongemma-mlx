@@ -2935,5 +2935,25 @@ class TestIncrement108DistributiveFrequencyDeclines(unittest.TestCase):
                                        "How many apples does Tom have?"), 8)
 
 
+class TestIncrement109LossFrameComparative(unittest.TestCase):
+    """#109 - a comparative whose standard is a LOSS ("Veronica lost 1.5 pounds more than Seth") must
+    compare MAGNITUDES: _holdings nets a loss to −17.5, but stored amounts (and the "in total" sum) are
+    positive magnitudes, so the referent is expressed in the SUBJECT's frame (×verb-sign) → 17.5+1.5=19,
+    not −17.5+1.5=−16. Gain/'have' comparatives and 'less than' are unaffected."""
+
+    def test_loss_frame_more_than(self):
+        self.assertEqual(reading.solve(
+            "Seth lost 17 pounds. Jerome lost three times that many pounds and Veronica lost 2 pounds "
+            "more than Seth. How many pounds did the 3 people lose in total?"), 17 + 51 + 19)
+
+    def test_have_frame_more_than_unaffected(self):
+        self.assertEqual(reading.solve("Tom has 10 apples. Bob has 5 more apples than Tom. "
+                                       "How many apples does Bob have?"), 15)
+
+    def test_less_than_unaffected(self):
+        self.assertEqual(reading.solve("Martha has 68 apples. Tim has 30 less apples than Martha. "
+                                       "How many apples does Tim have?"), 38)
+
+
 if __name__ == "__main__":
     unittest.main()

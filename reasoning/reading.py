@@ -1940,12 +1940,14 @@ def _comparative_quantity(reading: Reading, context: list):
         if noun is None:
             return None
         measure = _descriptor(noun)
-    if standard is not None:                             # explicit "… than Y" — Y's holdings
-        referent = _holdings(_entity(standard), measure, context or [])
-    else:                                                # IMPLICIT standard — "10 years less" (than the
-        referent = next((f.amount for f in reversed(context or [])   # value just stated): the most recent
-                         if isinstance(f, Quantity) and f.measure == measure   # Quantity of this measure
-                         and f.amount is not None), None)
+    if standard is not None:                             # explicit "… than Y" — Y's holdings, but expressed
+        referent = _holdings(_entity(standard), measure, context or [])   # in the SUBJECT's frame: _holdings
+        if referent is not None:                         # is signed (a loss nets −17.5), while stored amounts
+            referent *= _verb_sign(_lemma(verbs[-1].surface))   # are magnitudes — so a loss compared with a
+    else:                                                # loss ("lost 1.5 more than Seth") compares MAGNITUDES
+        referent = next((f.amount for f in reversed(context or [])   # (17.5+1.5=19, not −17.5+1.5). IMPLICIT
+                         if isinstance(f, Quantity) and f.measure == measure   # standard — "10 years less"
+                         and f.amount is not None), None)            # — is already a stored magnitude.
     if referent is None:
         return None                                      # standard's count unknown (e.g. forward ref)
     op = "-" if COMPARATIVE_SIGN.get(_key(comp.surface), 1) < 0 else "+"   # younger/less → −, older/more → +
