@@ -3252,5 +3252,31 @@ class TestIncrement122RelationalSpeedChain(unittest.TestCase):
         self.assertIsNone(reading._rate_relations(reading.analyze("Carole reads as much as Anna.")))
 
 
+class TestIncrement123PerOccurrenceChain(unittest.TestCase):
+    """#123 - Sam: a chained per-occurrence rate + duration. "For every sandwich that he eats, Sam eats
+    four apples" → Rate(4 apple per sandwich); "10 sandwiches every day for one week" → 10/day × 7 days
+    (week→day) = 70 sandwiches; 70 × 4 = 280 apples. The per-occurrence sentence stays one clause; "he"
+    binds to Sam via the discourse name-registration; the rate_duration synth chains both steps."""
+
+    def test_per_occurrence_rate_parse(self):
+        rate = reading._per_occurrence_rate(reading.analyze(
+            "For every sandwich that he eats, Sam eats four apples."))
+        self.assertEqual(rate, reading.Rate("sam", 4, ("apple", frozenset()), "sandwich", "eat", 1))
+
+    def test_for_duration_skips_rate_measure(self):
+        # "for 8 hours a day" — 8 hours is the rate value, not a duration
+        rate = reading.Rate("james", 8.0, ("hour", frozenset()), "day", "rent", 1)
+        self.assertIsNone(reading._for_duration(reading.analyze("He rents it for 8 hours a day"), rate))
+
+    def test_sam_solves(self):
+        self.assertEqual(reading.solve(
+            "For every sandwich that he eats, Sam eats four apples. If he eats 10 sandwiches every day "
+            "for one week, how many apples does he eat?"), 280)
+
+    def test_convertible_duration_unit(self):
+        self.assertEqual(reading.solve("Sam makes 10 toys every day for one week. "
+                                       "How many toys does he make?"), 70)
+
+
 if __name__ == "__main__":
     unittest.main()
