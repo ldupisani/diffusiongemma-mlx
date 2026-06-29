@@ -3885,6 +3885,34 @@ def _dropped_unit_quantity(premise_readings: list, question_reading: Reading) ->
     return any(n not in computed for n in need)
 
 
+def _unapplied_multi_rate(premise_readings: list) -> bool:
+    """DECLINE-SAFETY (GUARD 13): a MULTI-RATE purchase/charge we don't compose → decline. Fires when a
+    premise pairs a per-item price ("$P each / per <noun>") with an item COUNT that never reached the
+    computation ("three movie tickets for $12 each" → 3×12 dropped, only 12 added), OR when the premises
+    carry ≥2 distinct per-item prices (a priced list — "$a each … $b per packet …" — we'd sum without the
+    per-item quantities). An "each/per" price is what makes a nearby count OPERATIVE (vs a bare enumeration
+    count "3 snakes", which has no price → never triggers). Catches the multi-rate residue GUARD 12 misses
+    (those prices ARE summed, so no money value is 'dropped'; the error is the unapplied counts)."""
+    computed = set()
+    for prog, _res in ARITHMETIC_LOG:
+        computed |= {round(float(m), 6) for m in re.findall(r"\d+\.?\d*", prog)}
+    per_item_prices = 0
+    for rd in premise_readings:
+        money = [u for u in rd.units if u.features.get("measure") == MONEY]
+        has_each = any(_key(u.surface) in ("each", "per") for u in rd.units)
+        if not (money and has_each):
+            continue
+        per_item_prices += len(money)
+        for u in rd.units:                               # (a) a count linked to the price, never applied
+            if "value" in u.features.get("senses", []) and u.features.get("value") is not None \
+                    and u.features.get("measure") != MONEY:
+                qn = _follow(u, "quantifies")
+                if qn is not None and _descriptor(qn)[0] not in UNIT_NOUNS \
+                        and round(float(u.features["value"]), 6) not in computed:
+                    return True
+    return per_item_prices >= 2                           # (b) a multi-rate priced list
+
+
 def _container_giveaway(premises: list, question: str, context: list):
     """EQUAL-SPLIT into containers, then GIVE some containers away → the contents lost. "28 marbles … into
     4 bags … the same number in each bag … gives one bag away … how many marbles left?" → per-bag = 28/4 =
@@ -4126,6 +4154,12 @@ def solve(text: str):
     # guard underpinning vocabulary growth: a fully-read but partially-folded problem declines, never commits.
     if part is None and isinstance(result, (int, float)) and not isinstance(result, bool) \
             and _dropped_unit_quantity(readings[:len(premises)], readings[-1]):
+        return "undetermined"
+    # GUARD 13 — MULTI-RATE purchase/charge (decline-safety): a per-item price with an unapplied item count
+    # ("three tickets for $12 each" → 3×12 dropped) or ≥2 per-item prices (a priced list) → we don't compose
+    # the per-item products → DECLINE. The residue GUARD 12 misses (the prices are summed, so none is dropped).
+    if part is None and isinstance(result, (int, float)) and not isinstance(result, bool) \
+            and _unapplied_multi_rate(readings[:len(premises)]):
         return "undetermined"
     if result == "undetermined" and _underspecified_distribution(context) is not None:
         return [Deficiency("under-specified", None,                 # ask, don't silently decline: the

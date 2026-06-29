@@ -3574,5 +3574,27 @@ class TestIncrement135SafeVocabGain(unittest.TestCase):
         self.assertFalse([d for d in reading.deficiencies(rd) if d.kind == "unknown-word"])
 
 
+class TestIncrement136MultiRateDecline(unittest.TestCase):
+    """#136 - DECLINE-SAFETY (GUARD 13): a MULTI-RATE purchase/charge we don't compose declines. Fires on a
+    per-item price with an unapplied item count ("three movie tickets for $12 each" → 3×12 dropped) or on
+    ≥2 distinct per-item prices (a priced list). This is the multi-rate residue GUARD 12 misses (those
+    prices ARE summed, so no money value is 'dropped' — the error is the unapplied per-item quantities). A
+    single applied purchase (Todd: 4×$2) is unaffected. dev unchanged, TEST holds 40.0%. SYNTHETIC."""
+
+    def test_multi_item_unapplied_count_declines(self):
+        self.assertEqual(reading.solve(
+            "Jackson buys a computer game for $66 and three movie tickets for $12 each. "
+            "How much did he pay in total?"), "undetermined")
+
+    def test_two_per_item_prices_declines(self):
+        self.assertEqual(reading.solve(
+            "A store sells pens at $2 each and books at $5 each. "
+            "How much does one pen and one book cost?"), "undetermined")
+
+    def test_single_applied_purchase_unaffected(self):
+        self.assertEqual(reading.solve(
+            "Todd has $20. He buys 4 candy bars that cost $2 each. How much money does Todd have left?"), 12)
+
+
 if __name__ == "__main__":
     unittest.main()
