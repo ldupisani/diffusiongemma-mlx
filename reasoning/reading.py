@@ -3310,6 +3310,23 @@ def solve(text: str):
     # problem in dev already declines on other grounds; this makes the decline uniform. Gold: Maria 6.
     if any(p in " ".join(premises).lower() for p in ("every time", "each time")):
         return "undetermined"
+    # GUARD 10 — ELIDED TRANSFER OBJECT: "gave 12 to his brother, 9 to his sister" — the value quantifies
+    # the RECIPIENT (the noun that is the object of "to"), because the transferred object was elided ("12
+    # [boxes] to his brother"). We then attach the count to the recipient (measure='brother'), so the give
+    # never reduces the real holding and the gross commits (Sonny: 45 with the 12/9/7 gives lost). The
+    # object is unrecoverable here, so DECLINE. A stated object ("gave 12 BOXES to his brother": 12
+    # quantifies 'boxes', not the to-object) is unaffected.
+    for rp in readings[:len(premises)]:
+        tos = [(rp.units.index(u), u) for u in rp.units
+               if "preposition" in u.features.get("senses", []) and _key(u.surface) == "to"]
+        for vi, u in enumerate(rp.units):
+            if "value" in u.features.get("senses", []):
+                qn = _follow(u, "quantifies")
+                # the value must PRECEDE its "to" (the transferred amount with the object elided —
+                # "12 [boxes] to his brother") and quantify that "to"'s object. A value AFTER "to"
+                # ("to 3 friends", "to 48 of her friends") is a RECIPIENT COUNT, not an elided object.
+                if qn is not None and any(vi < ti and _follow(t, "object") is qn for ti, t in tos):
+                    return "undetermined"
     discourse, context = [], []
     facts_of = [None] * len(premises)                    # per-premise facts (None = not yet resolved)
     for i, p in enumerate(premises):                     # first pass: sequential, builds the discourse

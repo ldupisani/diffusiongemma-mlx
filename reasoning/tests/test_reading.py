@@ -2996,5 +2996,28 @@ class TestIncrement111ComparativeExemptionRequiresQuantity(unittest.TestCase):
                                        "How much money do they have together?"), 200)
 
 
+class TestIncrement112ElidedTransferObjectDeclines(unittest.TestCase):
+    """#112 - GUARD 10: "gave 12 to his brother, 9 to his sister" — the value PRECEDES "to" and quantifies
+    that "to"'s object (the recipient), because the transferred object was elided ("12 [boxes] to his
+    brother"). The count then attaches to the recipient, so the give never reduces the real holding and
+    the gross commits (Sonny: 45). The object is unrecoverable → DECLINE. A recipient COUNT after "to"
+    ("to 3 friends") or a stated object ("gave 12 boxes to …") is unaffected."""
+
+    def test_elided_transfer_object_declines(self):
+        self.assertEqual(reading.solve(
+            "Sonny received 45 boxes of cookies. He gave 12 to his brother, 9 to his sister, "
+            "and he gave 7 to his cousin. How many boxes were left for him?"), "undetermined")
+
+    def test_recipient_count_after_to_still_solves(self):
+        # "to 3 friends" — the value is a recipient COUNT (after "to"), not an elided object → solves
+        self.assertEqual(reading.solve("Colton gave 4 stickers each to 3 friends. "
+                                       "How many stickers did Colton give?"), 12)
+
+    def test_stated_transfer_object_still_solves(self):
+        # "gave 3 apples to his brother" — 3 quantifies 'apples' (not the to-object) → unaffected
+        self.assertEqual(reading.solve("Tom has 10 apples. He gave 3 apples to his brother. "
+                                       "How many apples does Tom have?"), 7)
+
+
 if __name__ == "__main__":
     unittest.main()
