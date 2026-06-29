@@ -1981,7 +1981,7 @@ def _rate(reading: Reading):
     rate). The measure is a self-measuring money value, or the noun the rate value quantifies. Else None."""
     units = reading.units
     per = next((u for u in units if "per" in u.features.get("senses", [])), None)
-    rate_val = unit = None
+    rate_val = unit = rate_noun = None
     per_amount = 1
     if per is not None:                                  # explicit "per"
         rate_val, unit = _follow(per, "rate"), _follow(per, "unit")
@@ -1994,12 +1994,15 @@ def _rate(reading: Reading):
             if "measure" in prev.features:               # "$12 an hour"
                 rate_val, unit = prev, units[k + 1]
                 break
-            if "noun" in prev.features.get("senses", []):   # "20 pages a day" — the value quantifying prev
-                v = next((x for x in units if "value" in x.features.get("senses", [])
-                          and _follow(x, "quantifies") is prev), None)
+            if "noun" in prev.features.get("senses", []):   # "20 pages a day" — the value quantifying prev,
+                run, j = [], k - 1                           # or, for a COMPOUND noun ("7 apple pies a day"),
+                while j >= 0 and "noun" in units[j].features.get("senses", []):  # any noun in the contiguous
+                    run.append(units[j]); j -= 1             # run ending at prev (the value quantifies the
+                v = next((x for x in units if "value" in x.features.get("senses", [])   # head 'apple', the
+                          and _follow(x, "quantifies") in run), None)                   # rate-noun is 'pies')
                 if v is not None:
-                    rate_val, unit = v, units[k + 1]
-                    break
+                    rate_val, unit, rate_noun = v, units[k + 1], prev   # measure is the rate-noun (prev),
+                    break                                               # not what the value quantifies
     if rate_val is None:                                 # "N <measure> in M <time-unit>" — a per-M rate
         inp = next((u for u in units if _key(u.surface) == "in"), None)
         tu = _follow(inp, "object") if inp is not None else None
@@ -2019,8 +2022,8 @@ def _rate(reading: Reading):
         return None
     if "measure" in rate_val.features:                   # "$12" — a self-measuring money rate
         measure = rate_val.features["measure"]
-    else:                                                # "20 PAGES a day" — the noun the value quantifies
-        mnoun = _follow(rate_val, "quantifies")
+    else:                                                # "20 PAGES a day" — the noun the value quantifies,
+        mnoun = rate_noun or _follow(rate_val, "quantifies")   # or the compound rate-noun ("apple PIES")
         measure = _descriptor(mnoun) if mnoun is not None else None
     if measure is None:
         return None
@@ -3091,9 +3094,32 @@ def _synth_equal_split(facts: list, readings: list, agenda: set) -> list:
     return out
 
 
+def _synth_rate_duration(facts: list, readings: list, agenda: set) -> list:
+    """A Rate accumulated over a stated DURATION → a concrete Quantity: "makes 7 pies a day … does this
+    for 12 days" → Quantity(cooper, pie, 7×12, make), which then folds with later events (− eaten …).
+    Fires when a same-entity Quantity counts the rate's per_unit (e.g. "12 days" for a per-day rate); a
+    DIFFERENT-measure duration only (so the rate's own count-noun isn't mistaken for its duration). The
+    derived total carries the rate's verb, so holdings sees production, not a stray day-count."""
+    out = []
+    for rt in facts:
+        if not isinstance(rt, Rate):
+            continue
+        dur = next((q.amount for q in facts if isinstance(q, Quantity) and q.entity == rt.entity
+                    and q.measure[0] == rt.per_unit and q.amount is not None
+                    and q.measure != rt.measure), None)
+        if dur is None:
+            continue
+        total = _compute(f"{_num(rt.amount)} * {_num(dur)} / {_num(rt.per_amount)}")
+        cand = Quantity(rt.entity, rt.measure, total, rt.verb, derived=True)
+        if cand not in facts and cand not in out:
+            out.append(cand)
+    return out
+
+
 # obligation/fact KIND → derivation (facts, readings, agenda) -> new facts. Register here to add reasoning.
 SYNTHESIZERS = {"orders": _synth_transitive_order, "narrative": _synth_narrative_order,
-                "distribution": _synth_distribution, "equal_split": _synth_equal_split}
+                "distribution": _synth_distribution, "equal_split": _synth_equal_split,
+                "rate_duration": _synth_rate_duration}
 
 
 def _outstanding(readings: list) -> set:

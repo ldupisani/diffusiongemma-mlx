@@ -3085,5 +3085,30 @@ class TestIncrement115AgeShiftTurnedAgo(unittest.TestCase):
         self.assertEqual(quants, [5.0])
 
 
+class TestIncrement116RateDuration(unittest.TestCase):
+    """#116 - rate cluster foundation: a Rate accumulated over a stated DURATION → a concrete Quantity
+    (_synth_rate_duration), which folds with later events. Plus a compound-noun rate parse ("7 apple
+    pies a day" → Rate keyed to the HEAD noun 'pie', value quantifies the modifier 'apple')."""
+
+    def test_compound_noun_rate_parse(self):
+        rate = reading._rate(reading.analyze("Cooper makes 7 apple pies a day."))
+        self.assertEqual((rate.amount, rate.measure[0], rate.per_unit), (7.0, "pie", "day"))
+
+    def test_rate_times_duration_solves(self):
+        self.assertEqual(reading.solve("Cooper makes 7 pies a day. He does this for 12 days. "
+                                       "How many pies does Cooper have?"), 84)
+
+    def test_rate_duration_then_self_consumption(self):
+        self.assertEqual(reading.solve("Cooper makes 7 pies a day. He does this for 12 days. "
+                                       "He then eats 50 pies. How many pies does Cooper have?"), 34)
+
+    def test_compound_plus_cross_entity_declines_for_now(self):
+        # full Cooper still needs compound-measure unification + cross-entity "of his pies" — declines
+        # (no longer the confident-wrong 7) until those land
+        self.assertEqual(reading.solve("Cooper makes 7 apple pies a day. He does this for 12 days. "
+                                       "Ashley then eats 50 of his pies. How many apple pies remain "
+                                       "with Cooper?"), "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()
