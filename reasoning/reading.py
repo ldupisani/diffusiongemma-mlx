@@ -3913,6 +3913,32 @@ def _unapplied_multi_rate(premise_readings: list) -> bool:
     return per_item_prices >= 2                           # (b) a multi-rate priced list
 
 
+def _dropped_multiplier(premise_readings: list) -> bool:
+    """DECLINE-SAFETY (GUARD 14): a stated relational MULTIPLIER ("7 times", "twice"=2, "one-third") whose
+    EVIDENCE never reached the computation → a dropped relational-chain link → decline. Evidence = the
+    integer factor itself ("7 times" → 7), or for a FRACTION the DENOMINATOR ("one-third" → 3; fractions are
+    computed as num/denom, so the decimal never appears literally but the denom does). Catches multi-step
+    chains that mis-resolve and commit a partial ("Emily = 7× Sandra, Sandra = 3× Betty" → 7×Betty drops the
+    3×). The residue the unit/money/multi-rate guards miss (the dropped factor isn't a unit or a price)."""
+    need = set()
+    for rd in premise_readings:
+        for u in rd.units:
+            if "multiplier" not in u.features.get("senses", []):
+                continue
+            if "fraction" in u.features:
+                need.add(round(float(u.features["fraction"][1]), 6))      # the denominator
+            else:
+                v = u.features.get("value")
+                if v is not None and float(v) == int(float(v)) and float(v) >= 2:
+                    need.add(round(float(v), 6))                          # an integer factor ≥ 2
+    if not need:
+        return False
+    computed = set()
+    for prog, _res in ARITHMETIC_LOG:
+        computed |= {round(float(m), 6) for m in re.findall(r"\d+\.?\d*", prog)}
+    return any(n not in computed for n in need)
+
+
 def _container_giveaway(premises: list, question: str, context: list):
     """EQUAL-SPLIT into containers, then GIVE some containers away → the contents lost. "28 marbles … into
     4 bags … the same number in each bag … gives one bag away … how many marbles left?" → per-bag = 28/4 =
@@ -4160,6 +4186,12 @@ def solve(text: str):
     # the per-item products → DECLINE. The residue GUARD 12 misses (the prices are summed, so none is dropped).
     if part is None and isinstance(result, (int, float)) and not isinstance(result, bool) \
             and _unapplied_multi_rate(readings[:len(premises)]):
+        return "undetermined"
+    # GUARD 14 — DROPPED MULTIPLIER (decline-safety): a stated relational factor ("7 times", "one-third")
+    # whose evidence never reached the computation → a dropped relational-chain link → DECLINE. Catches
+    # multi-step chains that mis-resolve and commit a partial (Emily "7× Sandra, 3× Betty" → 7×Betty drops 3).
+    if part is None and isinstance(result, (int, float)) and not isinstance(result, bool) \
+            and _dropped_multiplier(readings[:len(premises)]):
         return "undetermined"
     if result == "undetermined" and _underspecified_distribution(context) is not None:
         return [Deficiency("under-specified", None,                 # ask, don't silently decline: the

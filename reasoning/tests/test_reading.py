@@ -3596,5 +3596,35 @@ class TestIncrement136MultiRateDecline(unittest.TestCase):
             "Todd has $20. He buys 4 candy bars that cost $2 each. How much money does Todd have left?"), 12)
 
 
+class TestIncrement137DroppedMultiplier(unittest.TestCase):
+    """#137 - DECLINE-SAFETY (GUARD 14): a stated relational MULTIPLIER ("7 times", "one-third") whose
+    evidence never reached the computation = a dropped relational-chain link → decline. Evidence = the
+    integer factor, or for a fraction the DENOMINATOR (computed as num/denom, so the decimal never appears
+    but the denom does). Catches multi-step chains that mis-resolve and commit a partial ("Emily = 7× Sandra,
+    Sandra = 3× Betty" → 7×Betty drops the 3×). The trigger needs a mis-parse (only under permissive vocab on
+    real data), so the unit test exercises the HELPER against a crafted ARITHMETIC_LOG. SYNTHETIC."""
+
+    def test_integer_factor_dropped(self):
+        prem = [reading.analyze("Emily has 7 times as many oranges as Sandra"),
+                reading.analyze("Sandra has 3 times as many oranges as Betty")]
+        reading.ARITHMETIC_LOG[:] = [("answer = 7 * 4", 28)]      # the 3× link dropped
+        self.assertTrue(reading._dropped_multiplier(prem))
+        reading.ARITHMETIC_LOG[:] = [("answer = 7 * 3 * 4", 84)]  # both factors present
+        self.assertFalse(reading._dropped_multiplier(prem))
+
+    def test_fraction_uses_denominator(self):
+        prem = [reading.analyze("Arthur spends one-third of his money")]
+        reading.ARITHMETIC_LOG[:] = [("answer = 200 / 3", 66)]    # denom 3 present
+        self.assertFalse(reading._dropped_multiplier(prem))
+        reading.ARITHMETIC_LOG[:] = [("answer = 200 + 5", 205)]   # denom 3 absent
+        self.assertTrue(reading._dropped_multiplier(prem))
+
+    def test_clean_chain_still_solves(self):
+        # with known vocabulary the chain resolves correctly (7×3×4) and is NOT declined
+        self.assertEqual(reading.solve(
+            "Anna has 7 times as many apples as Beth. Beth has 3 times as many apples as Cara. "
+            "If Cara has 4 apples, how many apples does Anna have?"), 84)
+
+
 if __name__ == "__main__":
     unittest.main()
