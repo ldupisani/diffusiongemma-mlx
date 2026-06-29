@@ -3278,5 +3278,30 @@ class TestIncrement123PerOccurrenceChain(unittest.TestCase):
                                        "How many toys does he make?"), 70)
 
 
+class TestIncrement124DaypartWeekScaling(unittest.TestCase):
+    """#124 - Droid: events recurring DAILY (dayparts morning/afternoon/evening) summed into a per-day
+    total, asked "every week" → ×7. "uses 3 bags every morning, triple that in the afternoon, twice the
+    morning in the evening" → 3+9+6 = 18/day; "how many every week?" → 18×7 = 126. Gated on a daypart cue
+    in a premise + "every/per/a week" in the question + no "week" stated in a premise."""
+
+    def test_droid_weekly_scaling(self):
+        self.assertEqual(reading.solve(
+            "Droid owns a coffee shop. He uses 3 bags of coffee beans every morning, he uses triple that "
+            "number in the afternoon than in the morning, and he uses twice the morning number in the "
+            "evening. How many bags of coffee beans does he use every week?"), 126)
+
+    _DROID = ("Droid owns a coffee shop. He uses 3 bags of coffee beans every morning, he uses triple that "
+              "number in the afternoon than in the morning, and he uses twice the morning number in the "
+              "evening. ")
+
+    def test_daily_question_no_scaling(self):
+        # same daypart premises, but the question asks the DAILY total → no ×7
+        self.assertEqual(reading.solve(self._DROID + "How many bags of coffee beans does he use every day?"), 18)
+
+    def test_no_period_no_scaling(self):
+        # no period in the question → the bare daily total, no scaling
+        self.assertEqual(reading.solve(self._DROID + "How many bags of coffee beans does he use?"), 18)
+
+
 if __name__ == "__main__":
     unittest.main()

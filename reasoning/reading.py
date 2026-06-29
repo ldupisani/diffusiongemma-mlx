@@ -774,6 +774,7 @@ NUMBERS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seve
 # "three hundred" → 300), merged into one value unit by _merge_scales.
 SCALES = {"dozen": 12, "hundred": 100, "thousand": 1000, "million": 1000000, "billion": 1000000000}
 TIME_UNITS = {"second", "minute", "hour", "day", "week", "month", "year"}   # rate per_unit / duration query
+DAYPARTS = {"morning", "afternoon", "evening", "night", "noon"}   # sub-day recurrences → a DAILY cadence
 
 
 def annotate_senses(reading: Reading) -> Reading:
@@ -3770,6 +3771,21 @@ def solve(text: str):
     if any(_key(u.surface) == "each" and _key(qu[j + 1].surface) == "of" for j, u in enumerate(qu[:-1])):
         return "undetermined"
     result = answer(question, context, discourse)
+    # PERIOD SCALING: events that recur DAILY (dayparts "morning/afternoon/evening", or "every/each day")
+    # are summed into a per-DAY total, but the question asks "every/per/a WEEK" → ×7. Gated on BOTH the
+    # daily cue in a premise AND the weekly period in the question, AND no "week" stated in a premise (else
+    # the events already carry the period and we'd double-count). Droid: 18 bags/day → 18×7 = 126.
+    if isinstance(result, (int, float)) and not isinstance(result, bool):
+        qk = [_key(w) for w in question.lower().split()]
+        asks_week = any(qk[j] == "week" and j > 0 and qk[j - 1] in ("every", "per", "a", "each")
+                        for j in range(len(qk)))
+        prem_units = [u for rp in readings[:len(premises)] for u in rp.units]
+        daily = any(_key(u.surface) in DAYPARTS for u in prem_units) \
+            or any(_key(u.surface) == "day" and i > 0 and _key(prem_units[i - 1].surface) in ("every", "each")
+                   for i, u in enumerate(prem_units))
+        no_week_premise = not any(_key(u.surface) == "week" for u in prem_units)
+        if asks_week and daily and no_week_premise:
+            result = _compute(f"{_num(result)} * 7")     # week = 7 daily totals
     if isinstance(result, float) and not isinstance(result, bool):   # snap binary-float drift on the FINAL
         snapped = round(result, 9)                                   # answer only (intermediates keep full
         result = int(snapped) if snapped == int(snapped) else snapped   # precision): "100 × (1 − 0.8)" → 30,
