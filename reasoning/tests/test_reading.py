@@ -3521,5 +3521,38 @@ class TestIncrement133PeriodNotApplied(unittest.TestCase):
             "How many pages does he read in 7 days?"), 700)
 
 
+class TestIncrement134DroppedUnitQuantity(unittest.TestCase):
+    """#134 - DECLINE-SAFETY (GUARD 12): a stated number quantifying a measurement unit (distance/weight/
+    volume) or a money value that never enters the computation is an OPERATIVE quantity we dropped → the
+    structure is unhandled → DECLINE. Object-noun enumeration counts ("3 snakes") are NOT units → exempt;
+    TIME periods are left to the recurrence-gated GUARD 11 (so a static "…in 7 days?" isn't snagged). The
+    broad firewall-safe guard underpinning vocabulary growth (28 permissive-vocab commit-wrongs decline).
+    dev unchanged, TEST holds 40.0%. SYNTHETIC strings only."""
+
+    def test_multi_price_list_declines(self):
+        # three per-item prices we don't compose → committing one drops the others → decline
+        self.assertEqual(reading.solve(
+            "A store sells apples at $2 each, bananas at $3 each, and cherries at $5 each. "
+            "How much do all of them cost together?"), "undetermined")
+
+    def test_handled_money_still_solves(self):
+        # Todd's purchase computes 4×2 and 20−8 → every money value is used → not declined
+        self.assertEqual(reading.solve(
+            "Todd has $20. He buys 4 candy bars that cost $2 each. How much money does Todd have left?"), 12)
+
+    def test_handled_unit_rate_still_solves(self):
+        # Weng: $12/hr × 50/60 hr → 12 and 50 both enter the arithmetic → not declined
+        self.assertEqual(reading.solve(
+            "Weng earns $12 an hour for babysitting. Yesterday, she just did 50 minutes of babysitting. "
+            "How much did she earn?"), 10)
+
+    def test_object_count_not_a_unit(self):
+        # an object-noun count ("snakes") is not a UNIT → GUARD 12 ignores it (helper returns False)
+        prem = [reading.analyze("Christina has 3 snakes")]
+        q = reading.analyze("How many snakes are there?")
+        reading.ARITHMETIC_LOG.clear()
+        self.assertFalse(reading._dropped_unit_quantity(prem, q))
+
+
 if __name__ == "__main__":
     unittest.main()

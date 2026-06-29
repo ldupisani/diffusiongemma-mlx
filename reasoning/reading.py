@@ -776,6 +776,13 @@ NUMBERS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seve
 SCALES = {"dozen": 12, "hundred": 100, "thousand": 1000, "million": 1000000, "billion": 1000000000}
 TIME_UNITS = {"second", "minute", "hour", "day", "week", "month", "year"}   # rate per_unit / duration query
 DAYPARTS = {"morning", "afternoon", "evening", "night", "noon"}   # sub-day recurrences → a DAILY cadence
+# Measurement UNITS — time + distance + weight + volume. A value quantifying one of these (or a money value)
+# is OPERATIVE: it must enter the computation, else we dropped it (decline-safety GUARD 12). Object nouns
+# ("3 snakes", "3 people") are NOT units — those are enumeration counts, legitimately often uncomputed.
+UNIT_NOUNS = TIME_UNITS | {"second", "minute", "hour", "day", "week", "month", "year",
+                           "inch", "foot", "yard", "mile", "centimeter", "meter", "kilometer",
+                           "gram", "kilogram", "ounce", "pound", "ton", "milligram",
+                           "liter", "gallon", "cup", "quart", "pint"}
 
 
 def annotate_senses(reading: Reading) -> Reading:
@@ -3849,6 +3856,33 @@ def _period_unapplied(question_reading: Reading, premise_readings: list, context
     return any(p not in computed for p in periods)
 
 
+def _dropped_unit_quantity(premise_readings: list, question_reading: Reading) -> bool:
+    """DECLINE-SAFETY (GUARD 12): True when a stated number that quantifies a measurement UNIT (time /
+    distance / weight / volume) or is a MONEY value never entered the computation (absent from
+    ARITHMETIC_LOG) — an OPERATIVE quantity we dropped, so the structure is unhandled → decline. Object-noun
+    counts ("3 snakes", "3 people") are NOT units and stay exempt (enumeration counts are often legitimately
+    uncomputed). Generalizes the period guard to every unit/money quantity; the broad firewall-safe guard
+    that lets future vocabulary growth turn unknown-word→{correct | decline}, never →wrong."""
+    non_time_units = UNIT_NOUNS - TIME_UNITS   # TIME periods are handled by the recurrence-gated GUARD 11
+    need = set()                               # (a static "…in 7 days?" must NOT decline); here: distance /
+    for rd in list(premise_readings) + [question_reading]:   # weight / volume / money — always operative.
+        for u in rd.units:
+            if "value" not in u.features.get("senses", []) or u.features.get("value") is None:
+                continue
+            if u.features.get("measure") == MONEY:
+                need.add(round(float(u.features["value"]), 6))
+                continue
+            qn = _follow(u, "quantifies")
+            if qn is not None and _descriptor(qn)[0] in non_time_units:
+                need.add(round(float(u.features["value"]), 6))
+    if not need:
+        return False
+    computed = set()
+    for prog, _res in ARITHMETIC_LOG:
+        computed |= {round(float(m), 6) for m in re.findall(r"\d+\.?\d*", prog)}
+    return any(n not in computed for n in need)
+
+
 def _container_giveaway(premises: list, question: str, context: list):
     """EQUAL-SPLIT into containers, then GIVE some containers away → the contents lost. "28 marbles … into
     4 bags … the same number in each bag … gives one bag away … how many marbles left?" → per-bag = 28/4 =
@@ -4081,6 +4115,15 @@ def solve(text: str):
     # instead of committing (e.g. "buys 2 … every school day … how many in 3 weeks?" → 2 would be wrong).
     if isinstance(result, (int, float)) and not isinstance(result, bool) \
             and _period_unapplied(readings[-1], readings[:len(premises)], context):
+        return "undetermined"
+    # GUARD 12 — DROPPED UNIT/MONEY QUANTITY (decline-safety): a stated number quantifying a measurement
+    # unit (distance/weight/volume) or a money value that never entered the computation is an OPERATIVE
+    # quantity we dropped → the structure is unhandled → DECLINE. Object-noun counts ("3 snakes") are not
+    # units → exempt. Skipped when a special recognizer (partition/giveaway) produced the result (its
+    # bespoke arithmetic legitimately ignores some givens, e.g. a container count). The broad firewall-safe
+    # guard underpinning vocabulary growth: a fully-read but partially-folded problem declines, never commits.
+    if part is None and isinstance(result, (int, float)) and not isinstance(result, bool) \
+            and _dropped_unit_quantity(readings[:len(premises)], readings[-1]):
         return "undetermined"
     if result == "undetermined" and _underspecified_distribution(context) is not None:
         return [Deficiency("under-specified", None,                 # ask, don't silently decline: the
