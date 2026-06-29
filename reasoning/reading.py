@@ -3942,6 +3942,37 @@ def _dropped_multiplier(premise_readings: list) -> bool:
     return any(n not in computed for n in need)
 
 
+def _dropped_each_attribute(premise_readings: list) -> bool:
+    """DECLINE-SAFETY (GUARD 15): a per-EACH attribute multiplier we dropped → decline. The "each"/"every"
+    quantifier turns a nearby object count into a MULTIPLIER ("7 starfish with 5 arms EACH" → 7×5; "EACH
+    daisy has 8 petals" → ×8), so that count is OPERATIVE — unlike a bare enumeration count ("3 snakes")
+    GUARD 12 deliberately exempts. Fires when a premise carries an each/every quantifier and a value
+    quantifying a NON-TIME, NON-MONEY object noun that never reached the computation (absent from
+    ARITHMETIC_LOG). TIME per-each ("every 30 minutes") is a rate/period (GUARDs 11) not an attribute, and a
+    clock TIME-RANGE premise ("1 PM to 4 PM every night") consumes its clocks into a span — both excluded."""
+    computed = set()
+    for prog, _res in ARITHMETIC_LOG:
+        computed |= {round(float(m), 6) for m in re.findall(r"\d+\.?\d*", prog)}
+    for rd in premise_readings:
+        units = rd.units
+        if not any("quantifier" in u.features.get("senses", []) and _key(u.surface) in ("each", "every")
+                   for u in units):
+            continue
+        if any(_key(u.surface) in ("am", "pm") for u in units):       # clock values consumed into a span
+            continue
+        for i, u in enumerate(units):
+            if "value" not in u.features.get("senses", []) or u.features.get("value") is None:
+                continue
+            if u.features.get("measure") == MONEY:
+                continue
+            nxt = units[i + 1] if i + 1 < len(units) else None         # the object this count quantifies
+            if nxt is not None and _descriptor(nxt)[0] in TIME_UNITS:   # "every 30 MINUTES" — a rate, not attr
+                continue
+            if round(float(u.features["value"]), 6) not in computed:
+                return True
+    return False
+
+
 def _container_giveaway(premises: list, question: str, context: list):
     """EQUAL-SPLIT into containers, then GIVE some containers away → the contents lost. "28 marbles … into
     4 bags … the same number in each bag … gives one bag away … how many marbles left?" → per-bag = 28/4 =
@@ -4195,6 +4226,13 @@ def solve(text: str):
     # multi-step chains that mis-resolve and commit a partial (Emily "7× Sandra, 3× Betty" → 7×Betty drops 3).
     if part is None and isinstance(result, (int, float)) and not isinstance(result, bool) \
             and _dropped_multiplier(readings[:len(premises)]):
+        return "undetermined"
+    # GUARD 15 — DROPPED EACH-ATTRIBUTE multiplier (decline-safety): an "each/every" quantifier makes a
+    # nearby object count a per-each multiplier ("7 starfish with 5 arms each" → 7×5); if that count never
+    # reached the computation the attribute product was dropped → DECLINE. The object-count analogue of the
+    # unit/price guards (a bare enumeration count stays exempt; "each" is what makes this one operative).
+    if part is None and isinstance(result, (int, float)) and not isinstance(result, bool) \
+            and _dropped_each_attribute(readings[:len(premises)]):
         return "undetermined"
     if result == "undetermined" and _underspecified_distribution(context) is not None:
         return [Deficiency("under-specified", None,                 # ask, don't silently decline: the

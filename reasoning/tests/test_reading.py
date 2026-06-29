@@ -3626,5 +3626,33 @@ class TestIncrement137DroppedMultiplier(unittest.TestCase):
             "If Cara has 4 apples, how many apples does Anna have?"), 84)
 
 
+class TestIncrement138DroppedEachAttribute(unittest.TestCase):
+    """#138 - DECLINE-SAFETY (GUARD 15): an "each/every" quantifier turns a nearby object count into a
+    per-each MULTIPLIER ("7 starfish with 5 arms each" → 7×5; "each daisy has 8 petals" → ×8), so that count
+    is OPERATIVE — unlike a bare enumeration count GUARD 12 exempts. Fires when such a premise has a value
+    quantifying a non-time, non-money object noun absent from the computation. A TIME per-each ("every 30
+    minutes") and a clock TIME-RANGE ("1 PM to 4 PM every night") are excluded. The end-to-end trigger needs
+    a mis-parse (only under permissive vocab on real data), so the helper is exercised against a crafted
+    ARITHMETIC_LOG. dev unchanged 71/3/95.9%, TEST 40.0→50.0%. SYNTHETIC."""
+
+    def test_each_attribute_count_dropped(self):
+        prem = [reading.analyze("Each box has 8 apples")]
+        reading.ARITHMETIC_LOG[:] = [("answer = 1 + 2", 3)]       # the per-each 8 never used
+        self.assertTrue(reading._dropped_each_attribute(prem))
+        reading.ARITHMETIC_LOG[:] = [("answer = 3 * 8", 24)]      # 8 applied
+        self.assertFalse(reading._dropped_each_attribute(prem))
+
+    def test_time_per_each_excluded(self):
+        # "every 30 minutes" is a rate/period (GUARD 11 territory), not an attribute multiplier → no fire
+        prem = [reading.analyze("She writes 1 page every 30 minutes")]
+        reading.ARITHMETIC_LOG[:] = [("answer = 1 + 1", 2)]       # 30 (a time period) absent — still exempt
+        self.assertFalse(reading._dropped_each_attribute(prem))
+
+    def test_no_each_quantifier_no_fire(self):
+        prem = [reading.analyze("There are 8 apples")]
+        reading.ARITHMETIC_LOG[:] = [("answer = 1 + 1", 2)]
+        self.assertFalse(reading._dropped_each_attribute(prem))
+
+
 if __name__ == "__main__":
     unittest.main()
