@@ -3295,6 +3295,13 @@ def solve(text: str):
         return "undetermined"
     if any("would" in [_key(w) for w in p.lower().split()] for p in premises):
         return "undetermined"
+    # GUARD 9 — DISTRIBUTIVE per-occurrence frequency: "every time / each time <X happens>, <amount>" is a
+    # rate (per-occurrence amount) that must be MULTIPLIED by an occurrence count to total. We don't compose
+    # that product yet, so committing the bare per-occurrence amount silently drops the frequency factor
+    # ("2 times a day … every time she orders 3 cups" → 3, not 6). DECLINE on the frame — every other such
+    # problem in dev already declines on other grounds; this makes the decline uniform. Gold: Maria 6.
+    if any(p in " ".join(premises).lower() for p in ("every time", "each time")):
+        return "undetermined"
     discourse, context = [], []
     facts_of = [None] * len(premises)                    # per-premise facts (None = not yet resolved)
     for i, p in enumerate(premises):                     # first pass: sequential, builds the discourse

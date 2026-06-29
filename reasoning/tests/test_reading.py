@@ -2914,5 +2914,26 @@ class TestIncrement107InversionCounterfactualDeclines(unittest.TestCase):
                                        "How many apples does Tom have?"), 9)
 
 
+class TestIncrement108DistributiveFrequencyDeclines(unittest.TestCase):
+    """#108 - GUARD 9: "every time / each time <X happens>, <amount>" is a per-occurrence rate that must be
+    multiplied by an occurrence count to total. We don't compose that product yet, so committing the bare
+    per-occurrence amount drops the frequency factor — an honest DECLINE on the frame (only-declines shape)."""
+
+    def test_every_time_frame_declines(self):
+        self.assertEqual(reading.solve("Mary goes to the shop 2 times a day. "
+                                       "Every time she goes to the shop, she buys 3 apples. "
+                                       "How many apples does she buy per day?"), "undetermined")
+
+    def test_each_time_frame_declines(self):
+        self.assertEqual(reading.solve("Tom runs 4 times a week. Each time he runs, he drinks 2 cups "
+                                       "of water. How many cups of water does he drink per week?"),
+                         "undetermined")
+
+    def test_plain_frame_unaffected(self):
+        # no "every time"/"each time" frame → ordinary forward accumulation still commits
+        self.assertEqual(reading.solve("Tom has 5 apples. He buys 3 apples. "
+                                       "How many apples does Tom have?"), 8)
+
+
 if __name__ == "__main__":
     unittest.main()
