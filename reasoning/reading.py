@@ -221,6 +221,11 @@ def _merge_labels(reading: Reading) -> Reading:
     units = reading.units
     for i in range(len(units) - 1):
         noun, val = units[i], units[i + 1]
+        # NOTE: do NOT un-merge a value before "times" ("shop 2 times a day"). Tried it so the freq count
+        # would be visible — but it then parses as a Frequency (satisfying the unused-given guard) without
+        # composing into the answer, AND un-declines other un-composed frequency problems (Theo: "13
+        # cookies, 3 times a day, 20 days/month" commits a partial 13). Net −precision; the label-merge's
+        # value-hiding is doing useful decline work here. Revisit only with frequency×per-occurrence compose.
         if "noun" in noun.features.get("senses", []) and "operator" not in noun.features.get("senses", []) \
                 and "value" in val.features.get("senses", []) \
                 and "measure" not in val.features:        # not "$5" (money), not "times 3" (operator+noun)
