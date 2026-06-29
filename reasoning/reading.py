@@ -3229,6 +3229,12 @@ def _split_clauses(sentence: str) -> list:
             left, right = sentence[:i].strip(), sentence[i + len(sep):].strip()
             if _has_verb(left):
                 if _has_verb(right):
+                    # NOTE: SUBJECT elision ("She gave X and bought Y" → the right clause's verb has no
+                    # subject and binds to a stray post-verb noun) was prototyped and REVERTED. With a
+                    # question-clause guard it was precision-NEUTRAL (56.7→56.8% dev) but RAISED absolute
+                    # confident-wrongs 39→41: supplying the subject exposes multi-step gaps we don't yet
+                    # close (per-recipient "each" distribution, "had $N left" inversion, running sums), so
+                    # previously-declined problems commit a partial answer. Defer until those compose.
                     return _split_clauses(left) + _split_clauses(right)
                 if _is_elided_clause(right):           # the right borrows the left's verb (elision)
                     synth = _supply_verb(right, _main_verb(left))
