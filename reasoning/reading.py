@@ -3660,6 +3660,94 @@ def _question_durations(reading: Reading, context: list) -> list:
     return seeds
 
 
+# Words that SELECT a subgroup of a partitioned container set ("the FIRST two tanks", "the OTHER two",
+# "ANOTHER tank") — the structural signature of a partition (distinct from a plain "N of the apples").
+_PARTITION_SELECTORS = {"first", "other", "another", "next", "last", "remaining"}
+
+
+def _subgroup_count(reading: Reading):
+    """The COUNT of members a subgroup-selector picks out, or None. Three surface forms:
+    "the first/other TWO …" (value right of a selector word), "N OF the tanks" (value left of "of"),
+    or a bare "<value> <container>" only when a selector word is also present in the clause."""
+    units = reading.units
+    for k, u in enumerate(units):
+        if "value" not in u.features.get("senses", []):
+            continue
+        prevk = _key(units[k - 1].surface) if k > 0 else ""
+        nextk = _key(units[k + 1].surface) if k + 1 < len(units) else ""
+        if prevk in _PARTITION_SELECTORS:        # "the other TWO", "the first TWO"
+            return u.features["value"]
+        if nextk == "of":                        # "1 OF the tanks" (partition-level gates provide safety)
+            return u.features["value"]
+    return None
+
+
+def _subgroup_container(reading: Reading):
+    """The CONTAINER noun a subgroup partitions ("the first two TANKS" / "1 of the TANKS"), or None —
+    the noun adjacent to the count selector. Used to gate: the container must differ from the queried
+    measure (a partition counts CONTAINERS, each holding some quantity of the asked measure)."""
+    units = reading.units
+    for k, u in enumerate(units):
+        if "value" not in u.features.get("senses", []):
+            continue
+        prevk = _key(units[k - 1].surface) if k > 0 else ""
+        nxt = next((x for x in units[k + 1:] if "noun" in x.features.get("senses", [])), None)
+        if prevk in _PARTITION_SELECTORS and nxt is not None \
+                and units.index(nxt) == k + 1:   # "first two TANKS" — noun immediately follows the count
+            return _descriptor(nxt)[0]
+        if k + 1 < len(units) and _key(units[k + 1].surface) == "of" and nxt is not None:
+            return _descriptor(nxt)[0]           # "1 of the TANKS"
+    return None
+
+
+def _partition(premises: list, question: str):
+    """Solve a PARTITION-and-AGGREGATE problem, or None if the shape doesn't apply. A container set is
+    split into named subgroups ("the first two … the other two … 1 of the tanks"), each member holding a
+    per-member quantity of the asked measure; the answer is Σ (subgroup_count × per_member), optionally ×
+    a period asked in the question ("…in four weeks"). The per-member value — including a RELATIONAL one
+    ("twice as many fish each as the first", "2 fewer gallons each than the first two") — is resolved by
+    the ordinary `learn` machinery against the running per-member context; only the subgroup COUNT and the
+    Σ-fold are new here. Tightly gated: ≥2 subgroups, a partition selector word present, and a container
+    that differs from the queried measure (so a plain "3 of the apples … 4 of the apples" never fires)."""
+    qr = analyze(question)
+    interro = next((u for u in qr.units if "interrogative" in u.features.get("senses", [])), None)
+    if interro is None:
+        return None
+    coll = _follow(_follow(interro, "queries"), "collection")
+    target = _descriptor(coll) if coll is not None else None
+    if target is None:
+        return None
+    portions, ctx, containers, saw_selector = [], [], set(), False
+    for p in premises:
+        rp = analyze(p)
+        cnt = _subgroup_count(rp)
+        if cnt is None:
+            continue
+        facts = learn(p, [], ctx)
+        pm = next((f.amount for f in facts if isinstance(f, Quantity)
+                   and f.measure == target and f.amount is not None), None)
+        if pm is None:
+            continue
+        saw_selector = saw_selector or any(_key(u.surface) in _PARTITION_SELECTORS for u in rp.units)
+        cont = _subgroup_container(rp)
+        if cont is not None:
+            containers.add(cont)
+        portions.append((cnt, pm))
+        ctx += facts
+    if len(portions) < 2 or not saw_selector:
+        return None
+    if not containers or target[0] in containers:        # the partition must be over CONTAINERS, not the
+        return None                                      # asked measure itself ("3 of the apples …")
+    total = _compute(" + ".join(f"{_num(c)} * {_num(v)}" for c, v in portions))
+    # PERIOD: "…how many gallons will she need in four weeks?" → × the question's time-unit count.
+    period = next((u.features["value"] for u in qr.units if "value" in u.features.get("senses", [])
+                   and _follow(u, "quantifies") is not None
+                   and _descriptor(_follow(u, "quantifies"))[0] in TIME_UNITS), None)
+    if period is not None:
+        total = _compute(f"{_num(total)} * {_num(period)}")
+    return total
+
+
 def solve(text: str):
     """Read a whole word-problem paragraph (premises + a trailing question) and answer the question —
     threading coreference (`discourse`) and the growing `context` across the premises (split into
@@ -3828,7 +3916,11 @@ def solve(text: str):
     qu = readings[-1].units
     if any(_key(u.surface) == "each" and _key(qu[j + 1].surface) == "of" for j, u in enumerate(qu[:-1])):
         return "undetermined"
-    result = answer(question, context, discourse)
+    # PARTITION-and-AGGREGATE: a container set split into subgroups ("the first two … the other two"),
+    # each holding a per-member quantity → Σ (count × per_member). Tries before the generic fold (which
+    # would sum the per-member values without their subgroup counts). None ⇒ not this shape → fall through.
+    part = _partition(premises, question)
+    result = part if part is not None else answer(question, context, discourse)
     # PERIOD SCALING: events that recur DAILY (dayparts "morning/afternoon/evening", or "every/each day")
     # are summed into a per-DAY total, but the question asks "every/per/a WEEK" → ×7. Gated on BOTH the
     # daily cue in a premise AND the weekly period in the question, AND no "week" stated in a premise (else

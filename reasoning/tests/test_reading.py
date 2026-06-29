@@ -3328,5 +3328,48 @@ class TestIncrement125FutureAndComparativeAge(unittest.TestCase):
             "How old is Jessica now?"), 24)
 
 
+class TestIncrement126PartitionAggregate(unittest.TestCase):
+    """#126 - PARTITION-and-AGGREGATE: a container set split into subgroups ("the first two … the other
+    two … 1 of the tanks"), each member holding a per-member quantity of the asked measure → Σ (count ×
+    per_member), optionally × a period asked in the question. The relational per-member ("twice as many
+    each as the first", "N fewer each than the first two") is resolved by the ordinary `learn` machinery;
+    only the subgroup COUNT and the Σ-fold are new. Resolves James-fish 100 and Nicole 112. SYNTHETIC
+    strings only (the firewall keeps GSM8K text out of the unit tests)."""
+
+    def test_partition_relational_each(self):
+        # "1 of the boxes → 10; the other two → twice as many each (=20)" → 10 + 2×20 = 50
+        self.assertEqual(reading.solve(
+            "Maria has 3 boxes. 1 of the boxes holds 10 marbles and the other two hold twice as many "
+            "marbles each as the first. How many marbles are there in total?"), 50)
+
+    _ROSA = ("Rosa has 4 tanks. The first two tanks need 5 gallons of water each and the other two need "
+             "2 fewer gallons of water each than the first two tanks. ")
+
+    def test_partition_comparative_each_with_period(self):
+        # "first two → 5 each; other two → 2 fewer each (=3)" → 2×5 + 2×3 = 16, × 3 weeks = 48
+        self.assertEqual(reading.solve(
+            self._ROSA + "If she changes the water every week, how many gallons of water will she "
+            "need in three weeks?"), 48)
+
+    def test_partition_no_period_no_scaling(self):
+        # same partition, no period in the question → the bare Σ (no × period)
+        self.assertEqual(reading.solve(self._ROSA + "How many gallons of water does she need?"), 16)
+
+    def test_partition_helpers(self):
+        # the subgroup count is read off the selector; the container off the adjacent noun
+        rd = reading.analyze("the first two tanks need 8 gallons of water each")
+        self.assertEqual(reading._subgroup_count(rd), 2)
+        self.assertEqual(reading._subgroup_container(rd), "tank")
+        rd2 = reading.analyze("1 of the tanks has 20 fish in it")
+        self.assertEqual(reading._subgroup_count(rd2), 1)
+        self.assertEqual(reading._subgroup_container(rd2), "tank")
+
+    def test_partition_declines_same_measure(self):
+        # NOT a partition: "3 of the apples … 4 of the apples" partitions the SAME measure that's asked
+        # (apple), and there's no first/other selector → the gate rejects it (container == target).
+        self.assertIsNone(reading._partition(
+            ["3 of the apples are red", "4 of the apples are green"], "How many apples are there?"))
+
+
 if __name__ == "__main__":
     unittest.main()
