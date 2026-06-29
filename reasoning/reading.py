@@ -3346,9 +3346,18 @@ def solve(text: str):
     # into a DERIVED amount ("30 less … than Martha" → 38), so it won't appear verbatim.
     given = set()
     for i, rp in enumerate(readings[:len(premises)]):
-        if any(s in u.features.get("senses", []) for u in rp.units for s in ("comparative", "multiplier")) \
+        facts_i = facts_of[i] or []
+        # the comparative/multiplier exemption holds ONLY if the premise actually produced a Quantity/Rate
+        # (proof the factor was consumed into a DERIVED amount). A degenerate parse that yields only a
+        # Frequency — "Billy has $25 less than twice the money Sam has" → Frequency(have, 2), dropping the
+        # $25 — must NOT be exempt, so the unused $25 trips this guard and we DECLINE instead of summing a
+        # partial total (Billy committed 75 = Sam alone). "30 less than Martha" → a Quantity → still exempt.
+        comp_consumed = any(s in u.features.get("senses", []) for u in rp.units
+                            for s in ("comparative", "multiplier")) \
+            and any(isinstance(f, (Quantity, Rate)) for f in facts_i)
+        if comp_consumed \
                 or any(_key(u.surface) == "each" for u in rp.units) \
-                or any(isinstance(f, Distribution) for f in (facts_of[i] or [])) \
+                or any(isinstance(f, Distribution) for f in facts_i) \
                 or _relational_age_factor(rp) is not None \
                 or _container_quantity(rp):   # "20 packets of 100 grams" / "N times as old" —
             continue                                      # the factor is consumed into the derived product

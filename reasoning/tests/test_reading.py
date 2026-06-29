@@ -2974,5 +2974,27 @@ class TestIncrement110DerivedReferentBaseline(unittest.TestCase):
         self.assertEqual(a, b)        # compare=False — a derived and a stated quantity are still equal
 
 
+class TestIncrement111ComparativeExemptionRequiresQuantity(unittest.TestCase):
+    """#111 - GUARD 3's comparative/multiplier exemption (which skips the unused-given check, assuming the
+    factor was consumed into a derived amount) now holds ONLY if the premise actually produced a
+    Quantity/Rate. A degenerate parse that yields only a Frequency ("Billy has $25 less than twice the
+    money Sam has" → Frequency(have, 2), dropping the $25) is no longer exempt, so the unused $25 trips
+    the guard and we DECLINE instead of summing a partial total."""
+
+    def test_degenerate_comparative_declines(self):
+        self.assertEqual(reading.solve(
+            "Billy has $25 less than twice the money Sam has. If Sam has $75, "
+            "how much money do they have together?"), "undetermined")
+
+    def test_consumed_comparative_still_solves(self):
+        # a comparative that DOES produce a Quantity stays exempt and solves
+        self.assertEqual(reading.solve("Martha has 68 apples. Tim has 30 less apples than Martha. "
+                                       "How many apples does Tim have?"), 38)
+
+    def test_consumed_relational_still_solves(self):
+        self.assertEqual(reading.solve("Sam has $75. Billy has $25 less than twice as much money as Sam. "
+                                       "How much money do they have together?"), 200)
+
+
 if __name__ == "__main__":
     unittest.main()
