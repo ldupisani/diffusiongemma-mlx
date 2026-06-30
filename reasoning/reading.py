@@ -2979,6 +2979,13 @@ def answer(question: str, context: list, discourse: list = None):
     kys = {_key(u.surface) for u in r.units}
     combined_q = bool(kys & {"combined", "altogether", "total"}) or {"all", "together"} <= kys
     is_long = any(_key(u.surface) == "long" for u in r.units)
+    # AGGREGATION CUE — bare "together" (without "all") is a sum cue ("how much did the two men earn
+    # TOGETHER?" → Σ), but it's CONFOUNDED with the collaborative-rate sense ("how long to paint the house
+    # together?" = a joint RATE, not a sum). The rate-inversion branch below is gated `not combined_q`, so
+    # firing combined_q on a how-long/time question would skip it and sum rates into garbage. Restrict the
+    # "together" trigger to NON-time questions, which the rate branch never claims. (Salvadore 2934, Anika 64.)
+    if "together" in kys and not is_long and asked_unit not in TIME_UNITS:
+        combined_q = True
     if (is_long or asked_unit in TIME_UNITS) and not combined_q:   # "How LONG / how many HOURS … to <verb>?"
         rates = [f for f in context if isinstance(f, Rate)]                   # → RATE INVERSION: target ÷
         def _inv_target(rate):                                               # rate, in per_unit (convert if

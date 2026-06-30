@@ -1207,6 +1207,18 @@ class TestIncrement43Aggregation(unittest.TestCase):
                                "How many apples do Tom and Mary have altogether?"])
         self.assertEqual(out.strip(), "5")
 
+    def test_bare_together_sums(self):
+        # "together" alone (without "all") is also an aggregation cue, like "altogether"/"combined".
+        self.assertEqual(reading.answer("How many apples do Tom and Mary have together?",
+                                        self._ctx()), 5)
+
+    def test_together_not_hijacked_on_how_long(self):
+        # The collaborative-rate sense ("how long … together?") must NOT be turned into a sum. A
+        # how-long question with two duration facts present should NOT return their sum (5) off the
+        # bare-"together" cue — the time-question guard keeps it out of the aggregation path.
+        ctx = reading.learn("Tom works 3 hours") + reading.learn("Mary works 2 hours")
+        self.assertNotEqual(reading.answer("How long do Tom and Mary work together?", ctx), 5)
+
 
 class TestIncrement44Accumulation(unittest.TestCase):
     """#44 — accumulation on one entity (math step 4): repeated Quantity statements for the same
