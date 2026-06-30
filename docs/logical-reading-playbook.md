@@ -932,6 +932,16 @@ measures keep query None → honest decline (the genuinely-ambiguous case). TEST
 delta). 824 tests. LESSON: an *artificial* parse-level decline (the answer is computed, only the question's
 referent is elided) is the cheapest, lowest-risk coverage win — infer the missing referent from the salient
 context and reuse the existing fold, rather than adding any new solving machinery.  ·
+- **backward COMPARATIVE-offset inversion — ATTEMPTED + REVERTED (holdout caught the overfit).** The additive
+twin of #107: when "A is N more/less than B" has the SUBJECT known and the standard unknown, invert
+(standard = subject ∓ N). Worked on the targets (Tim/Martha 68 both directions) and gained +1 dev-train
+(Benjie) with 0 dev-train wrong — but dev-holdout went 3→5 wrong (**+2 new-wrong delta**), failing the §3
+gate. WHY it differs from #107 (which shipped clean): "N more/less than Y" is a VERY common surface pattern,
+so backward-inverting it fires on many unseen shapes where the inversion is unsound; "k times as many as Y"
+(#107) is rarer/more specific and so far less exposed (§3a exactly). LESSON: a capability being the "twin" of
+a safe one does NOT make it safe — safety tracks the SURFACE PATTERN's commonness, not the mechanism. The
+holdout is what distinguishes them; spend it before the TEST look. Re-attempt only behind a tighter gate
+(e.g. require the standard be the asked entity AND no other relation/offset in the problem).  ·
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
