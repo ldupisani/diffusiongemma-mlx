@@ -260,9 +260,11 @@ def _merge_labels(reading: Reading) -> Reading:
         # composing into the answer, AND un-declines other un-composed frequency problems (Theo: "13
         # cookies, 3 times a day, 20 days/month" commits a partial 13). Net −precision; the label-merge's
         # value-hiding is doing useful decline work here. Revisit only with frequency×per-occurrence compose.
+        # a GERUND ("finish reading 30 pages") is a verb, not a label-bearing noun → keep N free
         if "noun" in noun.features.get("senses", []) and "operator" not in noun.features.get("senses", []) \
                 and "value" in val.features.get("senses", []) \
-                and "measure" not in val.features:        # not "$5" (money), not "times 3" (operator+noun)
+                and "measure" not in val.features \
+                and not (_key(noun.surface).endswith("ing") and "verb" in noun.features.get("senses", [])):
             v = val.features["value"]
             label = str(int(v)) if v == int(v) else str(v)
             merged = Unit(words=sorted(noun.words + val.words, key=lambda w: w.index))
@@ -1242,20 +1244,27 @@ def _trial_cost(reading: Reading, multi_idx, combo) -> int:
     return _unmet_count(trial)
 
 
+_ASPECTUAL = {"is", "are", "was", "were", "am",          # progressive copulas
+              "finish", "finishes", "finished",          # ASPECTUAL light verbs that take a V-ing
+              "start", "starts", "started", "begin", "begins", "began",
+              "keep", "keeps", "kept", "continue", "continues", "continued"}
+
+
 def _progressive(reading: Reading) -> Reading:
-    """Present/past PROGRESSIVE "is/are/was/were V-ing" → the copula is an AUXILIARY, the participle the main
-    verb ("is driving" → drive). Without this both read as verbs and the single-main-verb logic (rates, the
-    discourse subject) misfires. Gated to a copula immediately before an -ing word that is a known verb."""
+    """Present/past PROGRESSIVE "is/are/was/were V-ing" and ASPECTUAL "finish/start/keep V-ing" → the leading
+    verb is an AUXILIARY and the participle the main verb ("is driving" → drive, "can finish reading 30 pages"
+    → read). Without this both read as verbs and the single-main-verb logic (rates, the discourse subject)
+    misfires. Gated to an aspectual/copula immediately before an -ing word that is a known verb."""
     units = reading.units
     for i in range(len(units) - 1):
         nxt = _key(units[i + 1].surface)
-        if _key(units[i].surface) in ("is", "are", "was", "were", "am") \
+        if _key(units[i].surface) in _ASPECTUAL \
                 and "verb" in units[i].features.get("senses", []) \
                 and nxt.endswith("ing") and "verb" in units[i + 1].features.get("senses", []):
             before = dict(units[i].features)
             units[i].features["senses"] = ["auxiliary"]
             reading.record("progressive", target=units[i], before=before, after=dict(units[i].features),
-                           reason="copula + V-ing → auxiliary (progressive)")
+                           reason="aspectual/copula + V-ing → auxiliary")
     return reading
 
 
@@ -1492,7 +1501,7 @@ VERB_LEMMA = {"passed": "pass", "wilted": "wilt", "rose": "rise", "failed": "fai
     "needs": "need", "needed": "need", "makes": "make", "made": "make", "pays": "pay", "paid": "pay",
     "takes": "take", "took": "take", "goes": "go", "went": "go", "wants": "want", "wanted": "want",
     "puts": "put", "keeps": "keep", "kept": "keep", "brings": "bring", "brought": "bring",
-    "sends": "send", "sent": "send", "reads": "read", "writes": "write", "wrote": "write",
+    "sends": "send", "sent": "send", "reads": "read", "reading": "read", "writes": "write", "wrote": "write",
     "builds": "build", "built": "build", "fills": "fill", "walks": "walk", "sees": "see", "saw": "see",
     "drinks": "drink", "drank": "drink", "cuts": "cut", "saves": "save", "saved": "save",
     "collects": "collect", "counts": "count", "picks": "pick", "picked": "pick", "wins": "win",
@@ -1543,7 +1552,7 @@ LEXICON.update({
     "allowance": ["noun"], "farm": ["noun"], "mango": ["noun"], "coconut": ["noun"], "cheese": ["noun"],
     "ingredient": ["noun"], "dinner": ["noun"], "hat": ["noun"], "stamp": ["noun"], "snake": ["noun"],
     "forest": ["noun"], "summer": ["noun"], "grocery": ["noun"], "nickel": ["noun"], "dime": ["noun"],
-    "penny": ["noun"], "meeting": ["noun"], "reading": ["noun"], "top": ["noun"],
+    "penny": ["noun"], "meeting": ["noun"], "reading": ["verb", "noun"], "top": ["noun"],
     "stay": ["verb"], "stays": ["verb"], "stayed": ["verb"],
     "serve": ["verb"], "serves": ["verb"], "served": ["verb"], "serving": ["verb"],
     "mow": ["verb"], "mows": ["verb"], "mowed": ["verb"], "mowing": ["verb"],
@@ -5139,6 +5148,42 @@ def _rate_extrapolation(premises: list, question: str, context: list):
     return _compute(f"{_num(rate.amount)} * ({per}) / {_num(rate.per_amount)}")
 
 
+def _rate_sum(premises: list, question: str, context: list):
+    """MULTI-ENTITY RATE SUM — "Anna 30 pages/60 min, Bob 27/60 min, Cherry 25/60 min. They have read for 240
+    min. How many pages in TOTAL?" → (30+27+25)/60 × 240 = 328. ≥2 rates (same measure & per_unit) and
+    nothing else; a single DURATION (a time-value in the premises/question that is NOT a rate's per-marker);
+    a total-cue question. answer = Σ(amount/per_amount) × (duration → per_unit). None otherwise."""
+    rates = [f for f in context if isinstance(f, Rate)]
+    if len(rates) < 2 or any(isinstance(f, Quantity) and f.amount is not None for f in context):
+        return None                                      # ≥2 rates and NO extra real quantity (a multi-step
+        #                                                  given) — a bare descriptor from the duration clause
+        #                                                  ("reading for 240 min" → ('minute',…)) is tolerated
+    if len({(r.measure, r.per_unit) for r in rates}) != 1:
+        return None
+    per_unit = rates[0].per_unit
+    if not any(w in question.lower() for w in ("total", "altogether", "combined", "in all", "together")):
+        return None
+    per_amounts = {r.per_amount for r in rates}
+    dur = du = None
+    for text in premises + [question]:                   # the duration: a time-value that is NOT a rate's
+        for u in analyze(text).units:                    # per-marker (so not the "60 minutes" of the rate)
+            if "value" in u.features.get("senses", []) and _follow(u, "quantifies") is not None \
+                    and _descriptor(_follow(u, "quantifies"))[0] in TIME_UNITS:
+                v, unit = u.features["value"], _descriptor(_follow(u, "quantifies"))[0]
+                if v not in per_amounts or unit != per_unit:
+                    dur, du = v, unit
+    if dur is None:
+        return None
+    if du == per_unit:
+        d = _num(dur)
+    elif (du, per_unit) in CONVERSIONS:
+        d = f"{_num(dur)} * {_num(CONVERSIONS[(du, per_unit)])}"
+    else:
+        return None
+    total = " + ".join(f"{_num(r.amount)}/{_num(r.per_amount)}" for r in rates)
+    return _compute(f"({total}) * ({d})")
+
+
 def _rate_difference(premises: list, question: str, context: list):
     """RATE DIFFERENCE × DURATION — "Janet reads 80 pages a day, Belinda 30 pages a day. How many MORE pages
     does Janet read in 6 weeks?" → (80 − 30) × 42 = 2100; "how many more miles did Frank run in an hour than
@@ -5417,6 +5462,10 @@ def solve(text: str):
     _rdiff = _rate_difference(premises, question, context)
     if _rdiff is not None:
         return _rdiff
+    # RATE SUM — "Anna/Bob/Cherry each read R pages/T min. Read for D min. How many in total?" → ΣR/T × D.
+    _rsum = _rate_sum(premises, question, context)
+    if _rsum is not None:
+        return _rsum
     # POOL-AND-REDISTRIBUTE — "combine their candies and share equally, how many will EACH have?" → Σ/N.
     # Tried before GUARD 3 (the pooled amounts are all "used" so it wouldn't trip, but keep recognizers
     # together). Same math as the average branch but cued by a share-equally premise + a per-each question.

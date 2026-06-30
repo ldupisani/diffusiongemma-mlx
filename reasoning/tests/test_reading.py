@@ -4516,5 +4516,25 @@ class TestRateDifference(unittest.TestCase):
             "How many more pages does Anna read than Bob in 40 minutes?"), 20)
 
 
+class TestRateSum(unittest.TestCase):
+    """MULTI-ENTITY RATE SUM — N people each read R_i pages per T minutes; after D minutes, how many pages in
+    TOTAL → Σ(R_i / T) × D. Includes the GERUND/aspectual parse: "can finish reading 30 pages" — "reading" is
+    a verb (lemma read), the aspectual "finish" an auxiliary, and "30" stays free (not a "reading 30" label).
+    SYNTHETIC."""
+
+    def test_three_entity_rate_sum(self):
+        # (30 + 27 + 25) / 60 × 240 = 328.
+        self.assertEqual(reading.solve(
+            "Anna reads 30 pages in 60 minutes. Bob reads 27 pages in 60 minutes. "
+            "Cherry reads 25 pages in 60 minutes. If they have been reading for 240 minutes, "
+            "how many pages have they read in total?"), 328)
+
+    def test_finish_reading_gerund_rate(self):
+        # "can finish reading 40 pages in 60 minutes" parses as a 40-pages/60-min read rate.
+        self.assertEqual(reading.solve(
+            "Anna can finish reading 40 pages in 60 minutes. Bob can read 20 pages in 60 minutes. "
+            "If they have been reading for 120 minutes, how many pages have they read in total?"), 120)
+
+
 if __name__ == "__main__":
     unittest.main()
