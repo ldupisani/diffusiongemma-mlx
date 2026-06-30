@@ -3901,6 +3901,36 @@ class TestSumRatioSystem(unittest.TestCase):
             "many as Cam. How many donuts did Cam take?"), 8)
 
 
+class TestEqualShare(unittest.TestCase):
+    """POOL-AND-REDISTRIBUTE — "Mark has 30, Peter 25, John 35. They combine and share equally. How many
+    will EACH have?" → (30+25+35)/3 = 30. Same Σ/N math as the average branch, cued by a share-equally premise
+    + a per-each result question. Gated against the distinct distributor-among-a-count shape (a Distribution
+    fact, or a "rest"/remainder shared among OTHERS), noun-entity owners ("the rest" → entity == measure), and
+    a non-integer result (a relation didn't resolve). dev-train 62→64, holdout/TEST held. SYNTHETIC."""
+
+    def test_pool_and_share_equally(self):
+        self.assertEqual(reading.solve(
+            "Mark has 30 candies, Peter has 25 candies, and John has 35 candies. They combine their candies "
+            "and share them equally. How many candies will each one of them have?"), 30)
+
+    def test_share_equally_each_person(self):
+        self.assertEqual(reading.solve(
+            "Hugh had 8 marbles, Tommy had 6 marbles, and Melany had 7 marbles. If they share the marbles "
+            "equally, how many will each person have?"), 7)
+
+    def test_distributor_among_count_unaffected(self):
+        # one whole shared among a stated count (the existing equal-split handler) → 5250/3, NOT a pool.
+        self.assertEqual(reading.solve(
+            "Mr. Sam shared $5250 equally among his 3 sons. How much did each son get?"), 1750)
+
+    def test_remainder_to_others_declines(self):
+        # "kept 20 and shared THE REST among friends" is a remainder to OTHERS, not a pool → this recognizer
+        # must NOT fire (it would pool Harold's own holding); left to other machinery (here: declines).
+        self.assertEqual(reading.solve(
+            "Harold had 100 marbles. He kept 20 marbles and shared the rest evenly among his 5 friends. "
+            "How many marbles did each friend get?"), "undetermined")
+
+
 class TestComparedToDifference(unittest.TestCase):
     """"How many more <measure> does A have compared to B?" → A's holding − B's. The comparative ("more")
     greedily binds its standard to the MEASURE noun ("more PAIRS"), not the entity, and the real standard sits

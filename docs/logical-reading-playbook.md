@@ -1111,6 +1111,24 @@ blocked ones (sub-facts resolve, one answer-path is missing; a cheap, low-risk w
 turned out parse-blocked (e.g. "how many CANS" reads 'cans' as the modal auxiliary 'can', so the query measure
 never resolves) — only the difference-fold case was genuinely fold-only.  ·
 
+120. **pool-and-redistribute (equal-share)** (dev-train 62→64: Mark/Peter/John 30, Hugh/Tommy/Melany 7; holdout
++ TEST held). Also a FOLD-REACHABLE find: "Mark has 30 candies, Peter 25, John 35. They combine and share them
+equally. How many will EACH have?" — all three holdings resolved, only Σ/N missing. Same math as the average
+branch (#3l) but cued by a SHARE-EQUALLY premise + a per-each result question, so it lives in solve() (the cue
+isn't in the question). `_equal_share`: a share/divide/combine + equal cue in a premise; question "how many/much
+… EACH … have/get"; single shared measure with ≥2 owners; Σ(each owner's holding)/owner-count. THE FIREWALL ARC
+(three over-fires caught, three principled gates added): (1) a Distribution fact in context = the distinct
+distributor-among-a-COUNT shape (Mr. Sam $5250÷3) whose synthesized per-recipient share would be wrongly pooled
+with the distributor's holding → defer to the existing handler; (2) "the rest/remaining/kept" = a remainder
+shared to OTHERS (Harold kept 20, shared the rest among 5 FRIENDS → 80÷5, not Σ÷N) → decline; (3) a NOUN-entity
+owner (entity == measure head, from "the rest" → entity 'marble') is excluded, and a NON-INTEGER result (a
+relation didn't resolve — Wolfgang's 40/3 because the "2/3 of both" relation deferred) → decline. Also: "each
+ONE of them" makes "one"=value 1, so the set-size safety check must ignore a stated count of 1. dev-train +2 / 0
+new wrong; holdout 45/3 held (the first A/B regressed it 45/5 — the three gates recovered it); TEST held 61.5%.
+861 tests. LESSON: a Σ/N pool recognizer's danger is MIS-COUNTING the denominator — exclude noun-entity "owners"
+(remainder nouns) and the distributor-among-others shape, and let a non-integer result veto a half-resolved
+context. The holdout caught all three; each became a reusable precision gate.  ·
+
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
 head, attribute-superset; a sub-group's count = instances whose attributes ⊇ the query's. We store

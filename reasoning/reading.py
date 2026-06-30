@@ -4530,6 +4530,55 @@ def _scene_depletion(question: str, context: list, prem_readings: list):
     return _compute(f"{base} - (" + " + ".join(_num(f.amount) for f in depl) + ")")
 
 
+def _equal_share(question: str, context: list, premises: list):
+    """POOL-AND-REDISTRIBUTE — "Mark has 30 candies, Peter 25, John 35. They combine their candies and share
+    them equally. How many will EACH have?" → (30+25+35)/3 = 30. Same Σ/N math as the `average` branch (#3l)
+    but triggered by a SHARE-EQUALLY premise + a per-each result question, not the word "average". The
+    recognizer needs the premise text (the "share equally" cue isn't in the question), so it lives in solve(),
+    not answer(). GATED: a share/divide/split/combine + equal cue in a premise; the question asks "how
+    many/much … EACH … have/get"; a SINGLE shared measure with ≥2 owners; and (denominator safety, as #3l) any
+    set-size the question states must equal the owner count. Σ(each owner's net holding) / owner-count. None
+    otherwise."""
+    ql = question.lower()
+    if "each" not in ql or not any(w in ql for w in ("how many", "how much")) \
+            or not any(w in ql for w in ("have", "get", "receive", "end up")):
+        return None
+    pl = " ".join(premises).lower()
+    if not (any(w in pl for w in ("share", "shares", "shared", "divide", "divided", "split", "distribute",
+                                  "combine", "combined")) and any(w in pl for w in ("equal", "equally", "evenly"))):
+        return None
+    if any(isinstance(f, Distribution) for f in context):
+        return None                                        # one whole split among a COUNT (Mr. Sam $5250 ÷ 3
+        #                                                    sons) is the existing equal-split handler's job —
+        #                                                    its synthesized per-recipient share would here be
+        #                                                    wrongly pooled with the distributor's own holding
+    if any(w in pl for w in ("the rest", "remaining", "remainder", " left ", "kept")):
+        return None                                        # "kept 20 and shared THE REST among his friends" is
+        #                                                    a remainder distributed to OTHERS, not a pool among
+        #                                                    the owners (Harold 100 → 80÷5, not Σ holdings ÷ N)
+    measures = {f.measure for f in context if isinstance(f, Quantity) and f.amount is not None}
+    if len(measures) != 1:
+        return None
+    gq = next(iter(measures))
+    owners = {f.entity for f in context if isinstance(f, Quantity) and f.measure == gq
+              and f.amount is not None and f.entity != gq[0]}   # exclude a NOUN-entity ("the rest" → entity
+    if len(owners) < 2:                                         # 'marble' == measure head), only real holders
+        return None
+    terms = [_holdings(o, gq, context) for o in owners]
+    if not all(t is not None for t in terms):
+        return None
+    qr = analyze(question)                                 # set-size safety: a stated count > 1 (a recipient
+    stated_n = next((u.features["value"] for u in qr.units if "value" in u.features.get("senses", [])  # set size,
+                     and float(u.features["value"]).is_integer() and u.features["value"] > 1), None)   # not the
+    if stated_n is not None and stated_n != len(owners):   # "one" of "each ONE of them") must equal owner count
+        return None
+    result = _compute(f"({' + '.join(_num(t) for t in terms)}) / {len(owners)}")
+    if isinstance(result, float) and not result.is_integer():
+        return None                                        # a clean pool divides evenly; a fraction means the
+        #                                                    holdings didn't all resolve (a relation deferred)
+    return result
+
+
 def solve(text: str):
     """Read a whole word-problem paragraph (premises + a trailing question) and answer the question —
     threading coreference (`discourse`) and the growing `context` across the premises (split into
@@ -4640,6 +4689,12 @@ def solve(text: str):
     _depleted = _scene_depletion(question, context, readings[:len(premises)])
     if _depleted is not None:
         return _depleted
+    # POOL-AND-REDISTRIBUTE — "combine their candies and share equally, how many will EACH have?" → Σ/N.
+    # Tried before GUARD 3 (the pooled amounts are all "used" so it wouldn't trip, but keep recognizers
+    # together). Same math as the average branch but cued by a share-equally premise + a per-each question.
+    _shared = _equal_share(question, context, premises)
+    if _shared is not None:
+        return _shared
     # GUARD 2 — a "than" comparison that collapsed to a FLAT quantity (a verbatim stated value, no
     # Relation, not a derived ±) means the relation ("25 times more stickers THAN Kristoff") was
     # dropped → we misread it. A comparative-derived quantity (amount ≠ any stated value) is OK.
@@ -4905,6 +4960,8 @@ def run_cli(args: list) -> str:
     if _sys is None:
         _sys = _offset_sum_system(premises, question)
     _depleted = _scene_depletion(question, context, readings)   # mirror solve() (#104) — pool − Σ takes
+    if _depleted is None:
+        _depleted = _equal_share(question, context, premises)   # mirror solve(): pool-and-redistribute Σ/N
     if not trace:                                          # just the answer
         return _answer_text(_sys if _sys is not None else
                             _depleted if _depleted is not None else answer(question, context))
