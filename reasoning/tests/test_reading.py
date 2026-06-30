@@ -3901,6 +3901,27 @@ class TestSumRatioSystem(unittest.TestCase):
             "many as Cam. How many donuts did Cam take?"), 8)
 
 
+class TestNounAfterQuantifierAndInAll(unittest.TestCase):
+    """Two coupled fixes for "How many cans did the boys collect in all?": (1) a word after "many"/"much"
+    with both a noun and an auxiliary sense reads as the NOUN (else 'cans'→modal and "many" binds 'boys');
+    (2) "in all" is a combined-total cue. Together: Solomon=66, Juwan=66/3=22, Levi=22/2=11 → Σ = 99.
+    dev-train 66→67, holdout/TEST held. SYNTHETIC."""
+
+    def test_solomon_cans_in_all(self):
+        self.assertEqual(reading.solve(
+            "Solomon collected three times as many cans as Juwan. Levi collected half of what Juwan "
+            "collected. Solomon collected 66 cans. How many cans did the boys collect in all?"), 99)
+
+    def test_cans_reads_as_noun_after_many(self):
+        r = reading.analyze("How many cans did the boys collect?")
+        cans = next(u for u in r.units if u.surface == "cans")
+        self.assertEqual(cans.features["senses"], ["noun"])
+
+    def test_modal_can_unaffected_elsewhere(self):
+        # "can" as a true modal (not after many/much) is untouched.
+        self.assertEqual(reading.solve("Bob has 5 apples. Ann has 3 apples. How many apples in all?"), 8)
+
+
 class TestLabelLetterEntities(unittest.TestCase):
     """"Jar A" / "Jar B" / "Jar C" are DISTINCT labeled entities, not the bare noun 'jar' three times. A
     noun/name + a single capital letter merges into one NAME unit (keyed 'jar a' etc.), firing on a lowercase

@@ -1189,6 +1189,20 @@ def _trial_cost(reading: Reading, multi_idx, combo) -> int:
     return _unmet_count(trial)
 
 
+def _prefer_noun_after_quantifier(reading: Reading) -> Reading:
+    """A quantifier ("many"/"much") counts a NOUN, never an auxiliary/modal — so a word right after
+    "many"/"much" carrying BOTH a noun and an auxiliary/modal sense ("how many CANS", can=[auxiliary, noun])
+    must read as the NOUN. Drop the auxiliary/modal sense so disambiguate can't be pulled to it by a nearby
+    "did" ("how many cans DID the boys collect" was reading 'cans' as a modal, then 'many' bound 'boys')."""
+    units = reading.units
+    for i in range(1, len(units)):
+        if _key(units[i - 1].surface) in ("many", "much"):
+            s = units[i].features.get("senses", [])
+            if "noun" in s and ("auxiliary" in s or "modal" in s):
+                units[i].features["senses"] = [x for x in s if x not in ("auxiliary", "modal")]
+    return reading
+
+
 def disambiguate(reading: Reading) -> Reading:
     """Pick the best-covering sense for each ambiguous word; commit it as a reversible decision."""
     multi_idx = [k for k, u in enumerate(reading.units) if len(u.features.get("senses", [])) > 1]
@@ -1220,6 +1234,7 @@ def analyze(text: str) -> Reading:
     _merge_times_multiplier(r)  # "three times as" → one multiplier unit (×3), like "twice"
     _merge_labels(r)         # "Grade 5" → a labeled noun (the number is an ordinal, not a quantity)
     _merge_label_letters(r)  # "Jar A" / "Class B" → one labeled NAME (distinct entities, not bare 'jar')
+    _prefer_noun_after_quantifier(r)   # "how many CANS" → cans is a noun, never the modal 'can'
     disambiguate(r)          # collapse multi-sense words to the reading that covers best
     annotate_obligations(r)
     while condense(r):       # condense "red apple" → one noun unit; loop stacks "big red apple"
@@ -3170,7 +3185,8 @@ def answer(question: str, context: list, discourse: list = None):
     _coll0 = _follow(_follow(interro, "queries"), "collection")               # "how many HOURS" → (hour,…)
     asked_unit = _descriptor(_coll0)[0] if _coll0 is not None else None
     kys = {_key(u.surface) for u in r.units}
-    combined_q = bool(kys & {"combined", "altogether", "total"}) or {"all", "together"} <= kys
+    combined_q = bool(kys & {"combined", "altogether", "total"}) or {"all", "together"} <= kys \
+        or "in all" in question.lower()                  # "How many cans did the boys collect IN ALL?" → Σ
     is_long = any(_key(u.surface) == "long" for u in r.units)
     # AGGREGATION CUE — bare "together" (without "all") is a sum cue ("how much did the two men earn
     # TOGETHER?" → Σ), but it's CONFOUNDED with the collaborative-rate sense ("how long to paint the house

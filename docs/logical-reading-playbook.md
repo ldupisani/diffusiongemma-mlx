@@ -1155,6 +1155,22 @@ flagged as "high-blast-radius" (cf. the reverted noun-noun head-walk) can be SAF
 surface signal (one capital letter, not a general compound-head rule) — and ALWAYS verify the fix is the SOLE
 blocker first (substitute clean names) so you don't build parse machinery for a problem that still won't solve.  ·
 
+123. **noun-after-quantifier + "in all" cue** (dev-train 66→67: Solomon; holdout + TEST held). Two coupled
+fixes for "How many cans did the boys collect in all?": Solomon=66, Juwan=66/3=22, Levi=22/2=11 → Σ=99 (the
+relations + backward inversion already resolved all three — this was FOLD-blocked). Blockers: (1) "cans"
+disambiguated to the MODAL 'can' (it's `["auxiliary","noun"]`) because a nearby "did" pulled it there, so "many"
+bound the next noun 'boys' → the Σ found no 'boy' quantities → decline; (2) "in all" wasn't a combined-total cue
+(combined_q only knew combined/altogether/total or all+together). FIX: `_prefer_noun_after_quantifier` (before
+disambiguate) drops the auxiliary/modal sense from a word right after "many"/"much" that also has a noun sense
+(a quantifier counts a noun, never a modal); and "in all" added to combined_q. NARROW: the noun-pref fires only
+immediately after many/much (an adjective like "how many RED apples" is untouched — 'red' has no noun sense to
+prefer; a true modal "she can run" is nowhere near a quantifier). dev-train +1 / 0 new wrong; holdout + TEST
+held. 869 tests. LESSON: a disambiguation bug ("cans"→modal) can MISDIRECT the quantifier binding two words
+downstream ("many"→'boys'), so the visible symptom (Σ over the wrong measure) is far from the cause — trace the
+collection the interrogative actually bound, not just the final fold. Coupled fixes (parse + cue) often both
+needed: the gq-inference covered the measure but the quantifier still mis-bound, and "in all" was a separate
+gate.  ·
+
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
 head, attribute-superset; a sub-group's count = instances whose attributes ⊇ the query's. We store
