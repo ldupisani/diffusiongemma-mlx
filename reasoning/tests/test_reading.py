@@ -4386,5 +4386,28 @@ class TestCopulaSubjectCoreference(unittest.TestCase):
             "How many months old is Antonio?"), "undetermined")
 
 
+class TestAgeOfPhraseAndPresentAnchor(unittest.TestCase):
+    """The possessive age frame now also reads "the age OF Y" / "the age that Y is" (not just "Y's age"),
+    accepts a resolved-PRONOUN subject ("she"), and honors a present anchor: "the age that Y is CURRENTLY"
+    keeps Y at the present (X+Δ = k·Y_now), unlike the default where the shift applies to both. SYNTHETIC."""
+
+    def test_age_of_phrase_backward_shifted(self):
+        # Cori 3; Cori+5 = ⅓·(aunt+5) → aunt = (3+5)/(1/3) − 5 = 24 − 5 = 19. ("she" → Cori.)
+        self.assertEqual(reading.solve(
+            "Cori is 3 years old today. In 5 years, she will be one-third the age of her aunt. "
+            "How old is her aunt today?"), 19)
+
+    def test_present_anchored_standard(self):
+        # "the age that Nora is CURRENTLY" anchors Nora to now: Terry+10 = 4·Nora_now = 40 → Terry = 30.
+        self.assertEqual(reading.solve(
+            "In 10 years, Terry will be 4 times the age that Nora is currently. "
+            "If Nora is currently 10 years old, how old is Terry now?"), 30)
+
+    def test_then_anchor_shifts_both(self):
+        # "Mary's age THEN" (not "now") → both shift: Suzy+4 = 2·(Mary+4); Suzy 20 → Mary = 8.
+        self.assertEqual(reading.solve(
+            "In four years, Suzy will be twice Mary's age then. If Suzy is 20 now, how old is Mary?"), 8)
+
+
 if __name__ == "__main__":
     unittest.main()

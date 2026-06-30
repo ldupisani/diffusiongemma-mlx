@@ -1998,16 +1998,21 @@ def _possessive_age_parts(reading: Reading):
         return None
     mi = units.index(mult)
     names = [u for u in units if "name" in u.features.get("senses", [])]
-    if len(names) < 2:
+    if not names:
         return None
+    # the standard Y owns an "age": EITHER "Y's age" (age within 3 AFTER the name) OR "the age of Y" (age
+    # within 3 BEFORE it, past the multiplier). Both denote Y's-age as the scaled referent.
     std = next((u for i, u in enumerate(units) if i > mi and "name" in u.features.get("senses", [])
-                and any(_key(units[j].surface) == "age" for j in range(i + 1, min(i + 4, len(units))))), None)
+                and (any(_key(units[j].surface) == "age" for j in range(i + 1, min(i + 4, len(units))))
+                     or any(_key(units[j].surface) == "age" for j in range(max(mi, i - 3), i)))), None)
     if std is None:
         return None
-    cs = _copula_args(reading)[0]                         # the copula subject, else the first non-standard name
-    subj = cs if (cs is not None and "name" in cs.features.get("senses", []) and cs is not std) \
+    cs = _copula_args(reading)[0]                         # the copula subject: a NAME, or a resolved pronoun
+    subj = cs if (cs is not None and cs is not std        # ("she is one-third Tina's age" → she→Cori), else
+                  and ("name" in cs.features.get("senses", [])           # the first non-standard name
+                       or ("pronoun" in cs.features.get("senses", []) and _follow(cs, "refers") is not None))) \
         else next((u for u in names if u is not std), None)
-    if subj is None or subj is std:
+    if subj is None or subj is std or _entity(subj) == _entity(std):
         return None
     return _entity(subj), _entity(std), k
 
@@ -4080,15 +4085,18 @@ def _facts_from(reading: Reading, context: list = None) -> list:
     if pap is not None:                                   # X_age = k × Y_age (the possessive frame)
         subj_e, std_e, k = pap
         delta = _time_offset(r)                           # "In Δ years, X will be k× Y's age" shifts BOTH
+        std_now = any(_key(u.surface) in ("now", "today", "currently") for u in r.units)   # …unless Y is
+        #                                                  anchored to the present ("the age Y is CURRENTLY")
         y = _holdings(std_e, ("year", frozenset()), context)
-        if y is not None:                                 # FORWARD: X_now = k·(Y_now+Δ) − Δ (present: Δ=0)
-            x = f"{_num(k)} * ({_num(y)} + {_num(delta)}) - {_num(delta)}" if delta \
-                else f"{_num(k)} * {_num(y)}"
+        if y is not None:                                 # FORWARD: X_now = k·(Y_now+Δ) − Δ; std_now drops +Δ
+            y_ref = _num(y) if std_now else f"({_num(y)} + {_num(delta)})"
+            x = f"{_num(k)} * {y_ref} - {_num(delta)}" if delta else f"{_num(k)} * {_num(y)}"
             return [Quantity(subj_e, ("year", frozenset()), _compute(x), "be")]
         x_now = _holdings(subj_e, ("year", frozenset()), context)   # BACKWARD: subject known, derive standard
         if x_now is not None and k:                       # Y_now = (X_now+Δ)/k − Δ ("Suzy 20; Suzy+4 = 2·(Mary+4)"
-            yv = f"({_num(x_now)} + {_num(delta)}) / {_num(k)} - {_num(delta)}" if delta \
-                else f"{_num(x_now)} / {_num(k)}"          # → Mary = 24/2 − 4 = 8)
+            tail = "" if std_now else f" - {_num(delta)}"   # → Mary = 24/2 − 4 = 8); std_now drops the −Δ
+            yv = f"({_num(x_now)} + {_num(delta)}) / {_num(k)}{tail}" if delta \
+                else f"{_num(x_now)} / {_num(k)}"
             return [Quantity(std_e, ("year", frozenset()), _compute(yv), "be")]
         return []                                         # neither age known → DEFER (fixpoint chains), and
         #                                                   crucially don't fall to _frequency (bogus Freq)
