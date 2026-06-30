@@ -2598,6 +2598,21 @@ def _transfer_quantity(reading: Reading):
                      _lemma(verbs[0].surface), _time_at(reading, verbs[0]))]
 
 
+def _list_cardinals(reading: Reading) -> set:
+    """The units that are a value-LIST's set-size CARDINAL — "Malou got 91, 90, and 92 in her three
+    quizzes": the "three" equals the count of the OTHER values quantifying the same noun ('quiz'), so it's
+    the list size, not another datum. Returns their id()s. A genuine list needs ≥3 values on one noun (≥2
+    data + the cardinal). Shared by _quantity (skip emitting it) and GUARD 3 (don't flag it unused-given)."""
+    by_noun: dict = {}
+    for u in reading.units:
+        if "value" in u.features.get("senses", []):
+            n = _follow(u, "quantifies")
+            if n is not None:
+                by_noun.setdefault(id(n), []).append(u)
+    return {id(u) for vs in by_noun.values() if len(vs) >= 3
+            for u in vs if u.features.get("value") == len(vs) - 1}
+
+
 def _quantity(reading: Reading):
     """The quantities a "<entity> <verb>s <amount> …" statement asserts — ONE per value: a
     self-measuring money value ("earns $12") or a value quantifying a noun ("buys 2 apples"). A list,
@@ -2612,15 +2627,21 @@ def _quantity(reading: Reading):
         return []
     # Two ADJACENT bare values ("10 $20" = ten twenty-dollar bills) are a compound denomination we
     # don't parse — never a genuine conjoined object ("3 apples AND 2 oranges" separates them). Decline.
+    # EXCEPTION: a COMMA after the first value ("got 91, 90, and 92") marks a value LIST, not a denomination.
     vi = [k for k, u in enumerate(reading.units) if "value" in u.features.get("senses", [])]
-    if any(b - a == 1 for a, b in zip(vi, vi[1:])):
+    if any(b - a == 1 and not reading.units[a].surface.rstrip().endswith(",")
+           for a, b in zip(vi, vi[1:])):
         return []
+    cardinals = _list_cardinals(reading)                 # the set-size cardinal of a value list ("three
+    #                                                      quizzes" beside 3 scores) — dropped, not a datum
     ent, lemma, when = _entity(subject), _lemma(verbs[0].surface), _time_at(reading, verbs[0])
     first = any("noun" in u.features.get("senses", []) and _descriptor(u)[0] in TIME_UNITS   # "in the FIRST
                and "first" in u.features.get("attributes", []) for u in reading.units)       # year …" override
     out = []
     for u in reading.units:
         if "value" not in u.features.get("senses", []):
+            continue
+        if id(u) in cardinals:                           # the list's set-size cardinal ("three quizzes")
             continue
         if "measure" in u.features:                      # "$12" — a self-measuring money value
             out.append(Quantity(ent, u.features["measure"], u.features["value"], lemma, when))
@@ -2855,25 +2876,29 @@ def answer(question: str, context: list, discourse: list = None):
     if unknown:
         return unknown                                   # don't guess about words we don't know
 
-    # AVERAGE over a set — "what is the average height of the three people?" = Σ(each entity's holding) / N.
-    # Handled FIRST: "average" is a "what is …" phrasing that the wh_value dispatch (expecting "what is
-    # <name>") would otherwise decline. Σ one net holding per distinct owner, ÷ the owner count. The cue is
-    # SPECIFIC (unlike "more than"), and average questions all decline today → only blocked → {correct |
-    # decline}. DENOMINATOR SAFETY: infer the single shared measure (the question says "height" but holdings
-    # are keyed 'inch'); require ≥2 owners; and if the question states the set size ("the three"), the owner
-    # count MUST equal it (else an entity is missing/extra → DECLINE rather than divide by the wrong N).
+    # AVERAGE over a set — "what is the average height of the three people?" = Σ(values) / N. Handled FIRST:
+    # "average" is a "what is …" phrasing the wh_value dispatch (expecting "what is <name>") would otherwise
+    # decline. The cue is SPECIFIC (unlike "more than"), and average questions all decline today → only
+    # blocked → {correct | decline}. Two modes over the SINGLE shared measure: (a) MULTI-OWNER — one net
+    # holding per distinct owner (Reese/Daisy/Parker → 3 heights); (b) VALUE-LIST — one owner with several
+    # quantities ("Malou got 91, 90, 92" → average those amounts, NOT the accumulated 273). DENOMINATOR
+    # SAFETY: require exactly one shared measure (the question says "height", holdings are keyed 'inch'); ≥2
+    # terms; and if the question states the set size, the term count MUST equal it (else DECLINE, not /wrong-N).
     if any(_key(u.surface) == "average" for u in r.units) and context:
         measures = {f.measure for f in context if isinstance(f, Quantity) and f.amount is not None}
         if len(measures) == 1:
             gq = next(iter(measures))
-            owners = {f.entity for f in context
-                      if isinstance(f, Quantity) and f.measure == gq and f.amount is not None}
-            hs = [_holdings(o, gq, context) for o in owners]
+            qs = [f for f in context if isinstance(f, Quantity) and f.measure == gq and f.amount is not None]
+            owners = {f.entity for f in qs}
+            if len(owners) == 1:                         # VALUE-LIST: average the individual amounts
+                terms = [f.amount for f in qs]
+            else:                                        # MULTI-OWNER: one net holding per owner
+                terms = [_holdings(o, gq, context) for o in owners]
             stated_n = next((u.features["value"] for u in r.units if "value" in u.features.get("senses", [])
                              and float(u.features["value"]).is_integer()), None)
-            if hs and all(h is not None for h in hs) and len(hs) >= 2 \
-                    and (stated_n is None or len(hs) == stated_n):
-                return _compute(f"({' + '.join(_num(h) for h in hs)}) / {len(hs)}")
+            if terms and all(t is not None for t in terms) and len(terms) >= 2 \
+                    and (stated_n is None or len(terms) == stated_n):
+                return _compute(f"({' + '.join(_num(t) for t in terms)}) / {len(terms)}")
         return "undetermined"
 
     op_unit = next((u for u in r.units if "operator" in u.features.get("senses", [])), None)
@@ -4306,8 +4331,9 @@ def solve(text: str):
             # Exempting it solved the single-partitive case (+1) but un-declined the chains (+3 wrong) →
             # net precision-negative. Re-exempt only once the chain composition (elided 2nd base, remainder)
             # is handled; until then the single partitive declines (safe), the chains decline (safe).
-        given |= {u.features["value"] for u in rp.units if "value" in u.features.get("senses", [])}
-        given |= {u.features["value"] for u in rp.units if "value" in u.features.get("senses", [])}
+        cardinals = _list_cardinals(rp)                  # a value-list's set-size ("three quizzes") is
+        given |= {u.features["value"] for u in rp.units  # consumed as the size, not a stated datum → exempt
+                  if "value" in u.features.get("senses", []) and id(u) not in cardinals}
     used = {f.amount for f in context if isinstance(f, (Quantity, Rate))} \
         | {f.per_amount for f in context if isinstance(f, Rate)} \
         | {f.count for f in context if isinstance(f, Frequency)}

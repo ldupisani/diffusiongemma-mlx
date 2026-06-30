@@ -1401,6 +1401,18 @@ class TestIncrement48RelationalQuantity(unittest.TestCase):
         self.assertEqual(reading.answer("What is the average number of apples of the three people?", ctx),
                          "undetermined")
 
+    def test_value_list_parses_to_separate_quantities(self):
+        # "got 8, 10, and 12 in his three games" → three quantities; the "three" cardinal equals the list
+        # length (the set size), not a fourth datum, so it is dropped.
+        facts = reading.learn("Sam got 8, 10, and 12 in his three games")
+        amounts = sorted(f.amount for f in facts if isinstance(f, reading.Quantity))
+        self.assertEqual(amounts, [8, 10, 12])
+
+    def test_value_list_average(self):
+        out = reading.run_cli(["Sam got 8, 10, and 12 in his three games. "
+                               "What is his average score?"])
+        self.assertEqual(out.strip(), "10")
+
 
 class TestIncrement49QuestionRelativePolarity(unittest.TestCase):
     """#49 — a quantity's sign is RELATIVE TO THE QUESTION. "how many does X have?" folds holdings
