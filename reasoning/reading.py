@@ -3371,6 +3371,16 @@ def answer(question: str, context: list, discourse: list = None):
                     return int(total) if total == int(total) else total
         return "undetermined"
     if query is None:
+        # ABSTRACT/ELIDED MEASURE over an ACCUMULATION — "how FAR did she walk for 2 hours?" has no measure
+        # noun, but if the context holds ONE measure, ONE owner, and ≥2 quantities (a sum the normal path
+        # missed), the answer is that owner's net holding (Hazel: 2 + 4 = 6). The ≥2 gate keeps a single-fact
+        # "how much did Tom run?" (5 miles) DECLINING per #74's no-guess design — this only rescues an
+        # accumulation the measure-less question couldn't dispatch.
+        qs = [f for f in context if isinstance(f, Quantity) and f.amount is not None]
+        if len(qs) >= 2 and len({f.measure for f in qs}) == 1 and len({f.entity for f in qs}) == 1:
+            total = _holdings(qs[0].entity, qs[0].measure, context)
+            if total is not None:
+                return int(total) if total == int(total) else total
         return [Deficiency("unanswerable", interro, "I couldn't tell what to count")]
     if not any(isinstance(inst, tuple) and inst[0] == query[0] for inst in context):
         return "undetermined"        # the queried TYPE isn't present as instances (e.g. "how much money"

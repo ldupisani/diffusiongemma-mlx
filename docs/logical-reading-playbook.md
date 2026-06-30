@@ -1129,6 +1129,17 @@ new wrong; holdout 45/3 held (the first A/B regressed it 45/5 — the three gate
 (remainder nouns) and the distributor-among-others shape, and let a non-integer result veto a half-resolved
 context. The holdout caught all three; each became a reusable precision gate.  ·
 
+121. **abstract-measure accumulation** (dev-train 64→65: Hazel; holdout + TEST held). Fold-reachable: "Hazel
+walked 2 km in the first hour. She walked twice as far in the second hour. How FAR did she walk for 2 hours?" —
+both facts resolved (2, 4 → hazel/kilometer) but the answer path raised "couldn't tell what to count" because
+"how far" carries no measure noun (query=None). FIX in answer()'s query=None branch: when the context holds ONE
+measure, ONE owner, and ≥2 quantities, return that owner's net holding. The ≥2 gate is the discriminator — it
+fires only on an ACCUMULATION the measure-less question couldn't dispatch, while a SINGLE-fact "how much did Tom
+run?" (5 miles) keeps DECLINING per #74's deliberate no-guess design (don't answer a lone holding when the
+question's measure is unreadable). dev-train +1 / 0 new wrong; holdout + TEST held. 863 tests. LESSON: a query=None
+fallback is safe only if it requires MORE than a single lookup — gate on the accumulation (≥2 facts the normal
+fold missed), so it rescues a genuine sum without overriding a conservative single-fact decline.  ·
+
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
 head, attribute-superset; a sub-group's count = instances whose attributes ⊇ the query's. We store

@@ -3901,6 +3901,21 @@ class TestSumRatioSystem(unittest.TestCase):
             "many as Cam. How many donuts did Cam take?"), 8)
 
 
+class TestAbstractMeasureAccumulation(unittest.TestCase):
+    """"How FAR did she walk for 2 hours?" — no measure noun in the question, but the context holds one
+    measure, one owner, and ≥2 quantities (an accumulation the measure-less question couldn't dispatch) →
+    that owner's net holding (Hazel 2 + 4 = 6). The ≥2 gate keeps a single-fact "how much did Tom run?"
+    (5 miles) DECLINING per #74's no-guess design. dev-train 64→65, holdout/TEST held. SYNTHETIC."""
+
+    def test_abstract_measure_accumulation(self):
+        self.assertEqual(reading.solve(
+            "Hazel walked 2 kilometers in the first hour. If she walked twice as far in the second hour, "
+            "how far did she walk for 2 hours?"), 6)
+
+    def test_single_fact_abstract_still_declines(self):
+        self.assertNotIsInstance(reading.solve("Tom ran 5 miles. How much did Tom run?"), (int, float))
+
+
 class TestEqualShare(unittest.TestCase):
     """POOL-AND-REDISTRIBUTE — "Mark has 30, Peter 25, John 35. They combine and share equally. How many
     will EACH have?" → (30+25+35)/3 = 30. Same Σ/N math as the average branch, cued by a share-equally premise
