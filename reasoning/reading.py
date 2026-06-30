@@ -1856,6 +1856,46 @@ def _relational_age_factor(reading: Reading):
     return None
 
 
+def _possessive_age_parts(reading: Reading):
+    """The (subject, standard, factor) of a POSSESSIVE relational age — "Jordyn's age is double Zrinka's
+    age" / "Jerica is twice Louis' age" → subject's age = factor × standard's age. The possessive frame
+    (the noun "age" owned via a name) instead of "as old as"; the multiplier mis-scales the copula, so we
+    read it POSITIONALLY: the standard is the name after the multiplier that owns an "age". None if the
+    frame doesn't apply. PURE-RATIO only (a comparative offset is left to other resolvers)."""
+    units = reading.units
+    if not any(_key(u.surface) == "age" for u in units):
+        return None
+    if any(_key(u.surface) == "as" for u in units):
+        return None                                       # "as old as Y" is _relational_age's frame
+    if any(_key(u.surface) in ("more", "less", "older", "younger", "fewer") for u in units):
+        return None                                       # an offset on the factor we don't fold here
+    if not any(_key(u.surface) in ("is", "are", "was", "were") for u in units):
+        return None
+    mult = next((u for u in units if "multiplier" in u.features.get("senses", [])), None)
+    if mult is None:
+        return None
+    if "fraction" in mult.features:
+        num, den = mult.features["fraction"]; k = num / den
+    else:
+        k = mult.features.get("value")
+    if k is None:
+        return None
+    mi = units.index(mult)
+    names = [u for u in units if "name" in u.features.get("senses", [])]
+    if len(names) < 2:
+        return None
+    std = next((u for i, u in enumerate(units) if i > mi and "name" in u.features.get("senses", [])
+                and any(_key(units[j].surface) == "age" for j in range(i + 1, min(i + 4, len(units))))), None)
+    if std is None:
+        return None
+    cs = _copula_args(reading)[0]                         # the copula subject, else the first non-standard name
+    subj = cs if (cs is not None and "name" in cs.features.get("senses", []) and cs is not std) \
+        else next((u for u in names if u is not std), None)
+    if subj is None or subj is std:
+        return None
+    return _entity(subj), _entity(std), k
+
+
 def _relational_age(reading: Reading, context: list):
     """A RELATIONAL AGE — "X is N times as old as Y" → X's age = N × Y's age (the year-Quantity of the
     standard Y). None when Y's age isn't known yet — the solve() fixpoint then chains a multi-hop
@@ -2963,9 +3003,15 @@ def answer(question: str, context: list, discourse: list = None):
         aux = next((u for u in r.units if "auxiliary" in u.features.get("senses", [])), None)   # age@(now+Δ)
         if aux is not None:                                                                     # = age_now+Δ
             entities, _ = _question_subjects(r, aux)
-        else:                                            # "How old is X?" — copula, subject is fronted
-            subj, _ = _copula_args(r)
-            entities = [_entity(subj)] if subj is not None else []
+        else:                                            # "How old is X?" / "How many years old is X?" — the
+            # entity asked about is the NAME (the copula's grammatical subject mis-resolves to the fronted
+            # measure "years" in "how many years old", so prefer the name; fall back to the copula subject).
+            name = next((u for u in r.units if "name" in u.features.get("senses", [])), None)
+            if name is not None:
+                entities = [_entity(name)]
+            else:
+                subj, _ = _copula_args(r)
+                entities = [_entity(subj)] if subj is not None else []
         if not entities:
             return "undetermined"
         parts = []
@@ -3672,6 +3718,14 @@ def _facts_from(reading: Reading, context: list = None) -> list:
     ra = _relational_age(r, context)                     # "X is N times as old as Y" → X_age = N × Y_age?
     if ra is not None:
         return [ra]
+    pap = _possessive_age_parts(r)                        # "X's age is k× Y's age" / "X is k× Y's age" →
+    if pap is not None:                                   # X_age = k × Y_age (the possessive frame)
+        subj_e, std_e, k = pap
+        y = _holdings(std_e, ("year", frozenset()), context)
+        if y is not None:
+            return [Quantity(subj_e, ("year", frozenset()), _compute(f"{_num(k)} * {_num(y)}"), "be")]
+        return []                                         # Y's age unknown → DEFER (fixpoint chains), and
+        #                                                   crucially don't fall to _frequency (bogus Freq)
     if _relational_age_factor(r) is not None and _copula_args(r)[0] is not None:
         return []                                        # Y's age not yet known → DEFER (the fixpoint
         # chains the multi-hop: Anne=2×Emile, Emile=6×Maude, Maude=8 → 96; never a bare predication)

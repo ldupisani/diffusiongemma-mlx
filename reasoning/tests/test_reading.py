@@ -2616,6 +2616,28 @@ class TestBareAge(unittest.TestCase):
         self.assertEqual(reading.run_cli([q]).strip(), str(reading.solve(q)))
 
 
+class TestPossessiveRelationalAge(unittest.TestCase):
+    """The possessive age frame "X's age is k× Y's age" / "X is k× Y's age" → X's age = k × Y's age
+    (the multiplier mis-scales the copula, so it's read positionally). And "how many years old is X?"
+    asks for the NAME's age (the grammatical subject mis-resolves to the fronted "years")."""
+
+    def test_possessive_age_resolves(self):
+        out = reading.run_cli(["Bob is 6 years old. Anna's age is double Bob's age. How old is Anna?"])
+        self.assertEqual(out.strip(), "12")
+
+    def test_possessive_age_bare_multiplier(self):
+        out = reading.run_cli(["Bob is 7 years old. Anna is twice Bob's age. How old is Anna?"])
+        self.assertEqual(out.strip(), "14")
+
+    def test_possessive_age_defers_when_standard_unknown(self):
+        # standard's age unknown → DEFER (no bogus frequency, no wrong value).
+        self.assertEqual(reading.learn("Anna is twice Bob's age", None, []), [])
+
+    def test_how_many_years_old_question(self):
+        out = reading.run_cli(["Matilda is 35 years old. How many years old is Matilda?"])
+        self.assertEqual(out.strip(), "35")
+
+
 class TestIncrement92HyphenCompounds(unittest.TestCase):
     """#92 - a DIGIT-led hyphen compound is an adjectival number-unit phrase, restored to its words at
     tokenization: "120-page" → 120 + page, "2-hour" → 2 + hour (the number then quantifies the unit
