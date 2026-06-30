@@ -4308,9 +4308,24 @@ def _sum_ratio_system(premises: list, question: str):
                              if _descriptor(u)[0] == asked_measure[0]), None)   # CONDENSED adj ('red')
     if not rels:
         return None
+    knowns = {}                                                        # entities with a stated ABSOLUTE value
+    for p in premises:                                                 # ("Delta took 8 donuts" → delta=8) —
+        rp = analyze(p)                                                # a part of the total that isn't a ratio
+        if any("multiplier" in u.features.get("senses", []) for u in rp.units) \
+                or any(_fraction_parts(u.surface) is not None for u in rp.units) \
+                or any(_key(u.surface) in ("more", "less", "fewer") for u in rp.units):
+            continue
+        nm = [u for u in rp.units if "name" in u.features.get("senses", []) and " and " not in _entity(u)]
+        kv = next((u for u in rp.units if "value" in u.features.get("senses", [])           # value of the
+                   and u.features.get("value") is not None and _follow(u, "quantifies") is not None  # asked
+                   and asked_measure is not None and _descriptor(_follow(u, "quantifies")) == asked_measure
+                   ), None) if asked_measure is not None else None
+        if len(nm) == 1 and kv is not None and _entity(nm[0]) not in rels:
+            knowns[_entity(nm[0])] = kv.features["value"]
     total = None
     for p in premises:                                                 # the combined TOTAL (as #3h)
-        if not any(w in p.lower() for w in ("combined", "total", "together", "between them", "in all")):
+        if not any(w in p.lower() for w in ("combined", "total", "together", "between them", "in all",
+                                            "share", "shared", "altogether")):
             continue
         rp = analyze(p)
         if any("comparative" in u.features.get("senses", []) for u in rp.units):
@@ -4333,21 +4348,27 @@ def _sum_ratio_system(premises: list, question: str):
             total = tv.features["value"]; break
     if total is None:
         return None
-    entities = set(rels) | {std for _k, std in rels.values()} | {asked}
-    roots = [e for e in entities if e not in rels]                     # the pivot: the unique non-subject
-    if len(roots) != 1:
+    entities = set(rels) | {std for _k, std in rels.values()} | set(knowns) | {asked}
+    free = [e for e in entities if e not in rels and e not in knowns]   # the pivot: the one entity that is
+    if len(free) != 1:                                                 # neither a ratio-subject nor known
         return None
-    coeff = {roots[0]: 1.0}                                            # propagate coeff = factor × coeff[std]
+    coeff = {free[0]: 1.0}                                             # propagate coeff = factor × coeff[std]
     for _ in range(len(entities) + 1):                                # to a fixpoint along the relation tree
         for e, (k, std) in rels.items():
             if std in coeff and e not in coeff:
                 coeff[e] = k * coeff[std]
-    if set(coeff) != entities or asked not in coeff:                  # disconnected / cyclic → reject
+    # every entity must be reducible to the pivot OR a known (else disconnected / cyclic) → reject
+    if any(e not in coeff and e not in knowns for e in entities):
         return None
     denom = sum(coeff.values())
     if denom == 0:
         return None
-    pivot = _compute(f"{_num(total)} / {_num(denom)}")                # pivot = Total / Σ coeff
+    if asked in knowns:                                               # the asked part is itself stated
+        return knowns[asked]
+    # pivot = (Total − Σ knowns) / Σ coeff ; answer = coeff[asked] × pivot ("Delta 8 + Beta 3·Gamma + Gamma
+    # = 40" → Gamma = (40−8)/4 = 8). With no knowns this is exactly #3r's Total / Σ coeff.
+    pivot = _compute(f"({_num(total)} - ({_num(sum(knowns.values()))})) / {_num(denom)}") if knowns \
+        else _compute(f"{_num(total)} / {_num(denom)}")
     return pivot if coeff[asked] == 1 else _compute(f"{_num(coeff[asked])} * {_num(pivot)}")
 
 

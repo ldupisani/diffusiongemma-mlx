@@ -3894,6 +3894,12 @@ class TestSumRatioSystem(unittest.TestCase):
             "Bob and Sue have 12 cards combined. Bob bought half the cards sold. How many does Sue have?"),
             "undetermined")
 
+    def test_known_absolute_part_in_sum(self):
+        # a KNOWN absolute (Ann took 8) + a ratio (Bea = 3·Cam) + total: Cam = (40 − 8) / (3 + 1) = 8.
+        self.assertEqual(reading.solve(
+            "Ann, Bea and Cam decided to share 40 donuts. Ann took 8 donuts and Bea took three times as "
+            "many as Cam. How many donuts did Cam take?"), 8)
+
 
 class TestSceneDepletion(unittest.TestCase):
     """A POOL ("there were N X") depleted by takes ("took A … took B") → N − Σtakes. The existential N is
