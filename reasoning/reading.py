@@ -3251,6 +3251,14 @@ def answer(question: str, context: list, discourse: list = None):
                     diff = a - b if _key(comp.surface) == "more" else b - a
                     return int(diff) if diff == int(diff) else diff
             return "undetermined"
+        # the comparative often binds its standard to the MEASURE noun ("more PAIRS"), not the entity being
+        # compared. When the bound standard isn't a NAME and the question carries a comparison marker
+        # ("compared to Jim" / "than Jim"), recover the standard as the non-subject NAME. ("How many more
+        # pairs does Anthony have compared to Jim?" → Anthony − Jim.)
+        if (standard is None or "name" not in standard.features.get("senses", [])) \
+                and any(_key(u.surface) in ("than", "compared", "versus") for u in r.units):
+            standard = next((u for u in r.units if "name" in u.features.get("senses", [])
+                             and _entity(u) not in subjects), None)
         if standard is not None and len(subjects) == 1:
             a = _holdings(subjects[0], query, context)
             b = _holdings(_entity(standard), query, context)

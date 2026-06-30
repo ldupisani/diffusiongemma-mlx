@@ -1095,6 +1095,22 @@ was deliberately gated against, the affine/offset extension is a clean SIBLING (
 a separate function reusing the shared total-finder isolates the new regression surface from the mature path's
 hard-won gates, and the holdout proves it generalized rather than memorized.  ·
 
+119. **"compared to <name>" difference fold** (dev-train 61→62: Scott/Anthony/Jim, holdout/TEST held). FOUND by
+a FOLD-REACHABLE miner (build each fully-read decline's context to a fixpoint, then test whether the gold is a
+simple combination — Σ holdings, a difference, a product — of the already-resolved quantities; the largest such
+group is where parsing already succeeded and only an answer-fold is missing). "How many more pairs of shoes does
+Anthony have compared to Jim?" had Anthony=21 and Jim=19 both resolved, but the difference branch declined: the
+comparative "more" greedily binds its `standard` to the adjacent MEASURE noun ("more PAIRS"), not the entity, and
+the real standard sits after "compared to" (which the than-only branch never reads). FIX: when the comp-bound
+standard isn't a NAME and the question carries a comparison marker (than/compared/versus), recover the standard
+as the non-subject NAME (Anthony − Jim = 2). The pre-existing "than <NAME>" path is untouched (its standard is
+already a name → fallback skipped). dev-train +1 / 0 new wrong; holdout + TEST held (no such problem there, but
+no regression). 610 tests. LESSON: the fold-reachable miner is the right tool once the clean recognizer vein is
+worked out — it separates PARSE-blocked declines (the sub-facts never resolve; multi-piece, skip) from FOLD-
+blocked ones (sub-facts resolve, one answer-path is missing; a cheap, low-risk win). Most "in all"/sum declines
+turned out parse-blocked (e.g. "how many CANS" reads 'cans' as the modal auxiliary 'can', so the query measure
+never resolves) — only the difference-fold case was genuinely fold-only.  ·
+
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
 head, attribute-superset; a sub-group's count = instances whose attributes ⊇ the query's. We store

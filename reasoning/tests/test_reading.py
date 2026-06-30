@@ -3901,6 +3901,25 @@ class TestSumRatioSystem(unittest.TestCase):
             "many as Cam. How many donuts did Cam take?"), 8)
 
 
+class TestComparedToDifference(unittest.TestCase):
+    """"How many more <measure> does A have compared to B?" → A's holding − B's. The comparative ("more")
+    greedily binds its standard to the MEASURE noun ("more PAIRS"), not the entity, and the real standard sits
+    after "compared to" (or "than"), so the existing than-standard branch can't see it. Recover the standard as
+    the non-subject NAME when the bound standard isn't a name and a comparison marker is present. dev-train
+    61→62 (Scott/Anthony/Jim), 0 new wrong either slice, TEST held 61.5%. SYNTHETIC — never GSM8K strings."""
+
+    def test_compared_to_difference(self):
+        # Anthony = 3×7 = 21, Jim = 21 − 2 = 19 → 21 − 19 = 2.
+        self.assertEqual(reading.solve(
+            "Scott has 7 marbles. Anthony has 3 times as many marbles as Scott, and Jim has 2 less marbles "
+            "than Anthony. How many more marbles does Anthony have compared to Jim?"), 2)
+
+    def test_than_name_difference_still_works(self):
+        # the pre-existing "than <NAME>" path is unaffected (standard already a name).
+        self.assertEqual(reading.solve(
+            "Amy has 10 apples. Beth has 4 apples. How many more apples does Amy have than Beth?"), 6)
+
+
 class TestOffsetSumSystem(unittest.TestCase):
     """The AFFINE twin of the pure-ratio system: two entities, one relation subject = factor × standard +
     offset ("N more/less than k times as many as"), plus a combined total → solve a part. std = (T − c)/(k+1).
