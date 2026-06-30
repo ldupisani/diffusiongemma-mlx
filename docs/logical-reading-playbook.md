@@ -1066,6 +1066,16 @@ were N X" is a COUNT (instances), not a holding — a remainder over it has no o
 recognise the pool explicitly. And the no-unused-given gate is the clean discriminator between a plain pool
 (every number is base/depletion) and a computed base (an extra conversion/per-unit number) — reused from
 GUARD 3's principle.  ·
+117. **sum+ratio system with KNOWN-absolute parts** (extends #3r/#115; dev-train 57→58: Delta). #3r solved
+sum-constraint systems where every part is a ratio of the pivot; this adds a part with a stated ABSOLUTE
+value: "Delta, Beta and Gamma share 40 donuts. Delta took 8. Beta took 3× as many as Gamma. Gamma?" → Gamma
+= (40 − 8) / (3 + 1) = 8. `_sum_ratio_system` now collects KNOWNS (an entity with a stated value of the asked
+measure, no ratio/offset); the pivot is the one entity that is neither a ratio-subject nor known; solves
+pivot = (Total − Σknowns) / Σcoeff. Broadened the total cue with share/shared/altogether. Backward-compatible
+(no knowns → exactly #3r's Total/Σcoeff). All #3r/#3h gates preserved (unit/qualifier match, offset-tainted
+rejection) → Felipe still declines. holdout 42→43 / 0 new-wrong; TEST held 61.5%. 850 tests. LESSON: a fresh
+recognizer's natural generalizations (here knowns alongside ratios) are cheap, clean follow-ons IF you
+preserve its hard-won gates — the regression surface was already paid down in #115's holdout cycle.  ·
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
