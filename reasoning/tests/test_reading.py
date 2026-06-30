@@ -2547,6 +2547,24 @@ class TestIncrement91Contractions(unittest.TestCase):
         self.assertEqual(reading._split_contraction("didn't"), ["did", "not"])
         self.assertEqual(reading._split_contraction("won't"), ["will", "not"])
 
+    def test_other_suffixes(self):
+        self.assertEqual(reading._split_contraction("they're"), ["they", "are"])
+        self.assertEqual(reading._split_contraction("I'm"), ["I", "am"])
+        self.assertEqual(reading._split_contraction("we've"), ["we", "have"])
+
+    def test_possessive_name_splits_to_genitive(self):
+        self.assertEqual(reading._split_contraction("Tom's"), ["Tom", "'s"])
+        self.assertEqual([u.surface for u in reading.analyze("Tom's apples").units], ["Tom", "'s", "apples"])
+        # the name is now recognised (no unknown-word), unlike the un-split "Tom's"
+        self.assertFalse(any(d.kind == "unknown-word" for d in reading.deficiencies(reading.analyze("Tom's age"))))
+
+    def test_trailing_punctuation_rides_along(self):
+        self.assertEqual(reading._split_contraction("what's?"), ["what", "is?"])
+
+    def test_expanded_question_reads(self):
+        self.assertEqual([u.surface for u in reading.analyze("What's the answer?").units],
+                         ["What", "is", "the", "answer?"])
+
 
 class TestNameNounDisambiguation(unittest.TestCase):
     """A name that is ALSO a common noun ("Job", "Bill", "Rose") is made name/noun-ambiguous, and the
@@ -2574,23 +2592,28 @@ class TestNameNounDisambiguation(unittest.TestCase):
                  if reading._key(u.surface) == "bill")
         self.assertEqual(u.features["senses"], ["noun"])
 
-    def test_other_suffixes(self):
-        self.assertEqual(reading._split_contraction("they're"), ["they", "are"])
-        self.assertEqual(reading._split_contraction("I'm"), ["I", "am"])
-        self.assertEqual(reading._split_contraction("we've"), ["we", "have"])
 
-    def test_possessive_name_splits_to_genitive(self):
-        self.assertEqual(reading._split_contraction("Tom's"), ["Tom", "'s"])
-        self.assertEqual([u.surface for u in reading.analyze("Tom's apples").units], ["Tom", "'s", "apples"])
-        # the name is now recognised (no unknown-word), unlike the un-split "Tom's"
-        self.assertFalse(any(d.kind == "unknown-word" for d in reading.deficiencies(reading.analyze("Tom's age"))))
+class TestBareAge(unittest.TestCase):
+    """In an age-typed problem a bare copula "X is N" (no "years old" unit) states X's age = N, so a
+    relational-age chain can ground off it. Gated on age cues; a bare "X is N" elsewhere is untouched."""
 
-    def test_trailing_punctuation_rides_along(self):
-        self.assertEqual(reading._split_contraction("what's?"), ["what", "is?"])
+    def test_bare_age_in_age_context(self):
+        # "If Bob is 4" with an "as old as" relation present → Bob's age 4, so Anna = 3×4 = 12.
+        out = reading.run_cli(["Anna is 3 times as old as Bob. If Bob is 4, how old is Anna?"])
+        self.assertEqual(out.strip(), "12")
 
-    def test_expanded_question_reads(self):
-        self.assertEqual([u.surface for u in reading.analyze("What's the answer?").units],
-                         ["What", "is", "the", "answer?"])
+    def test_bare_number_without_age_context_is_not_an_age(self):
+        # no age cue → a bare "X is N" must NOT be invented as a year-quantity.
+        facts_of, context = [None], []
+        reading._inject_bare_ages([reading.analyze("Bob is 4")],
+                                  [reading.analyze("Bob is 4"), reading.analyze("How many does Bob have?")],
+                                  facts_of, context)
+        self.assertEqual(context, [])
+
+    def test_cli_matches_solve_on_bare_age(self):
+        # guard against re-introducing the CLI/solve divergence (#104) for this path.
+        q = "Anna is 3 times as old as Bob. If Bob is 4, how old is Anna?"
+        self.assertEqual(reading.run_cli([q]).strip(), str(reading.solve(q)))
 
 
 class TestIncrement92HyphenCompounds(unittest.TestCase):

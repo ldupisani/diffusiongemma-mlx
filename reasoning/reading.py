@@ -4222,6 +4222,33 @@ def _two_unknown_ratio(premises: list, question: str):
     return b_val if asked_ent == B else _compute(f"{_num(k)} * {_num(b_val)}")
 
 
+def _inject_bare_ages(prem_readings: list, all_readings: list, facts_of: list, context: list) -> None:
+    """BARE AGE — in an AGE-typed problem ("…as old as…", "older/younger than…"), a copula "X is N" with no
+    unit ("If Job is 5") states X's AGE = N. The bare value quantifies no noun, so `_quantity` emits nothing
+    and a relational-age chain can't ground. A bare equation has no dimension of its own, so infer it from
+    the problem's age framing: inject Quantity(X, year, N), letting the fixpoint chain (Job 5 → Stephanie 20
+    → Freddy 18). GATED on age cues so a bare "X is N" in a non-age problem is untouched. Mutates facts_of +
+    context in place; shared by solve() and the CLI paragraph loop so they don't diverge (cf. #104)."""
+    if not any(_key(u.surface) in ("old", "older", "younger", "age", "ages")
+               for rp in all_readings for u in rp.units):
+        return
+    for i, rp in enumerate(prem_readings):
+        if any(isinstance(f, Quantity) for f in (facts_of[i] or [])):
+            continue                                     # already produced a quantity → not a bare equation
+        verbs = [u for u in rp.units if "verb" in u.features.get("senses", [])]
+        if len(verbs) != 1 or _key(verbs[0].surface) not in ("is", "are", "was", "were"):
+            continue
+        subj = _follow(verbs[0], "subject")
+        if subj is None or "name" not in subj.features.get("senses", []):
+            continue
+        bare = next((u for u in rp.units if "value" in u.features.get("senses", [])
+                     and "measure" not in u.features and _follow(u, "quantifies") is None), None)
+        if bare is not None:
+            q = Quantity(_entity(subj), ("year", frozenset()), bare.features["value"], "be")
+            facts_of[i] = (facts_of[i] or []) + [q]
+            context.append(q)
+
+
 def solve(text: str):
     """Read a whole word-problem paragraph (premises + a trailing question) and answer the question —
     threading coreference (`discourse`) and the growing `context` across the premises (split into
@@ -4302,6 +4329,7 @@ def solve(text: str):
         if f:
             facts_of[i] = f
             context += f
+    _inject_bare_ages(readings[:len(premises)], readings, facts_of, context)   # "If Job is 5" → age 5
     context += _question_durations(readings[-1], context)   # SEED a question-clause duration ("…in 7
     # days?") so a rate×duration chain whose duration is in the QUESTION (not a premise) composes via the
     # rate_duration synth in the fixpoint below (Tom: 2 h/day × 7 days → 14 h, then 50 pg/h × 14 → 700).
@@ -4567,6 +4595,7 @@ def run_cli(args: list) -> str:
         f = learn(p, discourse, context)                   # discourse learn sees: prior subjects)
         if f:
             facts_of[i], context = f, context + f
+    _inject_bare_ages(readings, readings + [analyze(question)], facts_of, context)   # mirror solve() (#104)
     while fixpoint:                                         # retry the deferred + synthesize, to a fixpoint
         fixpoint = False
         for i, p in enumerate(premises):
