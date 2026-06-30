@@ -1030,6 +1030,27 @@ LESSON: a +0 standalone primitive isn't worthless — it can be a deferred-ready
 half unlocks it (here total-age); record it precisely so the companion session can re-add it in minutes. And
 an aggregation branch must exclude the INVERSE "how many <unit>" question (solving for the operand, not the
 aggregate) — the "many" interrogative is the discriminator.  ·
+115. **N-unknown sum + ratio-CHAIN solver** (generalizes #3h; dev-train 52→55: Kayla, Amy/Jeremy, Sam/Drew).
+`_two_unknown_ratio` (#3h) handled only 2 entities + one DIRECT relation and rejected 3-way; this generalizes
+it to N entities whose relations CHAIN, solved by PIVOT REDUCTION (express every entity as a multiple of one
+pivot, Σ the coefficients, pivot = Total / Σcoeff). Two functions: (a) `_ratio_relation(rp)` → (subject,
+factor, standard) — a clause with EXACTLY two names unifies every surface form (subject before the verb,
+standard the other, factor the multiplier/fraction): "k× as many as B", "k× as old as B", "1/3 the age of B",
+"twice B's age", "1/4 of the X that B Ved" — and the standard must sit in a real ratio frame (after as/of/that
+or a possessor "B's"), so "bought half the CDs" (a count of an object) isn't a ratio. (b) `_sum_ratio_system`
+builds the coefficient graph (unique root = the non-subject pivot, propagate coeff = factor × coeff[std] to a
+fixpoint, require a connected tree), finds the total, solves. The 2-entity case reproduces #3h exactly →
+replaces it. THE FIREWALL CAUGHT TWO HOLDOUT OVER-FIRES in the first cut (3→5 wrong): an OFFSET-tainted system
+("CJ has 5 MORE than twice …" — `_ratio_relation` drops the offset clause, leaving an incomplete system that
+still "solves") and a NO-FRAME false positive ("Prince bought half the CDs" — "CDs" capitalized → a name, but
+no ratio frame). Both gated (decline the whole system on a factor+comparative premise; require the standard in
+a ratio frame). After gating: holdout +1 correct / 0 new-wrong delta; TEST held 61.5%. Preserved #3h's
+unit/qualifier discipline (rel_mod + full descriptor: "red" vs "blue", years vs months). 846 tests. LESSON:
+generalizing a TIGHTLY-GATED recognizer re-opens every gap the original gate quietly covered — the original's
+specific gates (exactly-2-entities, scaled-quantifier) were load-bearing; dropping them needs REPLACEMENT
+discipline (ratio-frame, offset-system rejection, unique-root tree), and the holdout is what tells you which
+gates you still owe. Also: when a sub-relation is REJECTED (the offset clause), don't solve the remainder —
+an incomplete system silently commits a wrong; decline the whole thing.  ·
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
