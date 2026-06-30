@@ -4175,5 +4175,35 @@ class TestSceneDepletion(unittest.TestCase):
             "How many apples were left?"), "undetermined")
 
 
+class TestElidedComparativeQuantity(unittest.TestCase):
+    """A BARE comparative — "Riley has 3 fewer." — with BOTH the measure noun and the referent elided. The
+    most-recent prior Quantity supplies both: measure (pairs) and base (8), so Riley = 8 − 3 = 5, then the
+    "they … in all" fold sums 8 + 5 = 13. Restricted to the bare frame (NO "than" at all): an anaphoric
+    "47 more than that" reads correctly in isolation but sits in multi-step chains (Billy/Katelyn/Chloe)
+    where a later part stays underived, so deriving it turns an honest decline into a partial-sum wrong."""
+
+    def test_bare_fewer_inherits_measure_and_sums(self):
+        self.assertEqual(reading.solve(
+            "Ellie has 8 pairs of shoes. Riley has 3 fewer. "
+            "How many pairs of shoes do they have in all?"), 13)
+
+    def test_bare_fewer_derives_the_part(self):
+        self.assertEqual(reading.solve(
+            "Ellie has 8 pairs of shoes. Riley has 3 fewer. How many does Riley have?"), 5)
+
+    def test_more_than_that_chain_still_declines(self):
+        # "47 more than that" has a "than" token → the elided path is suppressed, so Katelyn stays
+        # underived and the partial sum (Billy+Katelyn, missing Chloe) is never committed.
+        self.assertEqual(reading.solve(
+            "Billy made 49 sandwiches; Katelyn made 47 more than that. Chloe made a quarter of the "
+            "amount that Katelyn made. How many sandwiches did they make in all?"), "undetermined")
+
+    def test_explicit_standard_path_intact(self):
+        # the noun-bearing "30 less apples than Martha" path is untouched.
+        self.assertEqual(reading.solve(
+            "Tim has 30 less apples than Martha. If Martha has 68 apples, "
+            "how many apples does Tim have?"), 38)
+
+
 if __name__ == "__main__":
     unittest.main()

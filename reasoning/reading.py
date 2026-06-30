@@ -2167,21 +2167,33 @@ def _comparative_quantity(reading: Reading, context: list):
     subject = next((_follow(v, "subject") for v in verbs if _follow(v, "subject") is not None), None)
     if value_unit is None or subject is None:            # multi-verb ("has been teaching") — any bound subj
         return None
+    elided_measure = False
     if "measure" in value_unit.features:                 # "$10 more than William" — money value
         measure = value_unit.features["measure"]
     else:                                                # "30 less apples than Martha" — value+noun
         noun = _follow(value_unit, "quantifies")
-        if noun is None:
-            return None
-        measure = _descriptor(noun)
+        if noun is None:                                 # ELIDED measure — "Riley has 3 fewer." The noun is
+            # gone, so the most-recent prior Quantity must supply BOTH measure and base. Restricted to the
+            # BARE frame (no "than" at all): an anaphoric "47 more than that" reads correctly here but tends
+            # to sit in a multi-step chain (Billy/Katelyn/Chloe) where a later part stays underived, so
+            # deriving this one turns an honest decline into a partial-sum confident-wrong.
+            if standard is not None or any(_key(u.surface) == "than" for u in reading.units):
+                return None
+            elided_measure = True
+            measure = None
+        else:
+            measure = _descriptor(noun)
     if standard is not None:                             # explicit "… than Y" — Y's holdings, but expressed
         referent = _holdings(_entity(standard), measure, context or [])   # in the SUBJECT's frame: _holdings
         if referent is not None:                         # is signed (a loss nets −17.5), while stored amounts
             referent *= _verb_sign(_lemma(verbs[-1].surface))   # are magnitudes — so a loss compared with a
     else:                                                # loss ("lost 1.5 more than Seth") compares MAGNITUDES
-        referent = next((f.amount for f in reversed(context or [])   # (17.5+1.5=19, not −17.5+1.5). IMPLICIT
-                         if isinstance(f, Quantity) and f.measure == measure   # standard — "10 years less"
-                         and f.amount is not None), None)            # — is already a stored magnitude.
+        base = next((f for f in reversed(context or [])   # (17.5+1.5=19, not −17.5+1.5). IMPLICIT standard —
+                     if isinstance(f, Quantity) and (elided_measure or f.measure == measure)  # "10 years less"
+                     and f.amount is not None), None)    # — is a stored magnitude; an elided measure inherits
+        referent = base.amount if base is not None else None   # the most-recent quantity's measure too.
+        if elided_measure and base is not None:
+            measure = base.measure
     if referent is None:
         return None                                      # standard's count unknown (e.g. forward ref)
     op = "-" if COMPARATIVE_SIGN.get(_key(comp.surface), 1) < 0 else "+"   # younger/less → −, older/more → +
