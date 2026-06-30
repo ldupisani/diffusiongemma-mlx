@@ -2731,6 +2731,67 @@ def _list_cardinals(reading: Reading) -> set:
             for u in vs if u.features.get("value") == len(vs) - 1}
 
 
+_TRANSFER_VERBS = {"give", "hand", "pass", "lend", "send"}
+
+
+def _dative_transfer(reading: Reading):
+    """A DATIVE transfer — "<giver> gave <recipient> $N" (no "to") credits the RECIPIENT +N AND debits the
+    giver −N. The recipient is a NAME or a RESOLVED object-pronoun (him/her/them) stranded right after the
+    transfer verb, before the value. "Tom gave Reggie $48" → [Tom −48, Reggie +48]; "father gave him $48" →
+    the resolved "him" gains. A "to"-marked transfer ("gave 12 to his brother") is a DIFFERENT construct
+    (GUARD 10 / distribution), so it's excluded. Returns the (giver, recipient) quantity pair(s), or None."""
+    verbs = [u for u in reading.units if "verb" in u.features.get("senses", [])]
+    if len(verbs) != 1 or _lemma(verbs[0].surface) not in _TRANSFER_VERBS:
+        return None
+    if any(_key(u.surface) == "to" for u in reading.units):
+        return None
+    vpos = reading.units.index(verbs[0])
+    subj = _follow(verbs[0], "subject")
+    subj_e = _entity(subj) if subj is not None else None
+    # POSSESSIVE OWNERS in the clause ("Reggie's father" → Reggie) — a name immediately followed by a
+    # possessive marker; an antecedent for an unresolved object pronoun ("…gave HIM"), disjoint from the subject.
+    owners = [reading.units[k] for k in range(len(reading.units) - 1)
+              if "name" in reading.units[k].features.get("senses", [])
+              and "possessive" in reading.units[k + 1].features.get("senses", [])
+              and _entity(reading.units[k]) != subj_e]
+    rec = None                                           # recipient: name / resolved (or possessive-owner) pronoun
+    for u in reading.units[vpos + 1:]:
+        if "value" in u.features.get("senses", []):
+            break
+        if "name" in u.features.get("senses", []):
+            rec = u
+            break
+        if "pronoun" in u.features.get("senses", []) and _key(u.surface) in ("him", "her", "them"):
+            if _follow(u, "refers") is not None:
+                rec = u
+            elif len(owners) == 1:                       # "Reggie's father gave him $48" → him = Reggie (owner)
+                rec = owners[0]
+            else:
+                return None                              # unresolved pronoun recipient → can't attribute → bail
+            break
+    if rec is None:
+        return None
+    giver = _entity(subj) if subj is not None and "name" in subj.features.get("senses", []) else None
+    recip = _entity(rec)
+    if recip == giver:
+        return None
+    out = []
+    for u in reading.units:
+        if "value" not in u.features.get("senses", []):
+            continue
+        if "measure" in u.features:                      # "$48" — a self-measuring money value
+            meas, val = u.features["measure"], u.features["value"]
+        else:
+            noun = _follow(u, "quantifies")              # "5 books" — the value's measure noun
+            if noun is None:
+                continue
+            meas, val = _descriptor(noun), u.features["value"]
+        if giver is not None:                            # the giver's loss (skip if the giver is a non-name,
+            out.append(Quantity(giver, meas, val, "give"))   # e.g. "his father" — don't track a noun-entity)
+        out.append(Quantity(recip, meas, val, "receive"))
+    return out or None
+
+
 def _quantity(reading: Reading):
     """The quantities a "<entity> <verb>s <amount> …" statement asserts — ONE per value: a
     self-measuring money value ("earns $12") or a value quantifying a noun ("buys 2 apples"). A list,
@@ -3892,6 +3953,9 @@ def _facts_from(reading: Reading, context: list = None) -> list:
     tq = _transfer_quantity(r)                           # "sold clips to 48 friends" → 48 clips (one each)
     if tq is not None:
         return tq
+    dt = _dative_transfer(r)                             # "Tom gave Reggie $48" → Reggie +48 AND Tom −48
+    if dt is not None:
+        return dt
     q = _quantity(r)                                     # "<entity> has 3 apples and 2 oranges" → list
     if q:
         return q
@@ -3953,6 +4017,11 @@ def _split_clauses(sentence: str) -> list:
             if left.lower().startswith(("for every", "for each")):
                 i = sentence.find(sep, i + 1)            # "For every X, <main>" is ONE per-occurrence
                 continue                                 # clause (the rate's per_unit + the main amount)
+            if right.lower().startswith(("which ", "each of which ", "each of them ", "that cost",
+                                         "that costs", "that each cost")):
+                i = sentence.find(sep, i + 1)            # a RELATIVE clause modifying the left's object
+                continue                                 # ("bought 5 books, each of which cost $2") — keep
+                #                                          together so _purchase reads the per-item price
             if _has_verb(left):
                 if _has_verb(right):
                     # NOTE: SUBJECT elision ("She gave X and bought Y" → the right clause's verb has no

@@ -1216,6 +1216,25 @@ strict item/price alternation. dev-train +1 / 0 new wrong; holdout 45/3 held (fi
 question; gate on the per-price "each"-adjacency (not just "each" present anywhere) and a real total cue, and the
 look-alikes fall away.  ·
 
+127. **dative transfer + possessive-pronoun + relative-clause split (a 3-FIX CLUSTER)** (dev-train 70→71: Reggie;
+**TEST 61.5→69.2%** — generalised). "Reggie's father gave him $48. Reggie bought 5 books, each of which cost $2.
+How much left?" → 48 − 5·2 = 38. The dative ALONE was +0 (#4-reverted): the problem was multi-blocked, so all
+three had to land together. (1) `_dative_transfer`: "<giver> gave <recipient> $N" (no "to") → [giver −N,
+recipient +N]; recipient = a name or RESOLVED object-pronoun stranded after a transfer verb (give/hand/pass/lend/
+send), placed before `_quantity` in _facts_from; "to"-marked transfers (GUARD 10) excluded. (2) POSSESSIVE-OWNER
+pronoun fallback INSIDE the dative: when the recipient pronoun is unresolved, fall back to a possessive-owner name
+in the clause ("Reggie's father gave HIM" → Reggie, a name followed by a possessive marker, disjoint from the
+subject) — contained to the recognizer rather than a broad coreference change. (3) a `_split_clauses` guard: don't
+split a comma before a RELATIVE clause ("books, each of which cost $2" / "which "/"that cost") so `_purchase`
+reads the per-item price in one clause (it already handles "each of which cost $X" unsplit — the split was the
+sole blocker). dev-train +1 / 0 new wrong; holdout 45/3 held; **TEST +1 correct −1 wrong (a held-out problem
+fixed AND a held-out confident-wrong corrected)** — the foundational infra generalised even though dev-train only
+gained Reggie. 882 tests. LESSON: a +0 primitive (#dative-reverted) is not worthless — it can be one strand of a
+MULTI-BLOCKED knot. When the firewall shows a correct primitive yielding 0, find its co-blockers and land them
+TOGETHER; the holdout/TEST then reveal whether the whole strand generalises (here it did, strongly). Keep the
+companion fixes CONTAINED (the possessive fallback lives in the dative, not in global coreference) so the blast
+radius stays inside the construct you're solving.  ·
+
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
 head, attribute-superset; a sub-group's count = instances whose attributes ⊇ the query's. We store

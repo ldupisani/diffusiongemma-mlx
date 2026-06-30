@@ -3901,6 +3901,35 @@ class TestSumRatioSystem(unittest.TestCase):
             "many as Cam. How many donuts did Cam take?"), 8)
 
 
+class TestDativeTransferCluster(unittest.TestCase):
+    """Three fixes landed TOGETHER to solve "Reggie's father gave him $48. Reggie bought 5 books, each of which
+    cost $2. How much left?" → 48 − 5·2 = 38: (1) DATIVE transfer "<giver> gave <recipient> $N" → recipient +N,
+    giver −N; (2) POSSESSIVE-OWNER pronoun resolution ("Reggie's father gave HIM" → him = Reggie); (3) a
+    clause-split guard keeping a relative clause ("books, each of which cost $2") with its head so _purchase
+    reads the per-item price. The dative alone was +0 (multi-blocked); together +1 dev-train, and TEST 61.5→69.2%
+    (generalised — a held-out problem fixed + a held-out wrong corrected). SYNTHETIC."""
+
+    def test_dative_money_gain(self):
+        self.assertEqual(reading.solve("Tom gave Reggie $48. How much money does Reggie have?"), 48)
+
+    def test_dative_giver_loss_preserved(self):
+        self.assertEqual(reading.solve(
+            "Randy has $5000. Randy gave Sally $1200. How much money does Randy have?"), 3800)
+
+    def test_possessive_owner_pronoun(self):
+        self.assertEqual(reading.solve(
+            "Reggie's father gave him $48. How much money does Reggie have?"), 48)
+
+    def test_full_cluster(self):
+        self.assertEqual(reading.solve(
+            "Reggie's father gave him $48. Reggie bought 5 books, each of which cost $2. How much money does "
+            "Reggie have left?"), 38)
+
+    def test_to_transfer_unaffected(self):
+        # "gave 12 to his brother" (with "to") is a different construct — the dative must NOT fire.
+        self.assertIsNone(reading._dative_transfer(reading.analyze("Sonny gave 12 to his brother.")))
+
+
 class TestShoppingTotal(unittest.TestCase):
     """"buys 3 toys at $10 each, 2 packs at $5 each, 5 shirts at $6 each. How much spend in all?" → Σ(count×
     price) = 70. Counts and per-item prices parse as separate buy-quantities; only the per-each products + sum
