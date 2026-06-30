@@ -39,6 +39,14 @@ The bench (`reasoning/reading_bench.py`) reports a **harm-ordered miss taxonomy*
 **Work order:** precision first (decline-safety), then coverage (composition). Never trade held-out
 precision for a coverage gain.
 
+**The gate is precision-hold, NOT raw wrong-count** (decided by increment 3j). A coverage increment can
+legitimately *add* a TEST confident-wrong while *raising* precision — e.g. 4/4 → 7/5 is +3 correct / +1
+wrong, precision 50.0% → 58.3%. That ships: the committed-answer set got safer on average, and a new wrong
+from an unseen structure is the §3a distribution-shift the holdout cannot catch. A precision *drop* (the
+offset case, 50→40%) reverts, no matter the DEV numbers. The asymmetry is the point — `wrong` is the worst
+*per-problem* outcome, but the aggregate *rate* is what governs ship/revert, because TEST is one-look and
+the new wrong is undiagnosable without breaking the firewall.
+
 ---
 
 ## 2. The firewall: DEV vs TEST

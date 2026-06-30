@@ -907,6 +907,21 @@ a how-long/time question would SKIP it and sum rates into garbage. Gate the cue 
 was mined too but gave 0 dev-train gain (its problems also need offset-base resolution) → DROPPED per
 example-driven-deferral (don't ship a trigger that only risks firing unmeasured on TEST). Firewall:
 dev-train 37→39 / 0 wrong; dev-holdout 0 new-wrong delta; TEST precision held 50.0%. 820 tests.  ·
+107. **bidirectional relational-multiplier resolution** (backward inversion; dev-train 39→40, holdout
+35→37). `_relational_quantity` only derived subject-FROM-standard ("Mary has k× as many as Tom" fires
+once Tom is known); the symmetric case — SUBJECT known, standard unknown — deferred forever, so backward
+chains declined ("Tyrah 6× Sarah, Tyrah=12 → Sarah=2 → Tim 8×Sarah=16"; "Alexis 4× (Dilan+Ashley),
+Alexis=60 → group=15 → all=75"). FIX: when the named standard has no quantity but the subject does, emit
+`standard = subject / factor`, tagged with the relation's OWN verb (run/have) so the answer fold matches —
+the fixpoint then chains forward off it. PURE-RATIO only (a comparative offset inverts ambiguously → keep
+deferring), and mutually exclusive with the forward path (forward needs the standard known, backward needs
+it unknown) → no double-emit, no correct→decline churn. The conjoined-group standard ("Dilan and Ashley
+combined") grounds as one entity and composes with the aggregation fold. LESSON (about the FIREWALL, not
+the parser): this was the first increment where TEST gained a confident-wrong (4→5) yet precision ROSE
+(50.0→58.3%, +3 correct / +1 wrong). The governing gate is **precision-hold, not raw wrong-count** — a
+*drop* reverts (the offset case, 50→40); a *rise* with a new wrong is the §3a distribution-shift the holdout
+can't catch, but the committed-answer set got safer on average, so it ships. The new wrong is undiagnosable
+without breaking the TEST firewall — the price of an honest one-look arbiter. 822 tests.  ·
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
