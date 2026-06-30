@@ -999,6 +999,20 @@ new wrong (precision ROSE). 835 tests. LESSON: a bare equation's DIMENSION is su
 the clause — when a value has no unit, look to the problem's framing (age cues) to type it, and gate tightly
 so the inference only fires where that framing is unambiguous. The #111→#112 pair shows compounding: a
 foundational disambiguation fix re-opens a whole cluster whose follow-on increments were previously unreachable.  ·
+113. **possessive relational age + "how many years old" question** (dev-train 47→50: Mehki, Noah, Jerica).
+Two coupled age-cluster fixes. (a) POSSESSIVE relational age: "Jordyn's age is double Zrinka's age" / "Jerica
+is twice Louis' age" → X_age = k × Y_age. The possessive frame (the noun "age" owned via a name, not "as old
+as") means the multiplier mis-scales the copula into a bogus Frequency, so `_possessive_age_parts` reads it
+POSITIONALLY (standard = the name after the multiplier that owns an "age"); the dispatch resolves it or DEFERS
+(so the fixpoint chains AND it never falls through to `_frequency`). Pure-ratio only. (b) "How many years old
+is X?": `_copula_args` picks the fronted measure "years" as the subject, not the name → no holdings → decline;
+the "how old" branch now prefers the NAME asked about. These are COUPLED — the possessive-age problems all use
+the "how many years old" question form, so neither fix alone moves them (the recognizer alone was +1, on a
+"how old"-phrased problem). Noah ("Noah's age is twice Joe's age … how old will Noah be after 10 years") now
+composes possessive-age + bare-age (#112) + projection (#100) end to end. dev-holdout 0 delta; TEST held 61.5%.
+839 tests. LESSON: when a recognizer is validated but yields ~0 on the bench, suspect a SECOND blocker on the
+same problems (here the question form) — bisect the failing problem (it solved with "how old" but not "how many
+years old"), don't assume the recognizer is wrong. The age cluster's wins keep coming in #111→#112→#113 chains.  ·
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
