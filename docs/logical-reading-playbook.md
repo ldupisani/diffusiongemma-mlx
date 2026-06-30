@@ -1235,6 +1235,19 @@ TOGETHER; the holdout/TEST then reveal whether the whole strand generalises (her
 companion fixes CONTAINED (the possessive fallback lives in the dative, not in global coreference) so the blast
 radius stays inside the construct you're solving.  ·
 
+128. **backward inversion with gains** (dev-train 71→72: Randy; holdout + TEST held) — ENABLED by the 4d dative.
+"Randy had some money. Smith gave him $200 [+200]. Randy gave Sally $1200 [−1200]. $2000 left. How much at
+first?" → initial = final − Σ(signed deltas) = 2000 − (200 − 1200) = 3000. #4b `_backward_depletion` was LOSSES-
+ONLY and explicitly declined gains (its no-gain gate was driven by THIS problem: 3500≠3000). The blocker was that
+"Smith gave him $200" wasn't captured as Randy's gain — until the 4d dative made it `[smith −200, randy +200]`.
+New `_backward_inversion` (a sibling to the losses-only pool, tried first in GUARD 8): the ASKED entity's OWN
+quantities, split into one final ("left"/"now"/"end" cue) and ≥1 signed delta; initial = final − Σ(verb_sign×
+amount). Same precision gates as #4b: single measure, no dropped multiplier (fraction-of-remaining), no unused
+given. dev-train +1 / 0 new wrong; holdout + TEST held 69.2%. 635 tests. LESSON: a foundational fix (the dative)
+keeps paying forward — it didn't just solve Reggie (4d), it made a previously-IMPOSSIBLE inversion (Randy, which
+#4b had to explicitly gate OUT) representable, so the gate could become a solver. When you add a capability, revisit
+the guards that were declining for lack of it.  ·
+
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
 head, attribute-superset; a sub-group's count = instances whose attributes ⊇ the query's. We store

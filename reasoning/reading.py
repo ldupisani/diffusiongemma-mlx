@@ -4703,6 +4703,46 @@ def _backward_depletion(premises: list, question: str):
     return _compute(f"{_num(finals[0].amount)} + (" + " + ".join(_num(f.amount) for f in depl) + ")")
 
 
+def _backward_inversion(premises: list, question: str):
+    """A single-entity BACKWARD inversion with GAINS and losses → initial = final − Σ(signed deltas). "Randy had
+    some money. Smith gave him $200 [+200]. Randy gave Sally $1200 [−1200]. $2000 left. How much at first?" →
+    2000 − (200 − 1200) = 3000. Distinct from `_backward_depletion` (a multi-entity LOSSES-ONLY pool): here the
+    operations are the ASKED entity's OWN signed deltas — the dative now captures "Smith gave HIM $200" as Randy
+    +200, so the gain that made #4b decline (its no-gain gate) is finally representable. Self-contained. GATED
+    like the depletion: a "left"/"now"/"in the end" final, exactly one final + ≥1 delta of one measure, no dropped
+    multiplier (fraction-of-remaining), and NO unused given (every stated value captured) → else decline."""
+    qr = analyze(question)
+    qnames = [u for u in qr.units if "name" in u.features.get("senses", [])]
+    if not qnames:
+        return None
+    asked = _entity(qnames[0])
+    disc, ctx, prem_facts = [], [], []
+    for p in premises:
+        rp = analyze(p)
+        f = learn(p, disc, ctx) or []
+        if any(s in u.features.get("senses", []) for u in rp.units for s in ("multiplier", "percent")) \
+                and not any(isinstance(x, Quantity) for x in f):
+            return None                                      # a dropped fraction-of-remaining operation → decline
+        prem_facts.append((p, f))
+        ctx += f
+    aq = [(p, f) for (p, fs) in prem_facts for f in fs
+          if isinstance(f, Quantity) and f.entity == asked and f.amount is not None]
+    if not aq or len({f.measure for (p, f) in aq}) != 1:
+        return None
+    finals = [f for (p, f) in aq if f.verb in ("have", "be")          # the KNOWN final, from a "left"/"now"/
+              and any(w in p.lower() for w in ("left", "remain", "now", "in the end", "end of"))]   # "end" cue
+    deltas = [f for (p, f) in aq if f.verb not in ("have", "be") and f not in finals]
+    if len(finals) != 1 or not deltas:
+        return None
+    used = {round(float(finals[0].amount), 6)} | {round(float(d.amount), 6) for d in deltas}
+    stated = {round(float(u.features["value"]), 6) for p in premises for u in analyze(p).units
+              if "value" in u.features.get("senses", []) and u.features.get("value") is not None}
+    if stated - used:                                        # a dropped operation → an incomplete inversion
+        return None
+    delta_sum = " + ".join(f"{_verb_sign(d.verb)} * {_num(d.amount)}" for d in deltas)
+    return _compute(f"{_num(finals[0].amount)} - ({delta_sum})")
+
+
 def _shopping_total(premises: list, question: str):
     """A SHOPPING TOTAL — "buys 3 toys at $10 each, 2 packs at $5 each, 5 shirts at $6 each. How much did she
     spend in all?" → Σ(count × price) = 3·10 + 2·5 + 5·6 = 70. The counts and per-item prices already parse as
@@ -4855,7 +4895,10 @@ def solve(text: str):
                              "originally", "at the start", "in the beginning")):
         # BACKWARD POOL DEPLETION — a losses-only inversion we CAN solve (initial = final + Σ spends); the
         # tight gates keep every other "at first" inversion (gains, fraction-of-remaining, relational) declining.
-        _bd = _backward_depletion(premises, question)
+        _bi = _backward_inversion(premises, question)    # single-entity signed deltas (gains + losses) first
+        if _bi is not None:
+            return _bi
+        _bd = _backward_depletion(premises, question)    # then the multi-entity losses-only pool
         return _bd if _bd is not None else "undetermined"
     if any("would" in [_key(w) for w in p.lower().split()] for p in premises):
         return "undetermined"

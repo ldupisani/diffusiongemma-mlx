@@ -3967,11 +3967,12 @@ class TestBackwardDepletion(unittest.TestCase):
             "There was some money in the cookie jar. Doris spent $6 from the cookie jar. Martha spent half as "
             "much as Doris. If there were $15 left in the cookie jar, how much money was in it at first?"), 24)
 
-    def test_gain_to_pool_declines(self):
-        # "Smith gave him $200" raises the pool — initial = final + Σspends would over-count → decline.
-        self.assertNotIsInstance(reading.solve(
+    def test_gain_now_solved_by_inversion(self):
+        # "Smith gave him $200" is a GAIN — the losses-only depletion declines, but `_backward_inversion`
+        # (#4e) solves it with signed deltas: 2000 − (200 − 1200) = 3000.
+        self.assertEqual(reading.solve(
             "Randy had some money. Smith gave him another $200. Randy then gave Sally $1200. If Randy has "
-            "$2000 left, how much money did Randy have at first?"), (int, float))
+            "$2000 left, how much money did Randy have at first?"), 3000)
 
     def test_unused_given_declines(self):
         # a dropped operation (the 2nd spend never parsed) leaves a stated value uncaptured → decline.
