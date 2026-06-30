@@ -2072,7 +2072,16 @@ def _comparative_age(reading: Reading, context: list):
         return None
     y_age = _holdings(_entity(y), ("year", frozenset()), context)
     if y_age is None:
-        return None                                       # Y's age unknown → defer to the fixpoint
+        # BACKWARD inversion — Y's age unknown, but if the SUBJECT's is known, invert the relation:
+        # "Benjie is 5 older than Margo; Benjie is 6" → Margo = 6 − 5. (older: subj = std + N → std =
+        # subj − N; younger flips.) Grounds the standard so the fixpoint can chain onward, mirroring
+        # _relational_quantity's bidirectional grounding. Defers if the subject's age is unknown too.
+        subj_age = _holdings(_entity(subj), ("year", frozenset()), context)
+        if subj_age is None:
+            return None
+        inv = "-" if _key(comp.surface) == "older" else "+"
+        return Quantity(_entity(y), ("year", frozenset()),
+                        _compute(f"{_num(subj_age)} {inv} {_num(val)}"), "be")
     op = "+" if _key(comp.surface) == "older" else "-"
     return Quantity(_entity(subj), ("year", frozenset()),
                     _compute(f"{_num(y_age)} {op} {_num(val)}"), "be")

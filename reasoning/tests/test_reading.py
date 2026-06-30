@@ -4238,5 +4238,29 @@ class TestCompoundNounSubtype(unittest.TestCase):
             "How many apple pies remain with Cooper?"), "undetermined")
 
 
+class TestComparativeAgeBackward(unittest.TestCase):
+    """BACKWARD inversion of a comparative age — "X is N older than Y" with the SUBJECT's age known (not
+    the standard's) grounds the STANDARD: older → Y = X − N. Mirrors _relational_quantity's bidirectional
+    grounding; the fixpoint then chains a future shift ("in three years"). SYNTHETIC."""
+
+    def test_backward_standard_from_subject(self):
+        self.assertEqual(reading.solve(
+            "Benjie is 6 years old. Benjie is five years older than Margo. How old is Margo?"), 1)
+
+    def test_backward_then_future_shift(self):
+        self.assertEqual(reading.solve(
+            "Benjie is five years older than Margo. If Benjie is 6 years old, "
+            "how old will Margo be in three years?"), 4)
+
+    def test_backward_younger_flips_sign(self):
+        # "younger": subj = std − N → std = subj + N, so Margo = 6 + 5 = 11.
+        self.assertEqual(reading.solve(
+            "Benjie is 6 years old. Benjie is five years younger than Margo. How old is Margo?"), 11)
+
+    def test_forward_path_unchanged(self):
+        self.assertEqual(reading.solve(
+            "Kris is 24 years old. Herbert is 10 years younger than Kris. How old is Herbert?"), 14)
+
+
 if __name__ == "__main__":
     unittest.main()
