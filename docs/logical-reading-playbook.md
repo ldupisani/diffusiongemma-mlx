@@ -965,6 +965,26 @@ holdings. TEST held 58.3%; no _quantity regression (solved-set diff clean both w
 single surface ("got 91, 90, and 92 …") can be blocked by a STACK of guards each doing its job for other
 shapes (denomination guard, unused-given guard) — unblocking needs a discriminator (the comma) threaded
 through every one of them, plus the helper shared so the parse and the guard agree on what the cardinal is.  ·
+111. **name–noun disambiguation** (dev-train 43→45, holdout 39→41). A name that's ALSO a common noun
+("Job", "Bill", "Penny", "Rose") took the lexicon's noun sense and never reached the capitalized→name
+fallback, so "4 times as old as Joe"→20 but "…as Job"→undetermined. ROOT CAUSE: even made multi-sense
+["name","noun"], `disambiguate` picks the fewest unmet obligations, and in "as old as Job" a NAME leaves
+its own `predicate` obligation unmet (cost 1) while a NOUN covers (cost 0) → noun wins, killing the
+relational-age resolver. A comparative's "than"-standard escapes this because its MET `standard` obligation
+already subordinates it (predicate foregone); the bare `as…as` frame carries no comparative. FIX, two pieces:
+(a) `annotate_senses` — a capitalized known common-noun becomes `["name","noun"]` (name FIRST → ties favour
+it); modals/verbs/articles aren't `["noun"]`, untouched; (b) `_comparison_standard_ids` + `deficiencies` —
+subordinate the noun/name after the SECOND `as` of an `as <X> as <STANDARD>` frame (it fills the comparison's
+reference slot — the same "slot-filler is discharged" principle the subordinated set already encodes). Since
+`disambiguate` scores via `_unmet_count`→`deficiencies`, this stops penalizing the name reading with NO change
+to `disambiguate` or the resolvers. SAFE because an article-DETERMINED noun ("the bill") covers strictly
+better as a noun and stays one; only the undetermined `as…as` standard flips. Held-out generalised CLEANLY
+(+2 holdout, 0 new-wrong delta); TEST precision held 58.3%. 832 tests. LESSON: when `disambiguate` mis-picks a
+sense, the bug is usually an obligation that's unfairly counted as "unmet" — fix the COVERAGE accounting (here,
+subordinate a legitimate slot-filler) rather than bolting a position rule onto `disambiguate`; the coverage
+mechanism then picks correctly on its own, and the article-vs-bare contrast does the name/noun discrimination
+for free. ALSO confirmed by an external word-by-word cognitive analysis: the human reader assigns "Job" the
+role "comparison reference" (a person) precisely because it fills the `as…as` standard slot.  ·
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
