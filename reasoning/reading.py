@@ -1957,8 +1957,8 @@ def _possessive_age_parts(reading: Reading):
         return None                                       # "as old as Y" is _relational_age's frame
     if any(_key(u.surface) in ("more", "less", "older", "younger", "fewer") for u in units):
         return None                                       # an offset on the factor we don't fold here
-    if not any(_key(u.surface) in ("is", "are", "was", "were") for u in units):
-        return None
+    if not any(_key(u.surface) in ("is", "are", "was", "were", "be") for u in units):
+        return None                                       # "be" covers the future "X will BE k× Y's age"
     mult = next((u for u in units if "multiplier" in u.features.get("senses", [])), None)
     if mult is None:
         return None
@@ -3975,10 +3975,18 @@ def _facts_from(reading: Reading, context: list = None) -> list:
     pap = _possessive_age_parts(r)                        # "X's age is k× Y's age" / "X is k× Y's age" →
     if pap is not None:                                   # X_age = k × Y_age (the possessive frame)
         subj_e, std_e, k = pap
+        delta = _time_offset(r)                           # "In Δ years, X will be k× Y's age" shifts BOTH
         y = _holdings(std_e, ("year", frozenset()), context)
-        if y is not None:
-            return [Quantity(subj_e, ("year", frozenset()), _compute(f"{_num(k)} * {_num(y)}"), "be")]
-        return []                                         # Y's age unknown → DEFER (fixpoint chains), and
+        if y is not None:                                 # FORWARD: X_now = k·(Y_now+Δ) − Δ (present: Δ=0)
+            x = f"{_num(k)} * ({_num(y)} + {_num(delta)}) - {_num(delta)}" if delta \
+                else f"{_num(k)} * {_num(y)}"
+            return [Quantity(subj_e, ("year", frozenset()), _compute(x), "be")]
+        x_now = _holdings(subj_e, ("year", frozenset()), context)   # BACKWARD: subject known, derive standard
+        if x_now is not None and k:                       # Y_now = (X_now+Δ)/k − Δ ("Suzy 20; Suzy+4 = 2·(Mary+4)"
+            yv = f"({_num(x_now)} + {_num(delta)}) / {_num(k)} - {_num(delta)}" if delta \
+                else f"{_num(x_now)} / {_num(k)}"          # → Mary = 24/2 − 4 = 8)
+            return [Quantity(std_e, ("year", frozenset()), _compute(yv), "be")]
+        return []                                         # neither age known → DEFER (fixpoint chains), and
         #                                                   crucially don't fall to _frequency (bogus Freq)
     if _relational_age_factor(r) is not None and _copula_args(r)[0] is not None:
         return []                                        # Y's age not yet known → DEFER (the fixpoint

@@ -4288,5 +4288,26 @@ class TestShiftedRelationalAgeBackward(unittest.TestCase):
             "Sam is 12 years old. Sam is twice as old as Sue. How old is Sue?"), 6)
 
 
+class TestShiftedPossessiveAge(unittest.TestCase):
+    """The POSSESSIVE factor frame ("k× Y's age", "half OF Y's age") now carries the same future shift as
+    "as old as": "In Δ years, X will be k× Y's age" → X+Δ = k·(Y+Δ), solved forward (Y known) or backward
+    (X known). Required teaching _possessive_age_parts to accept the future copula "will BE". SYNTHETIC."""
+
+    def test_possessive_backward_shifted(self):
+        # Suzy+4 = 2·(Mary+4); Suzy 20 → Mary = (20+4)/2 − 4 = 8.
+        self.assertEqual(reading.solve(
+            "In four years, Suzy will be twice Mary's age then. If Suzy is 20 now, how old is Mary?"), 8)
+
+    def test_possessive_forward_shifted_half_of(self):
+        # Jayden+3 = ½·(Ernesto+3); Ernesto 11 → Jayden = (11+3)/2 − 3 = 4.
+        self.assertEqual(reading.solve(
+            "In 3 years, Jayden will be half of Ernesto's age. If Ernesto is 11 years old, "
+            "how many years old is Jayden now?"), 4)
+
+    def test_possessive_present_unchanged(self):
+        self.assertEqual(reading.solve(
+            "Suzy is twice Mary's age. Mary is 8 years old. How old is Suzy?"), 16)
+
+
 if __name__ == "__main__":
     unittest.main()
