@@ -4491,5 +4491,23 @@ class TestRateExtrapolation(unittest.TestCase):
             "How far will he go in 30 minutes?"), "undetermined")
 
 
+class TestRateDifference(unittest.TestCase):
+    """RATE DIFFERENCE × DURATION — "A reads M/day, B reads N/day. How many MORE does A read in K weeks?" →
+    (M − N) × (K → days). Two rates (same measure & per_unit) and nothing else; the question's subject is A,
+    the other is B. Also exercises the " while " clause split (two independent rate clauses). SYNTHETIC."""
+
+    def test_difference_over_duration(self):
+        # (50 − 20) × 14 days = 420.
+        self.assertEqual(reading.solve(
+            "Anna reads 50 pages a day and Bob reads 20 pages a day. "
+            "How many more pages does Anna read in 2 weeks?"), 420)
+
+    def test_while_split_and_per_amount(self):
+        # "while" splits two rate clauses; (16/2 − 10/2) × 1 hour = 3.
+        self.assertEqual(reading.solve(
+            "Anna ran 10 miles in 2 hours while Bob ran 16 miles in 2 hours. "
+            "How many more miles did Bob run in an hour than Anna?"), 3)
+
+
 if __name__ == "__main__":
     unittest.main()

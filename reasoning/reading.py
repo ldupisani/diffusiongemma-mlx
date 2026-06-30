@@ -4329,7 +4329,7 @@ def _split_clauses(sentence: str) -> list:
     own verb AND the right either has one too OR is an elided clause that can BORROW the left's verb. A
     phrase-joining "and" ("3 apples and 2 oranges", "Tom and Mary") does NOT split. Recursive, so a
     chain of clauses (and a leading "If P, Q?" premise) all separate."""
-    for sep in ("; ", ", and ", ", but ", ", so ", " if ", " and ", ", "):
+    for sep in ("; ", ", and ", ", but ", ", so ", " if ", " and ", " while ", ", "):
         i = sentence.find(sep)
         while i != -1:
             left, right = sentence[:i].strip(), sentence[i + len(sep):].strip()
@@ -5135,6 +5135,55 @@ def _rate_extrapolation(premises: list, question: str, context: list):
     return _compute(f"{_num(rate.amount)} * ({per}) / {_num(rate.per_amount)}")
 
 
+def _rate_difference(premises: list, question: str, context: list):
+    """RATE DIFFERENCE × DURATION — "Janet reads 80 pages a day, Belinda 30 pages a day. How many MORE pages
+    does Janet read in 6 weeks?" → (80 − 30) × 42 = 2100; "how many more miles did Frank run in an hour than
+    Jim?" → (10 − 8) × 1 = 2. EXACTLY two rates (same measure & per_unit) and nothing else; the question's
+    subject is A, the other rate is B; answer = (A_per_unit − B_per_unit) × (duration → per_unit). Gated to a
+    "how many/much MORE <measure>" question with a duration, every premise number consumed by the two rates."""
+    if len(context) != 2 or not all(isinstance(f, Rate) for f in context):
+        return None
+    rA0, rB0 = context
+    if rA0.measure != rB0.measure or rA0.per_unit != rB0.per_unit:
+        return None
+    prem_vals = [u.features["value"] for p in premises for u in analyze(p).units
+                 if "value" in u.features.get("senses", [])]
+    consumed = {rA0.amount, rA0.per_amount, rB0.amount, rB0.per_amount}
+    if any(all(abs(v - c) > 1e-9 for c in consumed) for v in prem_vals):
+        return None                                      # an unused premise number → not a bare difference
+    qr = analyze(question)
+    if not (any("interrogative" in u.features.get("senses", []) for u in qr.units)
+            and any("comparative" in u.features.get("senses", []) and _key(u.surface) == "more"
+                    for u in qr.units)):
+        return None
+    aux = next((u for u in qr.units if "auxiliary" in u.features.get("senses", [])), None)
+    subs = _question_subjects(qr, aux)[0] if aux is not None else []
+    A = next((r for r in context if r.entity in subs), None)
+    if A is None:
+        return None
+    B = next(r for r in context if r is not A)
+    dval = next((u for u in qr.units if "value" in u.features.get("senses", [])
+                 and _follow(u, "quantifies") is not None
+                 and _descriptor(_follow(u, "quantifies"))[0] in TIME_UNITS), None)
+    if dval is not None:
+        dur, du = dval.features["value"], _descriptor(_follow(dval, "quantifies"))[0]
+    else:                                                # "in AN hour" / "a day" → a single per-unit
+        u = qr.units
+        pair = next(((u[k], u[k + 1]) for k in range(len(u) - 1)
+                     if _key(u[k].surface) in ("a", "an", "each", "every")
+                     and _descriptor(u[k + 1])[0] in TIME_UNITS), None)
+        if pair is None:
+            return None
+        dur, du = 1, _descriptor(pair[1])[0]
+    if du == A.per_unit:
+        d = _num(dur)
+    elif (du, A.per_unit) in CONVERSIONS:
+        d = f"{_num(dur)} * {_num(CONVERSIONS[(du, A.per_unit)])}"
+    else:
+        return None
+    return _compute(f"({_num(A.amount)}/{_num(A.per_amount)} - {_num(B.amount)}/{_num(B.per_amount)}) * ({d})")
+
+
 def _shopping_total(premises: list, question: str):
     """A SHOPPING TOTAL — "buys 3 toys at $10 each, 2 packs at $5 each, 5 shirts at $6 each. How much did she
     spend in all?" → Σ(count × price) = 3·10 + 2·5 + 5·6 = 70. The counts and per-item prices already parse as
@@ -5360,6 +5409,10 @@ def solve(text: str):
     _rext = _rate_extrapolation(premises, question, context)
     if _rext is not None:
         return _rext
+    # RATE DIFFERENCE — "Janet 80 pages/day, Belinda 30/day. How many more does Janet read in 6 weeks?" → 2100.
+    _rdiff = _rate_difference(premises, question, context)
+    if _rdiff is not None:
+        return _rdiff
     # POOL-AND-REDISTRIBUTE — "combine their candies and share equally, how many will EACH have?" → Σ/N.
     # Tried before GUARD 3 (the pooled amounts are all "used" so it wouldn't trip, but keep recognizers
     # together). Same math as the average branch but cued by a share-equally premise + a per-each question.
