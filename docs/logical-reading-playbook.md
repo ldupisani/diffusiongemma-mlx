@@ -952,6 +952,19 @@ equal it, else an entity is missing/extra → DECLINE rather than divide by the 
 were ALREADY computed by the relational chain (60/68/64) — only the ÷3 was missing. TEST precision held
 58.3%. 826 tests. CONTRAST with the reverted backward-comparative just above: "average" is a SPECIFIC cue
 (safe to act on), "N more/less than Y" is ubiquitous (over-fires) — the same §3a commonness axis.  ·
+110. **value-list parsing + value-list average** (dev-train 42→43, Malou). "Malou got 91, 90, and 92 in her
+three quizzes. What is her average score?" declined TWO ways: (1) the comma-list "91, 90, and 92" tripped
+_quantity's adjacent-bare-values guard (meant for "10 $20" denominations) → no quantity emitted; (2) the
+trailing cardinal "three quizzes" (= the list length) would pollute the set / trip GUARD 3 unused-given.
+THREE coordinated pieces: (a) _quantity — a COMMA after the first value marks a LIST (not a denomination),
+emit one Quantity per item; (b) `_list_cardinals` — a value equal to the count of OTHER values quantifying
+the SAME noun is the set size, dropped (shared by _quantity AND GUARD 3 so the cardinal is neither emitted
+nor flagged unused); (c) the average branch gained a VALUE-LIST mode — one owner with several same-measure
+quantities averages the INDIVIDUAL amounts (not the accumulated 273), multi-owner still averages per-owner
+holdings. TEST held 58.3%; no _quantity regression (solved-set diff clean both ways). 828 tests. LESSON: a
+single surface ("got 91, 90, and 92 …") can be blocked by a STACK of guards each doing its job for other
+shapes (denomination guard, unused-given guard) — unblocking needs a discriminator (the comma) threaded
+through every one of them, plus the helper shared so the parse and the guard agree on what the cardinal is.  ·
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
