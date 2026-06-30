@@ -4496,6 +4496,13 @@ class TestRateExtrapolation(unittest.TestCase):
             "Tom reads 5 pages each minute. Every day, he reads for an hour. "
             "How many pages will Tom read in two days?"), 600)
 
+    def test_rate_remainder_with_group_total(self):
+        # group TOTAL rate (35/week = 5/day) minus a component (3/day) → other = 2/day. Also exercises the
+        # group-subject "total" guard exception ("they eat a TOTAL of 35 ounces a week" forms a rate).
+        self.assertEqual(reading.solve(
+            "Anna has two cats. Together, they eat a total of 35 ounces a week. The first cat eats "
+            "3 ounces a day. How many ounces a day does the other cat eat?"), 2)
+
 
 class TestRateDifference(unittest.TestCase):
     """RATE DIFFERENCE × DURATION — "A reads M/day, B reads N/day. How many MORE does A read in K weeks?" →

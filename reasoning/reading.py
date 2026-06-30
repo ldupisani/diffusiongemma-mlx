@@ -4166,9 +4166,11 @@ def _facts_from(reading: Reading, context: list = None) -> list:
             return []
     verbs = [u for u in r.units if "verb" in u.features.get("senses", [])]
     if len(verbs) == 1:                                  # a group-subject STATEMENT ("Tom and Mary have
-        subj = _follow(verbs[0], "subject")              # 5 apples") is distributive/collective —
-        if subj is not None and "members" in subj.features:   # ambiguous — so decline (no guessed fact)
-            return []
+        subj = _follow(verbs[0], "subject")              # 5 apples") is distributive/collective — ambiguous,
+        if subj is not None and "members" in subj.features \
+                and not any(_key(u.surface) in ("total", "combined") for u in r.units):   # but an explicit
+            return []                                    # TOTAL ("they walk a TOTAL of 70 miles") is an
+            #                                              unambiguous collective → let the fact form
     if any("existential" in u.features.get("senses", []) for u in r.units):   # "there are N <coll>" → N
         for u in r.units:                                # instances (existential-gated, so "Tom has three
             if "value" in u.features.get("senses", []):  # apples"/"three years younger" stay arithmetic)
@@ -5199,6 +5201,52 @@ def _rate_compound(premises: list, question: str, context: list):
     return _compute(f"{_num(rate.amount)}/{_num(rate.per_amount)} * ({per}) * {_num(num)}")
 
 
+def _rate_remainder(premises: list, question: str, context: list):
+    """RATE REMAINDER — "Two dogs walk a TOTAL of 70 miles a week. The first walks 2 miles a day. How many
+    miles a day does the OTHER walk?" → 70/week (=10/day) − 2/day = 8/day. Exactly two rates (same measure);
+    one is the group TOTAL (its premise carries total/combined/together), the other a component; the question
+    asks the remaining component in some per_unit. answer = (total − component), each normalized to that
+    per_unit. None otherwise."""
+    rates = [f for f in context if isinstance(f, Rate)]
+    if len(rates) != 2 or rates[0].measure != rates[1].measure:
+        return None
+    if any(isinstance(f, Quantity) and f.amount is not None and f.measure[0] == rates[0].measure[0]
+           for f in context):
+        return None                                      # an extra quantity OF THE RATE'S MEASURE → multi-step
+        #                                                  (a bare count like "two dogs" is a different measure)
+
+    def from_total_premise(rate):
+        for p in premises:
+            if any(w in p.lower() for w in ("total", "combined", "together")) \
+                    and any(isinstance(f, Rate) and abs(f.amount - rate.amount) < 1e-9 for f in learn(p)):
+                return True
+        return False
+
+    total = next((r for r in rates if from_total_premise(r)), None)
+    if total is None:
+        return None
+    comp = next(r for r in rates if r is not total)
+    qr = analyze(question)                                # the asked per_unit: "how many miles A DAY"
+    pu = next((_descriptor(qr.units[k + 1])[0] for k in range(len(qr.units) - 1)
+               if _key(qr.units[k].surface) in ("a", "an", "per", "each", "every")
+               and _descriptor(qr.units[k + 1])[0] in TIME_UNITS), None)
+    if pu is None:
+        return None
+
+    def per(rate):                                        # the rate's amount expressed PER `pu`
+        base = f"{_num(rate.amount)}/{_num(rate.per_amount)}"
+        if rate.per_unit == pu:
+            return base
+        if (rate.per_unit, pu) in CONVERSIONS:            # "70 per week" → per day = 70 / (days in a week)
+            return f"({base}) / {_num(CONVERSIONS[(rate.per_unit, pu)])}"
+        return None
+
+    pt, pc = per(total), per(comp)
+    if pt is None or pc is None:
+        return None
+    return _compute(f"({pt}) - ({pc})")
+
+
 def _rate_sum(premises: list, question: str, context: list):
     """MULTI-ENTITY RATE SUM — "Anna 30 pages/60 min, Bob 27/60 min, Cherry 25/60 min. They have read for 240
     min. How many pages in TOTAL?" → (30+27+25)/60 × 240 = 328. ≥2 rates (same measure & per_unit) and
@@ -5521,6 +5569,10 @@ def solve(text: str):
     _rsum = _rate_sum(premises, question, context)
     if _rsum is not None:
         return _rsum
+    # RATE REMAINDER — "two dogs walk 70 mi/week total; first walks 2/day. How many a day does the other?" → 8.
+    _rrem = _rate_remainder(premises, question, context)
+    if _rrem is not None:
+        return _rrem
     # POOL-AND-REDISTRIBUTE — "combine their candies and share equally, how many will EACH have?" → Σ/N.
     # Tried before GUARD 3 (the pooled amounts are all "used" so it wouldn't trip, but keep recognizers
     # together). Same math as the average branch but cued by a share-equally premise + a per-each question.
