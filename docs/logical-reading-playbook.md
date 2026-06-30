@@ -1013,6 +1013,23 @@ composes possessive-age + bare-age (#112) + projection (#100) end to end. dev-ho
 839 tests. LESSON: when a recognizer is validated but yields ~0 on the bench, suspect a SECOND blocker on the
 same problems (here the question form) — bisect the failing problem (it solved with "how old" but not "how many
 years old"), don't assume the recognizer is wrong. The age cluster's wins keep coming in #111→#112→#113 chains.  ·
+114. **total-age question + backward age** (MULTI-PIECE bundle; dev-train 50→52: Xavier, Sam). Two coupled
+pieces that only move the bench TOGETHER. (a) BACKWARD age inversion in `_relational_age` (the age twin of
+#107): standard's age unknown but the SUBJECT's known → standard = subject / factor ("Sam is twice as old as
+Sue; Sam 12" → Sue 6); present-tense, pure-ratio, mutually exclusive with the forward path. (b) TOTAL-age
+question (sibling of the #3l/109 average branch, placed before the wh_value handler): "what is the total of
+their ages now?" / "what will be their total age in N years?" → Σ(each owner's age) [+ `_time_offset` ×
+owner-count]. Lands Xavier 36 (future-age #2d + backward + total) and Sam 36 (backward chain + total +
+projection). WHY BUNDLED: backward-age standalone was +0/+0/+0 (its problems need the total aggregation), the
+total-age question needs the ages backward produces — neither moves the bench alone (documented in the
+firewall memory as a deferred-ready twin until this companion landed). FIREWALL CAUGHT AN OVER-FIRE: the first
+cut claimed the INVERSE "in how many years will their total age be N?" (solve for the DURATION, not the total
+— Adam/Tom, +1 holdout wrong); gated with `not any("many")` (the inverse has "how many years"; the forward
+total-age question does not). dev-holdout 0 new-wrong delta after the gate; TEST held 61.5%. 842 tests.
+LESSON: a +0 standalone primitive isn't worthless — it can be a deferred-ready HALF of a bundle whose other
+half unlocks it (here total-age); record it precisely so the companion session can re-add it in minutes. And
+an aggregation branch must exclude the INVERSE "how many <unit>" question (solving for the operand, not the
+aggregate) — the "many" interrogative is the discriminator.  ·
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
