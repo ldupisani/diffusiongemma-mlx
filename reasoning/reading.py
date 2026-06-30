@@ -804,6 +804,13 @@ def annotate_senses(reading: Reading) -> Reading:
             # a capitalized word we don't otherwise know is a proper noun — a named individual.
             # (Known capitalized words, e.g. sentence-initial "All"/"The", are caught above first.)
             senses = ["name"]
+        elif senses == ["noun"] and u.surface[:1].isupper() and _key(u.surface).isalpha():
+            # a capitalized word that IS a known common noun ("Job", "Bill", "Rose", "Penny") may be a
+            # NAME used as that noun — make it name/noun-ambiguous so disambiguate can pick by coverage.
+            # A name wins in name positions (the as…as standard, a copula subject); the noun wins when
+            # article-DETERMINED ("the bill") or otherwise covers better. Modals/verbs ("Will", "May")
+            # aren't ["noun"], so they're untouched. The name reading is listed FIRST → ties favour it.
+            senses = ["name", "noun"]
         if senses is None:
             continue  # not in the dictionary → attach no meaning
         before = dict(u.features)
@@ -1224,6 +1231,27 @@ _NEED_PHRASING = {
 }
 
 
+def _comparison_standard_ids(reading: Reading) -> set:
+    """id()s of the noun/name that is the STANDARD of an "as <X> as <STANDARD>" comparison — the
+    noun/name immediately following the SECOND "as" ("4 times as old as Job" → Job; "half as many as
+    Tim" → Tim). A comparative's "than"-standard is already subordinated via its met "standard"
+    obligation, but the bare as…as frame carries no comparative, so its standard would otherwise look
+    UNPREDICATED — making `disambiguate` wrongly prefer the common-noun reading of a name like "Job".
+    Foregoing the standard's own obligations (treating it as subordinated) lets the name reading win.
+    The standard fills the comparison's reference slot, so this is the same "slot-filler is discharged"
+    principle the subordinated set already encodes."""
+    units = reading.units
+    as_idx = [i for i, u in enumerate(units) if _key(u.surface) == "as"]
+    if len(as_idx) < 2:
+        return set()
+    out = set()
+    for i in range(as_idx[-1] + 1, len(units)):          # the nearest noun/name after the LAST "as"
+        if any(s in units[i].features.get("senses", []) for s in ("noun", "name")):
+            out.add(id(units[i]))
+            break
+    return out
+
+
 def deficiencies(reading: Reading) -> list:
     """Everything that stops this reading from being a complete, understood statement. Empty ⇒
     well-formed."""
@@ -1232,6 +1260,8 @@ def deficiencies(reading: Reading) -> list:
     # foregone — "the dog" in "Mary owns a dog" doesn't independently demand a predicate.
     subordinated = {id(o.target) for u in reading.units for o in u.features.get("obligations", [])
                     if o.met and o.need in ("complement", "dobj", "left", "right", "unit", "standard")}
+    subordinated |= _comparison_standard_ids(reading)    # the as…as comparison standard (no comparative
+    #                                                      word binds it, but it fills the reference slot)
     out = []
     for u in reading.units:
         if not u.features.get("senses"):

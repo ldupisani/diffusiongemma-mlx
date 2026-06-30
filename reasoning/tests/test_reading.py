@@ -2547,6 +2547,33 @@ class TestIncrement91Contractions(unittest.TestCase):
         self.assertEqual(reading._split_contraction("didn't"), ["did", "not"])
         self.assertEqual(reading._split_contraction("won't"), ["will", "not"])
 
+
+class TestNameNounDisambiguation(unittest.TestCase):
+    """A name that is ALSO a common noun ("Job", "Bill", "Rose") is made name/noun-ambiguous, and the
+    standard of an "as <X> as <STANDARD>" comparison is subordinated (its predicate foregone) so
+    `disambiguate` picks the NAME reading there — while an article-determined noun still reads as a noun."""
+
+    def test_capitalized_known_noun_is_dual_sense(self):
+        u = next(u for u in reading.analyze("Job is 5 years old").units
+                 if reading._key(u.surface) == "job")
+        self.assertIn("name", u.features["senses"])
+
+    def test_comparison_standard_is_subordinated(self):
+        r = reading.analyze("Anna is 4 times as old as Job")
+        job = next(u for u in r.units if reading._key(u.surface) == "job")
+        self.assertIn(id(job), reading._comparison_standard_ids(r))
+
+    def test_collision_name_as_comparison_standard_resolves(self):
+        # "Job" after "as old as" is the comparison reference (a person), not the occupation noun.
+        out = reading.run_cli(["Anna is 3 times as old as Job. Job is 5 years old. How old is Anna?"])
+        self.assertEqual(out.strip(), "15")
+
+    def test_article_determined_collision_noun_stays_noun(self):
+        # "the bill" is article-determined → the noun reading covers strictly better, so it is NOT a name.
+        u = next(u for u in reading.analyze("He paid the bill").units
+                 if reading._key(u.surface) == "bill")
+        self.assertEqual(u.features["senses"], ["noun"])
+
     def test_other_suffixes(self):
         self.assertEqual(reading._split_contraction("they're"), ["they", "are"])
         self.assertEqual(reading._split_contraction("I'm"), ["I", "am"])
