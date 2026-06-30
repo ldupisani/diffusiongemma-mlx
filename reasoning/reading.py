@@ -1984,6 +1984,27 @@ def _possessive_age_parts(reading: Reading):
     return _entity(subj), _entity(std), k
 
 
+def _possessive_age_statement(reading: Reading):
+    """A plain POSSESSIVE age statement — "Ron's age is 43" / "Ron's age now is 43" → Quantity(ron, year,
+    43). The noun 'age' owned by a name, a copula, and a value, with NO multiplier/comparative/"as" (those
+    are the relational / possessive-relational frames). Without this the value stays unbound ("age" carries
+    the predication and 43 quantifies nothing). Gated to exactly one name + one value → no relation to confuse."""
+    units = reading.units
+    if not any(_key(u.surface) == "age" for u in units):
+        return None
+    if any(_key(u.surface) == "as" for u in units) \
+            or any("multiplier" in u.features.get("senses", []) for u in units) \
+            or any(_key(u.surface) in ("more", "less", "older", "younger", "fewer") for u in units):
+        return None
+    if not any(_key(u.surface) in ("is", "are", "was", "were") for u in units):
+        return None
+    names = [u for u in units if "name" in u.features.get("senses", [])]
+    vals = [u for u in units if "value" in u.features.get("senses", [])]
+    if len(names) != 1 or len(vals) != 1:
+        return None
+    return Quantity(_entity(names[0]), ("year", frozenset()), vals[0].features["value"], "be")
+
+
 def _relational_age(reading: Reading, context: list):
     """A RELATIONAL AGE — "X is N times as old as Y" → X's age = N × Y's age (the year-Quantity of the
     standard Y). None when Y's age isn't known yet — the solve() fixpoint then chains a multi-hop
@@ -2004,25 +2025,32 @@ def _relational_age(reading: Reading, context: list):
         return None
     y_now = _holdings(_entity(standard), ("year", frozenset()), context)
     delta = _time_offset(reading)
+    si = reading.units.index(standard)                    # the present-anchor ("as Y is NOW") follows the
+    std_now = any(_key(u.surface) in ("now", "today")     # standard; the displacement "from NOW" precedes
+                  for u in reading.units[si + 1:])         # it — so look only to the RIGHT of the standard
     if y_now is None:
-        # BACKWARD (age twin of #107): Y's age unknown, but if X's (the subject's) is known, INVERT —
-        # Y = X / factor ("Sam is twice as old as Sue; Sam is 12" → Sue 6), so the fixpoint chains backward
-        # through age relations too. Present-tense only (delta == 0); pure-ratio (the offset case is excluded
-        # above). Mutually exclusive with the forward path, which needs Y known — no double-emit.
+        # BACKWARD (age twin of #107): Y's age unknown, but if X's (the subject's) is known, INVERT so the
+        # fixpoint chains backward through age relations too. Pure-ratio (the offset case is excluded above).
+        # Mutually exclusive with the forward path, which needs Y known — no double-emit.
         x_now = _holdings(_entity(subj), ("year", frozenset()), context)
-        if delta == 0 and x_now is not None and factor:
+        if x_now is None or not factor:
+            return None                                   # Y's age unknown → defer (see _facts_from)
+        if delta == 0:                                    # present: X = k·Y → Y = X / k ("Sam 12, twice Sue" → 6)
             return Quantity(_entity(standard), ("year", frozenset()),
                             _compute(f"{_num(x_now)} / {_num(factor)}"), "be")
-        return None                                       # Y's age unknown → defer (see _facts_from)
+        # SHIFTED backward: X+Δ = k·(Y+Δ) → Y_now = (X_now+Δ)/k − Δ ("After 5 yrs Ron = 4× Maurice; Ron 43"
+        # → Maurice = (43+5)/4 − 5 = 7). The "as Y is NOW" anchor drops the −Δ: X+Δ = k·Y_now → Y_now =
+        # (X_now+Δ)/k.
+        x_future = f"({_num(x_now)} + {_num(delta)})"
+        y_now_expr = f"{x_future} / {_num(factor)}" if std_now \
+            else f"{x_future} / {_num(factor)} - {_num(delta)}"
+        return Quantity(_entity(standard), ("year", frozenset()), _compute(y_now_expr), "be")
     if delta == 0:                                        # present-tense relation: X = k × Y_now
         return Quantity(_entity(subj), ("year", frozenset()),
                         _compute(f"{_num(factor)} * {_num(y_now)}"), "be")
     # SHIFTED relation "In Δ years, X will be k× as old as Y": BOTH are at the future point by default
     # (X+Δ = k·(Y+Δ)), so X_now = k·(Y_now+Δ) − Δ. The variant "as Y is NOW/today" anchors the standard
     # to the present (X+Δ = k·Y_now → X_now = k·Y_now − Δ) — else the Kaylee class commits a wrong.
-    si = reading.units.index(standard)                    # the present-anchor ("as Y is NOW") follows the
-    std_now = any(_key(u.surface) in ("now", "today")     # standard; the displacement "from NOW" precedes
-                  for u in reading.units[si + 1:])         # it — so look only to the RIGHT of the standard
     y_future = _num(y_now) if std_now else f"({_num(y_now)} + {_num(delta)})"
     x_now = _compute(f"{_num(factor)} * {y_future} - {_num(delta)}")
     return Quantity(_entity(subj), ("year", frozenset()), x_now, "be")
@@ -3941,6 +3969,9 @@ def _facts_from(reading: Reading, context: list = None) -> list:
     ra = _relational_age(r, context)                     # "X is N times as old as Y" → X_age = N × Y_age?
     if ra is not None:
         return [ra]
+    pas = _possessive_age_statement(r)                    # "Ron's age is 43" → Quantity(ron, year, 43)
+    if pas is not None:
+        return [pas]
     pap = _possessive_age_parts(r)                        # "X's age is k× Y's age" / "X is k× Y's age" →
     if pap is not None:                                   # X_age = k × Y_age (the possessive frame)
         subj_e, std_e, k = pap

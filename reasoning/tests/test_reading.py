@@ -4262,5 +4262,31 @@ class TestComparativeAgeBackward(unittest.TestCase):
             "Kris is 24 years old. Herbert is 10 years younger than Kris. How old is Herbert?"), 14)
 
 
+class TestShiftedRelationalAgeBackward(unittest.TestCase):
+    """A FUTURE multiplicative age solved for the STANDARD — "In Δ years, X will be k× as old as Y" with X's
+    age known: X+Δ = k·(Y+Δ) → Y_now = (X_now+Δ)/k − Δ. The twin of the forward shifted relation; plus a
+    plain POSSESSIVE age statement ("Ron's age is 43" → Quantity(ron, year, 43)) so the subject grounds.
+    SYNTHETIC."""
+
+    def test_backward_shifted_solves_standard(self):
+        # Ron+5 = 4·(Maurice+5); Ron 43 → Maurice = (43+5)/4 − 5 = 7.
+        self.assertEqual(reading.solve(
+            "After five years, Ron will be four times as old as Maurice. If Ron's age now is 43, "
+            "how old is Maurice now?"), 7)
+
+    def test_possessive_age_statement(self):
+        self.assertEqual(reading.solve("Ron's age is 43. How old is Ron?"), 43)
+
+    def test_forward_shifted_unchanged(self):
+        # Ernesto_now = 2·(11+3) − 3 = 25 (the forward path must still hold).
+        self.assertEqual(reading.solve(
+            "In 3 years, Ernesto will be twice as old as Maria. Maria is 11 years old. "
+            "How old is Ernesto now?"), 25)
+
+    def test_present_backward_unchanged(self):
+        self.assertEqual(reading.solve(
+            "Sam is 12 years old. Sam is twice as old as Sue. How old is Sue?"), 6)
+
+
 if __name__ == "__main__":
     unittest.main()
