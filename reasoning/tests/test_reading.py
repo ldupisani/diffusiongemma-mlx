@@ -4450,5 +4450,25 @@ class TestAgeSolveForT(unittest.TestCase):
             "How old will Joel be when his dad is 10 years older than him?"), "undetermined")
 
 
+class TestProportion(unittest.TestCase):
+    """A direct PROPORTION — "If N X <verb> M <unit>, how MUCH do K X <verb>?" → M × K/N. A premise pairs a
+    count (N X) with a measure (M unit) for one entity and verb; the question scales it to a new count.
+    Gated to "how much" (an amount, not "how many <noun>") so it never fires on a plain count question.
+    SYNTHETIC."""
+
+    def test_weight_proportion(self):
+        self.assertEqual(reading.solve(
+            "If 4 boxes of apples weigh 20 pounds, how much do 6 boxes weigh?"), 30)
+
+    def test_volume_proportion(self):
+        self.assertEqual(reading.solve(
+            "If 3 jars hold 12 ounces, how much do 5 jars hold?"), 20)
+
+    def test_plain_count_question_not_proportion(self):
+        # "how MANY apples" asks a count, not an amount → the proportion path must not fire.
+        self.assertEqual(reading.solve(
+            "Tom has 3 apples and 2 oranges. How many apples does Tom have?"), 3)
+
+
 if __name__ == "__main__":
     unittest.main()

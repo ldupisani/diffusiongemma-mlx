@@ -5044,6 +5044,36 @@ def _backward_inversion(premises: list, question: str):
     return _compute(f"{_num(finals[0].amount)} - ({delta_sum})")
 
 
+def _proportion(premises: list, question: str):
+    """A direct PROPORTION — "If 12 bags of oranges weigh 24 pounds, how much do 8 bags weigh?" → 24 × 8/12 =
+    16. A premise pairs a COUNT (12 bags) with a measure (24 pounds) for the same entity and verb; the
+    question gives a NEW count (8 bags) and asks "how MUCH" the measure is → measure × new_count / count.
+    TIGHTLY gated: a "how much" question (asking an amount, not "how many <noun>"), one value quantifying a
+    count-noun + a matching verb; a premise with exactly two same-entity, same-verb quantities whose heads
+    are the count and a different measure. None otherwise."""
+    qr = analyze(question)
+    if not (any("interrogative" in u.features.get("senses", []) for u in qr.units)
+            and any(_key(u.surface) == "much" for u in qr.units)):   # "how MUCH" → an amount, not a count
+        return None
+    qval = next((u for u in qr.units if "value" in u.features.get("senses", [])
+                 and _follow(u, "quantifies") is not None), None)
+    qverb = next((_lemma(u.surface) for u in qr.units if "verb" in u.features.get("senses", [])
+                  and _key(u.surface) not in ("is", "are", "was", "were", "do", "does", "did")), None)
+    if qval is None or qverb is None:
+        return None
+    count_head = _descriptor(_follow(qval, "quantifies"))[0]
+    for p in premises:
+        qs = [f for f in learn(p) if isinstance(f, Quantity) and f.amount is not None]
+        if len(qs) != 2 or qs[0].entity != qs[1].entity:
+            continue
+        cnt = next((f for f in qs if f.measure[0] == count_head and f.verb == qverb), None)
+        oth = next((f for f in qs if f.measure[0] != count_head and f.verb == qverb), None)
+        if cnt is None or oth is None or cnt.amount == 0:
+            continue
+        return _compute(f"{_num(oth.amount)} * {_num(qval.features['value'])} / {_num(cnt.amount)}")
+    return None
+
+
 def _shopping_total(premises: list, question: str):
     """A SHOPPING TOTAL — "buys 3 toys at $10 each, 2 packs at $5 each, 5 shirts at $6 each. How much did she
     spend in all?" → Σ(count × price) = 3·10 + 2·5 + 5·6 = 70. The counts and per-item prices already parse as
@@ -5261,6 +5291,10 @@ def solve(text: str):
     _shop = _shopping_total(premises, question)
     if _shop is not None:
         return _shop
+    # PROPORTION — "If 12 bags weigh 24 pounds, how much do 8 bags weigh?" → 24 × 8/12.
+    _prop = _proportion(premises, question)
+    if _prop is not None:
+        return _prop
     # POOL-AND-REDISTRIBUTE — "combine their candies and share equally, how many will EACH have?" → Σ/N.
     # Tried before GUARD 3 (the pooled amounts are all "used" so it wouldn't trip, but keep recognizers
     # together). Same math as the average branch but cued by a share-equally premise + a per-each question.
