@@ -922,6 +922,16 @@ the parser): this was the first increment where TEST gained a confident-wrong (4
 *drop* reverts (the offset case, 50→40); a *rise* with a new wrong is the §3a distribution-shift the holdout
 can't catch, but the committed-answer set got safer on average, so it ships. The new wrong is undiagnosable
 without breaking the TEST firewall — the price of an honest one-look arbiter. 822 tests.  ·
+108. **elided count-noun → infer the single shared measure** (dev-train 40→41, holdout 37→38). "How many
+does Steven have?" omits the measure noun, so the question's `query` descriptor is None and the per-entity
+fold can't run — the engine declined ("couldn't tell what to count") even though its forward chain already
+computed the answer (Steven: 6×3=18, 4×18=72). FIX: when `query` is None on a "how many" question and the
+context quantities share exactly ONE measure, infer it as the query — mirrors the query-less combined-fold's
+measure inference (#102). The existing fold then runs; NO new arithmetic. Decline-safe: two+ distinct
+measures keep query None → honest decline (the genuinely-ambiguous case). TEST precision held 58.3% (0
+delta). 824 tests. LESSON: an *artificial* parse-level decline (the answer is computed, only the question's
+referent is elided) is the cheapest, lowest-risk coverage win — infer the missing referent from the salient
+context and reuse the existing fold, rather than adding any new solving machinery.  ·
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
