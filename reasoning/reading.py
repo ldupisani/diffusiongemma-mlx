@@ -3308,6 +3308,10 @@ def answer(question: str, context: list, discourse: list = None):
         when_proj = _age_when_projection(r, context)     # "how old will X be WHEN Y is/turns M" → X + (M − Y)
         if when_proj is not None:                        # (the future point is set by Y reaching M, not "+Δ")
             return when_proj
+        if any(_key(u.surface) == "when" for u in r.units):
+            return "undetermined"                        # a "when <condition>" the projection couldn't resolve
+            # ("when his dad is twice as old as him" — a relation, not a target age) must DECLINE, never fall
+            # to the bare entity-age SUM below (which folded Joel 5 + dad 32×3 = 101).
         offset = _time_offset(r)                         # the queried time vs now — age TRACKS the timeline:
         aux = next((u for u in r.units if "auxiliary" in u.features.get("senses", [])), None)   # age@(now+Δ)
         if aux is not None:                                                                     # = age_now+Δ
@@ -3782,10 +3786,15 @@ def learn(statement: str, discourse: list = None, context: list = None) -> list:
         _resolve_references(r, discourse)
     facts = _facts_from(r, context)
     if discourse is not None:                            # remember this statement's subject as a discourse
-        verbs = [u for u in r.units if "verb" in u.features.get("senses", [])   # entry (entity, is_name) —
-                 and _key(u.surface) not in ("is", "are", "was", "were")]       # MAIN verb (skip a relative
-        subj = _follow(verbs[0], "subject") if len(verbs) == 1 else None        # copula, so "James buys …
-        if subj is not None:                                                    # that are …" still records
+        verbs = [u for u in r.units if "verb" in u.features.get("senses", [])]  # entry (entity, is_name).
+        non_cop = [v for v in verbs if _key(v.surface) not in ("is", "are", "was", "were", "be")]
+        subj = _follow(non_cop[0], "subject") if len(non_cop) == 1 else None    # the non-copula MAIN verb's
+        #                                                    subject ("James buys … that are …" → James). A
+        if subj is None and len(verbs) == 1 and not non_cop:   # BARE copula ("Tina is 10") records its subject
+            cs = _follow(verbs[0], "subject")                  # too — but ONLY a NAME (so "She is …" can later
+            if cs is not None and "name" in cs.features.get("senses", []):   # corefer to Tina); a common-noun
+                subj = cs                                      # copula subject ("the PRICE of beef is $5") must
+        if subj is not None:                                   # NOT pollute the discourse (it broke he→James)
             discourse.append((_entity(subj), "name" in subj.features.get("senses", [])))   # James)
         elif facts and len(r.units) > 1 and _key(r.units[0].surface) == "for" \
                 and _key(r.units[1].surface) in ("every", "each"):   # the per-occurrence construct "For
@@ -4031,6 +4040,16 @@ def _facts_from(reading: Reading, context: list = None) -> list:
     dist = _distribution(r)                              # "<name> shared <measure> between <recipients>"
     if dist is not None:                                 # → unknown-amount node + a Distribution relation
         return dist
+    # FUTURE age with a SUB-YEAR shift the year-machinery can't convert ("In 18 months, she will be 10 years
+    # old") — storing a plain current age (10) ignores the shift and the relation off it commits a wrong
+    # (Antonio = 10/2 = 5). The age path is year-only, so DECLINE rather than fold the months as years.
+    if any(_key(u.surface) == "will" and "auxiliary" in u.features.get("senses", []) for u in r.units) \
+            and any(_key(u.surface) == "old" for u in r.units):
+        off_prep = next((u for u in r.units if "preposition" in u.features.get("senses", [])
+                         and _key(u.surface) in ("in", "after")), None)
+        off_obj = _follow(off_prep, "object") if off_prep is not None else None
+        if off_obj is not None and _descriptor(off_obj)[0] in ("month", "week", "day"):
+            return []
     verbs = [u for u in r.units if "verb" in u.features.get("senses", [])]
     if len(verbs) == 1:                                  # a group-subject STATEMENT ("Tom and Mary have
         subj = _follow(verbs[0], "subject")              # 5 apples") is distributive/collective —

@@ -4356,5 +4356,35 @@ class TestKinshipEntity(unittest.TestCase):
             "Mary has 3 apples. She buys 2 apples. How many apples does Mary have?"), 5)
 
 
+class TestCopulaSubjectCoreference(unittest.TestCase):
+    """A BARE copula statement ("Tina is 10 years old") now records its NAME subject in the discourse, so a
+    later subjective pronoun resolves ("She is twice as old as Bob" → Tina). A common-noun copula subject
+    ("the PRICE of beef is $5") must NOT pollute the discourse (it broke he→James). Two guards keep the new
+    coreference from committing wrongs it merely UNMASKS in still-incomplete age forms. SYNTHETIC."""
+
+    def test_copula_subject_enables_coreference(self):
+        self.assertEqual(reading.solve(
+            "Tina is 10 years old. She is twice as old as Bob. How old is Bob?"), 5)
+
+    def test_common_noun_copula_subject_not_recorded(self):
+        # "the price of beef is $5" must not steal he→James (price is not a person).
+        self.assertEqual(reading.solve("James buys 4 pounds of beef. The price of beef is $5 per pound. "
+                                       "How much did he pay?"), 20)
+
+    def test_when_relation_declines_not_sums(self):
+        # "when his dad is twice as old as him" is a relation, not a target age → the projection can't
+        # resolve it, so DECLINE rather than fold Joel 5 + dad 32×3 = 101.
+        self.assertEqual(reading.solve(
+            "Joel is 5 years old and his dad is 32 years old. "
+            "How old will Joel be when his dad is twice as old as him?"), "undetermined")
+
+    def test_subyear_future_age_declines(self):
+        # "In 18 months, she will be 10 years old" — a sub-year shift the year-machinery can't convert →
+        # decline rather than store the future age (10) as current and derive off it.
+        self.assertEqual(reading.solve(
+            "Isabella is twice as old as Antonio. In 18 months, she will be 10 years old. "
+            "How many months old is Antonio?"), "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()
