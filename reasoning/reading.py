@@ -996,7 +996,10 @@ def _find_target(need, u, i, units, pos):
         ll = left("noun", "name", "pronoun")            # else the unique noun/name/pronoun to the LEFT,
         pp_obj = {id(_follow(p, "object")) for p in units    # EXCLUDING a preposition's object ("the price
                   if has(p, "preposition") and _follow(p, "object") is not None}   # OF beef is …" → price,
-        ll = [x for x in ll if id(x) not in pp_obj]     # not beef, which sits inside the PP)
+        poss_det = {id(units[k]) for k in range(len(units) - 1)   # and a POSSESSIVE pronoun before a name/
+                    if _key(units[k].surface) in ("his", "her", "their", "its", "my", "our")   # noun ("HIS
+                    and has(units[k + 1], "noun", "name")}        # dad is 32") — a determiner, not the subject
+        ll = [x for x in ll if id(x) not in pp_obj and id(x) not in poss_det]   # ("dad" wins, not "his")
         if len(ll) == 1:
             return ll[0]
         if not ll:                                      # none to the left → fronted, take the first RIGHT
@@ -1251,6 +1254,30 @@ def _prefer_noun_after_quantifier(reading: Reading) -> Reading:
     return reading
 
 
+KINSHIP = {"dad", "mom", "mum", "mommy", "mother", "father", "sister", "brother", "son", "daughter",
+           "cousin", "aunt", "uncle", "grandfather", "grandmother", "grandpa", "grandma", "grandmother",
+           "niece", "nephew", "wife", "husband", "sibling", "parent"}
+
+
+def _promote_kinship(reading: Reading) -> Reading:
+    """Treat "his/her/their <KINSHIP>" as a NAMED entity keyed by the kinship noun, so "his dad is 32" stores
+    an age and "how old is his dad" reads it. A possessive pronoun immediately before a kinship noun is the
+    signal — rare enough as a non-referential phrase that the promotion is safe. Keyed by the kinship word
+    (one "his dad" per problem); a possessor-qualified key is a later refinement if collisions appear."""
+    POSS = ("his", "her", "their", "my", "our", "its")
+    units = reading.units
+    for i in range(1, len(units)):
+        u = units[i]
+        if _key(u.surface) in KINSHIP and "noun" in u.features.get("senses", []) \
+                and _key(units[i - 1].surface) in POSS \
+                and "pronoun" in units[i - 1].features.get("senses", []):
+            before = dict(u.features)
+            u.features["senses"] = ["name"]
+            reading.record("promote-kinship", target=u, before=before, after=dict(u.features),
+                           reason="possessive + kinship noun → named entity")
+    return reading
+
+
 def disambiguate(reading: Reading) -> Reading:
     """Pick the best-covering sense for each ambiguous word; commit it as a reversible decision."""
     multi_idx = [k for k, u in enumerate(reading.units) if len(u.features.get("senses", [])) > 1]
@@ -1283,6 +1310,7 @@ def analyze(text: str) -> Reading:
     _merge_labels(r)         # "Grade 5" → a labeled noun (the number is an ordinal, not a quantity)
     _merge_label_letters(r)  # "Jar A" / "Class B" → one labeled NAME (distinct entities, not bare 'jar')
     _prefer_noun_after_quantifier(r)   # "how many CANS" → cans is a noun, never the modal 'can'
+    _promote_kinship(r)      # "his dad" / "her sister" → a named entity (keyed by the kinship noun)
     disambiguate(r)          # collapse multi-sense words to the reading that covers best
     annotate_obligations(r)
     while condense(r):       # condense "red apple" → one noun unit; loop stacks "big red apple"

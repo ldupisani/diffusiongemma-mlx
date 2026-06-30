@@ -4330,5 +4330,31 @@ class TestAgeWhenProjection(unittest.TestCase):
             "Marianne is 20 years old. Bella is 8 years old. How old is Marianne?"), 20)
 
 
+class TestKinshipEntity(unittest.TestCase):
+    """"his/her/their <KINSHIP>" ("his dad", "her sister") is a NAMED entity keyed by the kinship noun, so
+    "His dad is 32" stores an age and "her brother has half as much" derives. Needed a companion fix: a
+    possessive pronoun before a name/noun is a DETERMINER, not the subject ("His" was tying with "dad" as a
+    subject candidate, leaving the copula's subject unbound). Generalizes beyond age. SYNTHETIC."""
+
+    def test_kinship_age_stored_and_read(self):
+        self.assertEqual(reading.solve(
+            "Joel is 5 years old. His dad is 32 years old. How old is his dad?"), 32)
+
+    def test_kinship_comparative_then_when_projection(self):
+        self.assertEqual(reading.solve(
+            "Emma is 7 years old. If her sister is 9 years older than her, "
+            "how old will Emma be when her sister is 56?"), 47)
+
+    def test_kinship_generalizes_to_money(self):
+        self.assertEqual(reading.solve(
+            "Madeline has $48 and her brother has half as much. "
+            "How much money do they have together?"), 72)
+
+    def test_subjective_pronoun_subject_unaffected(self):
+        # "She" (not a determiner — no following name) must still bind as the subject.
+        self.assertEqual(reading.solve(
+            "Mary has 3 apples. She buys 2 apples. How many apples does Mary have?"), 5)
+
+
 if __name__ == "__main__":
     unittest.main()
