@@ -1140,6 +1140,21 @@ question's measure is unreadable). dev-train +1 / 0 new wrong; holdout + TEST he
 fallback is safe only if it requires MORE than a single lookup — gate on the accumulation (≥2 facts the normal
 fold missed), so it rescues a genuine sum without overriding a conservative single-fact decline.  ·
 
+122. **label-letter entities ("Jar A" / "Class B")** — a deliberate PARSE fix (dev-train 65→66: Jar A/B/C 148;
+holdout + TEST held). "Jar A has 28. Jar B has 12 more than jar A. Jar C has twice as many as jar B. How many
+altogether?" declined because "Jar A"/"Jar B"/"Jar C" ALL collapse to the bare noun 'jar' ("A"/"B"/"C" read as
+article/name) — so the three jars are one entity and the chain can't form. VERIFIED FIRST that the only blocker
+was the name collapse: substituting distinct proper names (Alpha/Beta/Gamma) solved it via the existing forward-
+chain + combined-sum machinery (148). FIX: a new merge pass `_merge_label_letters` (after `_merge_labels`, before
+disambiguate) merges a NOUN/NAME + a single capital letter into one NAME unit, keyed 'jar a'/'jar b'/'jar c' like
+proper names. Fires on a LOWERCASE head too ("…than jar A") so a subject ("Jar B") and a later standard ("jar B")
+key identically. A sentence-initial article ("A teacher") has no preceding noun → untouched. Despite being a
+BROAD parse change (every analyze()), the narrow single-uppercase-letter gate kept the blast radius tiny: 866
+tests, dev-train +1 / 0 new wrong, holdout + TEST held (0 regression). LESSON: a parse fix the firewall log
+flagged as "high-blast-radius" (cf. the reverted noun-noun head-walk) can be SAFE if gated on a narrow, specific
+surface signal (one capital letter, not a general compound-head rule) — and ALWAYS verify the fix is the SOLE
+blocker first (substitute clean names) so you don't build parse machinery for a problem that still won't solve.  ·
+
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
 head, attribute-superset; a sub-group's count = instances whose attributes ⊇ the query's. We store

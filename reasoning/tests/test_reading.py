@@ -3901,6 +3901,32 @@ class TestSumRatioSystem(unittest.TestCase):
             "many as Cam. How many donuts did Cam take?"), 8)
 
 
+class TestLabelLetterEntities(unittest.TestCase):
+    """"Jar A" / "Jar B" / "Jar C" are DISTINCT labeled entities, not the bare noun 'jar' three times. A
+    noun/name + a single capital letter merges into one NAME unit (keyed 'jar a' etc.), firing on a lowercase
+    head too ("…than jar A") so a subject and a later standard key identically — letting the forward
+    chain + combined-sum machinery solve them. dev-train 65→66 (Jar A/B/C 148), holdout/TEST held. SYNTHETIC."""
+
+    def test_jar_label_chain_sums(self):
+        # A=28, B=A+12=40, C=2·B=80 → 28+40+80 = 148.
+        self.assertEqual(reading.solve(
+            "Jar A has 28 marbles. Jar B has 12 more marbles than jar A. Jar C has twice as many marbles as "
+            "jar B. How many marbles are there altogether?"), 148)
+
+    def test_distinct_label_entities(self):
+        a = reading.analyze("Jar A has 28 marbles.")
+        b = reading.analyze("jar B has 5 marbles.")
+        ea = reading._entity(next(u for u in a.units if "name" in u.features.get("senses", [])))
+        eb = reading._entity(next(u for u in b.units if "name" in u.features.get("senses", [])))
+        self.assertEqual((ea, eb), ("jar a", "jar b"))
+
+    def test_sentence_initial_article_untouched(self):
+        # "A teacher …" — the article has no preceding noun, so it must NOT merge into a label entity.
+        r = reading.analyze("A teacher distributed 30 candies.")
+        self.assertTrue(any(u.surface.strip(".") == "teacher" for u in r.units))
+        self.assertFalse(any("A teacher" in u.surface for u in r.units))
+
+
 class TestAbstractMeasureAccumulation(unittest.TestCase):
     """"How FAR did she walk for 2 hours?" — no measure noun in the question, but the context holds one
     measure, one owner, and ≥2 quantities (an accumulation the measure-less question couldn't dispatch) →

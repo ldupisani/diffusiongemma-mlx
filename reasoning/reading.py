@@ -173,6 +173,29 @@ def _merge_compounds(reading: Reading) -> Reading:
     return reading
 
 
+def _merge_label_letters(reading: Reading) -> Reading:
+    """A NOUN/NAME followed by a SINGLE CAPITAL LETTER ("Jar A", "Class B", "Building C") is a LABELED
+    ENTITY, not a noun plus a stray article/name. Merge into one NAME unit so "Jar A"/"Jar B"/"Jar C" are
+    DISTINCT entities (keyed 'jar a'/'jar b'/'jar c', like proper names) the relational/sum machinery can
+    chain — without this they all collapse to the bare noun 'jar'. Fires on a LOWERCASE head too ("…than
+    jar A") so a subject ("Jar B") and a later standard ("jar B") key identically. The single uppercase
+    letter is the label signal; a sentence-initial article ("A teacher") has no preceding noun, so it's
+    untouched."""
+    units = reading.units
+    for i in range(len(units) - 1):
+        head, lab = units[i], units[i + 1]
+        if ("noun" in head.features.get("senses", []) or "name" in head.features.get("senses", [])) \
+                and re.fullmatch(r"[A-Z]", lab.surface.strip(".,?!:;()")):
+            merged = Unit(words=sorted(head.words + lab.words, key=lambda w: w.index))
+            merged.features["senses"] = ["name"]
+            reading.record("merge-label-letter", target=merged,
+                           before={"merged_from": [head, lab], "at": i},
+                           after={"entity": _key(merged.surface)}, reason="noun + single-letter label")
+            units[i:i + 2] = [merged]
+            return _merge_label_letters(reading)             # indices shifted → restart
+    return reading
+
+
 def _merge_scales(reading: Reading) -> Reading:
     """Combine "N <scale>" into ONE value unit: "two dozen" → 24, "three hundred" → 300 (and chains like
     "two hundred thousand"). Runs after senses are known so both are value units. Reversible."""
@@ -1196,6 +1219,7 @@ def analyze(text: str) -> Reading:
     _merge_scales(r)         # "two dozen" → one value unit (24) before obligations bind it
     _merge_times_multiplier(r)  # "three times as" → one multiplier unit (×3), like "twice"
     _merge_labels(r)         # "Grade 5" → a labeled noun (the number is an ordinal, not a quantity)
+    _merge_label_letters(r)  # "Jar A" / "Class B" → one labeled NAME (distinct entities, not bare 'jar')
     disambiguate(r)          # collapse multi-sense words to the reading that covers best
     annotate_obligations(r)
     while condense(r):       # condense "red apple" → one noun unit; loop stacks "big red apple"
