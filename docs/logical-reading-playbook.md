@@ -985,6 +985,20 @@ subordinate a legitimate slot-filler) rather than bolting a position rule onto `
 mechanism then picks correctly on its own, and the article-vs-bare contrast does the name/noun discrimination
 for free. ALSO confirmed by an external word-by-word cognitive analysis: the human reader assigns "Job" the
 role "comparison reference" (a person) precisely because it fills the `as…as` standard slot.  ·
+112. **bare age "X is N" (no unit) in age-typed problems** (dev-train 45→47, **TEST 58.3→61.5%**). A copula
+"X is N" with no unit ("If Job is 5") states X's AGE when the problem is age-framed, but the bare value
+quantifies no noun → `_quantity` emits nothing → a relational-age chain can't ground ("Stephanie is 4× as
+old as Job. Job is 5 YEARS OLD"→20, but "…If Job is 5"→undetermined). A bare equation has no dimension of its
+own, so INFER it from the problem's age framing. `_inject_bare_ages` (shared by `solve()` AND the CLI loop —
+mirrored so they don't re-diverge, cf. #104): in a problem with age cues (old/older/younger/age), a premise
+that is a bare copula "X is N" (name subject, value with no quantified noun, no quantity emitted) injects
+`Quantity(X, year, N)` before the fixpoint, which then chains (Job 5 → Stephanie 20 → Freddy 18). GATED on
+age cues so a bare "X is N" in a non-age problem is untouched. Builds directly on #111 — the collision-name
+fix (Job resolves as a name) is what lets these chains exist at all. dev-holdout 0 delta; TEST +1 correct, 0
+new wrong (precision ROSE). 835 tests. LESSON: a bare equation's DIMENSION is supplied by the discourse, not
+the clause — when a value has no unit, look to the problem's framing (age cues) to type it, and gate tightly
+so the inference only fires where that framing is unambiguous. The #111→#112 pair shows compounding: a
+foundational disambiguation fix re-opens a whole cluster whose follow-on increments were previously unreachable.  ·
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
