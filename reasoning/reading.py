@@ -4378,6 +4378,37 @@ def _inject_bare_ages(prem_readings: list, all_readings: list, facts_of: list, c
             context.append(q)
 
 
+_DEPLETION_VERBS = {"take", "eat", "remove", "drink", "consume", "use", "sell", "spend", "lose", "pick"}
+
+
+def _scene_depletion(question: str, context: list, prem_readings: list):
+    """A POOL depleted by takes — "There were 349 pieces of candy in a bowl. Talitha took 108, Solomon took
+    153. How many pieces are left?" → 349 − 108 − 153 = 88. The existential "there were N X" stores N
+    INSTANCES (a base count), not a holding Quantity, and each take is credited to the takER, so the
+    remainder fold finds no single owner to net. Compute base(#instances of the measure) − Σ(depletion-verb
+    Quantities of the measure). GATED: a left/remain question; an instance-base; EVERY measure-Quantity is a
+    depletion verb (an addition would break the plain base − Σ); and NO unused given — every stated premise
+    number must be the base or a depletion, else a conversion/per-unit count ("128 ounces in a GALLON … 3
+    gallons", "8 slices in a PIZZA … 2 pizzas") means the base needs computing → decline. None otherwise."""
+    ql = question.lower()
+    if "left" not in ql and "remain" not in ql:
+        return None
+    m = _queried_measure(question)
+    if m is None:
+        return None
+    base = sum(1 for f in context if isinstance(f, tuple) and f[0] == m[0])
+    allq = [f for f in context if isinstance(f, Quantity) and f.measure == m and f.amount is not None]
+    depl = [f for f in allq if f.verb in _DEPLETION_VERBS]
+    if base <= 0 or not depl or len(depl) != len(allq):   # all measure-quantities must be depletions
+        return None
+    used = {round(float(base), 6)} | {round(float(f.amount), 6) for f in depl}
+    stated = {round(float(u.features["value"]), 6) for rp in prem_readings for u in rp.units
+              if "value" in u.features.get("senses", []) and u.features.get("value") is not None}
+    if stated - used:                                     # a conversion factor / container count → the base
+        return None                                       # isn't the plain instance total → decline
+    return _compute(f"{base} - (" + " + ".join(_num(f.amount) for f in depl) + ")")
+
+
 def solve(text: str):
     """Read a whole word-problem paragraph (premises + a trailing question) and answer the question —
     threading coreference (`discourse`) and the growing `context` across the premises (split into
@@ -4475,6 +4506,12 @@ def solve(text: str):
         if derived:                                      # derive implied facts (transitive order, …) and
             context += derived                           # keep looping — one unified read–synthesize loop
             progress = True
+    # SCENE DEPLETION — "there were N X … took A … took B … how many X left?" → N − (A+B). Tried before
+    # GUARD 3, which would otherwise decline (the existential N is INSTANCES, not a Quantity amount, so it
+    # reads as an unused given). Tightly gated (instance-base + all-depletion); None ⇒ not this shape.
+    _depleted = _scene_depletion(question, context, readings[:len(premises)])
+    if _depleted is not None:
+        return _depleted
     # GUARD 2 — a "than" comparison that collapsed to a FLAT quantity (a verbatim stated value, no
     # Relation, not a derived ±) means the relation ("25 times more stickers THAN Kristoff") was
     # dropped → we misread it. A comparative-derived quantity (amount ≠ any stated value) is OK.
@@ -4736,14 +4773,15 @@ def run_cli(args: list) -> str:
         if derived:
             context, fixpoint = context + derived, True
 
+    _depleted = _scene_depletion(question, context, readings)   # mirror solve() (#104) — pool − Σ takes
     if not trace:                                          # just the answer
-        return _answer_text(answer(question, context))
+        return _answer_text(_depleted if _depleted is not None else answer(question, context))
 
     out = []                                               # the full trace
     for i, p in enumerate(premises):
         out += [f'STATEMENT: "{p}"'] + _trace_lines(readings[i]) + [f"  learned: {facts_of[i] or []}", ""]
     out += [f'QUESTION: "{question}"'] + _trace_lines(analyze(question)) + [""]
-    ans = answer(question, context)                        # logs the answer's arithmetic onto the premises'
+    ans = _depleted if _depleted is not None else answer(question, context)   # logs the arithmetic too
     programs = list(ARITHMETIC_LOG)                        # snapshot before explain() re-derives
     out += ["derivation:"] + ["  " + line for line in explain(question, context)]
     if programs:                                           # the AUDITED arithmetic — each a re-runnable

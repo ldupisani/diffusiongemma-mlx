@@ -3895,5 +3895,30 @@ class TestSumRatioSystem(unittest.TestCase):
             "undetermined")
 
 
+class TestSceneDepletion(unittest.TestCase):
+    """A POOL ("there were N X") depleted by takes ("took A … took B") → N − Σtakes. The existential N is
+    stored as INSTANCES, not a holding, and the takes are credited to the takers, so the remainder fold
+    can't net it. Gated: a left/remain question, an instance-base, all measure-quantities are depletion
+    verbs, and NO unused given (a conversion factor / per-unit count means the base needs computing)."""
+
+    def test_pool_depleted_by_takes(self):
+        self.assertEqual(reading.solve(
+            "There were 20 marbles in a jar. Tom took 5 marbles and Sue took 3 marbles. "
+            "How many marbles were left in the jar?"), 12)
+
+    def test_per_unit_base_declines(self):
+        # "6 eggs in a carton … 2 cartons" — the base needs ×2, so the bare instance count (6) is wrong;
+        # the extra number (2) is an unused given → decline rather than commit 6 − eaten.
+        self.assertEqual(reading.solve(
+            "There are 6 eggs in a carton. Sam buys 2 cartons and eats 4 eggs. How many eggs are left?"),
+            "undetermined")
+
+    def test_addition_present_declines(self):
+        # a non-depletion (add) quantity of the measure breaks the plain base − Σ → decline.
+        self.assertEqual(reading.solve(
+            "There were 10 apples in a basket. Ann added 5 apples and Bob took 3 apples. "
+            "How many apples were left?"), "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()
