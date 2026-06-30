@@ -4503,6 +4503,12 @@ class TestRateExtrapolation(unittest.TestCase):
             "Anna has two cats. Together, they eat a total of 35 ounces a week. The first cat eats "
             "3 ounces a day. How many ounces a day does the other cat eat?"), 2)
 
+    def test_rate_race_inversion(self):
+        # time to complete a target, differenced: 30/5 − 30/6 = 6 − 5 = 1 hour = 60 minutes.
+        self.assertEqual(reading.solve(
+            "Anna can run at a rate of 5 miles per hour. Bob can run at a rate of 6 miles per hour. "
+            "In minutes, how much faster will Bob run a 30 mile race?"), 60)
+
 
 class TestRateDifference(unittest.TestCase):
     """RATE DIFFERENCE × DURATION — "A reads M/day, B reads N/day. How many MORE does A read in K weeks?" →

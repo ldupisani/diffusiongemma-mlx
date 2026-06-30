@@ -5201,6 +5201,37 @@ def _rate_compound(premises: list, question: str, context: list):
     return _compute(f"{_num(rate.amount)}/{_num(rate.per_amount)} * ({per}) * {_num(num)}")
 
 
+def _rate_race(premises: list, question: str, context: list):
+    """RATE RACE (inversion difference) — "Apple runs 3 mph, Mac runs 4 mph. In minutes, how much FASTER will
+    Mac run a 24-mile race?" → 24/3 − 24/4 = 2 hr = 120 min. Two rates (same measure & per_unit), a TARGET
+    distance/amount in the question (a value of the rates' measure), and a faster/longer cue with an asked
+    time-unit → (target/slow − target/fast) converted to that unit. None otherwise."""
+    rates = [f for f in context if isinstance(f, Rate)]
+    if len(rates) != 2 or len(context) != 2:
+        return None
+    if rates[0].measure != rates[1].measure or rates[0].per_unit != rates[1].per_unit:
+        return None
+    qr = analyze(question)
+    if not any(_key(u.surface) in ("faster", "longer", "slower", "quicker") for u in qr.units):
+        return None
+    target = next((u.features["value"] for u in qr.units if "value" in u.features.get("senses", [])
+                   and _follow(u, "quantifies") is not None
+                   and _descriptor(_follow(u, "quantifies"))[0] == rates[0].measure[0]), None)
+    au = next((_descriptor(u)[0] for u in qr.units if "noun" in u.features.get("senses", [])
+               and _descriptor(u)[0] in TIME_UNITS), None)
+    if target is None or au is None:
+        return None
+    r0, r1 = rates[0].amount / rates[0].per_amount, rates[1].amount / rates[1].per_amount
+    slow, fast = (rates[0], rates[1]) if r0 < r1 else (rates[1], rates[0])
+    diff = f"{_num(target)} / ({_num(slow.amount)}/{_num(slow.per_amount)}) " \
+           f"- {_num(target)} / ({_num(fast.amount)}/{_num(fast.per_amount)})"
+    if au == slow.per_unit:
+        return _compute(diff)
+    if (slow.per_unit, au) in CONVERSIONS:               # time difference in per_unit → the asked unit
+        return _compute(f"({diff}) * {_num(CONVERSIONS[(slow.per_unit, au)])}")
+    return None
+
+
 def _rate_remainder(premises: list, question: str, context: list):
     """RATE REMAINDER — "Two dogs walk a TOTAL of 70 miles a week. The first walks 2 miles a day. How many
     miles a day does the OTHER walk?" → 70/week (=10/day) − 2/day = 8/day. Exactly two rates (same measure);
@@ -5573,6 +5604,10 @@ def solve(text: str):
     _rrem = _rate_remainder(premises, question, context)
     if _rrem is not None:
         return _rrem
+    # RATE RACE — "Apple 3 mph, Mac 4 mph. How much faster does Mac run a 24-mile race, in minutes?" → 120.
+    _rrace = _rate_race(premises, question, context)
+    if _rrace is not None:
+        return _rrace
     # POOL-AND-REDISTRIBUTE — "combine their candies and share equally, how many will EACH have?" → Σ/N.
     # Tried before GUARD 3 (the pooled amounts are all "used" so it wouldn't trip, but keep recognizers
     # together). Same math as the average branch but cued by a share-equally premise + a per-each question.
