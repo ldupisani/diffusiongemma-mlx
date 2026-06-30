@@ -2985,6 +2985,12 @@ def answer(question: str, context: list, discourse: list = None):
             return next((u for u in r.units if "value" in u.features.get("senses", [])   # asked). The target
                          and _follow(u, "quantifies") is not None                        # value quantifies
                          and _descriptor(_follow(u, "quantifies")) == rate.measure), None)  # the rate's measure
+        # NOTE (deferred generalization): the target is sought only in the QUESTION units. "…2800 pages long
+        # how many weeks…" (no comma) keeps the total in the question clause → found; a COMMA ("…long, how many
+        # weeks…") splits the total into a PREMISE → a context-Quantity fallback (f.measure == rate.measure)
+        # would solve it. Prototyped zero-regression but with ZERO benefit on real dev/test/permissive (the one
+        # real case, John-bible, is already fixed upstream by the rate-marker entity recovery), so DEFERRED per
+        # example-driven-deferral — re-add when a real comma-split rate-inversion problem forces it.
         # SELECT among rates (each must have a target the question quantifies): (1) one OWNED by a name in
         # the question ("how long does it take BRIANNA" → Brianna's 2 pg/min, not Anna's); (2) one whose
         # per_unit IS / converts to the asked unit ("15 pages/DAY" beats "5 pages/HOUR" for "how many
