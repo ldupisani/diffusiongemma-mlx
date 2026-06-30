@@ -117,7 +117,10 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   (currency / percentage / unknown-word / structure) and the **most-frequent unknown words** (the
   data-driven vocabulary worklist). Baseline: **0%** on real GSM8K (the clean shapes the parser handles
   are far simpler than real problems; top blockers are function-word vocabulary, then `$`/`%`). 0 model
-  calls. CLI: `python -m reasoning.reading_bench --slice dev|test [--limit N]`.
+  calls. DEV has a stable-hash **train/holdout split** (`--slice dev-train|dev-holdout`, the anti-overfit
+  refinement: tune on dev-train, validate on dev-holdout BEFORE the single TEST look — `dev-holdout` is a
+  cheap TEST proxy). The full selection+validation process is in **`docs/reading-coverage-methodology.md`**.
+  CLI: `python -m reasoning.reading_bench --slice dev|dev-train|dev-holdout|test [--limit N]`.
 - **`backend.py`** — pluggable inference backend (see below).
 - **`reasoning/mcp_server.py`** — exposes the reasoning project as an MCP service (FastMCP, stdio):
   `ask` (route → coded answer + domain + model-call count; 0-call compound split; non-coded types
