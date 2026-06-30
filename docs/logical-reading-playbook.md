@@ -1171,6 +1171,22 @@ collection the interrogative actually bound, not just the final fold. Coupled fi
 needed: the gq-inference covered the measure but the quantifier still mis-bound, and "in all" was a separate
 gate.  ·
 
+124. **action-amount across times + "savings"→money** (dev-train 67→68: Donny; holdout + TEST held). "Donny
+saves $15 Mon, $28 Tue, $13 Wed. Thursday he spends half of his total savings so far. How much did he spend?"
+→ ½·(15+28+13) = 28. Two blockers: (1) "his savings" didn't resolve to his money holding — added "savings"/
+"earnings" to `_MONEY_WORDS` (both ARE money; only a bare head collapses, "savings account" keeps head 'account').
+(2) GUARD 5(b) (≥2 distinct times in context + question names no time → decline, for timeline ambiguity) FALSELY
+declined it: the saves (mon/tue/wed) + spend (thu) are ≥2 times, but "how much did he SPEND?" targets a specific
+ACTION verb with exactly one matching quantity — unambiguous. EXEMPT GUARD 5(b) when the question's main
+non-auxiliary, non-HAVE/BE verb matches exactly one context quantity. CRUCIAL the exemption is verb-specific: a
+HOLDING question ("how much will he HAVE in the end?", Jack) genuinely depends on which point in the timeline
+(answer()'s 47 ≠ gold 97), so HAVE/BE/own/hold are excluded and Jack still declines. VERIFIED via a probe that
+GUARD 5(b) was declining exactly 2 problems where answer() would commit — Donny (right) and Jack (wrong) — so the
+guard was doing real work for Jack; the narrowing had to split them on the action-vs-holding verb. dev-train +1 /
+0 new wrong; holdout + TEST held. 871 tests. LESSON: before narrowing a precision GUARD, enumerate exactly which
+declines it currently turns into {correct, wrong} if removed — if any would be WRONG (Jack), the narrowing must
+discriminate on a signal that separates them (here: the question verb is an action vs a holding), not blanket-lift.  ·
+
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
 head, attribute-superset; a sub-group's count = instances whose attributes ⊇ the query's. We store

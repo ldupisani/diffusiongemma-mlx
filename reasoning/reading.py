@@ -1327,7 +1327,8 @@ def is_well_formed(reading: Reading) -> bool:
 # pipeline — same reader, same obligations — and inherits the answer-or-ask contract: an
 # unrecognized word makes the question unanswerable, so we ASK rather than guess. (Questions ask,
 # they don't assert, so we follow the interrogative chain rather than require full saturation.)
-_MONEY_WORDS = {"dollar", "cent", "buck", "money", "penny"}   # all normalise to the MONEY measure
+_MONEY_WORDS = {"dollar", "cent", "buck", "money", "penny",   # all normalise to the MONEY measure
+                "savings", "earnings"}                        # ("half of his SAVINGS" → his money holding)
 
 
 def _descriptor(unit: "Unit"):
@@ -4818,7 +4819,17 @@ def solve(text: str):
     times = {f.time for f in context if isinstance(f, Quantity) and f.time is not None}
     q_has_time = any("time" in u.features.get("senses", []) for u in readings[-1].units)
     if len(times) >= 2 and not q_has_time:
-        return "undetermined"
+        # EXEMPT an ACTION-amount question ("how much did he SPEND?") that names a specific verb matched by
+        # exactly ONE context quantity — the asked event is unambiguous, unlike a HOLDING question ("how much
+        # will he HAVE?") whose answer genuinely depends on which point in the timeline (Jack: 47 vs 97).
+        qverbs = [_lemma(u.surface) for u in readings[-1].units if "verb" in u.features.get("senses", [])
+                  and "auxiliary" not in u.features.get("senses", [])
+                  and _lemma(u.surface) not in ("have", "be", "own", "hold")]
+        qv = qverbs[0] if qverbs else None
+        matching = [f for f in context if isinstance(f, Quantity) and f.verb == qv
+                    and f.amount is not None] if qv else []
+        if not (qv is not None and len(matching) == 1):
+            return "undetermined"
     # GUARD 6 — "each OF the [subset]" is a per-MEMBER query over a restricted subset of a group; we hold
     # no per-member or subset facts (only the group aggregate), so the per-member demand can't be met →
     # decline (never match the group total). Distinct from "each <noun>" — the equal-split per-each we answer.

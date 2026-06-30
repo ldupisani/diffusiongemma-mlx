@@ -3901,6 +3901,25 @@ class TestSumRatioSystem(unittest.TestCase):
             "many as Cam. How many donuts did Cam take?"), 8)
 
 
+class TestActionAmountAcrossTimes(unittest.TestCase):
+    """"savings"/"earnings" normalise to the money measure (so "half of his SAVINGS" → his money holding), and
+    GUARD 5(b) (≥2 distinct times + no question-time → decline) is EXEMPTED for an ACTION-amount question that
+    names a verb matched by exactly one quantity ("how much did he SPEND?" — unambiguous), while a HOLDING
+    question ("how much will he HAVE?") still declines (Jack 47≠97 is a real timeline ambiguity). dev-train
+    67→68 (Donny 28), holdout/TEST held. SYNTHETIC."""
+
+    def test_spend_fraction_of_savings_across_days(self):
+        self.assertEqual(reading.solve(
+            "Donny saves $15 on Monday, $28 on Tuesday and $13 on Wednesday. On Thursday he spends half of "
+            "his total savings so far. How much did he spend?"), 28)
+
+    def test_holding_question_across_times_still_declines(self):
+        # a HOLDING question with an unresolved future event must stay declined (timeline ambiguity).
+        self.assertNotIsInstance(reading.solve(
+            "Jack has 65 pounds of sugar today. Tomorrow he will use 18 pounds of sugar. The following day "
+            "he will buy 50 more pounds of sugar. How many pounds will he have in the end?"), (int, float))
+
+
 class TestNounAfterQuantifierAndInAll(unittest.TestCase):
     """Two coupled fixes for "How many cans did the boys collect in all?": (1) a word after "many"/"much"
     with both a noun and an auxiliary sense reads as the NOUN (else 'cans'→modal and "many" binds 'boys');
