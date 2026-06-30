@@ -4490,6 +4490,12 @@ class TestRateExtrapolation(unittest.TestCase):
             "Sam drives 100 miles in 2 hours. He rests for 1 hour. "
             "How far will he go in 30 minutes?"), "undetermined")
 
+    def test_compound_duration(self):
+        # rate × per-period duration × #periods: 5/min × (1 hour → 60 min) × 2 days = 600.
+        self.assertEqual(reading.solve(
+            "Tom reads 5 pages each minute. Every day, he reads for an hour. "
+            "How many pages will Tom read in two days?"), 600)
+
 
 class TestRateDifference(unittest.TestCase):
     """RATE DIFFERENCE × DURATION — "A reads M/day, B reads N/day. How many MORE does A read in K weeks?" →

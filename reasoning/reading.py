@@ -5150,6 +5150,55 @@ def _rate_extrapolation(premises: list, question: str, context: list):
     return _compute(f"{_num(rate.amount)} * ({per}) / {_num(rate.per_amount)}")
 
 
+def _rate_compound(premises: list, question: str, context: list):
+    """COMPOUND-DURATION rate — "Lisa walks 10 meters each minute. Every day she walks for an hour. How many
+    meters in two days?" → 10/min × (1 hour → 60 min) × 2 days = 1200. A single work/distance rate, a premise
+    giving a per-PERIOD activity duration ("for a/N <dur> … every/each <period>"), and the question giving a
+    PERIOD count ("in N <period>"). answer = rate × (duration → per_unit) × periods. None otherwise."""
+    rates = [f for f in context if isinstance(f, Rate)]
+    if len(rates) != 1 or len(context) != 1:
+        return None
+    rate = rates[0]
+    dur_amt = dur_u = period_u = None
+    for p in premises:
+        pr = analyze(p)
+        forp = next((u for u in pr.units if _key(u.surface) == "for"
+                     and "preposition" in u.features.get("senses", [])), None)
+        if forp is None:
+            continue
+        fi = pr.units.index(forp)
+        tu = next((u for u in pr.units[fi + 1:fi + 4] if "noun" in u.features.get("senses", [])
+                   and _descriptor(u)[0] in TIME_UNITS), None)
+        if tu is None:
+            continue
+        vu = next((u.features["value"] for u in pr.units if "value" in u.features.get("senses", [])
+                   and _follow(u, "quantifies") is tu), None)
+        if vu is None:                                    # "for AN hour" → a single unit
+            ti = pr.units.index(tu)
+            vu = 1 if ti > 0 and _key(pr.units[ti - 1].surface) in ("a", "an") else None
+        pu = next((_descriptor(pr.units[k + 1])[0] for k in range(len(pr.units) - 1)
+                   if _key(pr.units[k].surface) in ("every", "each")
+                   and _descriptor(pr.units[k + 1])[0] in TIME_UNITS), None)
+        if vu is not None and pu is not None:
+            dur_amt, dur_u, period_u = vu, _descriptor(tu)[0], pu
+            break
+    if dur_amt is None:
+        return None
+    qr = analyze(question)
+    num = next((u.features["value"] for u in qr.units if "value" in u.features.get("senses", [])
+                and _follow(u, "quantifies") is not None
+                and _descriptor(_follow(u, "quantifies"))[0] == period_u), None)
+    if num is None:
+        return None
+    if dur_u == rate.per_unit:
+        per = _num(dur_amt)
+    elif (dur_u, rate.per_unit) in CONVERSIONS:
+        per = f"{_num(dur_amt)} * {_num(CONVERSIONS[(dur_u, rate.per_unit)])}"
+    else:
+        return None
+    return _compute(f"{_num(rate.amount)}/{_num(rate.per_amount)} * ({per}) * {_num(num)}")
+
+
 def _rate_sum(premises: list, question: str, context: list):
     """MULTI-ENTITY RATE SUM — "Anna 30 pages/60 min, Bob 27/60 min, Cherry 25/60 min. They have read for 240
     min. How many pages in TOTAL?" → (30+27+25)/60 × 240 = 328. ≥2 rates (same measure & per_unit) and
@@ -5460,6 +5509,10 @@ def solve(text: str):
     _rext = _rate_extrapolation(premises, question, context)
     if _rext is not None:
         return _rext
+    # COMPOUND-DURATION rate — "walks 10 m/min. Every day for an hour. How many meters in 2 days?" → 1200.
+    _rcomp = _rate_compound(premises, question, context)
+    if _rcomp is not None:
+        return _rcomp
     # RATE DIFFERENCE — "Janet 80 pages/day, Belinda 30/day. How many more does Janet read in 6 weeks?" → 2100.
     _rdiff = _rate_difference(premises, question, context)
     if _rdiff is not None:
