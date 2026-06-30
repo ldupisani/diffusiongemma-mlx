@@ -4371,12 +4371,12 @@ class TestCopulaSubjectCoreference(unittest.TestCase):
         self.assertEqual(reading.solve("James buys 4 pounds of beef. The price of beef is $5 per pound. "
                                        "How much did he pay?"), 20)
 
-    def test_when_relation_declines_not_sums(self):
-        # "when his dad is twice as old as him" is a relation, not a target age → the projection can't
-        # resolve it, so DECLINE rather than fold Joel 5 + dad 32×3 = 101.
-        self.assertEqual(reading.solve(
+    def test_when_relation_does_not_sum_ages(self):
+        # the when-clause's Y must NOT be folded into a bare age SUM (Joel 5 + dad 32×3 = 101). It now
+        # SOLVES via _age_solve_for_t (see TestAgeSolveForT); the key invariant here is "never 101".
+        self.assertNotEqual(reading.solve(
             "Joel is 5 years old and his dad is 32 years old. "
-            "How old will Joel be when his dad is twice as old as him?"), "undetermined")
+            "How old will Joel be when his dad is twice as old as him?"), 101)
 
     def test_subyear_future_age_declines(self):
         # "In 18 months, she will be 10 years old" — a sub-year shift the year-machinery can't convert →
@@ -4423,6 +4423,31 @@ class TestFractionAgeFactor(unittest.TestCase):
     def test_fraction_factor_forward(self):
         self.assertEqual(reading.solve(
             "Tina is 24 years old. Darcie is 1/6 as old as Tina. How old is Darcie?"), 4)
+
+
+class TestAgeSolveForT(unittest.TestCase):
+    """"How old will X be WHEN Y is k× as old as X [is now]?" — solve for the future displacement t at which
+    the multiplicative relation holds, then return X's age then. Both shift: Y+t = k·(X+t) → t = (kX−Y)/(1−k).
+    Present-anchored ("as old as X is NOW"): Y+t = k·X_now → t = k·X_now − Y_now. Also exercises kinship-
+    modifier promotion ("his OLDER brother" → entity across an attributive modifier). SYNTHETIC."""
+
+    def test_both_shift_solve(self):
+        # dad+t = 2·(Joel+t); Joel 5, dad 32 → t = (10−32)/(1−2) = 22 → Joel = 27.
+        self.assertEqual(reading.solve(
+            "Joel is 5 years old and his dad is 32 years old. "
+            "How old will Joel be when his dad is twice as old as him?"), 27)
+
+    def test_present_anchored_solve_with_modified_kinship(self):
+        # brother = 3·Trevor_now = 33 (anchored) → t = 33 − 20 = 13 → Trevor = 24. ("his older brother".)
+        self.assertEqual(reading.solve(
+            "Trevor is currently 11 years old and his older brother is 20 years old. How old will Trevor "
+            "be when his older brother is three times as old as Trevor is now?"), 24)
+
+    def test_additive_relation_declines(self):
+        # "N years older than" is an additive offset the multiplicative solver doesn't handle → decline.
+        self.assertEqual(reading.solve(
+            "Joel is 5 years old and his dad is 32 years old. "
+            "How old will Joel be when his dad is 10 years older than him?"), "undetermined")
 
 
 if __name__ == "__main__":

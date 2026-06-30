@@ -998,7 +998,9 @@ def _find_target(need, u, i, units, pos):
                   if has(p, "preposition") and _follow(p, "object") is not None}   # OF beef is …" → price,
         poss_det = {id(units[k]) for k in range(len(units) - 1)   # and a POSSESSIVE pronoun before a name/
                     if _key(units[k].surface) in ("his", "her", "their", "its", "my", "our")   # noun ("HIS
-                    and has(units[k + 1], "noun", "name")}        # dad is 32") — a determiner, not the subject
+                    and (has(units[k + 1], "noun", "name")        # dad is 32") — a determiner, not the subject;
+                         or (k + 2 < len(units) and has(units[k + 1], "title", "adjective")   # also across an
+                             and has(units[k + 2], "noun", "name")))}   # attributive modifier ("his OLDER brother")
         ll = [x for x in ll if id(x) not in pp_obj and id(x) not in poss_det]   # ("dad" wins, not "his")
         if len(ll) == 1:
             return ll[0]
@@ -1266,15 +1268,32 @@ def _promote_kinship(reading: Reading) -> Reading:
     (one "his dad" per problem); a possessor-qualified key is a later refinement if collisions appear."""
     POSS = ("his", "her", "their", "my", "our", "its")
     units = reading.units
+
+    def is_poss(k):
+        return 0 <= k < len(units) and _key(units[k].surface) in POSS \
+            and "pronoun" in units[k].features.get("senses", [])
+
     for i in range(1, len(units)):
         u = units[i]
-        if _key(u.surface) in KINSHIP and "noun" in u.features.get("senses", []) \
-                and _key(units[i - 1].surface) in POSS \
-                and "pronoun" in units[i - 1].features.get("senses", []):
-            before = dict(u.features)
-            u.features["senses"] = ["name"]
-            reading.record("promote-kinship", target=u, before=before, after=dict(u.features),
-                           reason="possessive + kinship noun → named entity")
+        if _key(u.surface) not in KINSHIP or "noun" not in u.features.get("senses", []):
+            continue
+        mod = None                                       # the possessive sits at i-1, OR at i-2 with one
+        if is_poss(i - 1):                               # attributive modifier between ("his OLDER brother")
+            pass
+        elif i - 2 >= 0 and is_poss(i - 2) and ("adjective" in units[i - 1].features.get("senses", [])
+                                                or "comparative" in units[i - 1].features.get("senses", [])):
+            mod = units[i - 1]
+        else:
+            continue
+        before = dict(u.features)
+        u.features["senses"] = ["name"]
+        reading.record("promote-kinship", target=u, before=before, after=dict(u.features),
+                       reason="possessive + kinship noun → named entity")
+        if mod is not None:                              # the modifier ("older") is now an attribute of a
+            mb = dict(mod.features)                      # NAME — neutralize it to a no-obligation title so it
+            mod.features["senses"] = ["title"]           # doesn't strand a comparative's "standard" need
+            reading.record("demote-kin-modifier", target=mod, before=mb, after=dict(mod.features),
+                           reason="modifier of a named kin → attributive title")
     return reading
 
 
@@ -3217,6 +3236,9 @@ def _age_when_projection(r: Reading, context: list):
         return None
     wi = units.index(when)
     after = units[wi + 1:]
+    if any("multiplier" in u.features.get("senses", []) or _key(u.surface) == "times" for u in after):
+        return None                                      # "when Y is k× as old as X" is a RELATION, not a
+        #                                                  literal target age → _age_solve_for_t handles it
     y = next((u for u in after if "name" in u.features.get("senses", [])), None)
     m = next((u.features["value"] for u in after if "value" in u.features.get("senses", [])), None)
     x = next((u for u in units[:wi] if "name" in u.features.get("senses", [])), None)
@@ -3227,6 +3249,52 @@ def _age_when_projection(r: Reading, context: list):
     if x_now is None or y_now is None:
         return None
     return _compute(f"{_num(x_now)} + ({_num(m)} - {_num(y_now)})")
+
+
+def _age_solve_for_t(r: Reading, context: list):
+    """"How old will X be WHEN Y is k times as old as X [is now]?" → solve for the future displacement t at
+    which the MULTIPLICATIVE age relation holds, then return X's age then. Both ages advance together, so
+    Y+t = k·(X+t) → t = (k·X − Y)/(1 − k); a PRESENT-anchored standard ("as old as X is NOW") fixes X →
+    Y+t = k·X_now → t = k·X_now − Y_now. Gated: an age question with a "when" clause carrying a multiplicative
+    factor, a distinct X (the question subject, before "when") and Y (after "when"), every after-clause name
+    being X or Y (the relation is Y-vs-X, not a third party), pure-multiplicative (no additive offset), and
+    both current ages known. k ≠ 1."""
+    units = r.units
+    if not (any("interrogative" in u.features.get("senses", []) for u in units)
+            and any(_key(u.surface) == "old" for u in units)
+            and any(_key(u.surface) == "will" and "auxiliary" in u.features.get("senses", []) for u in units)):
+        return None
+    when = next((u for u in units if _key(u.surface) == "when"), None)
+    if when is None:
+        return None
+    wi = units.index(when)
+    after = units[wi + 1:]
+    if any("comparative" in u.features.get("senses", []) for u in units):
+        return None                                      # an additive offset on the factor ("N years older
+        #                                                  than") — not handled. (Senses, not surface: a
+        #                                                  demoted kinship modifier "his OLDER brother" is a
+        #                                                  `title`, not a comparative, so it doesn't trip this.)
+    mult = next((u for u in after if "multiplier" in u.features.get("senses", [])), None)
+    k = mult.features.get("value") if mult is not None else next(
+        (after[i - 1].features["value"] for i, u in enumerate(after) if _key(u.surface) == "times"
+         and i and "value" in after[i - 1].features.get("senses", [])), None)
+    if k is None or k == 1:
+        return None
+    x = next((u for u in units[:wi] if "name" in u.features.get("senses", [])), None)
+    y = next((u for u in after if "name" in u.features.get("senses", [])), None)
+    if x is None or y is None or _entity(x) == _entity(y):
+        return None
+    if any(_entity(u) not in (_entity(x), _entity(y)) for u in after   # a THIRD entity in the relation →
+           if "name" in u.features.get("senses", [])):                 # the equation isn't Y-vs-X; decline
+        return None
+    x_now = _holdings(_entity(x), ("year", frozenset()), context)
+    y_now = _holdings(_entity(y), ("year", frozenset()), context)
+    if x_now is None or y_now is None:
+        return None
+    anchored = any(_key(u.surface) in ("now", "today", "currently") for u in after)   # "as old as X is NOW"
+    t = f"{_num(k)} * {_num(x_now)} - {_num(y_now)}" if anchored \
+        else f"({_num(k)} * {_num(x_now)} - {_num(y_now)}) / (1 - {_num(k)})"
+    return _compute(f"{_num(x_now)} + ({t})")
 
 
 def answer(question: str, context: list, discourse: list = None):
@@ -3319,10 +3387,12 @@ def answer(question: str, context: list, discourse: list = None):
         when_proj = _age_when_projection(r, context)     # "how old will X be WHEN Y is/turns M" → X + (M − Y)
         if when_proj is not None:                        # (the future point is set by Y reaching M, not "+Δ")
             return when_proj
+        solve_t = _age_solve_for_t(r, context)           # "WHEN Y is k× as old as X" → solve for the future t
+        if solve_t is not None:                          # at which the relation holds, then X's age then
+            return solve_t
         if any(_key(u.surface) == "when" for u in r.units):
-            return "undetermined"                        # a "when <condition>" the projection couldn't resolve
-            # ("when his dad is twice as old as him" — a relation, not a target age) must DECLINE, never fall
-            # to the bare entity-age SUM below (which folded Joel 5 + dad 32×3 = 101).
+            return "undetermined"                        # a "when <condition>" neither projection nor solve-for-t
+            # resolved must DECLINE, never fall to the bare entity-age SUM below (Joel 5 + dad 32×3 = 101).
         offset = _time_offset(r)                         # the queried time vs now — age TRACKS the timeline:
         aux = next((u for u in r.units if "auxiliary" in u.features.get("senses", [])), None)   # age@(now+Δ)
         if aux is not None:                                                                     # = age_now+Δ
