@@ -4535,6 +4535,13 @@ class TestRateSum(unittest.TestCase):
             "Anna can finish reading 40 pages in 60 minutes. Bob can read 20 pages in 60 minutes. "
             "If they have been reading for 120 minutes, how many pages have they read in total?"), 120)
 
+    def test_combine_to_verb_is_a_sum_cue(self):
+        # per-entity rate × duration ("1.5/week for 10 weeks" = 15, "2.5/week for 8 weeks" = 20), summed by
+        # the "combine to lose" cue → 35.
+        self.assertEqual(reading.solve(
+            "Anna lost 1.5 pounds each week for 10 weeks. Bob lost 2.5 pounds each week for 8 weeks. "
+            "How many pounds did the two friends combine to lose?"), 35)
+
 
 if __name__ == "__main__":
     unittest.main()

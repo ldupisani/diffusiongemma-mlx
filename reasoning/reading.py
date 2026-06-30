@@ -3542,8 +3542,10 @@ def answer(question: str, context: list, discourse: list = None):
     _coll0 = _follow(_follow(interro, "queries"), "collection")               # "how many HOURS" → (hour,…)
     asked_unit = _descriptor(_coll0)[0] if _coll0 is not None else None
     kys = {_key(u.surface) for u in r.units}
-    combined_q = bool(kys & {"combined", "altogether", "total"}) or {"all", "together"} <= kys \
+    combined_q = bool(kys & {"combined", "combine", "combines", "altogether", "total"}) \
+        or {"all", "together"} <= kys \
         or "in all" in question.lower()                  # "How many cans did the boys collect IN ALL?" → Σ
+        #                                                  ("the two friends COMBINE to lose …" → a sum too)
     is_long = any(_key(u.surface) == "long" for u in r.units)
     # AGGREGATION CUE — bare "together" (without "all") is a sum cue ("how much did the two men earn
     # TOGETHER?" → Σ), but it's CONFOUNDED with the collaborative-rate sense ("how long to paint the house
