@@ -2453,6 +2453,10 @@ def _rate(reading: Reading, context: list = None):
                        and _descriptor(_follow(x, "quantifies"))[0] not in TIME_UNITS), None)
             if per_v is not None and mv is not None:
                 rate_val, unit, per_amount = mv, tu, per_v.features["value"]
+            elif mv is not None:                         # "75 pages in AN hour" — no explicit duration value,
+                ti = units.index(tu)                     # so the article a/an/each/every means a SINGLE unit
+                if ti > 0 and _key(units[ti - 1].surface) in ("a", "an", "each", "every"):
+                    rate_val, unit, per_amount = mv, tu, 1
     if rate_val is None:                                 # "N <time-unit> over M <time-unit>" — a
         ov = next((u for u in units if _key(u.surface) == "over"), None)   # time-over-time rate ("reads
         tu = _follow(ov, "object") if ov is not None else None             # 10 hours over 5 days" = 2 h/day).

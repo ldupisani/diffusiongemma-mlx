@@ -4508,6 +4508,13 @@ class TestRateDifference(unittest.TestCase):
             "Anna ran 10 miles in 2 hours while Bob ran 16 miles in 2 hours. "
             "How many more miles did Bob run in an hour than Anna?"), 3)
 
+    def test_rate_in_an_hour_and_than_before_duration(self):
+        # "N pages in AN hour" parses as a per-hour rate; "than Bob in 40 minutes" word order:
+        # (60 − 30) × 40/60 = 20.
+        self.assertEqual(reading.solve(
+            "Anna can read 60 pages in an hour. Bob can read 30 pages in an hour. "
+            "How many more pages does Anna read than Bob in 40 minutes?"), 20)
+
 
 if __name__ == "__main__":
     unittest.main()
