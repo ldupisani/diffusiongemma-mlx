@@ -2135,6 +2135,14 @@ def _rate(reading: Reading, context: list = None):
     subject = _follow(verbs[0], "subject") if len(verbs) == 1 else None
     if subject is None:
         return None
+    entity = _entity(subject)
+    if entity == "rate":                                 # "(he) reads at a RATE of 50 pages an hour" — the
+        # rate-marker noun "rate" was grabbed as the elided subject; recover the real entity from context
+        # (the most-recent prior holder) so the two rates share an entity and `_synth_rate_chain` composes.
+        entity = next((f.entity for f in reversed(context or [])
+                       if isinstance(f, (Rate, Quantity)) and f.entity != "rate"), None)
+        if entity is None:
+            return None
     if "measure" in rate_val.features:                   # "$12" — a self-measuring money rate
         measure = rate_val.features["measure"]
     else:                                                # "20 PAGES a day" — the noun the value quantifies,
@@ -2156,7 +2164,7 @@ def _rate(reading: Reading, context: list = None):
         if base is None:
             return None                                  # standard's rate unknown yet — defer to the fixpoint
         amount = _compute(f"{_num(amount)} * {_num(base.amount)}")
-    return Rate(_entity(subject), amount, measure,
+    return Rate(entity, amount, measure,
                 _descriptor(unit)[0], _lemma(verbs[0].surface), per_amount)
 
 

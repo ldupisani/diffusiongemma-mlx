@@ -3654,5 +3654,29 @@ class TestIncrement138DroppedEachAttribute(unittest.TestCase):
         self.assertFalse(reading._dropped_each_attribute(prem))
 
 
+class TestIncrement139RateMarkerEntity(unittest.TestCase):
+    """#139 - "(he) reads at a RATE of 50 pages an hour": the rate-marker noun "rate" was grabbed as the
+    elided subject, so the Rate got entity='rate' — and `_synth_rate_chain` (same-entity) couldn't compose
+    it with "2 hours a day" (entity='john'), so the h/day × pg/h → pg/day chain never formed (John-bible
+    committed 56 = 2800/50 under permissive vocab instead of 4 weeks). FIX: when the rate's subject resolves
+    to the literal marker "rate", recover the real entity from context (the most-recent prior holder).
+    Permissive wrong→correct (John-bible 4); zero real-dev regression, dev 71/3/95.9%, TEST 50.0%. SYNTHETIC."""
+
+    def test_rate_marker_entity_recovered_from_context(self):
+        ctx = [reading.Rate("john", 2.0, ("hour", frozenset()), "day", "read", 1)]
+        out = reading._rate(reading.analyze("reads at a rate of 50 pages an hour"), ctx)
+        self.assertIsNotNone(out)
+        self.assertEqual(out.entity, "john")             # recovered, not the marker "rate"
+
+    def test_rate_marker_unrecoverable_without_context_declines(self):
+        out = reading._rate(reading.analyze("reads at a rate of 50 pages an hour"), [])
+        self.assertIsNone(out)                            # no prior holder → can't recover → no Rate
+
+    def test_explicit_subject_unaffected(self):
+        out = reading._rate(reading.analyze("He reads at a rate of 50 pages an hour"), [])
+        self.assertIsNotNone(out)
+        self.assertEqual(out.entity, "he")               # an explicit subject is used directly
+
+
 if __name__ == "__main__":
     unittest.main()
