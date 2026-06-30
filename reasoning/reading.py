@@ -2005,6 +2005,32 @@ def _possessive_age_statement(reading: Reading):
     return Quantity(_entity(names[0]), ("year", frozenset()), vals[0].features["value"], "be")
 
 
+def _simultaneous_ages(reading: Reading):
+    """"X was A years old WHEN Y was B years old" → two age facts at a common reference time, stored as
+    current ages (the constant gap is what a later "when Y turns M" projection needs; with no other anchor,
+    'then' = 'now'). Each side is a plain "<name> was <value> years old" clause flanking "when"."""
+    units = reading.units
+    when = next((u for u in units if _key(u.surface) == "when"
+                 and "conjunction" in u.features.get("senses", [])), None)
+    if when is None or not any(_key(u.surface) == "old" for u in units):
+        return None
+
+    def age_of(span):
+        name = next((u for u in span if "name" in u.features.get("senses", [])), None)
+        val = next((u.features["value"] for u in span if "value" in u.features.get("senses", [])
+                    and _follow(u, "quantifies") is not None
+                    and _descriptor(_follow(u, "quantifies"))[0] == "year"), None)
+        if name is None or val is None:
+            return None
+        return Quantity(_entity(name), ("year", frozenset()), val, "be")
+
+    wi = units.index(when)
+    left, right = age_of(units[:wi]), age_of(units[wi + 1:])
+    if left is None or right is None or left.entity == right.entity:
+        return None
+    return [left, right]
+
+
 def _relational_age(reading: Reading, context: list):
     """A RELATIONAL AGE — "X is N times as old as Y" → X's age = N × Y's age (the year-Quantity of the
     standard Y). None when Y's age isn't known yet — the solve() fixpoint then chains a multi-hop
@@ -3139,6 +3165,31 @@ def _question_subjects(reading: Reading, aux):
     return entities, q_verb
 
 
+def _age_when_projection(r: Reading, context: list):
+    """"How old will X be WHEN Y is/turns M?" → X_now + (M − Y_now). The future point is set by Y REACHING
+    age M (not a "+Δ years" displacement), and ages advance together, so X gains the same (M − Y_now) years.
+    Without this the question's two names (X and the when-clause's Y) both resolve as subjects and their ages
+    are summed (Marianne 20 + Bella 8 = 28, not 20 + (18−8) = 30). Gated: a "when" clause whose entity Y
+    reaches a target age M (an "is/turns/be <value>" after Y), a DISTINCT main subject X before "when", and
+    both current ages known. None otherwise."""
+    units = r.units
+    when = next((u for u in units if _key(u.surface) == "when"), None)
+    if when is None:
+        return None
+    wi = units.index(when)
+    after = units[wi + 1:]
+    y = next((u for u in after if "name" in u.features.get("senses", [])), None)
+    m = next((u.features["value"] for u in after if "value" in u.features.get("senses", [])), None)
+    x = next((u for u in units[:wi] if "name" in u.features.get("senses", [])), None)
+    if y is None or m is None or x is None or _entity(x) == _entity(y):
+        return None
+    x_now = _holdings(_entity(x), ("year", frozenset()), context)
+    y_now = _holdings(_entity(y), ("year", frozenset()), context)
+    if x_now is None or y_now is None:
+        return None
+    return _compute(f"{_num(x_now)} + ({_num(m)} - {_num(y_now)})")
+
+
 def answer(question: str, context: list, discourse: list = None):
     """Answer a question against a context of facts. A yes/no question ("Did the student pass?")
     returns "yes"/"no" by checking a Predication; a count question ("How many red apples?") returns
@@ -3226,6 +3277,9 @@ def answer(question: str, context: list, discourse: list = None):
                 return _compute(f"{_num(base)} + {_num(growth.amount)} * {_num(proj_offset)}")
     if any("interrogative" in u.features.get("senses", []) for u in r.units) \
             and any(_key(u.surface) == "old" for u in r.units):   # "How old is/will X be?" → age (years)
+        when_proj = _age_when_projection(r, context)     # "how old will X be WHEN Y is/turns M" → X + (M − Y)
+        if when_proj is not None:                        # (the future point is set by Y reaching M, not "+Δ")
+            return when_proj
         offset = _time_offset(r)                         # the queried time vs now — age TRACKS the timeline:
         aux = next((u for u in r.units if "auxiliary" in u.features.get("senses", [])), None)   # age@(now+Δ)
         if aux is not None:                                                                     # = age_now+Δ
@@ -3960,6 +4014,9 @@ def _facts_from(reading: Reading, context: list = None) -> list:
                 coll = _follow(u, "quantifies")
                 if coll is not None:
                     return [_descriptor(coll)] * int(u.features["value"])
+    sa = _simultaneous_ages(r)                           # "X was A years old when Y was B years old" → both
+    if sa is not None:                                   # ages (a constant-gap pair) at the same reference
+        return sa
     fa = _future_age(r)                                  # "(in N years) E will be X years old" → E_now=X−N?
     if fa is not None:
         return [fa]

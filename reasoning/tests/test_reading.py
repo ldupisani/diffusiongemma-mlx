@@ -4309,5 +4309,26 @@ class TestShiftedPossessiveAge(unittest.TestCase):
             "Suzy is twice Mary's age. Mary is 8 years old. How old is Suzy?"), 16)
 
 
+class TestAgeWhenProjection(unittest.TestCase):
+    """"How old will X be WHEN Y is/turns M?" → X_now + (M − Y_now): Y reaching age M sets the future point,
+    and ages advance together. Plus the premise "X was A years old when Y was B years old" → both current
+    ages (constant-gap pair). Without the projection, X and the when-clause's Y both resolve as subjects and
+    their ages are summed (20 + 8 = 28, not 20 + (18 − 8) = 30). SYNTHETIC."""
+
+    def test_when_projection_plain_ages(self):
+        self.assertEqual(reading.solve(
+            "Marianne is 20 years old. Bella is 8 years old. "
+            "How old will Marianne be when Bella turns 18?"), 30)
+
+    def test_simultaneous_age_premise_then_projection(self):
+        self.assertEqual(reading.solve(
+            "Marianne was 20 years old when Bella was 8 years old. "
+            "How old will Marianne be when Bella turns 18?"), 30)
+
+    def test_plain_age_question_unaffected(self):
+        self.assertEqual(reading.solve(
+            "Marianne is 20 years old. Bella is 8 years old. How old is Marianne?"), 20)
+
+
 if __name__ == "__main__":
     unittest.main()
