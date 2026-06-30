@@ -3901,6 +3901,32 @@ class TestSumRatioSystem(unittest.TestCase):
             "many as Cam. How many donuts did Cam take?"), 8)
 
 
+class TestBackwardDepletion(unittest.TestCase):
+    """The backward twin of scene-depletion: an UNKNOWN initial pool depleted by spends to a KNOWN final →
+    initial = final + Σ(depletions). "Some money in the jar. Doris spent $6. Martha spent half as much [$3].
+    $15 left. How much at first?" → 15+6+3 = 24. Three precision gates (the firewall caught all three over-
+    fires): NO gain to the pool (Randy "gave him $200" → 3500≠3000); NO dropped multiplier/fraction-of-remaining
+    (Tim "buys half the amount he had left" → 30≠22); NO unused given (Josh's 2nd "spent $1.25" lost to
+    elision → 7.75≠9). dev-train 68→69, holdout/TEST held. SYNTHETIC."""
+
+    def test_backward_pool_depletion(self):
+        self.assertEqual(reading.solve(
+            "There was some money in the cookie jar. Doris spent $6 from the cookie jar. Martha spent half as "
+            "much as Doris. If there were $15 left in the cookie jar, how much money was in it at first?"), 24)
+
+    def test_gain_to_pool_declines(self):
+        # "Smith gave him $200" raises the pool — initial = final + Σspends would over-count → decline.
+        self.assertNotIsInstance(reading.solve(
+            "Randy had some money. Smith gave him another $200. Randy then gave Sally $1200. If Randy has "
+            "$2000 left, how much money did Randy have at first?"), (int, float))
+
+    def test_unused_given_declines(self):
+        # a dropped operation (the 2nd spend never parsed) leaves a stated value uncaptured → decline.
+        self.assertNotIsInstance(reading.solve(
+            "Josh has some money. He spent $1.75 on a drink, and then spent another $1.25. If he had $6 left, "
+            "how much money did Josh have at first?"), (int, float))
+
+
 class TestActionAmountAcrossTimes(unittest.TestCase):
     """"savings"/"earnings" normalise to the money measure (so "half of his SAVINGS" → his money holding), and
     GUARD 5(b) (≥2 distinct times + no question-time → decline) is EXEMPTED for an ACTION-amount question that

@@ -4581,6 +4581,59 @@ def _scene_depletion(question: str, context: list, prem_readings: list):
     return _compute(f"{base} - (" + " + ".join(_num(f.amount) for f in depl) + ")")
 
 
+def _backward_depletion(premises: list, question: str):
+    """The BACKWARD twin of `_scene_depletion`: an UNKNOWN initial pool depleted by spends to a KNOWN final →
+    initial = final + Σ(depletions). "There was some money in the cookie jar. Doris spent $6. Martha spent
+    half as much [$3]. There were $15 left. How much was in the jar at first?" → 15 + 6 + 3 = 24. Self-contained
+    (re-learns premises, like `_sum_ratio_system`) so it can run before GUARD 8's "at first" decline. TIGHTLY
+    GATED — the inversion class is firewall-risky: the question asks an ORIGINAL value; a single FINAL holding
+    flagged by "left"/"remain"/"now"; every OTHER measure-quantity is a DEPLETION verb (NO gain — "gave him"/
+    received/added would raise the pool, so initial = final + Σ would over-count: Randy 3500≠3000); and NO
+    depletion references the running total ("half of the REMAINING" — unresolvable backward: Isabel). None
+    otherwise."""
+    pl = " ".join(premises).lower()
+    if not any(p in pl for p in ("left", "remain", "now")):
+        return None
+    # a GAIN to the pool (received / "gave him" / added / more) breaks the losses-only formula → not this shape
+    if any(w in pl for w in ("received", "receive", "got ", "gained", "gain ", "added", " more ",
+                             "gave him", "gave her", "gives him", "gives her")):
+        return None
+    if any(w in pl for w in ("the remaining", "the rest", "what was left", "what is left", "what's left")):
+        return None                                          # a running-total-dependent depletion (Isabel)
+    disc, ctx = [], []
+    for p in premises:
+        rp = analyze(p)
+        f = learn(p, disc, ctx)
+        # GUARD-4-like: a premise STATING a multiplier/fraction/percent but producing NO quantity dropped an
+        # operation we can't fold ("buys another HALF the amount he had left" → a fraction-of-remaining GAIN
+        # that didn't resolve; Tim 30≠22). Decline rather than commit an inversion missing that operation.
+        if any(s in u.features.get("senses", []) for u in rp.units for s in ("multiplier", "percent")) \
+                and not any(isinstance(x, Quantity) for x in (f or [])):
+            return None
+        if f:
+            ctx += f
+    qs = [f for f in ctx if isinstance(f, Quantity) and f.amount is not None]
+    measures = {f.measure for f in qs}
+    if len(measures) != 1 or not qs:
+        return None
+    # the FINAL holding: a non-depletion quantity whose premise carried the "left"/"remain"/"now" flag.
+    finals = [f for f in qs if f.verb not in _DEPLETION_VERBS]
+    depl = [f for f in qs if f.verb in _DEPLETION_VERBS]
+    if len(finals) != 1 or not depl:                         # exactly one final; ≥1 depletion; nothing else
+        return None
+    if len(finals) + len(depl) != len(qs):                   # every quantity is final-or-depletion (no gain)
+        return None
+    # NO-UNUSED-GIVEN (mirrors `_scene_depletion`): every STATED money value must surface as the final or a
+    # depletion. A dropped value means the parse missed an operation (Josh's 2nd "spent $1.25" lost to subject-
+    # elision → 6+1.75=7.75≠9) and Σ would be incomplete → DECLINE rather than commit a partial inversion.
+    used = {round(float(finals[0].amount), 6)} | {round(float(f.amount), 6) for f in depl}
+    stated = {round(float(u.features["value"]), 6) for p in premises for u in analyze(p).units
+              if "value" in u.features.get("senses", []) and u.features.get("value") is not None}
+    if stated - used:
+        return None
+    return _compute(f"{_num(finals[0].amount)} + (" + " + ".join(_num(f.amount) for f in depl) + ")")
+
+
 def _equal_share(question: str, context: list, premises: list):
     """POOL-AND-REDISTRIBUTE — "Mark has 30 candies, Peter 25, John 35. They combine their candies and share
     them equally. How many will EACH have?" → (30+25+35)/3 = 30. Same Σ/N math as the `average` branch (#3l)
@@ -4683,7 +4736,10 @@ def solve(text: str):
     ql = question.lower()
     if any(p in ql for p in ("at first", "to begin with", "to start with",
                              "originally", "at the start", "in the beginning")):
-        return "undetermined"
+        # BACKWARD POOL DEPLETION — a losses-only inversion we CAN solve (initial = final + Σ spends); the
+        # tight gates keep every other "at first" inversion (gains, fraction-of-remaining, relational) declining.
+        _bd = _backward_depletion(premises, question)
+        return _bd if _bd is not None else "undetermined"
     if any("would" in [_key(w) for w in p.lower().split()] for p in premises):
         return "undetermined"
     # GUARD 9 — DISTRIBUTIVE per-occurrence frequency: "every time / each time <X happens>, <amount>" is a

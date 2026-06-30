@@ -1187,6 +1187,21 @@ guard was doing real work for Jack; the narrowing had to split them on the actio
 declines it currently turns into {correct, wrong} if removed — if any would be WRONG (Jack), the narrowing must
 discriminate on a signal that separates them (here: the question verb is an action vs a holding), not blanket-lift.  ·
 
+125. **backward pool depletion** (dev-train 68→69: cookie-jar; holdout + TEST held) — a losses-only INVERSION we
+can solve, carved out of GUARD 8's blanket "at first" decline. "Some money in the jar. Doris spent $6. Martha
+spent half as much [$3]. $15 left. How much at first?" → initial = final + Σ(depletions) = 15+6+3 = 24. The
+backward twin of `_scene_depletion` (3s): there the pool is known and the remainder asked; here the remainder is
+known and the pool asked. THE FIREWALL ARC — the first A/B BROKE dev-train precision (69/1) and added a holdout
+wrong; three over-fires → three precision gates: (1) a GAIN to the pool ("Smith gave him $200", Randy 3500≠3000)
+breaks initial=final+Σspends → exclude gain words; (2) a DROPPED multiplier — a premise stating a fraction but
+producing no quantity ("buys half the amount he had LEFT", a fraction-of-remaining gain, Tim 30≠22) → GUARD-4-like
+decline; (3) NO-UNUSED-GIVEN (Josh's 2nd "spent $1.25" lost to subject-elision → 7.75≠9) — every stated value must
+surface as the final or a depletion, mirroring `_scene_depletion`'s gate. After the three gates: dev-train 69/0,
+holdout 45/3 held, TEST held 61.5%. 874 tests. LESSON: an inversion recognizer commits a confident WRONG because
+the formula always yields a number — gate on (a) no opposite-sign op, (b) no operation that failed to parse
+(stated-but-no-quantity), (c) no stated value unaccounted. The holdout turned a precision-breaking change into a
+clean one — never ship the first green; A/B and gate the over-fires.  ·
+
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
 head, attribute-superset; a sub-group's count = instances whose attributes ⊇ the query's. We store
