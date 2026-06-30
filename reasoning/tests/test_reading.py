@@ -3678,5 +3678,35 @@ class TestIncrement139RateMarkerEntity(unittest.TestCase):
         self.assertEqual(out.entity, "he")               # an explicit subject is used directly
 
 
+class TestIncrement140TwoUnknownRatio(unittest.TestCase):
+    """#140 - FIRST 2-UNKNOWN SUM+RATIO solve: two entities, one a multiple of the other, plus a COMBINED
+    TOTAL → solve for the asked part. "Jean has three times as much money as Jane. They have a combined total
+    of $76. How much does Jane have?" → Jean=3·Jane, Jean+Jane=76 → Jane=19. The forward fold can't invert it
+    (neither part is known; the relation defers to no fact). `_two_unknown_ratio` is tried EARLY (before the
+    unused-given GUARD 3, which would otherwise decline on the 'unused' 3 and 76). TIGHTLY gated because these
+    shapes also appear in CORRECT forward problems: exactly 2 entities, relation+total about the SAME measure
+    (head AND qualifier — 'red balls' ≠ 'blue balls', 'parking' ≠ 'traffic' tickets), no comparative offset.
+    PURE-RATIO only. dev 71→72 (95.9→96.0%), 0 new wrongs, TEST 50.0% held, 0 permissive regression. SYNTHETIC."""
+
+    def test_ratio_with_combined_total_solves_part(self):
+        self.assertEqual(reading.solve(
+            "Jean has three times as much money as Jane. They have a combined total of $76. "
+            "How much money does Jane have?"), 19)
+        self.assertEqual(reading.solve(
+            "Mark has twice as many points as Eric. They have a combined total of 30 points. "
+            "How many points does Mark have?"), 20)
+
+    def test_three_entity_system_declines(self):
+        self.assertEqual(reading.solve(
+            "Ann has 3 times as many pens as Bob. Carol has 5 pens. They have a combined total of 40 pens. "
+            "How many pens does Bob have?"), "undetermined")
+
+    def test_measure_qualifier_mismatch_declines(self):
+        # the relation ('red balls') and the total ('blue balls') are different measures → not this system
+        self.assertEqual(reading.solve(
+            "Zoe has twice as many red balls as Sam. They have a combined total of 12 blue balls. "
+            "How many red balls does Sam have?"), "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()

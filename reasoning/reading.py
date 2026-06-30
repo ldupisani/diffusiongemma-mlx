@@ -4013,6 +4013,106 @@ def _container_giveaway(premises: list, question: str, context: list):
     return _compute(f"{_num(whole.amount)} - {_num(give.amount)} * {_num(per)}")
 
 
+def _measure_mod(rp: Reading, head: str):
+    """The content-word modifier immediately before the measure head noun ("PARKING tickets" → 'parking',
+    "much money" → None — 'much' is a quantifier). Distinguishes compound measures the head-only descriptor
+    collapses ('parking ticket' vs 'traffic ticket'), INCLUDING unknown-word qualifiers (no sense)."""
+    func = {"quantifier", "article", "value", "preposition", "verb", "pronoun", "name",
+            "multiplier", "comparative", "operator"}
+    for i, u in enumerate(rp.units):
+        if _descriptor(u)[0] == head and i > 0:
+            prev = rp.units[i - 1]
+            if _key(prev.surface).isalpha() and not (set(prev.features.get("senses") or []) & func):
+                return _key(prev.surface)
+    return None
+
+
+def _two_unknown_ratio(premises: list, question: str):
+    """A 2-UNKNOWN SUM+RATIO system: two entities, one is a multiple of the other, and a COMBINED TOTAL is
+    given → solve for the asked one. "Jean has three times as much money as Jane. They have a combined total
+    of $76. How much does Jane have?" → Jean = 3·Jane, Jean+Jane = 76 → Jane = 76/4 = 19. The forward fold
+    can't invert this (neither part is known). PURE-RATIO only (no comparative offset — that's a later
+    increment). TIGHTLY gated, because these shapes also appear in CORRECT forward problems: exactly TWO
+    distinct entities (rejects 3-way systems), the relation and the total must be about the SAME measure
+    INCLUDING its qualifier (rejects "parking tickets" relation vs "traffic tickets" total), and neither the
+    relation nor the total clause may carry a comparative. None if the shape doesn't apply."""
+    qr = analyze(question)
+    qnames = [u for u in qr.units if "name" in u.features.get("senses", [])]
+    if not qnames:
+        return None
+    asked_ent = _entity(qnames[0])
+    asked_measure = _queried_measure(question)
+    if asked_measure is not None and "verb" in analyze(asked_measure[0]).units[0].features.get("senses", []):
+        asked_measure = RESULT_MEASURE.get(asked_measure[0])     # "how much did X EARN" → money
+    allnames = set()                                             # exactly two ATOMIC entities (a conjoined
+    for p in premises + [question]:                             # "Alice and Emily" unit is dropped — its
+        for u in analyze(p).units:                              # atoms are also present; reject 3-way systems)
+            if "name" in u.features.get("senses", []) and " and " not in _entity(u):
+                allnames.add(_entity(u))
+    if len(allnames) != 2:
+        return None
+    rel = rel_mod = None
+    for p in premises:                                          # the RATIO relation "A has k times as much/
+        rp = analyze(p)                                        # many <M> as B" (pure ratio, no offset)
+        mult = next((u for u in rp.units if "multiplier" in u.features.get("senses", [])), None)
+        if mult is None or any("comparative" in u.features.get("senses", []) for u in rp.units):
+            continue
+        scaled = _follow(mult, "scales")
+        if scaled is None or not ("quantifier" in scaled.features.get("senses", [])
+                                  or _key(scaled.surface) in (COUNT_NOUNS | DIMENSIONS)):
+            continue
+        names = [u for u in rp.units if "name" in u.features.get("senses", [])]
+        as_idx = next((i for i, u in enumerate(rp.units) if _key(u.surface) == "as"), None)
+        if len(names) != 2 or as_idx is None:
+            continue
+        after = [u for u in names if rp.units.index(u) > as_idx]
+        if len(after) != 1:                                    # standard = the name after "as"; subject = other
+            continue
+        std = after[0]; subj = next(u for u in names if u is not std)
+        if "fraction" in mult.features:
+            num, den = mult.features["fraction"]; k = num / den
+        else:
+            k = mult.features.get("value")
+        if k is None:
+            continue
+        rel_measures = {_descriptor(u)[0] for u in rp.units if u.features.get("senses") == ["noun"]}
+        if asked_measure is not None and asked_measure[0] not in rel_measures:
+            continue                                            # the relation must be about the asked measure
+        rel_mod = _measure_mod(rp, asked_measure[0]) if asked_measure is not None else None
+        rel_desc = next((_descriptor(u) for u in rp.units                      # the FULL descriptor (head +
+                         if asked_measure is not None and _descriptor(u)[0] == asked_measure[0]), None)
+        rel = (_entity(subj), k, _entity(std))                                 # condensed qualifiers, e.g.
+        break                                                                 # ('ball', {'red'}))
+    if rel is None or asked_ent not in (rel[0], rel[2]):
+        return None
+    A, k, B = rel
+    total = None                                                # the combined TOTAL: a plain value, no
+    for p in premises:                                         # comparative, same measure+qualifier
+        if not any(w in p.lower() for w in ("combined", "total", "together", "between them", "in all")):
+            continue
+        rp = analyze(p)
+        if any("comparative" in u.features.get("senses", []) for u in rp.units):
+            continue
+        tot_measures = {_descriptor(u)[0] for u in rp.units if u.features.get("senses") == ["noun"]}
+        if asked_measure is not None and tot_measures and asked_measure[0] not in tot_measures \
+                and "money" not in str(asked_measure):          # a money total often has no measure noun ("$76")
+            continue
+        if asked_measure is not None and _measure_mod(rp, asked_measure[0]) != rel_mod:
+            continue                                            # "traffic tickets" total ≠ "parking" relation
+        tot_desc = next((_descriptor(u) for u in rp.units
+                         if asked_measure is not None and _descriptor(u)[0] == asked_measure[0]), None)
+        if rel_desc is not None and tot_desc is not None and rel_desc != tot_desc:
+            continue                                            # condensed-qualifier mismatch ('red' vs 'blue')
+        tv = next((u for u in rp.units if "value" in u.features.get("senses", [])
+                   and u.features.get("value") is not None), None)
+        if tv is not None:
+            total = tv.features["value"]; break
+    if total is None:
+        return None
+    b_val = _compute(f"{_num(total)} / ({_num(k)} + 1)")        # A = k·B, A+B = T → B = T/(k+1)
+    return b_val if asked_ent == B else _compute(f"{_num(k)} * {_num(b_val)}")
+
+
 def solve(text: str):
     """Read a whole word-problem paragraph (premises + a trailing question) and answer the question —
     threading coreference (`discourse`) and the growing `context` across the premises (split into
@@ -4040,6 +4140,13 @@ def solve(text: str):
     # didn't fully read).
     if any(d.kind == "unknown-word" for r in readings for d in deficiencies(r)):
         return "undetermined"
+    # 2-UNKNOWN SUM+RATIO recognizer — tried EARLY (before the unused-given GUARD 3): its relation
+    # ("Jean = 3× Jane") DEFERS to no fact, so the stated 3 and the total would trip GUARD 3 and decline
+    # before the part-chain. Self-contained (re-analyzes premises, needs no context), tightly gated → safe
+    # to short-circuit here. "Jean = 3× Jane, together $76 → Jane 19." None ⇒ not this shape → fall through.
+    _ratio = _two_unknown_ratio(premises, question)
+    if _ratio is not None:
+        return _ratio
     # GUARD 8 — INVERSION / COUNTERFACTUAL: two shapes the forward fold structurally cannot solve, so it
     # would fold the literal numbers and commit garbage. Both are honest DECLINES (the safe "only-declines"
     # shape, like GUARD 7).
