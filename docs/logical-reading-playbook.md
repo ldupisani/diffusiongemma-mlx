@@ -942,6 +942,16 @@ so backward-inverting it fires on many unseen shapes where the inversion is unso
 a safe one does NOT make it safe — safety tracks the SURFACE PATTERN's commonness, not the mechanism. The
 holdout is what distinguishes them; spend it before the TEST look. Re-attempt only behind a tighter gate
 (e.g. require the standard be the asked entity AND no other relation/offset in the problem).  ·
+109. **average over a set** (dev-train 41→42, holdout 38→39). "What is the average height of the three
+people?" = Σ(each owner's net holding) ÷ owner-count. Handled FIRST in answer() (it's a "what is …" phrasing
+the wh_value dispatch — expecting "what is <name>" — would otherwise decline). Reuses the existing per-entity
+holdings; the only new op is the ÷N. DENOMINATOR SAFETY (the whole risk in averaging): infer the SINGLE
+shared measure (the question says "height" but holdings are keyed 'inch' — so a context with >1 measure
+declines); require ≥2 owners; and if the question states the set size ("the three"), the owner count MUST
+equal it, else an entity is missing/extra → DECLINE rather than divide by the wrong N. Parker's three heights
+were ALREADY computed by the relational chain (60/68/64) — only the ÷3 was missing. TEST precision held
+58.3%. 826 tests. CONTRAST with the reverted backward-comparative just above: "average" is a SPECIFIC cue
+(safe to act on), "N more/less than Y" is ubiquitous (over-fires) — the same §3a commonness axis.  ·
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
