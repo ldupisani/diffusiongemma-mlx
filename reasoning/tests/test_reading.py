@@ -2616,6 +2616,31 @@ class TestBareAge(unittest.TestCase):
         self.assertEqual(reading.run_cli([q]).strip(), str(reading.solve(q)))
 
 
+class TestAgeBackwardAndTotal(unittest.TestCase):
+    """Backward age inversion (X's age known, standard's unknown → standard = X / factor) + the total-age
+    question ("what is/will be the total of their ages [in N years]?" → Σ ages [+ N×count])."""
+
+    def test_backward_age_inversion(self):
+        out = reading.run_cli(["Bob is twice as old as Ann. Bob is 12 years old. How old is Ann?"])
+        self.assertEqual(out.strip(), "6")
+
+    def test_total_age_question(self):
+        out = reading.run_cli(["Bob is 6 years old. Ann is 3 years old. "
+                               "What is the total of their ages?"])
+        self.assertEqual(out.strip(), "9")
+
+    def test_total_age_projected(self):
+        # "their total age in 3 years" = Σ ages + 3 × count (2 people) = 9 + 6 = 15.
+        out = reading.run_cli(["Bob is 6 years old. Ann is 3 years old. "
+                               "What will be their total age in 3 years?"])
+        self.assertEqual(out.strip(), "15")
+
+    # NOTE: the inverse "in how many years will their total age be N?" (solve for the DURATION, not the
+    # total) is excluded by the "many" gate; that regression is verified by the dev-holdout A/B (the
+    # Adam/Tom case), not a unit test — the pre-existing combined-fold also returns a sum here, so the
+    # branch's exclusion isn't cleanly observable through answer()'s output alone.
+
+
 class TestPossessiveRelationalAge(unittest.TestCase):
     """The possessive age frame "X's age is k× Y's age" / "X is k× Y's age" → X's age = k × Y's age
     (the multiplier mis-scales the copula, so it's read positionally). And "how many years old is X?"

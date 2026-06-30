@@ -1915,9 +1915,17 @@ def _relational_age(reading: Reading, context: list):
     if standard is None:
         return None
     y_now = _holdings(_entity(standard), ("year", frozenset()), context)
-    if y_now is None:
-        return None                                       # Y's age unknown → defer (see _facts_from)
     delta = _time_offset(reading)
+    if y_now is None:
+        # BACKWARD (age twin of #107): Y's age unknown, but if X's (the subject's) is known, INVERT —
+        # Y = X / factor ("Sam is twice as old as Sue; Sam is 12" → Sue 6), so the fixpoint chains backward
+        # through age relations too. Present-tense only (delta == 0); pure-ratio (the offset case is excluded
+        # above). Mutually exclusive with the forward path, which needs Y known — no double-emit.
+        x_now = _holdings(_entity(subj), ("year", frozenset()), context)
+        if delta == 0 and x_now is not None and factor:
+            return Quantity(_entity(standard), ("year", frozenset()),
+                            _compute(f"{_num(x_now)} / {_num(factor)}"), "be")
+        return None                                       # Y's age unknown → defer (see _facts_from)
     if delta == 0:                                        # present-tense relation: X = k × Y_now
         return Quantity(_entity(subj), ("year", frozenset()),
                         _compute(f"{_num(factor)} * {_num(y_now)}"), "be")
@@ -2969,6 +2977,27 @@ def answer(question: str, context: list, discourse: list = None):
             if terms and all(t is not None for t in terms) and len(terms) >= 2 \
                     and (stated_n is None or len(terms) == stated_n):
                 return _compute(f"({' + '.join(_num(t) for t in terms)}) / {len(terms)}")
+        return "undetermined"
+
+    # TOTAL AGE over a set — "what is the total of their ages now?" / "what will be their total age in N
+    # years?" = Σ(each owner's age) [+ N × owner-count for a future projection]. Sibling of the average
+    # branch above; handled FIRST so the "what is …" form isn't claimed by the wh_value handler. GATED on an
+    # AGE cue + a "total"/"combined" word + ≥2 year-quantity owners, so non-age "total/combined" questions
+    # keep routing to the grand-total fold below. (Xavier 36: 24+12; Sam 36: (6+3+18) + 3×3.)
+    if any(_key(u.surface) in ("total", "combined") for u in r.units) and context \
+            and any(_key(u.surface) in ("age", "old", "ages") for u in r.units) \
+            and not any(_key(u.surface) == "many" for u in r.units):   # NOT the inverse "in how many
+            # years will their total age be N?" (that solves for the DURATION, not the total) — it has
+            # "many"; the forward "what is/will be the total age" does not.
+        owners = {f.entity for f in context if isinstance(f, Quantity)
+                  and f.measure == ("year", frozenset()) and f.amount is not None}
+        ages = [_holdings(o, ("year", frozenset()), context) for o in owners]
+        if ages and all(a is not None for a in ages) and len(ages) >= 2:
+            offset = _time_offset(r)                     # "in N years" → each member ages by N
+            expr = " + ".join(_num(a) for a in ages)
+            if offset:
+                expr = f"({expr}) + {_num(offset)} * {len(ages)}"
+            return _compute(expr)
         return "undetermined"
 
     op_unit = next((u for u in r.units if "operator" in u.features.get("senses", [])), None)
