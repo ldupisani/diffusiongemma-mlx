@@ -896,6 +896,18 @@ apples → Tom owns) is future work, needed only when a possessive problem is ot
 need world knowledge); further coverage needs foundational parsing (genitive semantics, noun-noun
 classifier compounds "mango trees", inverse comparatives) — each a real feature, not a quick win.
 
+106. **bare-"together" aggregation cue** (coverage +2 on dev-train; Salvadore 2934, Anika 64). The
+grand-total trigger `combined_q` fired only on `{combined, altogether, total}` or BOTH `{all, together}`
+— so "how much did the two men earn TOGETHER?" (only "together", no "all") missed the sum even though the
+relational quantity already resolves (Santo = 978). Add bare "together" as a sum cue. LESSON / GOTCHA: an
+aggregation cue is CONFOUNDED with the collaborative-rate sense — "how long to paint the house together?"
+is a joint RATE, not a sum. The rate-inversion branch is gated `not combined_q`, so firing `combined_q` on
+a how-long/time question would SKIP it and sum rates into garbage. Gate the cue to NON-time questions
+(`not is_long and asked_unit not in TIME_UNITS`), which the rate branch never claims. Sibling cue "in all"
+was mined too but gave 0 dev-train gain (its problems also need offset-base resolution) → DROPPED per
+example-driven-deferral (don't ship a trigger that only risks firing unmeasured on TEST). Firewall:
+dev-train 37→39 / 0 wrong; dev-holdout 0 new-wrong delta; TEST precision held 50.0%. 820 tests.  ·
+
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
 head, attribute-superset; a sub-group's count = instances whose attributes ⊇ the query's. We store
