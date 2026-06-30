@@ -3866,5 +3866,34 @@ class TestIncrement140TwoUnknownRatio(unittest.TestCase):
             "How many red balls does Sam have?"), "undetermined")
 
 
+class TestSumRatioSystem(unittest.TestCase):
+    """#3h generalized to an N-UNKNOWN sum + ratio-CHAIN system: relations may chain (Chris→Amy→Jeremy),
+    reduced to a pivot by coefficient propagation, then pivot = Total / Σcoeff. Tightly gated: a genuine
+    ratio frame (the standard after as/of/that or a possessor), unique root + connected tree, unit/qualifier
+    match, and pure-ratio (an offset-tainted system declines). Subsumes the 2-entity case."""
+
+    def test_three_entity_chain(self):
+        # B is the pivot (root); A = B/3, C = 2A = 2B/3; coeffs 1+1/3+2/3 = 2 → B = 12/2 = 6.
+        self.assertEqual(reading.solve(
+            "Ann, Bea, and Cam have a combined age of 12. Ann is 1/3 the age of Bea, and "
+            "Cam is twice as old as Ann. How old is Bea?"), 6)
+
+    def test_two_entity_still_solves(self):  # the #3h case via the generalized solver
+        self.assertEqual(reading.solve(
+            "Sam and Drew have a combined age of 54. Sam is half of Drew's age. How old is Sam?"), 18)
+
+    def test_offset_tainted_system_declines(self):
+        # "5 more than twice" is an offset relation we can't fold → the whole system declines.
+        self.assertEqual(reading.solve(
+            "Cy, Ky, and Ay have a combined total of 100 stamps. Cy has 5 more than twice as many as Ky, "
+            "and Ky has half as many as Ay. How many stamps does Ay have?"), "undetermined")
+
+    def test_no_ratio_frame_declines(self):
+        # "bought half the cards" is a count of an object, not a ratio between the two names → decline.
+        self.assertEqual(reading.solve(
+            "Bob and Sue have 12 cards combined. Bob bought half the cards sold. How many does Sue have?"),
+            "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()
