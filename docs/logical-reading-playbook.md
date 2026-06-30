@@ -1202,6 +1202,20 @@ the formula always yields a number — gate on (a) no opposite-sign op, (b) no o
 (stated-but-no-quantity), (c) no stated value unaccounted. The holdout turned a precision-breaking change into a
 clean one — never ship the first green; A/B and gate the over-fires.  ·
 
+126. **shopping total (Σ count×price)** (dev-train 69→70: Nina; holdout + TEST held). "buys 3 toys at $10 each,
+2 packs at $5 each, 5 shirts at $6 each. How much spend in all?" → 3·10+2·5+5·6 = 70. The counts and per-item
+prices already parse as separate buy-quantities; only the per-each products + sum were missing. The naive pairing
+OVER-FIRED 3:1 on dev (Jorge had a discount, Luigi was "for $80" total + a per-piece question) and added a holdout
+wrong (Alexander — a pair split INTO the question clause → incomplete). Four gates carved out the clean shape:
+(1) every money price immediately followed by "each"/"apiece" (a per-ITEM price, not "four pizzas FOR $80");
+(2) no discount/sale/off/coupon; (3) an explicit TOTAL cue in the question ("in all"/"total"/"altogether", not a
+bare "how much does he spend?"); (4) no "each"-price stranded in the question clause (the split-pair signal), and
+strict item/price alternation. dev-train +1 / 0 new wrong; holdout 45/3 held (first A/B 45/4); TEST held 61.5%.
+877 tests. LESSON: a multi-item product-sum collides with three look-alikes that all carry "each" — a TOTAL price
+("for $80"), a discounted price, and a per-piece question — plus clause-splitting can strand a pair in the
+question; gate on the per-price "each"-adjacency (not just "each" present anywhere) and a real total cue, and the
+look-alikes fall away.  ·
+
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
 head, attribute-superset; a sub-group's count = instances whose attributes ⊇ the query's. We store

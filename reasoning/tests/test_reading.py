@@ -3901,6 +3901,30 @@ class TestSumRatioSystem(unittest.TestCase):
             "many as Cam. How many donuts did Cam take?"), 8)
 
 
+class TestShoppingTotal(unittest.TestCase):
+    """"buys 3 toys at $10 each, 2 packs at $5 each, 5 shirts at $6 each. How much spend in all?" → Σ(count×
+    price) = 70. Counts and per-item prices parse as separate buy-quantities; only the per-each products + sum
+    were missing. Tight gates (the shape collides with "for $80" totals, discounts, per-piece questions, and
+    split pairs): explicit TOTAL cue, every price immediately followed by each/apiece, no discount, strict
+    item/price alternation, no each-price stranded in the question. dev-train 69→70, holdout/TEST held. SYNTHETIC."""
+
+    def test_shopping_total(self):
+        self.assertEqual(reading.solve(
+            "Nina buys three toys at $10 each, two packs of cards at $5 each, and five shirts at $6 each. "
+            "How much does she spend in all?"), 70)
+
+    def test_for_total_price_declines(self):
+        # "four pizzas for $80" is a TOTAL, not a per-each price → must not pair as 4×80.
+        self.assertNotIsInstance(reading.solve(
+            "Luigi bought four pizzas for $80. Each pizza was cut into 5 pieces. How much did each piece "
+            "cost in total?"), (int, float))
+
+    def test_no_total_cue_declines(self):
+        # no "in all"/"total" cue → a pair may be split into the question clause → decline (Alexander 5≠9).
+        self.assertNotIsInstance(reading.solve(
+            "He buys 5 apples for $1 each and 2 oranges for $2 each, how much does he spend?"), (int, float))
+
+
 class TestBackwardDepletion(unittest.TestCase):
     """The backward twin of scene-depletion: an UNKNOWN initial pool depleted by spends to a KNOWN final →
     initial = final + Σ(depletions). "Some money in the jar. Doris spent $6. Martha spent half as much [$3].

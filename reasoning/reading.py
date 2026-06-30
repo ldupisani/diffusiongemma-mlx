@@ -4634,6 +4634,54 @@ def _backward_depletion(premises: list, question: str):
     return _compute(f"{_num(finals[0].amount)} + (" + " + ".join(_num(f.amount) for f in depl) + ")")
 
 
+def _shopping_total(premises: list, question: str):
+    """A SHOPPING TOTAL — "buys 3 toys at $10 each, 2 packs at $5 each, 5 shirts at $6 each. How much did she
+    spend in all?" → Σ(count × price) = 3·10 + 2·5 + 5·6 = 70. The counts and per-item prices already parse as
+    separate buy-quantities; only the per-each products + sum are missing. TIGHTLY gated (the shape collides
+    with "for $80" totals, discounts, and per-piece questions, which all carry "each"): the question asks a
+    spend TOTAL; EVERY money price must be immediately followed by "each"/"apiece" (a genuine per-item price,
+    NOT "four pizzas for $80"); NO discount/sale/off; and the buy-quantities STRICTLY alternate item-count then
+    price so each price pairs with its count. None otherwise."""
+    ql = question.lower()
+    # require an explicit TOTAL cue (not a bare "how much does he spend?", whose 2nd "X for $Y each" pair may
+    # have been split INTO the question clause → an incomplete premise pairing, Alexander 5≠9).
+    if not (("how much" in ql) and any(w in ql for w in ("spend", "spent", "pay", "paid"))
+            and any(w in ql for w in ("in all", "total", "altogether", "combined"))):
+        return None
+    if any(_key(u.surface) in ("each", "apiece") for u in analyze(question).units):
+        return None                                          # shopping content stranded in the question clause
+    pl = " ".join(premises).lower()
+    if any(w in pl for w in ("discount", "sale", " off", "% ", "coupon", "free")):
+        return None
+    disc, ctx, readings = [], [], [analyze(p) for p in premises]
+    for p in premises:
+        f = learn(p, disc, ctx)
+        if f:
+            ctx += f
+    # every money value in the premises must be immediately followed by "each"/"apiece" (a per-ITEM price)
+    money_units = [(rp, k) for rp in readings for k, u in enumerate(rp.units)
+                   if "value" in u.features.get("senses", []) and "measure" in u.features
+                   and "money" in str(u.features.get("measure"))]
+    if not money_units:
+        return None
+    for rp, k in money_units:
+        nxt = rp.units[k + 1] if k + 1 < len(rp.units) else None
+        if nxt is None or _key(nxt.surface) not in ("each", "apiece"):
+            return None
+    qs = [f for f in ctx if isinstance(f, Quantity) and f.verb in ("buy", "purchase") and f.amount is not None]
+    products, i = [], 0
+    while i < len(qs) - 1:                                # STRICT alternation: (item-count, money-price)+
+        a, b = qs[i], qs[i + 1]
+        if a.measure != MONEY and b.measure == MONEY:
+            products.append(f"{_num(a.amount)} * {_num(b.amount)}")
+            i += 2
+        else:
+            return None
+    if i != len(qs) or not products:                     # leftover unpaired quantity → not a clean shape
+        return None
+    return _compute(" + ".join(f"({p})" for p in products))
+
+
 def _equal_share(question: str, context: list, premises: list):
     """POOL-AND-REDISTRIBUTE — "Mark has 30 candies, Peter 25, John 35. They combine their candies and share
     them equally. How many will EACH have?" → (30+25+35)/3 = 30. Same Σ/N math as the `average` branch (#3l)
@@ -4796,6 +4844,10 @@ def solve(text: str):
     _depleted = _scene_depletion(question, context, readings[:len(premises)])
     if _depleted is not None:
         return _depleted
+    # SHOPPING TOTAL — "buys 3 toys at $10 each, 2 packs at $5 each … how much spend in all?" → Σ(count×price).
+    _shop = _shopping_total(premises, question)
+    if _shop is not None:
+        return _shop
     # POOL-AND-REDISTRIBUTE — "combine their candies and share equally, how many will EACH have?" → Σ/N.
     # Tried before GUARD 3 (the pooled amounts are all "used" so it wouldn't trip, but keep recognizers
     # together). Same math as the average branch but cued by a share-equally premise + a per-each question.
