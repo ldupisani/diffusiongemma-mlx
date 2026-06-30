@@ -1051,6 +1051,21 @@ specific gates (exactly-2-entities, scaled-quantifier) were load-bearing; droppi
 discipline (ratio-frame, offset-system rejection, unique-root tree), and the holdout is what tells you which
 gates you still owe. Also: when a sub-relation is REJECTED (the offset clause), don't solve the remainder —
 an incomplete system silently commits a wrong; decline the whole thing.  ·
+116. **scene-depletion remainder** (dev-train 55→57: Candy, cookie-jar). "There were 349 pieces of candy in
+a bowl. Talitha took 108, Solomon took 153. How many left?" → 349 − 108 − 153 = 88. The existential "there
+were N X" stores N INSTANCES (a count base), not a holding Quantity, and each take is credited to the takER
+(not debited from the bowl), so the remainder fold finds no single owner to net — AND the 349 reads as an
+unused given, so GUARD 3 killed it. `_scene_depletion(question, context, prem_readings)`: base = #instances
+of the measure; answer = base − Σ(the measure's depletion-verb Quantities). Tried early in solve() (before
+GUARD 3) and mirrored into the CLI loop (#104). GATED — the firewall caught 2 dev over-fires (James-milk used
+the "128 ounces in a gallon" CONVERSION factor as the base; Pizza used "8 slices in a pizza" ignoring "2
+pizzas"): every measure-Quantity must be a depletion verb (an addition breaks base − Σ), and NO unused given
+— every stated premise number must be the base or a depletion, so a conversion factor / per-unit count (the
+base needs computing) declines. holdout 0 delta; TEST held 61.5%. 849 tests. LESSON: an existential "there
+were N X" is a COUNT (instances), not a holding — a remainder over it has no owner to net and trips GUARD 3;
+recognise the pool explicitly. And the no-unused-given gate is the clean discriminator between a plain pool
+(every number is base/depletion) and a computed base (an extra conversion/per-unit number) — reused from
+GUARD 3's principle.  ·
 
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
