@@ -4205,5 +4205,38 @@ class TestElidedComparativeQuantity(unittest.TestCase):
             "how many apples does Tim have?"), 38)
 
 
+class TestCompoundNounSubtype(unittest.TestCase):
+    """A NOUN-NOUN compound is head-FINAL — "8 flower stickers" is 8 stickers (head) of the flower kind
+    (attribute), measure ('sticker', {'flower'}). A bare-head question ("how many STICKERS") with no exact
+    match then sums the entity's sub-types under that head. Gated NARROWLY in `condense`: a value/quantifier
+    must precede the modifier (the count ranges over the head), the modifier must not be hyphen-bound to it
+    ("120-page book" → 120 counts pages), neither word may be a unit/money/time noun, and the sentence must
+    carry no rate marker (a rate composes a partial result that was safely declining). SYNTHETIC."""
+
+    def test_subtype_sum_under_head(self):
+        self.assertEqual(reading.solve(
+            "Victor has 8 flower stickers and 6 animal stickers. "
+            "How many stickers does Victor have?"), 14)
+
+    def test_subtype_relation_then_sum(self):
+        # "twice as many animal stickers as flower stickers" resolves ONLY because both compounds key to
+        # ('sticker', {...}); the bare-head "how many stickers in all" then sums 12 + 24.
+        self.assertEqual(reading.solve(
+            "Sara has 12 flower stickers. She has twice as many animal stickers as flower stickers. "
+            "How many stickers does Sara have in all?"), 36)
+
+    def test_hyphen_measure_not_stolen(self):
+        # "120-page book": 120 counts PAGES (hyphen-bound), so the merge must NOT make it 120 books.
+        self.assertEqual(reading.solve("John writes 20 pages a day. "
+                                       "How long will it take him to write a 120-page book?"), 6)
+
+    def test_rate_compound_still_declines(self):
+        # "7 apple pies a day": a rate marker is present → no merge, so the cross-entity depletion that
+        # isn't yet handled keeps this an honest decline rather than a partial rate×duration commit.
+        self.assertEqual(reading.solve(
+            "Cooper makes 7 apple pies a day. He does this for 12 days. Ashley then eats 50 of his pies. "
+            "How many apple pies remain with Cooper?"), "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()

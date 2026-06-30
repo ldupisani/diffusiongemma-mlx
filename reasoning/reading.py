@@ -147,10 +147,20 @@ def _split_hyphen(tok: str) -> list:
 
 def read(text: str) -> Reading:
     """Read text into a Reading: one Word per whitespace-separated token (contractions and digit-led hyphen
-    compounds expanded to their constituent words first), each wrapped in its own Unit. No further norm."""
-    toks = [t2 for tok in text.split() for t1 in _split_hyphen(tok) for t2 in _split_contraction(t1)]
-    words = [Word(surface=tok, index=i) for i, tok in enumerate(toks)]
-    return Reading(units=[Unit(words=[w]) for w in words])
+    compounds expanded to their constituent words first), each wrapped in its own Unit. A non-leading part
+    of a digit-led hyphen compound ("page" in "120-page") is flagged `hyphen_bound` — its value belongs to
+    IT, not to a following head noun, so the compound-noun merge must not steal it. No further norm."""
+    units, i = [], 0
+    for tok in text.split():
+        parts = _split_hyphen(tok)
+        for j, t1 in enumerate(parts):
+            for t2 in _split_contraction(t1):
+                u = Unit(words=[Word(surface=t2, index=i)])
+                if len(parts) > 1 and j > 0:
+                    u.features["hyphen_bound"] = True
+                units.append(u)
+                i += 1
+    return Reading(units=units)
 
 
 def _merge_compounds(reading: Reading) -> Reading:
@@ -1155,12 +1165,50 @@ def condense(reading: Reading) -> bool:
             if "noun" in reading.units[i + 1].features.get("senses", []):
                 _merge_adjective(reading, i, i + 1)
                 return True
+    for i in range(1, len(reading.units) - 1):           # NOUN-NOUN compound — head-FINAL: "8 flower
+        left, right = reading.units[i], reading.units[i + 1]   # stickers" is 8 stickers (head) of the
+        prev = reading.units[i - 1].features.get("senses") or []
+        if (prev == ["value"] or "quantifier" in prev) \
+                and left.features.get("senses") == ["noun"] and right.features.get("senses") == ["noun"] \
+                and not left.features.get("hyphen_bound") and not _has_rate_marker(reading) \
+                and _compound_modifier(left) and _compound_modifier(right):
+            # GATED narrow: "<value|quantifier> <modifier-noun> <head-noun>" where the count ranges over the
+            # HEAD (8 stickers / how many baseball CARDS), the modifier is a kind (flower/baseball), and the
+            # modifier wasn't hyphen-bound to that value ("120-page book" → 120 counts pages, not books). The
+            # quantifier case keeps the QUESTION's measure aligned with the statements'. Excludes "bags OF
+            # coffee beans" and "a coffee shop" (no count before the modifier) — they key on the un-merged measure.
+            _merge_adjective(reading, i, i + 1)          # left noun → attribute, right noun → head
+            return True
     for i, u in enumerate(reading.units):                # "Tom and Mary" → one group (names only:
         if "conjunction" in u.features.get("senses", []) and 0 < i < len(reading.units) - 1:  # a
             left, right = reading.units[i - 1], reading.units[i + 1]                          # subject)
             if "name" in left.features.get("senses", []) and "name" in right.features.get("senses", []):
                 _merge_conjuncts(reading, i)
                 return True
+    return False
+
+
+def _compound_modifier(unit: "Unit") -> bool:
+    """True if `unit` is a plain CONTENT noun eligible for a noun-noun compound merge. Excludes measure/
+    unit/money/time nouns whose head choice would corrupt a measure, and anything already carrying an
+    attribute or number."""
+    head = unit.features.get("head") or unit.features.get("singular") or _key(unit.surface)
+    return (head not in (UNIT_NOUNS | _MONEY_WORDS | TIME_UNITS)
+            and not unit.features.get("attributes") and "value" not in unit.features)
+
+
+def _has_rate_marker(reading: Reading) -> bool:
+    """True if the statement carries a per-unit RATE marker ("7 apple pies A DAY", "$5 PER hour"). The
+    compound-noun merge is suppressed here: a rate unifies the measure enough to compose a rate×duration
+    PARTIAL result, re-committing numbers (Cooper's 84) that were safely declining until the full chain
+    (cross-entity depletion) lands. None of the merge's targets (holdings/counts) are rates."""
+    units = reading.units
+    if any("per" in u.features.get("senses", []) for u in units):
+        return True
+    for k in range(len(units) - 1):
+        if _key(units[k].surface) in ("a", "an", "per", "every", "each") \
+                and (units[k + 1].features.get("singular") or _key(units[k + 1].surface)) in TIME_UNITS:
+            return True
     return False
 
 
@@ -3422,6 +3470,11 @@ def answer(question: str, context: list, discourse: list = None):
                     continue
                 qs = [f for f in context if isinstance(f, Quantity)
                       and f.entity == ent and f.measure == query]
+                if not qs and not query[1]:              # BARE HEAD ("how many STICKERS") with no exact
+                    qs = [f for f in context if isinstance(f, Quantity)   # match → sum the entity's SUB-TYPES
+                          and f.entity == ent and f.measure[0] == query[0]]   # under that head (8 flower +
+                #   6 animal stickers → 14). Reached only when no bare-head quantity exists, so it never
+                #   double-counts; the fold below signs each by its verb (have/used/…).
                 if not qs:                               # CONVERT: "how many KILOGRAMS" when we hold grams
                     qs = [Quantity(ent, query, _compute(f"{_num(f.amount)} * "
                                    f"{_num(CONVERSIONS[(f.measure[0], query[0])])}"), f.verb)
