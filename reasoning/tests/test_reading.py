@@ -1379,6 +1379,16 @@ class TestIncrement48RelationalQuantity(unittest.TestCase):
                                "How many pencils does Tim have?"])
         self.assertEqual(out.strip(), "16")
 
+    def test_elided_count_noun_infers_single_measure(self):
+        # "how many does X have?" omits the measure; when the context shares ONE measure, infer it.
+        ctx = reading.learn("Tom has 5 apples")
+        self.assertEqual(reading.answer("How many does Tom have?", ctx), 5)
+
+    def test_elided_count_noun_ambiguous_declines(self):
+        # two distinct measures in context → the elided "how many" is genuinely ambiguous → decline.
+        ctx = reading.learn("Tom has 5 apples") + reading.learn("Tom has 3 oranges")
+        self.assertIsInstance(reading.answer("How many does Tom have?", ctx), list)
+
 
 class TestIncrement49QuestionRelativePolarity(unittest.TestCase):
     """#49 — a quantity's sign is RELATIVE TO THE QUESTION. "how many does X have?" folds holdings

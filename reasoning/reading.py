@@ -3115,6 +3115,14 @@ def answer(question: str, context: list, discourse: list = None):
             if counts:
                 return int(counts[0]) if counts[0] == int(counts[0]) else counts[0]
             return "undetermined"
+    # ELIDED COUNT-NOUN — "how many does Steven have?" omits the measure noun, so `query` is None and the
+    # per-entity fold below can't run. If the context quantities share exactly ONE measure, infer it as the
+    # query (the single salient thing to count) — mirrors the query-less combined-fold's measure inference
+    # (#102). Decline-safe: only when unambiguous (one measure); two+ measures keep query None → decline.
+    if query is None and any(_key(u.surface) == "many" for u in r.units):
+        measures = {f.measure for f in context if isinstance(f, Quantity) and f.amount is not None}
+        if len(measures) == 1:
+            query = next(iter(measures))
     qverb_unit = next((u for u in r.units if "verb" in u.features.get("senses", [])
                        and _key(u.surface) not in ("is", "are", "was", "were")), None)
     # "How many STUDENTS passed?" — no aux; the query noun IS the subject. Only when a matching count-fact
