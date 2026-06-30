@@ -4409,5 +4409,21 @@ class TestAgeOfPhraseAndPresentAnchor(unittest.TestCase):
             "In four years, Suzy will be twice Mary's age then. If Suzy is 20 now, how old is Mary?"), 8)
 
 
+class TestFractionAgeFactor(unittest.TestCase):
+    """A FRACTION written N/M ("1/6 as old as Y") is the relational-age FACTOR, not an age value — so it
+    scales the standard (Y × 1/6) in both directions, and chains through kinship entities. Word fractions
+    ("half"/"one-third") already parsed as multipliers; the N/M form parsed as a bare value. SYNTHETIC."""
+
+    def test_fraction_factor_chain_through_kinship(self):
+        # Darcie 4; mother = 4 ÷ (1/6) = 24; father = 24 ÷ (4/5) = 30.
+        self.assertEqual(reading.solve(
+            "Darcie is 4 years old. She is 1/6 as old as her mother and her mother is 4/5 as old as "
+            "her father. How old is her father?"), 30)
+
+    def test_fraction_factor_forward(self):
+        self.assertEqual(reading.solve(
+            "Tina is 24 years old. Darcie is 1/6 as old as Tina. How old is Darcie?"), 4)
+
+
 if __name__ == "__main__":
     unittest.main()

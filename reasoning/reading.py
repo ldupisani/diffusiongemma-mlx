@@ -1966,9 +1966,15 @@ def _relational_age_factor(reading: Reading):
     mult = next((u for u in reading.units if "multiplier" in u.features.get("senses", [])), None)
     if mult is not None:
         return mult.features["value"]
-    for i, u in enumerate(reading.units):                 # "<value> times as old" → the value is the factor
-        if _key(u.surface) == "times" and i and "value" in reading.units[i - 1].features.get("senses", []):
-            return reading.units[i - 1].features["value"]
+    units = reading.units
+    for i, u in enumerate(units):                         # "<value> times as old" → the value is the factor
+        if _key(u.surface) == "times" and i and "value" in units[i - 1].features.get("senses", []):
+            return units[i - 1].features["value"]
+    for i, u in enumerate(units):                         # "1/6 as old as Y" — a FRACTION/number written
+        if "value" in u.features.get("senses", []) and i + 1 < len(units) \
+                and _key(units[i + 1].surface) == "as" \
+                and any(_key(units[j].surface) == "old" for j in range(i + 1, min(i + 4, len(units)))):
+            return u.features["value"]                    # directly before "as … old" is the factor, not an age
     return None
 
 
