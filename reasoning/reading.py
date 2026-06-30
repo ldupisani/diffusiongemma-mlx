@@ -1242,6 +1242,23 @@ def _trial_cost(reading: Reading, multi_idx, combo) -> int:
     return _unmet_count(trial)
 
 
+def _progressive(reading: Reading) -> Reading:
+    """Present/past PROGRESSIVE "is/are/was/were V-ing" → the copula is an AUXILIARY, the participle the main
+    verb ("is driving" → drive). Without this both read as verbs and the single-main-verb logic (rates, the
+    discourse subject) misfires. Gated to a copula immediately before an -ing word that is a known verb."""
+    units = reading.units
+    for i in range(len(units) - 1):
+        nxt = _key(units[i + 1].surface)
+        if _key(units[i].surface) in ("is", "are", "was", "were", "am") \
+                and "verb" in units[i].features.get("senses", []) \
+                and nxt.endswith("ing") and "verb" in units[i + 1].features.get("senses", []):
+            before = dict(units[i].features)
+            units[i].features["senses"] = ["auxiliary"]
+            reading.record("progressive", target=units[i], before=before, after=dict(units[i].features),
+                           reason="copula + V-ing → auxiliary (progressive)")
+    return reading
+
+
 def _prefer_noun_after_quantifier(reading: Reading) -> Reading:
     """A quantifier ("many"/"much") counts a NOUN, never an auxiliary/modal — so a word right after
     "many"/"much" carrying BOTH a noun and an auxiliary/modal sense ("how many CANS", can=[auxiliary, noun])
@@ -1330,6 +1347,7 @@ def analyze(text: str) -> Reading:
     _merge_label_letters(r)  # "Jar A" / "Class B" → one labeled NAME (distinct entities, not bare 'jar')
     _prefer_noun_after_quantifier(r)   # "how many CANS" → cans is a noun, never the modal 'can'
     _promote_kinship(r)      # "his dad" / "her sister" → a named entity (keyed by the kinship noun)
+    _progressive(r)          # "is driving" → driving is the main verb (the copula is an auxiliary)
     disambiguate(r)          # collapse multi-sense words to the reading that covers best
     annotate_obligations(r)
     while condense(r):       # condense "red apple" → one noun unit; loop stacks "big red apple"
@@ -5074,6 +5092,49 @@ def _proportion(premises: list, question: str):
     return None
 
 
+def _rate_extrapolation(premises: list, question: str, context: list):
+    """RATE × DURATION-IN-QUESTION — "Luis drives 80 miles in 2 hours. How far will he go in 15 minutes?" →
+    (80 per 2 hours) × (15 min → 0.25 hr) ÷ 2 = 10. A single Rate in context + a question asking "how
+    far/much/many … in N <time>" → rate.amount × (N converted to the rate's per_unit) ÷ rate.per_amount.
+    Gated: exactly one rate, the question is a how-far/much/many interrogative carrying a duration value in a
+    time-unit (the EXTRAPOLATION target), and that unit converts to the rate's per_unit. None otherwise."""
+    if len(context) != 1 or not isinstance(context[0], Rate):
+        return None                                      # a PURE single-rate problem only — any other fact
+        #                                                  (a count, a second rate, a multi-period split) means
+        #                                                  the answer isn't a bare rate×duration (Tammy's
+        #                                                  trees→packs→$, Ralph's weekday+weekend, Mark's
+        #                                                  weekly increase all commit a partial otherwise).
+    rate = context[0]
+    prem_vals = [u.features["value"] for p in premises for u in analyze(p).units
+                 if "value" in u.features.get("senses", [])]
+    if any(abs(v - rate.amount) > 1e-9 and abs(v - rate.per_amount) > 1e-9 for v in prem_vals):
+        return None                                      # an UNUSED premise number (Mark's weekly +4, Ralph's
+        #                                                  weekend 6) means the answer isn't a bare rate ×
+        #                                                  duration — decline (the engine's unused-given rule)
+    qr = analyze(question)
+    if not (any("interrogative" in u.features.get("senses", []) for u in qr.units)
+            and any(_key(u.surface) in ("far", "much", "many", "long") for u in qr.units)):
+        return None
+    dur = next((u for u in qr.units if "value" in u.features.get("senses", [])
+                and _follow(u, "quantifies") is not None
+                and _descriptor(_follow(u, "quantifies"))[0] in TIME_UNITS), None)
+    if dur is None:
+        return None
+    du = _descriptor(_follow(dur, "quantifies"))[0]
+    if rate.per_amount == 1 and du == rate.per_unit:
+        return None                                      # the plain "amount × duration" (matching unit,
+        #                                                  per_amount 1) is the existing rate×duration path's
+        #                                                  job — and it handles first-year exceptions etc. that
+        #                                                  this bare product would clobber (Adam 490, not 500)
+    if du == rate.per_unit:
+        per = _num(dur.features["value"])
+    elif (du, rate.per_unit) in CONVERSIONS:
+        per = f"{_num(dur.features['value'])} * {_num(CONVERSIONS[(du, rate.per_unit)])}"
+    else:
+        return None
+    return _compute(f"{_num(rate.amount)} * ({per}) / {_num(rate.per_amount)}")
+
+
 def _shopping_total(premises: list, question: str):
     """A SHOPPING TOTAL — "buys 3 toys at $10 each, 2 packs at $5 each, 5 shirts at $6 each. How much did she
     spend in all?" → Σ(count × price) = 3·10 + 2·5 + 5·6 = 70. The counts and per-item prices already parse as
@@ -5295,6 +5356,10 @@ def solve(text: str):
     _prop = _proportion(premises, question)
     if _prop is not None:
         return _prop
+    # RATE EXTRAPOLATION — "drives 80 miles in 2 hours. How far will he go in 15 minutes?" → 80×0.25/2.
+    _rext = _rate_extrapolation(premises, question, context)
+    if _rext is not None:
+        return _rext
     # POOL-AND-REDISTRIBUTE — "combine their candies and share equally, how many will EACH have?" → Σ/N.
     # Tried before GUARD 3 (the pooled amounts are all "used" so it wouldn't trip, but keep recognizers
     # together). Same math as the average branch but cued by a share-equally premise + a per-each question.

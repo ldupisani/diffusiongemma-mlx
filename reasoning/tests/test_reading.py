@@ -4470,5 +4470,26 @@ class TestProportion(unittest.TestCase):
             "Tom has 3 apples and 2 oranges. How many apples does Tom have?"), 3)
 
 
+class TestRateExtrapolation(unittest.TestCase):
+    """RATE × DURATION-IN-QUESTION — "drives 100 miles in 2 hours. How far will he go in 30 minutes?" →
+    100 × (30 min → 0.5 hr) ÷ 2 = 25. Includes the present-progressive parse ("is driving" → drive is the
+    main verb). TIGHTLY gated: a PURE single-rate context and EVERY premise number consumed by the rate, so
+    a multi-step problem (an extra count/rate/period, an unused given) declines. SYNTHETIC."""
+
+    def test_rate_extrapolation_with_conversion(self):
+        self.assertEqual(reading.solve(
+            "Sam drives 100 miles in 2 hours. How far will he go in 30 minutes?"), 25)
+
+    def test_present_progressive_rate(self):
+        self.assertEqual(reading.solve(
+            "Sam is driving 100 miles in 2 hours. How far will he go in 30 minutes?"), 25)
+
+    def test_unused_given_declines(self):
+        # the "1 hour" rest is an unused premise number → not a bare rate × duration → decline.
+        self.assertEqual(reading.solve(
+            "Sam drives 100 miles in 2 hours. He rests for 1 hour. "
+            "How far will he go in 30 minutes?"), "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()
