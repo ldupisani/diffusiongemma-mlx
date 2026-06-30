@@ -1389,6 +1389,18 @@ class TestIncrement48RelationalQuantity(unittest.TestCase):
         ctx = reading.learn("Tom has 5 apples") + reading.learn("Tom has 3 oranges")
         self.assertIsInstance(reading.answer("How many does Tom have?", ctx), list)
 
+    def test_average_over_entities(self):
+        # average = Σ(each owner's holding) / owner-count, over the single shared measure.
+        ctx = (reading.learn("Tom has 4 apples") + reading.learn("Mary has 6 apples")
+               + reading.learn("Sue has 8 apples"))
+        self.assertEqual(reading.answer("What is the average number of apples?", ctx), 6)
+
+    def test_average_stated_count_mismatch_declines(self):
+        # "the three" but only two owners present → divide-by-wrong-N risk → decline.
+        ctx = reading.learn("Tom has 4 apples") + reading.learn("Mary has 6 apples")
+        self.assertEqual(reading.answer("What is the average number of apples of the three people?", ctx),
+                         "undetermined")
+
 
 class TestIncrement49QuestionRelativePolarity(unittest.TestCase):
     """#49 — a quantity's sign is RELATIVE TO THE QUESTION. "how many does X have?" folds holdings

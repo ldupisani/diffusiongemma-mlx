@@ -2855,6 +2855,27 @@ def answer(question: str, context: list, discourse: list = None):
     if unknown:
         return unknown                                   # don't guess about words we don't know
 
+    # AVERAGE over a set — "what is the average height of the three people?" = Σ(each entity's holding) / N.
+    # Handled FIRST: "average" is a "what is …" phrasing that the wh_value dispatch (expecting "what is
+    # <name>") would otherwise decline. Σ one net holding per distinct owner, ÷ the owner count. The cue is
+    # SPECIFIC (unlike "more than"), and average questions all decline today → only blocked → {correct |
+    # decline}. DENOMINATOR SAFETY: infer the single shared measure (the question says "height" but holdings
+    # are keyed 'inch'); require ≥2 owners; and if the question states the set size ("the three"), the owner
+    # count MUST equal it (else an entity is missing/extra → DECLINE rather than divide by the wrong N).
+    if any(_key(u.surface) == "average" for u in r.units) and context:
+        measures = {f.measure for f in context if isinstance(f, Quantity) and f.amount is not None}
+        if len(measures) == 1:
+            gq = next(iter(measures))
+            owners = {f.entity for f in context
+                      if isinstance(f, Quantity) and f.measure == gq and f.amount is not None}
+            hs = [_holdings(o, gq, context) for o in owners]
+            stated_n = next((u.features["value"] for u in r.units if "value" in u.features.get("senses", [])
+                             and float(u.features["value"]).is_integer()), None)
+            if hs and all(h is not None for h in hs) and len(hs) >= 2 \
+                    and (stated_n is None or len(hs) == stated_n):
+                return _compute(f"({' + '.join(_num(h) for h in hs)}) / {len(hs)}")
+        return "undetermined"
+
     op_unit = next((u for u in r.units if "operator" in u.features.get("senses", [])), None)
     if op_unit is not None:                              # arithmetic: "What is 3 plus 2?"
         a, b = _follow(op_unit, "left"), _follow(op_unit, "right")
