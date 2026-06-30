@@ -1364,6 +1364,21 @@ class TestIncrement48RelationalQuantity(unittest.TestCase):
                                "How many apples does Tom have?"])
         self.assertEqual(out.strip(), "12")  # 4 (has) + 8 (twice as many as the 4)
 
+    def test_backward_inversion_grounds_the_standard(self):
+        # BIDIRECTIONAL: when the SUBJECT's value is known and the standard's isn't, invert the
+        # relation to ground the standard. "Mary has 3× as many apples as Tom; Mary has 12" → Tom = 4.
+        ctx = reading.learn("Mary has 3 times as many apples as Tom") \
+            + reading.learn("Mary has 12 apples")
+        self.assertEqual(reading.learn("Mary has 3 times as many apples as Tom", None, ctx),
+                         [reading.Quantity("tom", ("apple", frozenset()), 4, "have")])
+
+    def test_backward_inversion_chains(self):
+        # Sarah grounds backward off Tyrah, then Tim resolves forward off Sarah.
+        out = reading.run_cli(["Tyrah has 6 times as many pencils as Sarah. "
+                               "Tim has 8 times as many pencils as Sarah. Tyrah has 12 pencils. "
+                               "How many pencils does Tim have?"])
+        self.assertEqual(out.strip(), "16")
+
 
 class TestIncrement49QuestionRelativePolarity(unittest.TestCase):
     """#49 — a quantity's sign is RELATIVE TO THE QUESTION. "how many does X have?" folds holdings

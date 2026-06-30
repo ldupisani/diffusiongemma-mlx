@@ -1954,6 +1954,24 @@ def _relational_quantity(reading: Reading, context: list):
         ref_ent = _entity(named[-1])
         referent = next((f for f in reversed(context or [])
                          if isinstance(f, Quantity) and f.entity == ref_ent), None)
+        if referent is None:
+            # BIDIRECTIONAL grounding — the named standard has no quantity yet, but if the SUBJECT does,
+            # INVERT the relation: standard = subject / factor ("Tyrah has 6× as many pencils as Sarah;
+            # Tyrah has 12" → Sarah = 2). The forward path only derives subject-FROM-standard; this grounds
+            # the standard so the solve() fixpoint chains backward too (Sarah=2 → Tim = 8×2 = 16). PURE-RATIO
+            # only: a comparative offset ("5 more than twice as many as B") inverts ambiguously → keep deferring.
+            comp0 = any("comparative" in u.features.get("senses", []) for u in reading.units)
+            subj_q = next((f for f in reversed(context or []) if isinstance(f, Quantity)
+                           and f.entity == _entity(subject) and f.amount is not None), None)
+            if subj_q is not None and not comp0:
+                if "fraction" in mult.features:
+                    num, denom = mult.features["fraction"]
+                    inv = f"{_num(subj_q.amount)} * {denom} / {num}"
+                else:
+                    inv = f"{_num(subj_q.amount)} / {_num(mult.features['value'])}"
+                return Quantity(ref_ent, subj_q.measure, _compute(inv),
+                                _lemma(verbs[0].surface), derived=True)   # the relation's verb (run/have),
+                #                                                          so the answer fold can match it
     else:                                                 # IMPLICIT referent: prefer the most-recent
         quants = [f for f in reversed(context or []) if isinstance(f, Quantity)]   # NON-derived baseline
         referent = next((f for f in quants if not f.derived), None) or next(iter(quants), None)
