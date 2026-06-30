@@ -3901,6 +3901,45 @@ class TestSumRatioSystem(unittest.TestCase):
             "many as Cam. How many donuts did Cam take?"), 8)
 
 
+class TestOffsetSumSystem(unittest.TestCase):
+    """The AFFINE twin of the pure-ratio system: two entities, one relation subject = factor × standard +
+    offset ("N more/less than k times as many as"), plus a combined total → solve a part. std = (T − c)/(k+1).
+    Kept SEPARATE from `_sum_ratio_system` (which declines offset-tainted systems) to isolate the firewall-
+    riskier offset shape. dev-train 58→61, holdout 43→45 (generalized: Sara/Joe, Rajesh/Hiro), 0 new wrong
+    either slice; TEST held 61.5%. Requires an explicit factor (a bare "N more than Y" stays declined).
+    SYNTHETIC — never GSM8K strings."""
+
+    def test_offset_more_solves_standard(self):
+        # Justin = 2·Sabrina + 8, Justin + Sabrina = 50 → Sabrina = (50 − 8)/3 = 14.
+        self.assertEqual(reading.solve(
+            "Justin and Sabrina have 50 pencils combined. Justin has 8 more than twice as many pencils as "
+            "Sabrina. How many pencils does Sabrina have?"), 14)
+
+    def test_offset_less_fraction_solves_standard(self):
+        # Devin = ½·Tom − 5, Devin + Tom = 70 → Tom = (70 − (−5))/(½+1) = 75/1.5 = 50.
+        self.assertEqual(reading.solve(
+            "Tom and Devin have been teaching for a total of 70 years. Devin has been teaching for 5 less "
+            "than half the number of years that Tom has. How many years has Tom been teaching?"), 50)
+
+    def test_offset_solves_subject(self):
+        # Kayla = 4·Kylie + 10, total 340 → Kylie = (340 − 10)/5 = 66, Kayla = 340 − 66 = 274 (asked subject).
+        self.assertEqual(reading.solve(
+            "Kylie and Kayla have 340 apples combined. Kayla has 10 more than 4 times as many apples as "
+            "Kylie. How many apples does Kayla have?"), 274)
+
+    def test_bare_offset_no_factor_declines(self):
+        # "8 more than Sabrina" (no multiplier) is the firewall-risky bare offset → not this system, decline.
+        self.assertEqual(reading.solve(
+            "Justin and Sabrina have 50 pencils combined. Justin has 8 more pencils than Sabrina. "
+            "How many pencils does Sabrina have?"), "undetermined")
+
+    def test_offset_measure_mismatch_declines(self):
+        # relation about 'red balls', total about 'blue balls' → different measures, decline.
+        self.assertEqual(reading.solve(
+            "Zoe and Sam have a combined total of 12 blue balls. Zoe has 2 more than twice as many red "
+            "balls as Sam. How many red balls does Sam have?"), "undetermined")
+
+
 class TestSceneDepletion(unittest.TestCase):
     """A POOL ("there were N X") depleted by takes ("took A … took B") → N − Σtakes. The existential N is
     stored as INSTANCES, not a holding, and the takes are credited to the takers, so the remainder fold

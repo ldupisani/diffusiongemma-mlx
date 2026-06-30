@@ -1077,6 +1077,24 @@ rejection) → Felipe still declines. holdout 42→43 / 0 new-wrong; TEST held 6
 recognizer's natural generalizations (here knowns alongside ratios) are cheap, clean follow-ons IF you
 preserve its hard-won gates — the regression surface was already paid down in #115's holdout cycle.  ·
 
+118. **offset sum-system** (the affine twin of #3h/#115; dev-train 58→61, holdout 43→45 generalized, TEST held
+61.5%). #3h/#115/#117 fold only PURE-RATIO systems and explicitly DECLINE any offset-tainted one ("5 more than
+twice"). This adds the affine relation subject = factor × standard + offset: "Justin + Sabrina have 50 pencils;
+Justin has 8 more than twice as many as Sabrina → Sabrina = (50 − 8)/(2+1) = 14"; "Devin = ½·Tom − 5, total 70
+→ Tom = (70 − (−5))/1.5 = 50"; "Antoinette = 2·Rupert − 7, together 98 → Antoinette 63". New `_offset_ratio_
+relation` (POSITIONAL parse: the offset value precedes the comparative "8 **more**", the factor is a multiplier
+AFTER "than" "twice"; requires an explicit factor so a bare "N more than Y" stays the firewall-risky declined
+shape) + `_offset_sum_system` (2-entity solve std = (T−c)/(k+1), subj = T−std). Kept SEPARATE from
+`_sum_ratio_system` to isolate the riskier offset surface; the shared `_combined_total` was factored out of #3h's
+total-finder (used by both). GATES: EXACTLY one offset relation, NO pure-ratio relation alongside (a mixed/3-way
+system stays out of scope → declines, preserving #115's `test_offset_tainted_system_declines`), the asked entity
+among the two, and #3h's measure/qualifier match on the total. A/B both ways on BOTH slices: dev-train +3 / 0
+lost / 0 new wrong; **holdout +2 (Sara/Joe, Rajesh/Hiro both generalized — strong anti-overfit signal)** / 0
+new wrong; TEST unchanged 61.5%. 608 reading tests. LESSON: when an existing recognizer DECLINES a near-shape it
+was deliberately gated against, the affine/offset extension is a clean SIBLING (not a generalization-in-place) —
+a separate function reusing the shared total-finder isolates the new regression surface from the mature path's
+hard-won gates, and the holdout proves it generalized rather than memorized.  ·
+
 A **collection descriptor** = `(head noun, set of atomic attribute predicates)`. `apple`=`(apple,{})`,
 `red apple`=`(apple,{red})`, `rotten green apple`=`(apple,{green,rotten})`. Sub-collection = same
 head, attribute-superset; a sub-group's count = instances whose attributes ⊇ the query's. We store

@@ -4263,6 +4263,49 @@ def _ratio_relation(rp: Reading):
     return _entity(subj), k, _entity(std)
 
 
+def _offset_ratio_relation(rp: Reading):
+    """An OFFSET-RATIO relation → (subject, factor, standard, offset_signed) where subject = factor × standard
+    + offset. The affine twin of `_ratio_relation` for "X has N more/less than k times [as many M as] Y"
+    ("Justin has 8 more than twice as many pencils as Sabrina" → J = 2·S + 8; "Devin has 5 less than half the
+    years Tom has" → D = ½·T − 5). POSITIONAL parse: the OFFSET value precedes the comparative ("8 more"), the
+    FACTOR is a multiplier AFTER "than" ("twice"). Requires an explicit multiplier — a bare "N more than Y"
+    (no factor) is the firewall-risky offset shape we keep declining, not this one. Exactly two names, the
+    standard in a genuine ratio frame (after as/of/that), like `_ratio_relation`. None otherwise."""
+    comp = next((u for u in rp.units if _key(u.surface) in ("more", "less", "fewer")
+                 and "comparative" in u.features.get("senses", [])), None)
+    if comp is None:
+        return None
+    ci = rp.units.index(comp)
+    sign = 1.0 if _key(comp.surface) == "more" else -1.0
+    off = next((u for u in reversed(rp.units[:ci])                     # offset = the value RIGHT before the
+               if "value" in u.features.get("senses", []) and u.features.get("value") is not None), None)
+    if off is None:                                                   # comparative ("8 more than …")
+        return None
+    mult = next((u for u in rp.units[ci + 1:] if "multiplier" in u.features.get("senses", [])), None)
+    if mult is None:                                                  # require an explicit factor after "than"
+        return None
+    k = (mult.features["fraction"][0] / mult.features["fraction"][1]) if "fraction" in mult.features \
+        else mult.features.get("value")
+    if k is None:
+        return None
+    names = [u for u in rp.units if "name" in u.features.get("senses", [])]
+    verbs = [u for u in rp.units if "verb" in u.features.get("senses", [])]
+    if len(names) != 2 or not verbs:
+        return None
+    vpos = rp.units.index(verbs[0])
+    subj = next((u for u in names if rp.units.index(u) < vpos), None)
+    if subj is None:
+        return None
+    std = next(u for u in names if u is not subj)
+    si = rp.units.index(std)                                          # the standard must sit in a ratio frame
+    prev = _key(rp.units[si - 1].surface) if si > 0 else ""           # (after as/of/that), like _ratio_relation
+    nxt = rp.units[si + 1] if si + 1 < len(rp.units) else None
+    if prev not in ("as", "of", "that") \
+            and not (nxt is not None and "possessive" in nxt.features.get("senses", [])):
+        return None
+    return _entity(subj), k, _entity(std), sign * off.features["value"]
+
+
 def _sum_ratio_system(premises: list, question: str):
     """An N-UNKNOWN SUM+RATIO-CHAIN system: several entities, each a multiple of another (relations may
     CHAIN), and a COMBINED TOTAL → solve for the asked one by PIVOT REDUCTION. "Amy, Jeremy, Chris combined
@@ -4322,30 +4365,7 @@ def _sum_ratio_system(premises: list, question: str):
                    ), None) if asked_measure is not None else None
         if len(nm) == 1 and kv is not None and _entity(nm[0]) not in rels:
             knowns[_entity(nm[0])] = kv.features["value"]
-    total = None
-    for p in premises:                                                 # the combined TOTAL (as #3h)
-        if not any(w in p.lower() for w in ("combined", "total", "together", "between them", "in all",
-                                            "share", "shared", "altogether")):
-            continue
-        rp = analyze(p)
-        if any("comparative" in u.features.get("senses", []) for u in rp.units):
-            continue
-        tot_nouns = [_descriptor(u)[0] for u in rp.units if u.features.get("senses") == ["noun"]]
-        # UNIT/MEASURE GATE: the asked measure must match the total's measure (else "combined YEARS … how
-        # many MONTHS" would commit a wrong-unit number); money totals often have no measure noun ("$76").
-        if asked_measure is not None and tot_nouns and asked_measure[0] not in tot_nouns \
-                and "money" not in str(asked_measure):
-            continue
-        if asked_measure is not None and rel_mod is not None and _measure_mod(rp, asked_measure[0]) != rel_mod:
-            continue                                                   # "traffic" total ≠ "parking" relation
-        tot_desc = next((_descriptor(u) for u in rp.units
-                         if asked_measure is not None and _descriptor(u)[0] == asked_measure[0]), None)
-        if rel_desc is not None and tot_desc is not None and rel_desc != tot_desc:
-            continue                                                   # condensed-qualifier 'red' ≠ 'blue'
-        tv = next((u for u in rp.units if "value" in u.features.get("senses", [])
-                   and u.features.get("value") is not None), None)
-        if tv is not None:
-            total = tv.features["value"]; break
+    total = _combined_total(premises, asked_measure, rel_mod, rel_desc)
     if total is None:
         return None
     entities = set(rels) | {std for _k, std in rels.values()} | set(knowns) | {asked}
@@ -4370,6 +4390,78 @@ def _sum_ratio_system(premises: list, question: str):
     pivot = _compute(f"({_num(total)} - ({_num(sum(knowns.values()))})) / {_num(denom)}") if knowns \
         else _compute(f"{_num(total)} / {_num(denom)}")
     return pivot if coeff[asked] == 1 else _compute(f"{_num(coeff[asked])} * {_num(pivot)}")
+
+
+def _combined_total(premises: list, asked_measure, rel_mod, rel_desc):
+    """The stated COMBINED TOTAL over the system's entities (the #3h total-finder, shared by the pure-ratio
+    `_sum_ratio_system` and the offset `_offset_sum_system`). Same gates: a combined/total/together cue, no
+    comparative in the clause, and a measure/qualifier match to the asked measure. None if no such total."""
+    for p in premises:
+        if not any(w in p.lower() for w in ("combined", "total", "together", "between them", "in all",
+                                            "share", "shared", "altogether")):
+            continue
+        rp = analyze(p)
+        if any("comparative" in u.features.get("senses", []) for u in rp.units):
+            continue
+        tot_nouns = [_descriptor(u)[0] for u in rp.units if u.features.get("senses") == ["noun"]]
+        # UNIT/MEASURE GATE: the asked measure must match the total's measure (else "combined YEARS … how
+        # many MONTHS" would commit a wrong-unit number); money totals often have no measure noun ("$76").
+        if asked_measure is not None and tot_nouns and asked_measure[0] not in tot_nouns \
+                and "money" not in str(asked_measure):
+            continue
+        if asked_measure is not None and rel_mod is not None and _measure_mod(rp, asked_measure[0]) != rel_mod:
+            continue                                                   # "traffic" total ≠ "parking" relation
+        tot_desc = next((_descriptor(u) for u in rp.units
+                         if asked_measure is not None and _descriptor(u)[0] == asked_measure[0]), None)
+        if rel_desc is not None and tot_desc is not None and rel_desc != tot_desc:
+            continue                                                   # condensed-qualifier 'red' ≠ 'blue'
+        tv = next((u for u in rp.units if "value" in u.features.get("senses", [])
+                   and u.features.get("value") is not None), None)
+        if tv is not None:
+            return tv.features["value"]
+    return None
+
+
+def _offset_sum_system(premises: list, question: str):
+    """A 2-UNKNOWN OFFSET SUM-system: two entities, one AFFINE relation (subject = factor × standard + offset),
+    and a COMBINED TOTAL → solve. "Justin + Sabrina have 50 pencils; Justin has 8 more than twice as many as
+    Sabrina" → S = (50 − 8)/(2+1) = 14. The affine extension of `_sum_ratio_system`, which DECLINES any
+    offset-tainted system (it can only fold pure ratios); kept SEPARATE to isolate the firewall-riskier offset
+    shape from the mature pure-ratio path. TIGHTLY gated: EXACTLY ONE offset relation, NO pure-ratio relation
+    alongside it (a mixed/3-way system is out of scope → let it decline), exactly the two related entities, the
+    asked entity among them, and the #3h measure/qualifier match on the total. None if the shape doesn't apply."""
+    qr = analyze(question)
+    qnames = [u for u in qr.units if "name" in u.features.get("senses", [])]
+    if not qnames:
+        return None
+    asked = _entity(qnames[0])
+    asked_measure = _queried_measure(question)
+    if asked_measure is not None and "verb" in analyze(asked_measure[0]).units[0].features.get("senses", []):
+        asked_measure = RESULT_MEASURE.get(asked_measure[0])           # "how many did X PICK" → its measure
+    offs, rel_mod, rel_desc = [], None, None
+    for p in premises:
+        rr = _offset_ratio_relation(analyze(p))
+        if rr is None:
+            continue
+        offs.append(rr)
+        rp = analyze(p)                                                # carry over #3h's qualifier checks
+        if asked_measure is not None and any(_descriptor(u)[0] == asked_measure[0] for u in rp.units):
+            rel_mod = _measure_mod(rp, asked_measure[0])
+            rel_desc = next((_descriptor(u) for u in rp.units if _descriptor(u)[0] == asked_measure[0]), None)
+    if len(offs) != 1:                                                 # exactly one offset relation
+        return None
+    if any(_ratio_relation(analyze(p)) is not None for p in premises):  # a mixed system (offset + pure ratio)
+        return None                                                    # is out of scope — decline it here
+    subj_e, k, std_e, c = offs[0]
+    if subj_e == std_e or asked not in (subj_e, std_e):
+        return None
+    total = _combined_total(premises, asked_measure, rel_mod, rel_desc)
+    if total is None or k == -1:
+        return None
+    # subj = k·std + c and subj + std = T  ⇒  std = (T − c)/(k+1),  subj = T − std.
+    std_v = _compute(f"({_num(total)} - ({_num(c)})) / {_num(k + 1)}")
+    subj_v = _compute(f"{_num(total)} - ({_num(std_v)})")
+    return subj_v if asked == subj_e else std_v
 
 
 def _inject_bare_ages(prem_readings: list, all_readings: list, facts_of: list, context: list) -> None:
@@ -4464,6 +4556,13 @@ def solve(text: str):
     _ratio = _sum_ratio_system(premises, question)
     if _ratio is not None:
         return _ratio
+    # OFFSET SUM-system (the affine twin: subject = factor × standard + offset, + a combined total → solve for
+    # a part). Tried right after the pure-ratio system (which declines offset-tainted systems) and equally
+    # early, for the same reason — its relation defers to no fact, so the stated offset/factor/total would
+    # trip GUARD 3. "Justin + Sabrina 50 pencils; Justin 8 more than twice Sabrina → Sabrina 14."
+    _offset = _offset_sum_system(premises, question)
+    if _offset is not None:
+        return _offset
     # GUARD 8 — INVERSION / COUNTERFACTUAL: two shapes the forward fold structurally cannot solve, so it
     # would fold the literal numbers and commit garbage. Both are honest DECLINES (the safe "only-declines"
     # shape, like GUARD 7).
@@ -4794,9 +4893,13 @@ def run_cli(args: list) -> str:
         if derived:
             context, fixpoint = context + derived, True
 
+    _sys = _sum_ratio_system(premises, question)           # mirror solve() (#104): sum/ratio systems
+    if _sys is None:
+        _sys = _offset_sum_system(premises, question)
     _depleted = _scene_depletion(question, context, readings)   # mirror solve() (#104) — pool − Σ takes
     if not trace:                                          # just the answer
-        return _answer_text(_depleted if _depleted is not None else answer(question, context))
+        return _answer_text(_sys if _sys is not None else
+                            _depleted if _depleted is not None else answer(question, context))
 
     out = []                                               # the full trace
     for i, p in enumerate(premises):
