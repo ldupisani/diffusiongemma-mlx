@@ -302,6 +302,7 @@ def _merge_labels(reading: Reading) -> Reading:
 PLURALS = {
     "students": "student",
     "children": "child",
+    "adults": "adult", "seniors": "senior",
     "apples": "apple",
     "dogs": "dog", "cats": "cat", "birds": "bird", "cars": "car", "houses": "house",
     "trees": "tree", "books": "book", "flowers": "flower", "teachers": "teacher",
@@ -612,6 +613,7 @@ LEXICON: dict[str, list[str]] = {
     "card": ["noun"], "coin": ["noun"], "bill": ["noun"], "goat": ["noun"], "roommate": ["noun"],
     "sticker": ["noun"], "marble": ["noun"], "child": ["noun"], "person": ["noun"], "car": ["noun"],
     "parent": ["noun"], "grandparent": ["noun"], "friend": ["noun"],
+    "adult": ["noun"], "senior": ["noun"], "chef": ["noun"],
     "washing": ["noun"], "babysitting": ["noun"],
     # --- vocabulary push (data-driven from reading_bench): function words + units + common verbs/nouns ---
     "that": ["article"], "this": ["article"], "these": ["article"], "those": ["article"],
@@ -1756,6 +1758,18 @@ def _noun_entity_key(unit) -> str:
     if "adjective" in unit.features.get("senses", []):
         return _key(unit.surface)
     return _key(unit.features.get("singular") or unit.surface)
+
+
+def _name_count(rp: "Reading") -> int:
+    """How many NAME units a reading holds — the discriminator between the NAMED-ENTITY affine family (which
+    requires EXACTLY 2 names for a relation / 1 for an anchor) and `_affine_relation`/`_anchor_fact`'s
+    COMMON-NOUN fallback (0 or 1 names for a relation, 0 for an anchor). The named systems must gate on this
+    BEFORE accepting a result — otherwise a noun-entity relation the fallback silently produces (valid for
+    the coordinate-noun family, but semantically WRONG here — e.g. "as many books as the number of tables...
+    ARE ON TOP OF EACH TABLE" is a per-unit RATE, not a flat count the named systems' arithmetic assumes)
+    would be picked up by the wrong family and mis-solve. A real confident-wrong (700 vs gold 100000)
+    surfaced this: `_anchored_sum_system` had no idea its relation actually came from the noun fallback."""
+    return sum(1 for u in rp.units if "name" in u.features.get("senses", []))
 
 
 def _disc_pair(e):
@@ -4395,12 +4409,14 @@ def _clause_subject(text: str):
 
 def _is_value_first_relation(text: str) -> bool:
     """A VALUE-FIRST coordinate relation whose subject AND verb are elided: "2 fewer toys than Amanda",
-    "twice as many peppers as cucumbers", "4 more cows than goats" (a common-noun standard). It OPENS with a
+    "twice as many peppers as cucumbers", "4 more cows than goats" (a common-noun standard), "35 fewer
+    children than THE NUMBER OF adults" (tolerating the elided re-quantification wrapper). It OPENS with a
     value/multiplier (so `_is_elided_clause` — which needs a subject before the value — rejects it as a bare
     object like "2 oranges"), but a COMPARATIVE (more/less/fewer) or a MULTIPLIER makes it a relation, and a
-    NAME or NOUN/ADJECTIVE standard after "than"/"as" pins the other entity — `_affine_relation`'s
-    coordinate-noun fallback can consume a noun/adjective standard too, not just a name. Distinguishes the
-    relation-conjunct from a genuine phrase-join ("3 apples and 2 oranges" — no comparative, no factor)."""
+    NAME or NOUN/ADJECTIVE standard after "than"/"as" (possibly past a "the number/amount of" wrapper) pins
+    the other entity — `_affine_relation`'s coordinate-noun fallback can consume a noun/adjective standard
+    too, not just a name. Distinguishes the relation-conjunct from a genuine phrase-join ("3 apples and 2
+    oranges" — no comparative, no factor)."""
     units = analyze(text).units
     qi = next((k for k, u in enumerate(units)
                if any(s in u.features.get("senses", []) for s in ("value", "multiplier"))), None)
@@ -4412,8 +4428,13 @@ def _is_value_first_relation(text: str) -> bool:
     if not (has_comp or has_mult):
         return False
     for k, u in enumerate(units):                      # a NAME or NOUN/ADJECTIVE standard right after "than"/"as"
-        if _key(u.surface) in ("than", "as") and k + 1 < len(units) \
-                and any(s in units[k + 1].features.get("senses", []) for s in ("name", "noun", "adjective")):
+        if _key(u.surface) not in ("than", "as"):
+            continue
+        i = k + 1
+        if i < len(units) and _key(units[i].surface) in ("the", "a", "an") and i + 2 < len(units) \
+                and _key(units[i + 1].surface) in COUNT_NOUNS and _key(units[i + 2].surface) == "of":
+            i += 3                                      # skip the elided "the NUMBER/AMOUNT of" wrapper
+        if i < len(units) and any(s in units[i].features.get("senses", []) for s in ("name", "noun", "adjective")):
             return True
     return False
 
@@ -4815,18 +4836,46 @@ def _noun_std_entity(rp: Reading, after_idx: int):
     """The COMMON-NOUN standard for a NO-NAMES ratio/offset clause (used by `_ratio_relation`/
     `_offset_ratio_relation`/`_pure_offset_relation`'s noun-entity fallback): the token IMMEDIATELY after an
     "as"/"than" marker — "twice as many pigs AS COWS" / "24 more blue marbles THAN RED MARBLES" — but ONLY if
-    that immediate token IS itself a noun/adjective. Deliberately NOT a scan-ahead search: "twice as many
-    books AS SHE finished last month" has "she" (a pronoun) immediately after "as" — a self-referential
-    RELATIVE CLAUSE ("as many as SHE finished"), not a second coordinate-noun entity — scanning past the
-    pronoun to grab "month" further along caused a real confident-wrong (a temporal reference misread as a
-    second entity). None if there's no marker, or the immediate next token isn't a noun/adjective."""
+    that immediate token IS itself a noun/adjective, tolerating an elided "the NUMBER/AMOUNT of" re-
+    quantification wrapper right after the marker ("35 fewer children THAN THE NUMBER OF adults" → adults;
+    same idiom `_ratio_relation`'s NAME path already reads via its "of"-frame check). Otherwise deliberately
+    NOT a scan-ahead search: "twice as many books AS SHE finished last month" has "she" (a pronoun)
+    immediately after "as" — a self-referential RELATIVE CLAUSE ("as many as SHE finished"), not a second
+    coordinate-noun entity — scanning past the pronoun to grab "month" further along caused a real
+    confident-wrong (a temporal reference misread as a second entity). None if there's no marker, or the
+    (possibly wrapper-skipped) next token isn't a noun/adjective."""
     tail = rp.units[after_idx + 1:]
     marker = next((k for k, u in enumerate(tail) if _key(u.surface) in ("as", "than")), None)
     if marker is None or marker + 1 >= len(tail):
         return None
-    nxt = tail[marker + 1]
+    i = marker + 1
+    if _key(tail[i].surface) in ("the", "a", "an") and i + 2 < len(tail) \
+            and _key(tail[i + 1].surface) in COUNT_NOUNS and _key(tail[i + 2].surface) == "of":
+        i += 3                                              # skip the elided "the NUMBER/AMOUNT of" wrapper
+    if i >= len(tail):
+        return None
+    nxt = tail[i]
     if "noun" in nxt.features.get("senses", []) or "adjective" in nxt.features.get("senses", []):
         return nxt
+    return None
+
+
+def _asked_noun_entity(qr: Reading):
+    """The COMMON-NOUN entity a QUESTION asks about, for the coordinate-noun affine family: the noun "many"/
+    "much" quantifies ("how MANY goats does he have?" → goats), or — when there's no such quantifier — the
+    noun right after a bare "the (total) NUMBER/AMOUNT OF X" phrase ("What is the total number of guests
+    served?" → guests, a common GSM8K imperative-question wording with no "how many" at all). None if
+    neither pattern is found."""
+    many = next((u for u in qr.units if _key(u.surface) in ("many", "much")
+                 and "quantifier" in u.features.get("senses", [])), None)
+    if many is not None:
+        coll = _follow(many, "collection")
+        return _noun_entity_key(coll) if coll is not None else None
+    for i, u in enumerate(qr.units):
+        if _key(u.surface) in COUNT_NOUNS and i + 1 < len(qr.units) and _key(qr.units[i + 1].surface) == "of":
+            nxt = qr.units[i + 2] if i + 2 < len(qr.units) else None
+            if nxt is not None and "noun" in nxt.features.get("senses", []):
+                return _noun_entity_key(nxt)
     return None
 
 
@@ -5012,14 +5061,17 @@ def _sum_ratio_system(premises: list, question: str):
     rels = {}                                                          # subject → (factor, standard)
     rel_mod = rel_desc = None
     for p in premises:
-        rr = _ratio_relation(analyze(p))
+        rp = analyze(p)
+        if _name_count(rp) != 2:
+            continue                       # not a genuine 2-name relation — may be `_ratio_relation`'s
+        rr = _ratio_relation(rp)           # coordinate-noun fallback firing, a DIFFERENT family's turf
         if rr is None:
             continue
         subj_e, k, std_e = rr
         if subj_e in rels:                                             # a subject defined twice → reject
             return None
         rels[subj_e] = (k, std_e)
-        rp = analyze(p)                                                # carry over #3h's qualifier checks:
+        # carry over #3h's qualifier checks:
         if asked_measure is not None and any(_descriptor(u)[0] == asked_measure[0] for u in rp.units):
             rel_mod = _measure_mod(rp, asked_measure[0])               # a separate pre-modifier ('parking'),
             rel_desc = next((_descriptor(u) for u in rp.units          # AND the full descriptor incl. a
@@ -5181,11 +5233,13 @@ def _offset_sum_pure(premises: list, question: str):
         asked_measure = RESULT_MEASURE.get(asked_measure[0])
     offs, rel_mod, rel_desc = [], None, None
     for p in premises:
-        rr = _pure_offset_relation(analyze(p))
+        rp = analyze(p)
+        if _name_count(rp) != 2:
+            continue                       # not a genuine 2-name relation — may be `_pure_offset_relation`'s
+        rr = _pure_offset_relation(rp)      # coordinate-noun fallback firing, a DIFFERENT family's turf
         if rr is None:
             continue
         offs.append(rr)
-        rp = analyze(p)
         if asked_measure is not None and any(_descriptor(u)[0] == asked_measure[0] for u in rp.units):
             rel_mod = _measure_mod(rp, asked_measure[0])
             rel_desc = next((_descriptor(u) for u in rp.units if _descriptor(u)[0] == asked_measure[0]), None)
@@ -5239,11 +5293,13 @@ def _offset_sum_system(premises: list, question: str):
         asked_measure = RESULT_MEASURE.get(asked_measure[0])           # "how many did X PICK" → its measure
     offs, rel_mod, rel_desc = [], None, None
     for p in premises:
-        rr = _offset_ratio_relation(analyze(p))
+        rp = analyze(p)                                                # carry over #3h's qualifier checks
+        if _name_count(rp) != 2:
+            continue                       # not a genuine 2-name relation — may be `_offset_ratio_relation`'s
+        rr = _offset_ratio_relation(rp)     # coordinate-noun fallback firing, a DIFFERENT family's turf
         if rr is None:
             continue
         offs.append(rr)
-        rp = analyze(p)                                                # carry over #3h's qualifier checks
         if asked_measure is not None and any(_descriptor(u)[0] == asked_measure[0] for u in rp.units):
             rel_mod = _measure_mod(rp, asked_measure[0])
             rel_desc = next((_descriptor(u) for u in rp.units if _descriptor(u)[0] == asked_measure[0]), None)
@@ -5316,7 +5372,9 @@ def _affine_system(premises: list, question: str):
     rel_mod = rel_desc = None
     for p in premises:
         rp = analyze(p)
-        rel = _affine_relation(rp)
+        if _name_count(rp) != 2:
+            continue                       # not a genuine 2-name relation — may be `_affine_relation`'s
+        rel = _affine_relation(rp)         # coordinate-noun fallback firing, a DIFFERENT family's turf
         if rel is None:
             continue
         subj_e, k, std_e, c = rel
@@ -5435,13 +5493,8 @@ def _noun_affine_system(premises: list, question: str):
     if sum_a == 0:
         return None
     qr = analyze(question)
-    many = next((u for u in qr.units if _key(u.surface) in ("many", "much")
-                 and "quantifier" in u.features.get("senses", [])), None)
-    asked_u = _follow(many, "collection") if many is not None else None
-    if asked_u is None:
-        return None
-    asked = _noun_entity_key(asked_u)
-    if asked not in coeff:
+    asked = _asked_noun_entity(qr)
+    if asked is None or asked not in coeff:
         return None
     pivot = _compute(f"({_num(total)} - ({_num(sum_b)})) / {_num(sum_a)}")
     a_ask, b_ask = coeff[asked]
@@ -5515,13 +5568,8 @@ def _noun_anchored_sum_system(premises: list, question: str):
         return None
     pivot = _compute(f"({_num(anchor_v)} - ({_num(b_anc)})) / {_num(a_anc)}")
     qr = analyze(question)
-    many = next((u for u in qr.units if _key(u.surface) in ("many", "much")
-                 and "quantifier" in u.features.get("senses", [])), None)
-    asked_u = _follow(many, "collection") if many is not None else None
-    if asked_u is None:
-        return None
-    asked = _noun_entity_key(asked_u)
-    if asked in coeff:
+    asked = _asked_noun_entity(qr)
+    if asked is None or asked in coeff:
         return None                                        # a specific entity ask — not this SUM shape
     total = " + ".join(f"({_num(a)} * {_num(pivot)} + ({_num(b)}))" for a, b in coeff.values())
     return _compute(total)
@@ -5603,10 +5651,8 @@ def _noun_residual_sum_system(premises: list, question: str):
         return None
     pivot = _compute(f"({_num(anchor_v)} - ({_num(b_anc)})) / {_num(a_anc)}")
     qr = analyze(question)
-    many = next((u for u in qr.units if _key(u.surface) in ("many", "much")
-                 and "quantifier" in u.features.get("senses", [])), None)
-    asked_u = _follow(many, "collection") if many is not None else None
-    if asked_u is None or _noun_entity_key(asked_u) != residual:
+    asked = _asked_noun_entity(qr)
+    if asked != residual:
         return None                                          # only the RESIDUAL entity — a covered entity
         #                                                       is a different (unbuilt) single-ask variant
     covered_sum = " + ".join(f"({_num(a)} * {_num(pivot)} + ({_num(b)}))" for a, b in coeff.values())
@@ -5691,9 +5737,10 @@ def _anchored_affine_coeffs(premises: list, question: str):
     rels, anchors = {}, {}
     for p in premises:
         rp = analyze(p)
-        rel = _affine_relation(rp)
-        anc = None if rel is not None else _anchor_fact(rp)
-        if rel is None and anc is None:
+        nc = _name_count(rp)
+        rel = _affine_relation(rp) if nc == 2 else None      # exactly 2 names — else this may be the
+        anc = _anchor_fact(rp) if (rel is None and nc == 1) else None   # coordinate-noun fallback firing,
+        if rel is None and anc is None:                       # which is a DIFFERENT family's turf (see
             return None                    # an UNCLASSIFIED premise (e.g. a depletion action like "gave out
             #                                 half her apples", or an unsupported relation frame like "an equal
             #                                 number … as") may hide information this solver can't fold

@@ -4244,6 +4244,43 @@ class TestNounResidualSumSystem(unittest.TestCase):
             "how many red balls are there?"))
 
 
+class TestVocabAndFamilyIsolation(unittest.TestCase):
+    """Vocabulary additions (adult/senior/chef) unlocked the real chef GSM8K case for the coordinate-noun
+    family, but doing so surfaced a real architectural gap: `_affine_relation`/`_anchor_fact`'s noun-entity
+    fallback is reachable from EVERY consumer, including the ORIGINAL named-entity systems (`_affine_system`,
+    `_anchored_sum_system` via `_anchored_affine_coeffs`, `_sum_ratio_system`, `_offset_sum_system`,
+    `_offset_sum_pure`) — they had no name-count gate of their own, so a premise that only classifies via the
+    noun fallback could be silently accepted by the WRONG family and mis-solve (a class of 500 tables + "2/5
+    times as many books as the number of tables ... ARE ON TOP OF EACH TABLE" — a per-table RATE, not a flat
+    count — gave 700 via `_anchored_sum_system` instead of declining; the correct reading needs 100000, which
+    no current solver computes). All five named systems now require `_name_count(rp) == 2` for a relation /
+    `== 1` for an anchor before accepting `_affine_relation`/`_anchor_fact`'s result, via the shared
+    `_name_count` helper. Also added `_asked_noun_entity` (shared by all three noun systems) to recognize
+    "What is the TOTAL NUMBER OF guests served?" (no "how many" at all) as an equivalent asked-noun frame,
+    and extended `_noun_std_entity`/`_is_value_first_relation` to skip an elided "the NUMBER/AMOUNT OF"
+    wrapper ("35 fewer children THAN THE NUMBER OF adults"). +1 dev-train (the real chef GSM8K case)."""
+
+    def test_chef_case_solves(self):
+        self.assertEqual(reading.solve(
+            "A chef has served 58 adults, 35 fewer children than the number of adults, and twice as many "
+            "seniors as children. What is the total number of guests served?"), 127)
+
+    def test_per_unit_rate_declines_rather_than_mis_sum(self):
+        # "2/5 times as many books AS THE NUMBER OF TABLES ... ARE ON TOP OF EACH TABLE" is a per-table RATE
+        # (total books = density * table-count = 100000), not a flat coordinate-noun count (200) the affine
+        # family assumes — must decline rather than confidently mis-solve (was 700 via the wrong family).
+        self.assertEqual(reading.solve(
+            "A class has 500 tables and 2/5 times as many books as the number of tables in the class are "
+            "on top of each table. What's the total number of books in the class?"), "undetermined")
+
+    def test_noun_fallback_relation_not_claimed_by_named_system(self):
+        # a premise with 0-1 names (a coordinate-noun relation) must NOT be accepted by the NAMED
+        # `_anchored_affine_coeffs` family — direct check on the shared extraction helper.
+        self.assertIsNone(reading._anchored_affine_coeffs(
+            ["A farmer has twice as many pigs as cows.", "If there are 20 cows"],
+            "how many pigs does the farmer have?"))
+
+
 class TestImperativeQuestionClause(unittest.TestCase):
     """`solve()` used to require a literal "?" ANYWHERE in the text, so a GSM8K problem phrased as an
     IMPERATIVE ("Calculate the total…", "Find X's weight.", ending in "." — ~4% of the corpus) was declined
