@@ -69,12 +69,18 @@ def _correct(pred, gold) -> bool:
 
 
 def _predict(question: str):
-    """reading.solve → the committed number, or None on decline/error (declines are honest)."""
+    """reading.solve → the committed number, or None on decline/error (declines are honest).
+
+    solve() returns a BARE number when it commits, else a verdict string ("undetermined"/…) or None
+    when it declines — mirror reading_bench._as_number so the two harnesses agree on what "committed"
+    means (a bool is a logic verdict, not a number, and must not count)."""
     try:
         r = reading.solve(question)
     except Exception as e:                       # a crash is a decline for diffing purposes
         return f"ERR:{type(e).__name__}"
-    return r.get("value") if isinstance(r, dict) else None
+    if isinstance(r, bool):
+        return None
+    return float(r) if isinstance(r, (int, float)) else None
 
 
 def snapshot(out_path: str = None) -> str:
