@@ -6199,6 +6199,35 @@ def _target_contributions_system(premises: list, question: str):
     return _compute(f"{_num(target)} - ({' + '.join(_num(c) for c in contrib)})")
 
 
+def _total_between_residual_system(premises: list, question: str):
+    """A category TOTAL split "IN TOTAL BETWEEN" named parts, some parts stated, asking the RESIDUAL part:
+    "Mark has 12 candy bars in total between Mars bars, Snickers, and Butterfingers. He has 3 Snickers and 2
+    Mars bars. How many Butterfingers does he have?" → 12 − (3+2) = 7. Reads raw premise values (the general
+    fold can't attach the brand-name parts to the category total). Tightly gated by the "in total between/
+    among" cue; every other premise is a bare part-count or value-free. Same arithmetic as
+    `_target_contributions_system` (total − Σ parts), a DIFFERENT surface — the general "total − Σ" shape is
+    too common to trust, so each keeps its OWN specific cue."""
+    if "how many" not in question.lower():
+        return None
+    total, parts = None, []
+    for p in premises:
+        pl = f" {p.lower()} "
+        vs = [u.features["value"] for u in analyze(p).units if "value" in u.features.get("senses", [])]
+        if len(vs) == 1 and ("in total between" in pl or "in total among" in pl):
+            if total is not None:
+                return None
+            total = vs[0]
+        elif vs and "more" not in pl and "need" not in pl and "total" not in pl:
+            parts.extend(vs)
+        elif not vs:
+            continue
+        else:
+            return None
+    if total is None or not parts:
+        return None
+    return _compute(f"{_num(total)} - ({' + '.join(_num(c) for c in parts)})")
+
+
 def _inject_bare_ages(prem_readings: list, all_readings: list, facts_of: list, context: list) -> None:
     """BARE AGE — in an AGE-typed problem ("…as old as…", "older/younger than…"), a copula "X is N" with no
     unit ("If Job is 5") states X's AGE = N. The bare value quantifies no noun, so `_quantity` emits nothing
@@ -6969,6 +6998,8 @@ _EARLY_SYSTEMS = [
     ("two_relation", _two_relation_system),
     # TARGET − CONTRIBUTIONS: "need to collect 100 cans; collected 30, 43; how many more to collect?" → 27.
     ("target_contributions", _target_contributions_system),
+    # TOTAL-BETWEEN RESIDUAL: "12 in total between A, B, C; 3 B and 2 A; how many C?" → 12−5 = 7.
+    ("total_between_residual", _total_between_residual_system),
 ]
 
 # LATE systems run AFTER the read-synthesize fixpoint has built `context` (they consume derived

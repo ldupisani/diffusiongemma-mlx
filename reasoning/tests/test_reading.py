@@ -4719,6 +4719,24 @@ class TestTargetContributionsSystem(unittest.TestCase):
             "how many more coins does Bea need?"))
 
 
+class TestTotalBetweenResidualSystem(unittest.TestCase):
+    """`_total_between_residual_system` — a category total split "in total between" named parts, some stated,
+    asking the residual part: total − Σ(stated parts). +1 dev-train (the real Mark candy-bars case)."""
+
+    def test_residual_part_from_total_between(self):
+        # 20 marbles in total between red/blue/green; 5 blue + 7 green → red = 20 − 12 = 8.
+        self.assertEqual(reading.solve(
+            "Nora has 20 marbles in total between red, blue, and green. She has 5 blue and 7 green marbles. "
+            "How many red marbles does she have?"), 8)
+
+    def test_no_total_between_cue_declines(self):
+        # without the specific "in total between/among" cue, the common "total − Σ" surface is untrusted —
+        # a bare "total" must NOT fire this solver (it over-fires; e.g. a rate/per-item total).
+        self.assertIsNone(reading._total_between_residual_system(
+            ["Nora has 20 marbles total", "She has 5 blue and 7 green marbles"],
+            "How many red marbles does she have?"))
+
+
 class TestAnchoredSingleNeedsGuard(unittest.TestCase):
     """`_anchored_single_system` naively grabbed the FIRST name in the question as the ask — but "how many
     stamps does SHE NEED to ADD to have a collection AS LARGE AS Bert's?" is a DEFICIT-TO-TARGET question
