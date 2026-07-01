@@ -6919,6 +6919,67 @@ def _shopping_total(premises: list, question: str):
     return _compute(" + ".join(f"({p})" for p in products))
 
 
+def _revenue_product_sum(premises: list, question: str):
+    """The REVENUE / SELL twin of `_shopping_total` — "the baker sold 453 cakes at $12 and 126 pies at $7.
+    How much did the baker earn?" → Σ(count × price) = 453·12 + 126·7 = 6318. Same product-sum math, but the
+    price attaches via "at $P" (a per-item price with NO "each") rather than requiring "each", and the
+    question asks a revenue total (earn/make) as well as spend/pay. TIGHTLY gated to keep it off "for $80"
+    TOTAL prices (Luigi's four pizzas) and discounts/tiers: (1) the question asks "how much" + earn/make/
+    spend/pay, NO profit/more/less/change/left/each/discount cue; (2) every money value is a genuine PER-ITEM
+    price — immediately PRECEDED by "at" OR immediately FOLLOWED by "each"/"apiece" (a bare "for $P" is a
+    total → reject); (3) NO discount/sale/off/%/commission/free/per in the premises; (4) the buy/sell/order
+    quantities STRICTLY alternate item-count then price, every one consumed. Σ(count×price). None otherwise.
+    Registered AFTER `_shopping_total`, which claims its own each-marked buy shape first (they never disagree —
+    both compute the same product-sum)."""
+    ql = question.lower()
+    if not (("how much" in ql) and any(w in ql for w in ("earn", "earned", "make", "made",
+                                                          "spend", "spent", "pay", "paid"))):
+        return None
+    if any(w in ql for w in ("profit", "more", "less", "fewer", "change", "left", "discount",
+                             "percent", "commission", "each")):
+        return None
+    if any("value" in u.features.get("senses", []) for u in analyze(question).units):
+        return None                                          # a value in the question → content stranded there
+    pl = " ".join(premises).lower()
+    if any(w in pl for w in ("discount", "sale", " off", "% ", "percent", "coupon", "free",
+                             "commission", "profit", " per ", "tax", "tip")):
+        return None
+    disc, ctx, readings = [], [], [analyze(p) for p in premises]
+    for p in premises:
+        f = learn(p, disc, ctx)
+        if f:
+            ctx += f
+    # every money value in the premises must be a PER-ITEM price: preceded by "at" or followed by each/apiece.
+    money_units = [(rp, k) for rp in readings for k, u in enumerate(rp.units)
+                   if "value" in u.features.get("senses", []) and "money" in str(u.features.get("measure"))]
+    if not money_units:
+        return None
+    for rp, k in money_units:
+        prev = rp.units[k - 1] if k > 0 else None
+        nxt = rp.units[k + 1] if k + 1 < len(rp.units) else None
+        at_before = prev is not None and _key(prev.surface) == "at"
+        each_after = nxt is not None and _key(nxt.surface) in ("each", "apiece")
+        if not (at_before or each_after):
+            return None                                      # a bare "for $P" total → reject
+    qs = [f for f in ctx if isinstance(f, Quantity) and f.verb in ("buy", "purchase", "sell", "order")
+          and f.amount is not None]
+    products, i = [], 0
+    while i < len(qs) - 1:                                    # STRICT alternation: (item-count, money-price)+
+        a, b = qs[i], qs[i + 1]
+        if a.measure != MONEY and b.measure == MONEY:
+            products.append(f"{_num(a.amount)} * {_num(b.amount)}")
+            i += 2
+        else:
+            return None
+    if i != len(qs) or not products:                         # leftover unpaired quantity → not a clean shape
+        return None
+    if len(products) != len(money_units):                    # a premise whose price didn't LEARN (a locative
+        return None                                          # prefix "At a coffee shop, 7 customers…" drops the
+        #                                                      first clause's facts) → committing the surviving
+        #                                                      products silently omits it → DECLINE (coffee 67≠32).
+    return _compute(" + ".join(f"({p})" for p in products))
+
+
 def _equal_share(question: str, context: list, premises: list):
     """POOL-AND-REDISTRIBUTE — "Mark has 30 candies, Peter 25, John 35. They combine their candies and share
     them equally. How many will EACH have?" → (30+25+35)/3 = 30. Same Σ/N math as the `average` branch (#3l)
@@ -7025,6 +7086,8 @@ _LATE_SYSTEMS = [
     ("scene_depletion", lambda P, Q, C, R: _scene_depletion(Q, C, R)),
     # SHOPPING TOTAL — "buys 3 toys at $10 each, 2 packs at $5 each … spend in all?" → Σ(count×price).
     ("shopping_total", lambda P, Q, C, R: _shopping_total(P, Q)),
+    # REVENUE PRODUCT-SUM (sell/earn twin, "at $P" per-item price) — "sold 453 cakes at $12 and 126 pies at $7 … earn?" → 6318.
+    ("revenue_product_sum", lambda P, Q, C, R: _revenue_product_sum(P, Q)),
     # PROPORTION — "If 12 bags weigh 24 pounds, how much do 8 bags weigh?" → 24 × 8/12.
     ("proportion", lambda P, Q, C, R: _proportion(P, Q)),
     # RATE EXTRAPOLATION — "drives 80 miles in 2 hours. How far in 15 minutes?" → 80×0.25/2.

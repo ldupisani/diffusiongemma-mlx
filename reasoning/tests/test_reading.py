@@ -5470,5 +5470,38 @@ class TestIncrement141ChangeIsMoneyRemainder(unittest.TestCase):
         self.assertNotEqual(out, 150)
 
 
+class TestIncrement142RevenueProductSum(unittest.TestCase):
+    """#142 — the REVENUE/SELL twin of `_shopping_total`: "sold 453 cakes at $12 and 126 pies at $7. How
+    much did the baker earn?" → Σ(count×price)=6318. The price attaches via a PER-ITEM marker (preceded by
+    "at", or followed by "each"/"apiece"), and the question asks earn/make as well as spend/pay. A bare
+    "for $P" (a TOTAL, not per-item) is rejected, as are profit/discount/more/less questions. A premise that
+    fails to parse (so #products < #price-units) declines rather than committing a partial sum."""
+
+    def test_at_price_revenue_sum(self):
+        self.assertEqual(reading.solve(
+            "During April, the baker sold 453 cakes at $12 and 126 pies at $7. "
+            "How much did the baker earn?"), 6318)
+
+    def test_make_verb_form(self):
+        self.assertEqual(reading.solve(
+            "Tom sold 5 cakes at $3 and 4 pies at $2. How much did Tom make?"), 23)
+
+    def test_for_total_price_rejected(self):
+        # "four pizzas for $80" is a TOTAL price (not per-item) — no "at"/"each" marker → decline.
+        self.assertEqual(reading.solve(
+            "Sam bought four pizzas for $80. How much did Sam pay?"), "undetermined")
+
+    def test_profit_question_excluded(self):
+        # a "profit" question needs cost subtracted, not a plain revenue sum → decline.
+        self.assertEqual(reading.solve(
+            "A baker sold 5 cakes at $3 and 4 pies at $2. How much profit did the baker make?"),
+            "undetermined")
+
+    def test_discount_excluded(self):
+        self.assertEqual(reading.solve(
+            "A baker sold 5 cakes at $3 and 4 pies at $2 with a discount. How much did the baker earn?"),
+            "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()
