@@ -4648,15 +4648,24 @@ class TestResidualSumSystem(unittest.TestCase):
             "they need 10 bags of chips total, and Stacy buys 4 bags, how many bags of chips should Emily "
             "buy?"), 3)
 
-    def test_mis_split_question_fragment_declines(self):
-        # a known clause-splitting gap: "How many books total have Megan, Kelcie, and Greg read?" mis-splits
-        # into a premise-like fragment ("Greg read?") plus a truncated question ("...have Megan, Kelcie").
-        # Both fragments carry an interrogative/aggregator word or a trailing "?" — must NOT be silently
-        # skipped as harmless declaratives (that dropped Greg entirely: 40 vs gold 65).
+    def test_three_name_question_list_solves(self):
+        # "…have Nora, Opal, and Pax read?" is a COORDINATED NAME LIST sharing the trailing verb —
+        # `_split_clauses` must keep it whole (previously it split on ", and Pax", stranding a bogus "Pax
+        # read?" premise and truncating the question → decline). Nora=40 (anchor), Opal=1/4·40=10,
+        # Pax=2·10+5=25, total=75. (The genitive "the number of books that X has read" is already parsed by
+        # the system extractors; the split was the sole blocker.) A genuine second clause still splits — see
+        # TestRelativeClauseSplit / the "than <name>, and <name> has …" comparison standards below.
         self.assertEqual(reading.solve(
-            "Megan has read 32 books this year. Kelcie has read 1/4 the amount of books that Megan has "
-            "read. Greg has read 9 more than twice the number of books that Kelcie has read. How many "
-            "books total have Megan, Kelcie, and Greg read?"), "undetermined")
+            "Nora has read 40 books. Opal has read 1/4 the amount of books that Nora has read. Pax has read "
+            "5 more than twice the number of books that Opal has read. How many books total have Nora, Opal, "
+            "and Pax read?"), 75)
+
+    def test_comparison_standard_name_still_splits(self):
+        # the guard must NOT fire on a comparison STANDARD ("… than Mark, and Mark has …") — "Mark" follows
+        # "than" and begins a REAL second clause, so it must still split into two independent relations.
+        self.assertEqual(reading._split_clauses(
+            "Samir has 8 more points than Mark, and Mark has 4 more points than Eric"),
+            ["Samir has 8 more points than Mark", "Mark has 4 more points than Eric"])
 
     def test_unrecognized_relation_frame_not_silently_skipped(self):
         # "Jorge has an EQUAL NUMBER of cards AS Matias" isn't a recognized ratio frame ("equal" carries no

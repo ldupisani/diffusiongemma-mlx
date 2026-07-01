@@ -4391,6 +4391,12 @@ def _main_verb(text: str):
     return verbs[-1].surface if verbs else None
 
 
+def _is_name_word(word: str) -> bool:
+    """The token (minus punctuation) is a single proper NAME unit — used to spot a coordinated name list."""
+    u = analyze(word.strip(_PUNCT)).units
+    return len(u) == 1 and "name" in u[0].features.get("senses", [])
+
+
 def _is_elided_clause(text: str) -> bool:
     """A verb-less clause whose verb is ELIDED: it has a SUBJECT (name/noun) BEFORE its first quantity
     ("her grandparents twice as much", "Mary 5 apples") — distinct from a bare conjoined object
@@ -4471,6 +4477,25 @@ def _split_clauses(sentence: str) -> list:
         i = sentence.find(sep)
         while i != -1:
             left, right = sentence[:i].strip(), sentence[i + len(sep):].strip()
+            # COORDINATED NAME LIST: "…have Megan, Kelcie, and Greg read?" — the "Megan, Kelcie, and Greg"
+            # items are subjects sharing the TRAILING verb ("read"), not separate clauses. Splitting on any of
+            # the list's commas/"and" truncates the question and strands a bogus premise ("Greg read?" — the
+            # 3-name question-list bug). Fires (for a comma/"and" sep) when the left ENDS with a NAME and the
+            # right BEGINS with a NAME and the right carries NO value/multiplier of its own (a real second
+            # clause — "…and Mary has 5" — does, so it still splits). The whole list stays one clause.
+            _lt, _rtoks = left.split(), right.split()
+            if _rtoks and _rtoks[0].lower() == "and":         # a ", " that landed just before a list's "and"
+                _rtoks = _rtoks[1:]                            # ("Kelcie, | and Greg read?") — skip the "and"
+            # the ending name must be a LIST item (after a verb/comma), NOT a comparison STANDARD ("8 more
+            # than Mark, and Mark has …" / "as many as Dilan and Ashley" — "Mark"/"Dilan" follow than/as and
+            # begin a REAL second clause / a combined standard, which must still split).
+            _std = len(_lt) >= 2 and _lt[-2].lower().strip(_PUNCT) in ("than", "as")
+            if sep in (", ", ", and ", " and ") and _lt and _rtoks and not _std \
+                    and _is_name_word(_lt[-1]) and _is_name_word(_rtoks[0]) \
+                    and not any(s in u.features.get("senses", []) for u in analyze(right).units
+                                for s in ("value", "multiplier")):
+                i = sentence.find(sep, i + 1)
+                continue
             if left.lower().startswith(("for every", "for each")):
                 i = sentence.find(sep, i + 1)            # "For every X, <main>" is ONE per-occurrence
                 continue                                 # clause (the rate's per_unit + the main amount)
