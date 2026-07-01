@@ -6803,6 +6803,44 @@ _EARLY_SYSTEMS = [
     ("residual_sum", _residual_sum_system),
 ]
 
+# LATE systems run AFTER the read-synthesize fixpoint has built `context` (they consume derived
+# facts). Their signatures differ (some need context/readings), so each is registered as a thin
+# adapter over the uniform call `(premises, question, context, readings_prem)` — the adapter picks
+# the args its solver actually takes. Same registry contract as `_EARLY_SYSTEMS`: append here in
+# priority order, never re-inline a branch in solve().
+_LATE_SYSTEMS = [
+    # SCENE DEPLETION — "there were N X … took A … took B … how many X left?" → N − (A+B).
+    ("scene_depletion", lambda P, Q, C, R: _scene_depletion(Q, C, R)),
+    # SHOPPING TOTAL — "buys 3 toys at $10 each, 2 packs at $5 each … spend in all?" → Σ(count×price).
+    ("shopping_total", lambda P, Q, C, R: _shopping_total(P, Q)),
+    # PROPORTION — "If 12 bags weigh 24 pounds, how much do 8 bags weigh?" → 24 × 8/12.
+    ("proportion", lambda P, Q, C, R: _proportion(P, Q)),
+    # RATE EXTRAPOLATION — "drives 80 miles in 2 hours. How far in 15 minutes?" → 80×0.25/2.
+    ("rate_extrapolation", lambda P, Q, C, R: _rate_extrapolation(P, Q, C)),
+    # COMPOUND-DURATION rate — "walks 10 m/min. Every day for an hour. Meters in 2 days?" → 1200.
+    ("rate_compound", lambda P, Q, C, R: _rate_compound(P, Q, C)),
+    # RATE DIFFERENCE — "Janet 80 pg/day, Belinda 30/day. How many more in 6 weeks?" → 2100.
+    ("rate_difference", lambda P, Q, C, R: _rate_difference(P, Q, C)),
+    # RATE SUM — "Anna/Bob/Cherry each read R pg/T min. Read for D min. Total?" → ΣR/T × D.
+    ("rate_sum", lambda P, Q, C, R: _rate_sum(P, Q, C)),
+    # RATE REMAINDER — "two dogs walk 70 mi/week total; first walks 2/day. Other, per day?" → 8.
+    ("rate_remainder", lambda P, Q, C, R: _rate_remainder(P, Q, C)),
+    # RATE RACE — "Apple 3 mph, Mac 4 mph. How much faster on a 24-mile race, in minutes?" → 120.
+    ("rate_race", lambda P, Q, C, R: _rate_race(P, Q, C)),
+    # SELF-MULTIPLE SUM — "rode 2 miles, then 5 times that amount. Total?" → 2×(1+5) = 12.
+    ("self_multiple_sum", lambda P, Q, C, R: _self_multiple_sum(P, Q)),
+    # PERCENT CHANGE — "$220 bike +15%?" → 253; "$2000, 30% discount. Pays?" → 1400.
+    ("percent_change", lambda P, Q, C, R: _percent_change(P, Q)),
+    # PERCENT ORIGINAL (inverse) — "$15000 is 40% of the original. Original?" → 37500.
+    ("percent_original", lambda P, Q, C, R: _percent_original(P, Q)),
+    # PERCENT POPULATION — "50 people, 30% boys. Girls?" → 35; "60% girls, 300 boys → girls?" → 450.
+    ("percent_population", lambda P, Q, C, R: _percent_population(P, Q)),
+    # BACKWARD INVERSION (general) — "spent $1.75 + $1.25; $6 left. Had?" → 9 (any phrasing, not just "at first").
+    ("backward_inversion", lambda P, Q, C, R: _backward_inversion(P, Q)),
+    # POOL-AND-REDISTRIBUTE — "combine their candies and share equally, how many EACH?" → Σ/N.
+    ("equal_share", lambda P, Q, C, R: _equal_share(Q, C, P)),
+]
+
 
 def solve(text: str):
     """Read a whole word-problem paragraph (premises + a trailing question) and answer the question —
@@ -6914,74 +6952,17 @@ def solve(text: str):
         if derived:                                      # derive implied facts (transitive order, …) and
             context += derived                           # keep looping — one unified read–synthesize loop
             progress = True
-    # SCENE DEPLETION — "there were N X … took A … took B … how many X left?" → N − (A+B). Tried before
-    # GUARD 3, which would otherwise decline (the existential N is INSTANCES, not a Quantity amount, so it
-    # reads as an unused given). Tightly gated (instance-base + all-depletion); None ⇒ not this shape.
-    _depleted = _scene_depletion(question, context, readings[:len(premises)])
-    if _depleted is not None:
-        return _depleted
-    # SHOPPING TOTAL — "buys 3 toys at $10 each, 2 packs at $5 each … how much spend in all?" → Σ(count×price).
-    _shop = _shopping_total(premises, question)
-    if _shop is not None:
-        return _shop
-    # PROPORTION — "If 12 bags weigh 24 pounds, how much do 8 bags weigh?" → 24 × 8/12.
-    _prop = _proportion(premises, question)
-    if _prop is not None:
-        return _prop
-    # RATE EXTRAPOLATION — "drives 80 miles in 2 hours. How far will he go in 15 minutes?" → 80×0.25/2.
-    _rext = _rate_extrapolation(premises, question, context)
-    if _rext is not None:
-        return _rext
-    # COMPOUND-DURATION rate — "walks 10 m/min. Every day for an hour. How many meters in 2 days?" → 1200.
-    _rcomp = _rate_compound(premises, question, context)
-    if _rcomp is not None:
-        return _rcomp
-    # RATE DIFFERENCE — "Janet 80 pages/day, Belinda 30/day. How many more does Janet read in 6 weeks?" → 2100.
-    _rdiff = _rate_difference(premises, question, context)
-    if _rdiff is not None:
-        return _rdiff
-    # RATE SUM — "Anna/Bob/Cherry each read R pages/T min. Read for D min. How many in total?" → ΣR/T × D.
-    _rsum = _rate_sum(premises, question, context)
-    if _rsum is not None:
-        return _rsum
-    # RATE REMAINDER — "two dogs walk 70 mi/week total; first walks 2/day. How many a day does the other?" → 8.
-    _rrem = _rate_remainder(premises, question, context)
-    if _rrem is not None:
-        return _rrem
-    # RATE RACE — "Apple 3 mph, Mac 4 mph. How much faster does Mac run a 24-mile race, in minutes?" → 120.
-    _rrace = _rate_race(premises, question, context)
-    if _rrace is not None:
-        return _rrace
-    # SELF-MULTIPLE SUM — "rode 2 miles, then 5 times that amount. Total?" → 2×(1+5) = 12.
-    _sms = _self_multiple_sum(premises, question)
-    if _sms is not None:
-        return _sms
-    # PERCENT CHANGE — "$220 bike increased 15%. New price?" → 253; "$2000, 30% discount. Pays?" → 1400.
-    _pct = _percent_change(premises, question)
-    if _pct is not None:
-        return _pct
-    # PERCENT ORIGINAL (inverse) — "$15000 is 40% of the original. Original price?" → 15000/0.40 = 37500.
-    _porig = _percent_original(premises, question)
-    if _porig is not None:
-        return _porig
-    # PERCENT POPULATION — "50 people, 30% boys. How many girls?" → 50×0.70 = 35; "60% girls, 300 boys →
-    # girls?" → 300×0.6/0.4 = 450. A two-group partition; recover the asked group by its fraction.
-    _ppop = _percent_population(premises, question)
-    if _ppop is not None:
-        return _ppop
-    # BACKWARD INVERSION (general) — "Josh has some money; spent $1.75 + $1.25; $6 left. How much did he
-    # have?" → 6 + 1.75 + 1.25 = 9. GUARD 8 only tries this for "at first"-phrased questions; try it here for
-    # any phrasing too. Its own gates (unquantified initial, exactly one "left"-cued final, ≥1 delta, NO
-    # unused given) keep it from firing on forward problems (a stated initial trips the unused-given gate).
-    _binv = _backward_inversion(premises, question)
-    if _binv is not None:
-        return _binv
-    # POOL-AND-REDISTRIBUTE — "combine their candies and share equally, how many will EACH have?" → Σ/N.
-    # Tried before GUARD 3 (the pooled amounts are all "used" so it wouldn't trip, but keep recognizers
-    # together). Same math as the average branch but cued by a share-equally premise + a per-each question.
-    _shared = _equal_share(question, context, premises)
-    if _shared is not None:
-        return _shared
+    # ARITHMETIC SYSTEM-SOLVERS (LATE) — tried after the fixpoint has built `context` (they consume
+    # derived facts). Tried before GUARD 2/3 (their givens are all "used", so they wouldn't trip the
+    # unused-given guard, but the recognizers are kept together). The recognizers, their shapes, and
+    # their priority order live in the `_LATE_SYSTEMS` registry above; solve() returns the first that
+    # claims the problem. `_backward_inversion` is retried here for any phrasing (GUARD 8 above only
+    # tries it for "at first"-phrased questions); its own gates keep it off forward problems.
+    _readings_prem = readings[:len(premises)]
+    for _label, _system in _LATE_SYSTEMS:
+        _r = _system(premises, question, context, _readings_prem)
+        if _r is not None:
+            return _r
     # GUARD 2 — a "than" comparison that collapsed to a FLAT quantity (a verbatim stated value, no
     # Relation, not a derived ±) means the relation ("25 times more stickers THAN Kristoff") was
     # dropped → we misread it. A comparative-derived quantity (amount ≠ any stated value) is OK.
