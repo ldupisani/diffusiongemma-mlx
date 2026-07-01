@@ -4158,6 +4158,51 @@ class TestResidualSumSystem(unittest.TestCase):
              "If Talia earns $30"],
             "how much does Selim earn?"))
 
+    def test_pronoun_total_no_relation_fallback(self):
+        # "If THEY need 10 bags total" has NO explicit name list (unlike Priya/Selim/Talia above) — the
+        # names are inferred from the OTHER premises. AND there's no ratio/offset relation between Jeremy,
+        # Stacy, or Emily at all (independent anchors only) — `_anchored_affine_coeffs` requires >=1
+        # relation and declines, so this exercises the NO-RELATION fallback (bare per-name anchors summed
+        # directly). Jeremy=3, Stacy=4, total=10 -> Emily=10-3-4=3.
+        self.assertEqual(reading.solve(
+            "Jeremy buys 3 bags of chips for a party. Stacy and Emily also buy chips for the party. If "
+            "they need 10 bags of chips total, and Stacy buys 4 bags, how many bags of chips should Emily "
+            "buy?"), 3)
+
+    def test_mis_split_question_fragment_declines(self):
+        # a known clause-splitting gap: "How many books total have Megan, Kelcie, and Greg read?" mis-splits
+        # into a premise-like fragment ("Greg read?") plus a truncated question ("...have Megan, Kelcie").
+        # Both fragments carry an interrogative/aggregator word or a trailing "?" — must NOT be silently
+        # skipped as harmless declaratives (that dropped Greg entirely: 40 vs gold 65).
+        self.assertEqual(reading.solve(
+            "Megan has read 32 books this year. Kelcie has read 1/4 the amount of books that Megan has "
+            "read. Greg has read 9 more than twice the number of books that Kelcie has read. How many "
+            "books total have Megan, Kelcie, and Greg read?"), "undetermined")
+
+    def test_unrecognized_relation_frame_not_silently_skipped(self):
+        # "Jorge has an EQUAL NUMBER of cards AS Matias" isn't a recognized ratio frame ("equal" carries no
+        # multiplier), but the "as" + 2 names still signals a REAL relation — skipping it as a harmless
+        # declarative silently dropped Jorge=Matias (34 vs gold 48); must decline instead.
+        self.assertEqual(reading.solve(
+            "Jorge has an equal number of baseball cards as Matias, who has 6 fewer cards than Carlos. If "
+            "Carlos has 20 baseball cards, what is the total number of baseball cards the three have?"),
+            "undetermined")
+
+
+class TestAnchoredSingleNeedsGuard(unittest.TestCase):
+    """`_anchored_single_system` naively grabbed the FIRST name in the question as the ask — but "how many
+    stamps does SHE NEED to ADD to have a collection AS LARGE AS Bert's?" is a DEFICIT-TO-TARGET question
+    (Bert minus Peggy), not a request for Bert's raw value; "as large as" carries no comparative sense (it's
+    the positive-degree equative, not "larger than"), so the existing comparative-sense guard didn't catch
+    it. A confident-wrong (900 vs gold 825) — now declines on any "need"/"needs" in the question."""
+
+    def test_needs_to_reach_target_declines(self):
+        self.assertEqual(reading.solve(
+            "Bert, Ernie, and Peggy collect stamps. Bert has four times as many stamps as Ernie, but Ernie "
+            "has three times as many stamps as Peggy. If Peggy currently has 75 stamps in her collection, "
+            "how many stamps does she need to add to her collection to have a collection as large as "
+            "Bert's collection?"), "undetermined")
+
 
 class TestNounAffineSystem(unittest.TestCase):
     """`_noun_affine_system` — the COORDINATE/SUBTYPE-NOUN twin of `_affine_system`: entities are COMMON

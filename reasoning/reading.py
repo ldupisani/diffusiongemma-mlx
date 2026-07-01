@@ -5765,6 +5765,28 @@ def _anchored_affine_coeffs(premises: list, question: str):
     rels, anchors, measures = {}, {}, set()
     for p in premises:
         rp = analyze(p)
+        two_names = _name_count(rp) == 2
+        if not any(s in u.features.get("senses", []) for u in rp.units
+                   for s in ("value", "multiplier", "comparative", "interrogative", "aggregator")) \
+                and not any(_fraction_parts(u.surface) is not None for u in rp.units) \
+                and not p.rstrip().endswith("?") \
+                and not (two_names and re.search(r"\b(as|than)\b", p.lower())):
+            continue                       # a purely DECLARATIVE premise with NO number/factor/comparative
+            #                                 at all, and NOT itself a question fragment, can't hide any
+            #                                 dropped quantity ("Stacy and Emily also buy chips for the
+            #                                 party" just introduces entities) — skip it, don't decline.
+            #                                 EXCLUDES an interrogative/aggregator word OR a trailing "?"
+            #                                 ("how many … TOTAL have Megan, Kelcie" / "Greg read?" — both
+            #                                 MIS-SPLIT fragments of the ACTUAL question "...Megan, Kelcie,
+            #                                 and Greg read?", a known clause-splitting gap for a 3-name
+            #                                 question list) — skipping either silently would drop Greg
+            #                                 entirely and sum only Megan+Kelcie (40 vs gold 65). ALSO
+            #                                 excludes a 2-name clause with "as"/"than" ("Jorge has an EQUAL
+            #                                 NUMBER of cards AS Matias" — "equal" isn't a recognized
+            #                                 multiplier, but "as" still signals a REAL, just-unsupported
+            #                                 relation; skipping it silently dropped Jorge=Matias, 34 vs gold
+            #                                 48) — unlike a truly unclassified premise that DOES carry a
+            #                                 number this solver failed to fold, which stays a decline below
         nc = _name_count(rp)
         rel = _affine_relation(rp) if nc == 2 else None      # exactly 2 names — else this may be the
         anc = _anchor_fact(rp) if (rel is None and nc == 1) else None   # coordinate-noun fallback firing,
@@ -5872,10 +5894,15 @@ def _anchored_single_system(premises: list, question: str):
     """The ANCHORED-SINGLE twin: same anchor-pinned relation graph as `_anchored_sum_system`, but the question
     asks for ONE named entity's value (not the sum) — "Al is 25 pounds heavier than Ben. Ben is 16 pounds
     lighter than Carl. Ed weighs 146 pounds and is 38 pounds lighter than Al. Find Carl's weight." → pivot=Ed
-    (anchor), propagate to Al, then Ben, then Carl. Declines a SUM-cue question (that's the sum twin's shape)
-    and requires the asked entity to be a NAME reachable from the anchor."""
+    (anchor), propagate to Al, then Ben, then Carl. Declines a SUM-cue question (that's the sum twin's shape),
+    a "needs...to have as large as" DEFICIT-TO-TARGET question (the same "needs"-idiom risk as the relation
+    extractors — "how many stamps does SHE NEED to ADD to have a collection AS LARGE AS Bert's?" asks
+    Bert−Peggy, not Bert's raw value; naively grabbing the first name in the question gave a confident-wrong,
+    900 vs gold 825), and requires the asked entity to be a NAME reachable from the anchor."""
     if any(w in question.lower() for w in ("altogether", "in all", " total", "combined", "in total")):
         return None                                                  # a sum question is the other twin's shape
+    if re.search(r"\bneeds?\b", question.lower()):
+        return None
     qr = analyze(question)
     if any("comparative" in u.features.get("senses", []) for u in qr.units):
         return None       # "how many MORE does X have COMPARED TO Y" asks a DIFFERENCE, not a raw value
@@ -5927,9 +5954,12 @@ def _residual_sum_system(premises: list, question: str):
     Terrence"; "Terrence earns $30") — the ASKED entity (Emilee) is never mentioned again at all. Unlike
     `_affine_system` (which requires every named entity to reduce to the pivot), this solves for the ONE
     entity left OUT of that graph: residual = total − Σ(every OTHER named entity's value). Tightly gated: the
-    total clause must name ≥3 entities, the OTHER premises (anchor/relation graph, via the shared
-    `_anchored_affine_coeffs`) must cover ALL BUT EXACTLY ONE of them, and the asked entity must BE that one
-    uncovered residual — else this isn't the residual shape (or another solver already owns it)."""
+    total clause must name ≥3 entities EXPLICITLY, OR use a bare PRONOUN ("If THEY need 10 bags total") with
+    the ≥3 names inferred from every OTHER premise ("Jeremy buys 3 bags... Stacy buys 4 bags... how many
+    should Emily buy?" — no premise ever lists all three together) — the OTHER premises (anchor/relation
+    graph, via the shared `_anchored_affine_coeffs`) must cover ALL BUT EXACTLY ONE of them, and the asked
+    entity must BE that one uncovered residual — else this isn't the residual shape (or another solver
+    already owns it)."""
     tot_names = tot_val = tot_clause = None
     for p in premises:
         if not any(w in p.lower() for w in ("total", "combined", "altogether", "together")):
@@ -5939,11 +5969,19 @@ def _residual_sum_system(premises: list, question: str):
         # a comma/"and"-joined subject list ("Jermaine, Terrence, and Emilee") merges into ONE unit whose
         # surface spans multiple words — split back into individual entity keys, skipping "and" itself.
         names = [_key(w.surface) for u in name_units for w in u.words if _key(w.surface) != "and"]
-        if len(names) < 3:
-            continue
         vals = [u for u in rp.units if "value" in u.features.get("senses", []) and u.features.get("value") is not None]
         if not vals:
             continue
+        if len(names) < 3:
+            if names:
+                continue                   # 1-2 explicit names but not the full set — ambiguous, skip
+            # a PRONOUN total ("they need 10 bags total") — infer the name set from every OTHER premise
+            other_names = {_key(w.surface) for op in premises if op is not p
+                           for u in analyze(op).units if "name" in u.features.get("senses", [])
+                           for w in u.words if _key(w.surface) != "and"}
+            if len(other_names) < 3:
+                continue
+            names = sorted(other_names)
         tot_names, tot_val, tot_clause = names, vals[0].features["value"], p
         break
     if tot_val is None:
@@ -5957,17 +5995,49 @@ def _residual_sum_system(premises: list, question: str):
         return None
     rest = [p for p in premises if p is not tot_clause]
     got = _anchored_affine_coeffs(rest, question)
-    if got is None:
-        return None
-    coeff, pivot = got
-    covered = [e for e in tot_names if e in coeff]
-    residual = [e for e in tot_names if e not in coeff]
+    if got is not None:
+        coeff, pivot = got
+        covered = [e for e in tot_names if e in coeff]
+        residual = [e for e in tot_names if e not in coeff]
+        if len(residual) != 1 or residual[0] != asked:
+            return None                          # not the residual shape — 0 or ≥2 uncovered, or the asked
+        #                                           entity isn't the uncovered one (another solver's turf)
+        covered_sum = " + ".join(f"({_num(a)} * {_num(pivot)} + ({_num(b)}))" for a, b in
+                                 (coeff[e] for e in covered))
+        return _compute(f"{_num(tot_val)} - ({covered_sum})")
+    # NO-RELATION fallback: `_anchored_affine_coeffs` requires ≥1 relation between entities (its pivot-
+    # propagation has nothing to propagate otherwise) and declines a purely independent-anchors system
+    # ("Jeremy buys 3 bags... Stacy buys 4 bags... they need 10 total, how many should Emily buy?" — no
+    # ratio/offset relates Jeremy, Stacy, or Emily to each other at all). Extract bare per-name anchors
+    # directly instead: every "rest" premise must be a single-name anchor or purely declarative (no
+    # relations at all — a 2-name premise here means a REAL relation exists and this fallback doesn't apply).
+    anchors = {}
+    for p in rest:
+        rp = analyze(p)
+        if not any(s in u.features.get("senses", []) for u in rp.units
+                   for s in ("value", "multiplier", "comparative", "interrogative", "aggregator")) \
+                and not any(_fraction_parts(u.surface) is not None for u in rp.units) \
+                and not p.rstrip().endswith("?") \
+                and not (_name_count(rp) == 2 and re.search(r"\b(as|than)\b", p.lower())):
+            continue                             # purely declarative — skip, doesn't hide a number (an
+            #                                       interrogative/aggregator word, a trailing "?", or a
+            #                                       2-name "as"/"than" clause all mean REAL info is present
+            #                                       — never skip those, see the sibling gate in
+            #                                       `_anchored_affine_coeffs`)
+        if _name_count(rp) != 1:
+            return None                          # a relation (or an ambiguous multi-name clause) exists —
+        anc = _anchor_fact(rp)                   # `_anchored_affine_coeffs` already tried and failed above,
+        if anc is None:                          # so this ISN'T the no-relation shape after all
+            return None
+        e, v = anc
+        if e in anchors:
+            return None
+        anchors[e] = v
+    covered = [e for e in tot_names if e in anchors]
+    residual = [e for e in tot_names if e not in anchors]
     if len(residual) != 1 or residual[0] != asked:
-        return None                              # not the residual shape — 0 or ≥2 uncovered, or the asked
-    #                                               entity isn't the uncovered one (another solver's turf)
-    covered_sum = " + ".join(f"({_num(a)} * {_num(pivot)} + ({_num(b)}))" for a, b in
-                             (coeff[e] for e in covered))
-    return _compute(f"{_num(tot_val)} - ({covered_sum})")
+        return None
+    return _compute(f"{_num(tot_val)} - ({' + '.join(_num(anchors[e]) for e in covered)})")
 
 
 def _inject_bare_ages(prem_readings: list, all_readings: list, facts_of: list, context: list) -> None:
