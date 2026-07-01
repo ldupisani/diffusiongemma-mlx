@@ -4542,6 +4542,22 @@ class TestPercentChange(unittest.TestCase):
             "How much did he pay for everything?"), "undetermined")
 
 
+class TestRelativeClauseSplit(unittest.TestCase):
+    """"<Name>, who VERBs …" splits into an independent premise (who → the antecedent), so a ratio/comparative
+    CHAIN resolves. SYNTHETIC."""
+
+    def test_backward_ratio_chain(self):
+        # Xavier = 3×Katie, Katie = 4×Cole, Xavier 84 → Cole = 84/3/4 = 7.
+        self.assertEqual(reading.solve(
+            "Xavier runs three times as many miles as Katie, who runs 4 times as many miles as Cole. "
+            "If Xavier runs 84 miles, how many miles does Cole run?"), 7)
+
+    def test_comparative_grounded_via_who(self):
+        # Mark = Amy + 7, Amy = 15 → Mark now 22, in 5 years 27.
+        self.assertEqual(reading.solve(
+            "Mark is 7 years older than Amy, who is 15. How old will Mark be in 5 years?"), 27)
+
+
 class TestPercentPopulation(unittest.TestCase):
     """TWO-GROUP population partition — a percent splits a population into complementary groups; recover the
     asked group by its fraction (P for the percent's group, 1−P for the complement). Total given → N×f;

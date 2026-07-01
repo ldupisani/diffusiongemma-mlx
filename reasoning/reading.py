@@ -4353,6 +4353,18 @@ def _split_clauses(sentence: str) -> list:
             if left.lower().startswith(("for every", "for each")):
                 i = sentence.find(sep, i + 1)            # "For every X, <main>" is ONE per-occurrence
                 continue                                 # clause (the rate's per_unit + the main amount)
+            if right.lower().startswith(("who ", "whom ")) and _has_verb(left):
+                # RELATIVE CLAUSE "<Name>, who VERBs …" — the "who" refers to the antecedent (the name right
+                # before the comma), and the clause predicates a SECOND relation about it. Rewrite "who" → the
+                # antecedent so it learns as an independent premise ("Katie, who runs 4× as Cole" → "Katie runs
+                # 4× as Cole"), letting a ratio/comparative CHAIN resolve. Person-only ("who"); "which"/"that"
+                # stay reserved below for the per-item-price relative clause.
+                ref = left.split()[-1].strip(_PUNCT)
+                synth = f"{ref} {right[right.find(' ') + 1:]}".strip() if " " in right else ""
+                if synth and _has_verb(synth):
+                    return _split_clauses(left) + _split_clauses(synth)
+                i = sentence.find(sep, i + 1)
+                continue
             if right.lower().startswith(("which ", "each of which ", "each of them ", "that cost",
                                          "that costs", "that each cost")):
                 i = sentence.find(sep, i + 1)            # a RELATIVE clause modifying the left's object
