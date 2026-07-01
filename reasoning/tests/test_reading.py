@@ -499,7 +499,7 @@ class TestIncrement14CLI(unittest.TestCase):
         self.assertEqual(out.strip(), "2")
 
     def test_unanswerable_question_asks(self):
-        out = reading.run_cli(["How many bananas?", "--about", "red apple"])
+        out = reading.run_cli(["How many blorps?", "--about", "red apple"])   # blorp: a nonce unknown word
         self.assertIn("can't answer", out.lower())
 
     def test_no_args_shows_usage(self):
@@ -620,7 +620,7 @@ class TestIncrement13AnswerAQuestion(unittest.TestCase):
         self.assertEqual(reading.answer("How many apples?", self._context()), 3)
 
     def test_unknown_word_makes_it_ask_not_answer(self):
-        result = reading.answer("How many bananas?", self._context())
+        result = reading.answer("How many blorps?", self._context())   # blorp: a nonce unknown word
         self.assertIsInstance(result, list)
         self.assertTrue(any(d.kind == "unknown-word" for d in result))
 
@@ -649,7 +649,7 @@ class TestIncrement15ContextFromStatements(unittest.TestCase):
 
     def test_unparseable_statement_learns_nothing(self):
         # an unknown collection → we learn nothing rather than guess
-        self.assertEqual(reading.instances("There are three bananas"), [])
+        self.assertEqual(reading.instances("There are three blorps"), [])
 
     def test_cli_about_accepts_count_statements(self):
         out = reading.run_cli(["How many red apples?", "--about", "There are three red apples"])

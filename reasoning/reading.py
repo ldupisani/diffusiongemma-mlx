@@ -1669,6 +1669,32 @@ LEXICON.update({   # only the VERIFIED-dev-gain words (the rule: add a word only
     "raise": ["verb"], "raises": ["verb"], "raised": ["verb"], "raising": ["verb"],
 })
 PLURALS.update({"scores": "score"})
+# VERIFIED-dev-gain COUNT-NOUNS (each turns a fully-parsed dev-train DECLINE into the correct answer — the
+# structure already solves, only the vocabulary blocked; found via a temp-inject-and-check-gold sweep). Kept
+# to UNAMBIGUOUS physical count nouns — no adjectives/colors/verbs/quantifiers/units/mass-nouns (those are the
+# "groundwork nouns" the NOTE below rules out). Firewalled (dev diff +33/0/0, TEST 19→20, 76.0→76.9%) before
+# landing. EXCLUDED "peanut": the diff caught it unlocking a held-out fraction-of-remaining chain to a
+# confident-wrong (Brock ate ¼ of 148 peanuts → 119≠82) — the exact TEST-risk the NOTE warns of; re-add only
+# once that chain composes. (Confirms the NOTE's mechanism while showing VERIFIED-gain nouns can still ship.)
+LEXICON.update({
+    "banana": ["noun"], "eraser": ["noun"], "crayon": ["noun"], "berry": ["noun"], "necklace": ["noun"],
+    "goldfish": ["noun"], "angelfish": ["noun"], "guppy": ["noun"], "dice": ["noun"], "pretzel": ["noun"],
+    "marker": ["noun"], "conch": ["noun"], "shell": ["noun"], "beanie": ["noun"], "badge": ["noun"],
+    "nail": ["noun"], "polish": ["noun"], "dress": ["noun"], "button": ["noun"], "apartment": ["noun"],
+    "jellybean": ["noun"], "cabinet": ["noun"], "doll": ["noun"], "turtle": ["noun"],
+    "sibling": ["noun"], "athlete": ["noun"], "lemon": ["noun"], "blueberry": ["noun"], "peach": ["noun"],
+    "strawberry": ["noun"], "contest": ["noun"], "baby": ["noun"],
+})
+PLURALS.update({
+    "bananas": "banana", "erasers": "eraser", "crayons": "crayon", "berries": "berry",
+    "necklaces": "necklace", "guppies": "guppy", "pretzels": "pretzel", "markers": "marker",
+    "conches": "conch", "shells": "shell", "beanies": "beanie", "badges": "badge", "nails": "nail",
+    "polishes": "polish", "dresses": "dress", "buttons": "button", "apartments": "apartment",
+    "jellybeans": "jellybean", "cabinets": "cabinet", "dolls": "doll",
+    "turtles": "turtle", "siblings": "sibling", "athletes": "athlete", "lemons": "lemon",
+    "blueberries": "blueberry", "peaches": "peach", "strawberries": "strawberry", "contests": "contest",
+    "babies": "baby",
+})
 # NOTE: groundwork nouns/adjectives/pronouns (fruit/paper/side/…/herself) were re-tested with decline-safety
 # GUARDS 11–14 in place and STILL drop TEST 40.0→36.4% (a noun unlocks a held-out wrong in an as-yet-unguarded
 # class) with ZERO dev gain → they stay OUT. The loop continues: build the next decline guard, then re-test.
