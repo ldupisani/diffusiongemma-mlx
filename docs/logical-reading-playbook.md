@@ -61,6 +61,14 @@ which must be **0**. This turns the collision class into a detectable regression
 live first-return silently masks (and which the aggregate coverage number and the unit suite both
 hide). A benign overlap where both claimers agree is acceptable and reported as `agree`.
 
+The audit takes a slice argument (`collisions [dev|dev-train|dev-holdout|test]`, default dev). It
+compares solvers to EACH OTHER, never to the gold, so it leaks no coverage-fitting signal and is safe
+to run on TEST as an aggregate robustness check (per-item listing is dev-only; TEST prints counts
+only). **Verified clean on both slices** (2026-07-01, at the registry refactor): dev — 807 problems
+reach the early dispatch, 1 has ≥2 claimers and they *agree* (`sum_ratio=affine=66`), 0 disagreements;
+TEST — 144 reach, **0** with ≥2 claimers, 0 disagreements. The named/common-noun family isolation
+holds on the held-out slice too.
+
 ## Goal & stance
 
 - Deterministic reasoning, **not an LLM**. A valid statement gets a definitive, auditable reading;
