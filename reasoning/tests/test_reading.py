@@ -4137,11 +4137,12 @@ class TestOffsetSumSystem(unittest.TestCase):
             "Kylie and Kayla have 340 apples combined. Kayla has 10 more than 4 times as many apples as "
             "Kylie. How many apples does Kayla have?"), 274)
 
-    def test_bare_offset_no_factor_declines(self):
-        # "8 more than Sabrina" (no multiplier) is the firewall-risky bare offset → not this system, decline.
+    def test_bare_offset_no_factor(self):
+        # "8 more than Sabrina" (no factor) is now solved by _offset_sum_pure inside a sum-system (the total
+        # pins the pair): Sabrina = (50 − 8)/2 = 21.
         self.assertEqual(reading.solve(
             "Justin and Sabrina have 50 pencils combined. Justin has 8 more pencils than Sabrina. "
-            "How many pencils does Sabrina have?"), "undetermined")
+            "How many pencils does Sabrina have?"), 21)
 
     def test_offset_measure_mismatch_declines(self):
         # relation about 'red balls', total about 'blue balls' → different measures, decline.
@@ -4540,6 +4541,28 @@ class TestPercentChange(unittest.TestCase):
         self.assertEqual(reading.solve(
             "Bob buys 5 toys that each cost $3. He gets a 20% discount. "
             "How much did he pay for everything?"), "undetermined")
+
+
+class TestOffsetSumPure(unittest.TestCase):
+    """2-entity PURE additive offset + combined total → std = (T∓c)/2. SYNTHETIC."""
+
+    def test_more_than(self):
+        # Anais = Kamari + 30, total 160 → Kamari = (160−30)/2 = 65.
+        self.assertEqual(reading.solve(
+            "Anais has 30 more toys than Kamari. There are 160 toys altogether. "
+            "How many toys does Kamari have?"), 65)
+
+    def test_fewer_than(self):
+        # Sam = Tim − 20, total 100 → Tim = (100+20)/2 = 60.
+        self.assertEqual(reading.solve(
+            "Sam has 20 fewer marbles than Tim. They have 100 marbles altogether. "
+            "How many marbles does Tim have?"), 60)
+
+    def test_times_more_declines(self):
+        # "5 times more" is multiplicative, not additive ± → the pure resolver must NOT fire.
+        self.assertEqual(reading.solve(
+            "Jackson has 5 times more coins than Williams. Together they have 150 coins. "
+            "How many coins does Williams have?"), "undetermined")
 
 
 class TestSelfMultipleSum(unittest.TestCase):

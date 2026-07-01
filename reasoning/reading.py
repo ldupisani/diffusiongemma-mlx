@@ -4898,6 +4898,96 @@ def _combined_total(premises: list, asked_measure, rel_mod, rel_desc):
     return None
 
 
+def _pure_offset_relation(rp: "Reading"):
+    """A PURE additive comparative "X has N more/fewer <M> than Y" (NO factor) → (subject, standard, signed_N).
+    The no-multiplier twin of `_offset_ratio_relation`; safe only inside a sum-system (the total pins the pair,
+    so the bare offset — normally too under-determined to fold — becomes solvable). Exactly two names, standard
+    after "than"/"as". None otherwise."""
+    comp = next((u for u in rp.units if _key(u.surface) in ("more", "less", "fewer")
+                 and "comparative" in u.features.get("senses", [])), None)
+    if comp is None:
+        return None
+    if any("multiplier" in u.features.get("senses", []) for u in rp.units) \
+            or any(_fraction_parts(u.surface) is not None for u in rp.units):
+        return None                                                    # a factor present → not the pure shape
+    ci = rp.units.index(comp)
+    sign = 1.0 if _key(comp.surface) == "more" else -1.0
+    off = next((u for u in reversed(rp.units[:ci]) if "value" in u.features.get("senses", [])
+                and u.features.get("value") is not None), None)
+    if off is None:
+        return None
+    names = [u for u in rp.units if "name" in u.features.get("senses", [])]
+    verbs = [u for u in rp.units if "verb" in u.features.get("senses", [])]
+    if len(names) != 2 or not verbs:
+        return None
+    vpos = rp.units.index(verbs[0])
+    subj = next((u for u in names if rp.units.index(u) < vpos), None)
+    if subj is None:
+        return None
+    std = next(u for u in names if u is not subj)
+    si = rp.units.index(std)
+    prev = _key(rp.units[si - 1].surface) if si > 0 else ""
+    if prev not in ("than", "as"):
+        return None
+    return _entity(subj), _entity(std), sign * off.features["value"]
+
+
+def _offset_sum_pure(premises: list, question: str):
+    """A 2-ENTITY PURE additive offset + combined total → solve. "Anais has 30 more toys than Kamari; there
+    are 160 toys altogether → Kamari = (160 − 30)/2 = 65." The NO-FACTOR twin of `_offset_sum_system` (which
+    requires a multiplier). subj = std + c and subj + std = T ⇒ std = (T − c)/2, subj = T − std. TIGHTLY gated:
+    EXACTLY one pure-offset relation, NO factor/ratio anywhere (else it's the factored or ratio shape), exactly
+    the two related entities, the asked one among them, and a measure-matched combined total. None otherwise."""
+    qr = analyze(question)
+    qnames = [u for u in qr.units if "name" in u.features.get("senses", [])]
+    if not qnames:
+        return None
+    asked = _entity(qnames[0])
+    asked_measure = _queried_measure(question)
+    if asked_measure is not None and "verb" in analyze(asked_measure[0]).units[0].features.get("senses", []):
+        asked_measure = RESULT_MEASURE.get(asked_measure[0])
+    offs, rel_mod, rel_desc = [], None, None
+    for p in premises:
+        rr = _pure_offset_relation(analyze(p))
+        if rr is None:
+            continue
+        offs.append(rr)
+        rp = analyze(p)
+        if asked_measure is not None and any(_descriptor(u)[0] == asked_measure[0] for u in rp.units):
+            rel_mod = _measure_mod(rp, asked_measure[0])
+            rel_desc = next((_descriptor(u) for u in rp.units if _descriptor(u)[0] == asked_measure[0]), None)
+    if len(offs) != 1:
+        return None
+    alltext = " ".join(premises + [question]).lower()          # dollars and cents both normalise to the
+    if ("$" in alltext or "dollar" in alltext) and "cent" in alltext:   # 'money' measure, hiding the 100×
+        return None                                            # scale gap — mixing them needs a conversion we
+        #                                                        don't do ("$3 total, 50 cents more" → decline)
+    measures = set()
+    for p in premises:                                                 # NO factor/ratio anywhere → pure only
+        rp = analyze(p)
+        if any("multiplier" in u.features.get("senses", []) for u in rp.units) \
+                or any(_fraction_parts(u.surface) is not None for u in rp.units) \
+                or any(_key(u.surface) in ("times", "twice", "double", "triple", "half") for u in rp.units):
+            return None                                                # "5 TIMES more" is multiplicative, not ±
+        for u in rp.units:                                             # collect every value's unit — a MIXED-
+            if "value" in u.features.get("senses", []) and u.features.get("value") is not None:
+                qn = _follow(u, "quantifies")                          # unit system ("$3" total vs "50 cents"
+                m = _descriptor(qn) if qn is not None else u.features.get("measure")   # offset) needs a
+                if m is not None:                                      # conversion we don't do → decline
+                    measures.add(m[0])
+    if len(measures) > 1:
+        return None
+    subj_e, std_e, c = offs[0]
+    if subj_e == std_e or asked not in (subj_e, std_e):
+        return None
+    total = _combined_total(premises, asked_measure, rel_mod, rel_desc)
+    if total is None:
+        return None
+    std_v = _compute(f"({_num(total)} - ({_num(c)})) / 2")
+    subj_v = _compute(f"{_num(total)} - ({_num(std_v)})")
+    return subj_v if asked == subj_e else std_v
+
+
 def _offset_sum_system(premises: list, question: str):
     """A 2-UNKNOWN OFFSET SUM-system: two entities, one AFFINE relation (subject = factor × standard + offset),
     and a COMBINED TOTAL → solve. "Justin + Sabrina have 50 pencils; Justin has 8 more than twice as many as
@@ -5705,6 +5795,10 @@ def solve(text: str):
     _offset = _offset_sum_system(premises, question)
     if _offset is not None:
         return _offset
+    # PURE OFFSET SUM (no factor): "Anais has 30 more toys than Kamari; 160 altogether → Kamari 65."
+    _poff = _offset_sum_pure(premises, question)
+    if _poff is not None:
+        return _poff
     # GUARD 8 — INVERSION / COUNTERFACTUAL: two shapes the forward fold structurally cannot solve, so it
     # would fold the literal numbers and commit garbage. Both are honest DECLINES (the safe "only-declines"
     # shape, like GUARD 7).
