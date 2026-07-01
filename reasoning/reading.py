@@ -5771,7 +5771,13 @@ def _anchored_affine_coeffs(premises: list, question: str):
     checked — an INCIDENTAL value elsewhere in a relation clause ("half as many pages as Lucy IN 1 HOUR", a
     rate's constant duration, never itself part of the arithmetic) must NOT count, or it wrongly declines a
     correct pure-ratio system (a regression this exact fix introduced and then had to narrow)."""
-    if re.search(r"\b(old|older|younger|age|ages|aged)\b", " ".join(premises + [question]).lower()):
+    # "older sister"/"younger brother" are KINSHIP descriptors, not an age computation — strip them before
+    # the age check so a NON-age problem (shoe size, height) that merely names an older/younger sibling isn't
+    # blanket-declined by the age guard ("Jasmine and her OLDER SISTER Alexa … combined shoe size?" → 21). A
+    # real age relation ("3 years older THAN", "as old as", "years old", "X's age") keeps its trigger.
+    _agetext = re.sub(r"\b(older|younger) +(" + "|".join(KINSHIP) + r")\b", " ",
+                      " ".join(premises + [question]).lower())
+    if re.search(r"\b(old|older|younger|age|ages|aged)\b", _agetext):
         return None
     if any(w in p.lower() for p in premises
            for w in ("combined", "total", "together", "between them", "altogether")):

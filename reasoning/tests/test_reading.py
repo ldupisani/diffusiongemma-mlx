@@ -4470,6 +4470,14 @@ class TestAnchoredSumSystem(unittest.TestCase):
             "Nora brought 20 cookies to share in class. Owen brought 5 fewer cookies than Nora. Pat brought "
             "10 more cookies than Owen. How many cookies altogether did Nora, Owen, and Pat bring?"), 60)
 
+    def test_kinship_descriptor_is_not_an_age_trigger(self):
+        # "older sister"/"younger brother" is a KINSHIP descriptor, not an age computation — it must NOT trip
+        # the age guard in `_anchored_affine_coeffs`, so a NON-age problem (here shoe/book sizes) still solves.
+        # Nia=7 (anchor), Opal=2*7=14, altogether = 21. (The real Jasmine/Alexa shoe-size GSM8K case.)
+        self.assertEqual(reading.solve(
+            "Nia and her older sister Opal went shopping for books. Opal has twice as many books as Nia. "
+            "If Nia has 7 books, how many books do they have altogether?"), 21)
+
     def test_unclassified_premise_declines(self):
         # An UNCONSUMED premise (a depletion action on a pronoun, no name) must decline THIS solver rather
         # than silently drop information: "gave out half her apples" is neither a relation nor an anchor, so
