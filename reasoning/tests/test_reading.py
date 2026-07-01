@@ -4159,6 +4159,40 @@ class TestResidualSumSystem(unittest.TestCase):
             "how much does Selim earn?"))
 
 
+class TestNounAffineSystem(unittest.TestCase):
+    """`_noun_affine_system` — the COORDINATE/SUBTYPE-NOUN twin of `_affine_system`: entities are COMMON
+    NOUNS ("twice as many pigs as cows", "4 more cows than goats"), not names, extracted via the SAME
+    `_affine_relation` (now with a noun-entity fallback: `_ratio_relation`/`_offset_ratio_relation`/
+    `_pure_offset_relation` try their name-based path first, then fall back to `_noun_entity_key`/
+    `_noun_std_entity` when there isn't a clean 2-name match). The total is over a CATEGORY word ("56 ANIMALS
+    total" for pig/cow/goat) that this solver TRUSTS without hypernym verification — narrowly gated (the
+    underlying relation premises must have 0-1 names, never the 2-name shape `_affine_system` owns) so it
+    can never compete with the named-entity system. Also required `_is_value_first_relation` to accept a
+    noun/adjective standard (not just a name) so "and 4 more cows than goats" splits into its own premise.
+    +1 dev-train (the real farmer/pigs/cows/goats GSM8K case)."""
+
+    def test_coordinate_noun_chain_with_category_total(self):
+        self.assertEqual(reading.solve(
+            "A farmer has twice as many cats as dogs, and 4 more dogs than birds. If the farmer has 56 "
+            "animals total, how many birds does he have?"), 11)
+
+    def test_self_referential_pronoun_standard_declines(self):
+        # "twice as many books AS SHE finished last month" — the standard right after "as" is a PRONOUN
+        # (a self-referential relative clause across TIME, not a second coordinate-noun entity). Scanning
+        # past the pronoun to grab "month" caused a real confident-wrong (6 vs gold 12) — must decline.
+        self.assertIsNone(reading._affine_relation(reading.analyze(
+            "Lily wants to finish reading twice as many books as she finished last month.")))
+
+    def test_two_name_relation_not_claimed(self):
+        # a genuine 2-NAME relation premise must NOT be picked up by this solver (it's _affine_system's
+        # turf) — even when a category total is ALSO present, since real 2-name+total problems are already
+        # handled correctly by the stricter, already-tested named-entity system.
+        self.assertIsNone(reading._noun_affine_system(
+            ["Anna has 3 times as many toys as Mandy.", "Anna has 2 fewer toys than Amanda.",
+             "They have 142 toys combined."],
+            "how many toys does Mandy have?"))
+
+
 class TestImperativeQuestionClause(unittest.TestCase):
     """`solve()` used to require a literal "?" ANYWHERE in the text, so a GSM8K problem phrased as an
     IMPERATIVE ("Calculate the total…", "Find X's weight.", ending in "." — ~4% of the corpus) was declined

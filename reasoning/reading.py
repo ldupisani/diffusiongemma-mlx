@@ -1743,6 +1743,21 @@ def _entity(unit) -> str:
     return _key(unit.surface)
 
 
+def _noun_entity_key(unit) -> str:
+    """The COMMON-NOUN entity a unit denotes, for the subtype-partition/coordinate-noun affine family (the
+    noun-entity twin of `_entity`, used when a clause has NO names at all): a QUALIFIER for a merged
+    adjective-noun compound ("red balls" → "red", from the `attributes` the noun-compound merge records), a
+    bare ADJECTIVE with an elided head noun ("...than BLUE" = "...than blue balls" → "blue"), or the
+    SINGULAR of a plain distinct noun ("pigs"/"cows" → "pig"/"cow", DIFFERENT nouns naturally getting
+    DIFFERENT keys with no qualifier needed)."""
+    attrs = unit.features.get("attributes")
+    if attrs:
+        return _key(attrs[0])
+    if "adjective" in unit.features.get("senses", []):
+        return _key(unit.surface)
+    return _key(unit.features.get("singular") or unit.surface)
+
+
 def _disc_pair(e):
     """A discourse entry as (entity, is_name) — tolerating a bare entity string (treated as a name)."""
     return e if isinstance(e, tuple) else (e, True)
@@ -4380,11 +4395,11 @@ def _clause_subject(text: str):
 
 def _is_value_first_relation(text: str) -> bool:
     """A VALUE-FIRST coordinate relation whose subject AND verb are elided: "2 fewer toys than Amanda",
-    "twice as many peppers as cucumbers". It OPENS with a value/multiplier (so `_is_elided_clause` — which
-    needs a subject before the value — rejects it as a bare object like "2 oranges"), but a COMPARATIVE
-    (more/less/fewer) or a MULTIPLIER makes it a relation, and a NAME standard after "than"/"as" pins the
-    other entity. GATED to a NAME standard (a common-noun standard "than cucumbers" isn't yet an entity) so
-    the split only fires where `_affine_relation` can consume the synthesized clause. Distinguishes the
+    "twice as many peppers as cucumbers", "4 more cows than goats" (a common-noun standard). It OPENS with a
+    value/multiplier (so `_is_elided_clause` — which needs a subject before the value — rejects it as a bare
+    object like "2 oranges"), but a COMPARATIVE (more/less/fewer) or a MULTIPLIER makes it a relation, and a
+    NAME or NOUN/ADJECTIVE standard after "than"/"as" pins the other entity — `_affine_relation`'s
+    coordinate-noun fallback can consume a noun/adjective standard too, not just a name. Distinguishes the
     relation-conjunct from a genuine phrase-join ("3 apples and 2 oranges" — no comparative, no factor)."""
     units = analyze(text).units
     qi = next((k for k, u in enumerate(units)
@@ -4396,9 +4411,9 @@ def _is_value_first_relation(text: str) -> bool:
     has_mult = any("multiplier" in u.features.get("senses", []) for u in units)
     if not (has_comp or has_mult):
         return False
-    for k, u in enumerate(units):                      # a NAME standard right after "than"/"as"
+    for k, u in enumerate(units):                      # a NAME or NOUN/ADJECTIVE standard right after "than"/"as"
         if _key(u.surface) in ("than", "as") and k + 1 < len(units) \
-                and "name" in units[k + 1].features.get("senses", []):
+                and any(s in units[k + 1].features.get("senses", []) for s in ("name", "noun", "adjective")):
             return True
     return False
 
@@ -4796,19 +4811,41 @@ def _measure_mod(rp: Reading, head: str):
     return None
 
 
+def _noun_std_entity(rp: Reading, after_idx: int):
+    """The COMMON-NOUN standard for a NO-NAMES ratio/offset clause (used by `_ratio_relation`/
+    `_offset_ratio_relation`/`_pure_offset_relation`'s noun-entity fallback): the token IMMEDIATELY after an
+    "as"/"than" marker — "twice as many pigs AS COWS" / "24 more blue marbles THAN RED MARBLES" — but ONLY if
+    that immediate token IS itself a noun/adjective. Deliberately NOT a scan-ahead search: "twice as many
+    books AS SHE finished last month" has "she" (a pronoun) immediately after "as" — a self-referential
+    RELATIVE CLAUSE ("as many as SHE finished"), not a second coordinate-noun entity — scanning past the
+    pronoun to grab "month" further along caused a real confident-wrong (a temporal reference misread as a
+    second entity). None if there's no marker, or the immediate next token isn't a noun/adjective."""
+    tail = rp.units[after_idx + 1:]
+    marker = next((k for k, u in enumerate(tail) if _key(u.surface) in ("as", "than")), None)
+    if marker is None or marker + 1 >= len(tail):
+        return None
+    nxt = tail[marker + 1]
+    if "noun" in nxt.features.get("senses", []) or "adjective" in nxt.features.get("senses", []):
+        return nxt
+    return None
+
+
 def _ratio_relation(rp: Reading):
     """A single pure-RATIO relation in a clause → (subject, factor, standard), where subject = factor ×
     standard. A clause with EXACTLY two names unifies every surface form: the subject is the name BEFORE the
     verb, the standard is the OTHER name, the factor is the clause's multiplier or fraction. Covers "A has k×
     as many/much <M> as B", "A is k× as old as B", "A is 1/3 the age of B", "A is twice B's age", "A is half
-    of B's age". None if there's no factor, not exactly two names, a comparative/offset (pure-ratio only —
-    "N more/less than" is a different, firewall-risky shape), the ratio is over a RATE ADJECTIVE ("twice
-    as FAST/quick as") — speed doesn't scale like a plain value (twice as fast = HALF the time, not double),
-    so folding it as a direct ratio on whatever value the standard states elsewhere is a silent inversion bug;
-    that shape belongs to the dedicated rate-cluster machinery, not this generic value-ratio extractor — or
-    the clause is governed by "needs"/"need" ("Amanda NEEDS to have twice as many as Katrina" states a TARGET
-    Amanda doesn't hold yet, not Amanda's current value — misreading it as a plain ratio is a silent
-    deficit/current-state conflation this extractor doesn't model)."""
+    of B's age". Also covers a COMMON-NOUN pair with NO names at all ("twice as many PIGS as COWS", "twice as
+    many RED BALLS as BLUE") via `_noun_entity_key`/`_noun_std_entity` — the coordinate-noun/subtype-partition
+    affine family reuses this same extractor. None if there's no factor, not exactly two names (and not a
+    no-names noun-pair either), a comparative/offset (pure-ratio only — "N more/less than" is a different,
+    firewall-risky shape), the ratio is over a RATE ADJECTIVE ("twice as FAST/quick as") — speed doesn't scale
+    like a plain value (twice as fast = HALF the time, not double), so folding it as a direct ratio on
+    whatever value the standard states elsewhere is a silent inversion bug; that shape belongs to the
+    dedicated rate-cluster machinery, not this generic value-ratio extractor — or the clause is governed by
+    "needs"/"need" ("Amanda NEEDS to have twice as many as Katrina" states a TARGET Amanda doesn't hold yet,
+    not Amanda's current value — misreading it as a plain ratio is a silent deficit/current-state conflation
+    this extractor doesn't model)."""
     if any("comparative" in u.features.get("senses", []) for u in rp.units) \
             or any(_key(u.surface) in ("more", "less", "older", "younger", "fewer", "fast", "quick", "quickly",
                                         "need", "needs")
@@ -4827,6 +4864,24 @@ def _ratio_relation(rp: Reading):
         return None
     names = [u for u in rp.units if "name" in u.features.get("senses", [])]
     verbs = [u for u in rp.units if "verb" in u.features.get("senses", [])]
+    if len(names) != 2:
+        # NOT-TWO-NAMES fallback: a coordinate/subtype COMMON-NOUN ratio, with 0 names (bare "twice as many
+        # pigs as cows") or 1 (an outer possessor, "Brett has 24 more BLUE MARBLES than RED MARBLES" — Brett
+        # owns both, isn't one of the two ratio entities). The noun "many"/"much" quantifies is the subject
+        # ("twice AS MANY pigs as cows" → pigs), the standard is whatever noun/adjective follows the
+        # clause's "as"/"than" marker after it.
+        many = next((u for u in rp.units if _key(u.surface) in ("many", "much")
+                     and "quantifier" in u.features.get("senses", [])), None)
+        subj_u = _follow(many, "collection") if many is not None else None
+        if subj_u is None:
+            return None
+        std_u = _noun_std_entity(rp, rp.units.index(subj_u))
+        if std_u is None:
+            return None
+        subj_key, std_key = _noun_entity_key(subj_u), _noun_entity_key(std_u)
+        if subj_key == std_key:
+            return None
+        return subj_key, k, std_key
     if len(names) != 2 or not verbs:
         return None
     vpos = rp.units.index(verbs[0])
@@ -4888,6 +4943,21 @@ def _offset_ratio_relation(rp: Reading):
         return None
     names = [u for u in rp.units if "name" in u.features.get("senses", [])]
     verbs = [u for u in rp.units if "verb" in u.features.get("senses", [])]
+    if len(names) != 2:
+        # NOT-TWO-NAMES fallback: a coordinate/subtype COMMON-NOUN offset-ratio ("three fewer than twice as
+        # many cows as pigs") — same "many"-collection subject as `_ratio_relation`'s fallback.
+        many = next((u for u in rp.units if _key(u.surface) in ("many", "much")
+                     and "quantifier" in u.features.get("senses", [])), None)
+        subj_u = _follow(many, "collection") if many is not None else None
+        if subj_u is None:
+            return None
+        std_u = _noun_std_entity(rp, rp.units.index(subj_u))
+        if std_u is None:
+            return None
+        subj_key, std_key = _noun_entity_key(subj_u), _noun_entity_key(std_u)
+        if subj_key == std_key:
+            return None
+        return subj_key, k, std_key, sign * off.features["value"]
     if len(names) != 2 or not verbs:
         return None
     vpos = rp.units.index(verbs[0])
@@ -5065,6 +5135,22 @@ def _pure_offset_relation(rp: "Reading"):
         return None
     names = [u for u in rp.units if "name" in u.features.get("senses", [])]
     verbs = [u for u in rp.units if "verb" in u.features.get("senses", [])]
+    if len(names) != 2:
+        # NOT-TWO-NAMES fallback: a coordinate/subtype COMMON-NOUN pure offset ("Brett has 24 more BLUE
+        # MARBLES than RED MARBLES" — Brett is an outer possessor, not one of the two ratio entities) — no
+        # "many"/multiplier here, so the subject is the noun right after the comparative.
+        subj_u = next((u for u in rp.units[ci + 1:]
+                       if "noun" in u.features.get("senses", []) or "adjective" in u.features.get("senses", [])),
+                      None)
+        if subj_u is None:
+            return None
+        std_u = _noun_std_entity(rp, rp.units.index(subj_u))
+        if std_u is None:
+            return None
+        subj_key, std_key = _noun_entity_key(subj_u), _noun_entity_key(std_u)
+        if subj_key == std_key:
+            return None
+        return subj_key, std_key, sign * off.features["value"]
     if len(names) != 2 or not verbs:
         return None
     vpos = rp.units.index(verbs[0])
@@ -5281,23 +5367,112 @@ def _affine_system(premises: list, question: str):
     return _compute(f"{_num(a_ask)} * {_num(pivot)} + ({_num(b_ask)})")
 
 
+def _noun_affine_system(premises: list, question: str):
+    """The COORDINATE/SUBTYPE-NOUN twin of `_affine_system`: entities are COMMON NOUNS (via
+    `_affine_relation`'s noun-entity fallback — "twice as many pigs as cows", "4 more cows than goats"), not
+    names, and the stated total is over a CATEGORY word ("56 ANIMALS total" for pig/cow/goat entities) rather
+    than a literal noun match. `_combined_total`'s strict noun-matching (needed elsewhere to avoid grabbing
+    the wrong value) would reject this — a hypernym check ("animal" ⊇ pig/cow/goat) is a whole separate,
+    unbuilt feature — so this solver takes a NARROWER, self-contained shortcut instead: TRUST any total-cue
+    clause's single value as the target sum, but ONLY for a system whose relations are CONFIRMED noun-based
+    (the underlying premise has 0 or 1 names — an outer possessor like "farmer"/"Brett" is fine, but NOT the
+    2-name shape `_affine_system` already owns) — this keeps the shortcut from ever competing with the
+    named-entity system's own (stricter, already-tested) total-matching. Same pivot-propagation as
+    `_affine_system`: an entity value = A·pivot + B, propagated from the one FREE entity (no relation's
+    subject) via ≥2 relations, T = Σ(A)·pivot + Σ(B). "A farmer has twice as many pigs as cows, and 4 more
+    cows than goats. If the farmer has 56 animals total, how many goats does he have?" → pivot=goats=11."""
+    if any(w in question.lower() for w in ("altogether", "in all", " total", "combined", "in total")):
+        return None                                       # a sum question is a different shape, not this one
+    for p in premises:
+        if re.search(r"\btimes (more|less|fewer)\b", p.lower()):
+            return None                                   # ambiguous ×N idiom → decline (GATE C)
+    rels = {}
+    for p in premises:
+        if any(w in p.lower() for w in ("total", "combined", "altogether", "together")):
+            continue                                      # the total clause itself isn't a relation
+        rp = analyze(p)
+        if sum(1 for u in rp.units if "name" in u.features.get("senses", [])) == 2:
+            continue                                      # a genuine 2-NAME relation is _affine_system's turf
+        rel = _affine_relation(rp)
+        if rel is None:
+            continue
+        subj_e, k, std_e, c = rel
+        if k == 0 or subj_e == std_e:
+            return None
+        if subj_e in rels:                                # subject already defined → invert, like
+            if std_e in rels:                              # `_affine_system`
+                return None
+            rels[std_e] = (1.0 / k, subj_e, -c / k)
+        else:
+            rels[subj_e] = (k, std_e, c)
+    if len(rels) < 2:
+        return None                                       # a genuine N-entity SYSTEM, like `_affine_system`
+    total = None
+    for p in premises:
+        if not any(w in p.lower() for w in ("total", "combined", "altogether", "together")):
+            continue
+        vals = [u for u in analyze(p).units
+                if "value" in u.features.get("senses", []) and u.features.get("value") is not None]
+        if len(vals) == 1:
+            total = vals[0].features["value"]
+            break
+    if total is None:
+        return None
+    entities = set(rels) | {std for _k, std, _c in rels.values()}
+    free = [e for e in entities if e not in rels]
+    if len(free) != 1:
+        return None
+    coeff = {free[0]: (1.0, 0.0)}
+    for _ in range(len(entities) + 1):
+        for e, (k, std, c) in rels.items():
+            if std in coeff and e not in coeff:
+                a_std, b_std = coeff[std]
+                coeff[e] = (k * a_std, k * b_std + c)
+    if any(e not in coeff for e in entities):
+        return None
+    sum_a = sum(a for a, _b in coeff.values())
+    sum_b = sum(b for _a, b in coeff.values())
+    if sum_a == 0:
+        return None
+    qr = analyze(question)
+    many = next((u for u in qr.units if _key(u.surface) in ("many", "much")
+                 and "quantifier" in u.features.get("senses", [])), None)
+    asked_u = _follow(many, "collection") if many is not None else None
+    if asked_u is None:
+        return None
+    asked = _noun_entity_key(asked_u)
+    if asked not in coeff:
+        return None
+    pivot = _compute(f"({_num(total)} - ({_num(sum_b)})) / {_num(sum_a)}")
+    a_ask, b_ask = coeff[asked]
+    return _compute(f"{_num(a_ask)} * {_num(pivot)} + ({_num(b_ask)})")
+
+
 def _anchor_fact(rp: "Reading"):
     """A single ANCHOR fact: an ABSOLUTE value stated for exactly one NAMED entity, with no relation to any
-    other entity ("Cecil has $600", "If David has 15 shells" → (Cecil, 600) / (David, 15)). None if the clause
-    carries a comparative/multiplier/fraction (that's a RELATION, not an anchor) or doesn't name exactly one
-    entity holding exactly one value — the anchor is what `_anchored_sum_system` pins its free pivot to when
-    the problem states no combined total."""
+    other entity ("Cecil has $600", "If David has 15 shells" → (Cecil, 600) / (David, 15)). Also covers a
+    COMMON-NOUN anchor with NO names ("A pet store has six dogs for sale.", "If there are 11 blue balls" →
+    (dog, 6) / (blue, 11)) — the coordinate-noun/subtype-partition affine family's twin of the named case;
+    the entity is whatever the value's `quantifies` link points to. None if the clause carries a comparative/
+    multiplier/fraction (that's a RELATION, not an anchor) or doesn't name exactly one entity holding exactly
+    one value — the anchor is what `_anchored_sum_system` pins its free pivot to when the problem states no
+    combined total."""
     if any("comparative" in u.features.get("senses", []) for u in rp.units) \
             or any("multiplier" in u.features.get("senses", []) for u in rp.units) \
             or any(_fraction_parts(u.surface) is not None for u in rp.units):
         return None
     names = [u for u in rp.units if "name" in u.features.get("senses", [])]
-    if len(names) != 1:
-        return None
     if not any("verb" in u.features.get("senses", []) for u in rp.units):
         return None
     vals = [u for u in rp.units if "value" in u.features.get("senses", []) and u.features.get("value") is not None]
     if len(vals) != 1:
+        return None
+    if not names:
+        qn = _follow(vals[0], "quantifies")
+        if qn is None or "noun" not in qn.features.get("senses", []):
+            return None
+        return _noun_entity_key(qn), vals[0].features["value"]
+    if len(names) != 1:
         return None
     return _entity(names[0]), vals[0].features["value"]
 
@@ -6281,6 +6456,11 @@ def solve(text: str):
     _affine = _affine_system(premises, question)
     if _affine is not None:
         return _affine
+    # COORDINATE/SUBTYPE-NOUN AFFINE SYSTEM (entities are common nouns, not names — "twice as many pigs as
+    # cows, 4 more cows than goats; 56 animals total, how many goats?" → 11).
+    _noun_affine = _noun_affine_system(premises, question)
+    if _noun_affine is not None:
+        return _noun_affine
     # ANCHORED-SUM SYSTEM (the twin of the mixed affine system for when NO total is stated but one entity has
     # a bare absolute value, and the question asks for the SUM of all entities). "Cecil has $600; Catherine is
     # $250 less than twice Cecil; Carmela is $50 more than twice Cecil. How much altogether?" → 2800.
