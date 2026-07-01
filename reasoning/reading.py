@@ -225,18 +225,30 @@ def _merge_scales(reading: Reading) -> Reading:
 
 
 def _merge_times_multiplier(reading: Reading) -> Reading:
-    """Fuse a NUMERIC multiplier "<value> times" into ONE multiplier unit (factor N), but ONLY in the
-    relational frame — "three times as many", "four times as much", or "three times that many" (the
-    "that" pointing at the just-stated quantity) — so it scales a quantifier exactly like the lexicalized
-    "twice"/"thrice", bringing the quantity path to parity with the age path ("N times as old"). Gated on
-    a following "as"/"that": "N times M" (operator multiplication) and
-    "N times MORE than" (the multiplicative-ambiguity decline, the Riku trap) have no "as" and are left
-    untouched. Runs after senses, before obligations, so the merged multiplier carries its `scales`."""
+    """Fuse a NUMERIC multiplier "<value> times" into ONE multiplier unit (factor N), but ONLY in a
+    relational frame — "three times as many", "four times as much", "three times that many" (the "that"
+    pointing at the just-stated quantity), or "four times BENEDICT's house" (a genitive standard — the same
+    possessive ratio frame `_ratio_relation` already accepts for "twice B's age") — so it scales a quantifier
+    exactly like the lexicalized "twice"/"thrice", bringing the quantity path to parity with the age path
+    ("N times as old"). A NAME immediately after "times" is unambiguous (unlike "N times MORE than", the
+    multiplicative-ambiguity Riku trap — that idiom needs "more/less" right after "times", not a bare name,
+    so there's no overlap); `_ratio_relation`'s own frame-check still requires the name be followed by a
+    possessive marker, so a bare "N times NAME" with no "'s" stays correctly unmerged-useless. EXCLUDES a
+    possessed "age" specifically ("three times Mark's AGE minus 4") — the dedicated age-domain machinery
+    parses "<value> times" as a bare operator-expression over the UNMERGED tokens and regressed (a confident
+    wrong, 39 vs gold 26) when this merge pre-empted it; age already has its own "N times as old" path via a
+    different route, so this merge only needs to cover the non-age possessive case. "N times M" (operator
+    multiplication, no relational frame at all) is left untouched. Runs after senses, before obligations, so
+    the merged multiplier carries its `scales`."""
     units = reading.units
     for i in range(len(units) - 2):
         val, times, nxt = units[i], units[i + 1], units[i + 2]
+        is_age_possessive = ("name" in nxt.features.get("senses", []) and i + 4 < len(units)
+                              and "possessive" in units[i + 3].features.get("senses", [])
+                              and _key(units[i + 4].surface) == "age")
         if _key(times.surface) == "times" and "value" in val.features.get("senses", []) \
-                and "measure" not in val.features and _key(nxt.surface) in ("as", "that", "the"):
+                and "measure" not in val.features and not is_age_possessive \
+                and (_key(nxt.surface) in ("as", "that", "the") or "name" in nxt.features.get("senses", [])):
             merged = Unit(words=sorted(val.words + times.words, key=lambda w: w.index))
             merged.features["senses"] = ["multiplier"]
             merged.features["value"] = val.features["value"]
@@ -4841,15 +4853,18 @@ def _offset_ratio_relation(rp: Reading):
     governed by "needs"/"need" — "Amanda NEEDS 12 more to have twice as many as Katrina" states a DEFICIT to
     reach a target (Amanda + 12 = 2·Katrina), the OPPOSITE equation from "Amanda HAS 12 more than twice as
     many as Katrina" (Amanda = 2·Katrina + 12) this extractor assumes; silently applying the wrong equation
-    is a confident-wrong risk, not a parsing nuance to special-case here."""
+    is a confident-wrong risk, not a parsing nuance to special-case here. Covers ANY comparative adjective via
+    the shared `COMPARATIVE_SIGN` table, not just "more"/"less"/"fewer" — "600 square feet LARGER than 4
+    times Benedict's house" — EXCLUDING "older"/"younger" (the age domain's own temporal-shift machinery
+    owns those, same reasoning as `_pure_offset_relation`)."""
     if any(_key(u.surface) in ("need", "needs") for u in rp.units):
         return None
-    comp = next((u for u in rp.units if _key(u.surface) in ("more", "less", "fewer")
-                 and "comparative" in u.features.get("senses", [])), None)
+    comp = next((u for u in rp.units if "comparative" in u.features.get("senses", [])
+                 and _key(u.surface) not in ("older", "younger")), None)
     if comp is None:
         return None
     ci = rp.units.index(comp)
-    sign = 1.0 if _key(comp.surface) == "more" else -1.0
+    sign = float(COMPARATIVE_SIGN.get(_key(comp.surface), 1))
     off = next((u for u in reversed(rp.units[:ci])                     # offset = the value RIGHT before the
                if "value" in u.features.get("senses", []) and u.features.get("value") is not None), None)
     if off is None:                                                   # comparative ("8 more than …")

@@ -2827,6 +2827,36 @@ class TestIncrement97NumericMultiplier(unittest.TestCase):
         self.assertEqual(reading.solve("What is 4 times 3?"), 12)
 
 
+class TestGenitiveTimesMultiplier(unittest.TestCase):
+    """`_merge_times_multiplier` extended to ALSO fuse "N times NAME's <measure>" (a genitive/possessive
+    standard, no "as many as" framing) — "600 square feet larger than 4 times Benedict's house". Unambiguous
+    (unlike the Riku "N times MORE than" trap, which needs "more/less" right after "times", not a name) and
+    matches the possessive ratio frame `_ratio_relation` already accepts. EXCLUDES a possessed "age"
+    specifically — the age domain parses "<value> times" as a bare operator-expression over the UNMERGED
+    tokens via a different route, and this merge pre-empting it caused a real confident-wrong (39 vs gold 26)
+    the diff harness caught. +3 dev-holdout (Kennedy/Benedict, Brenda/Mel, Sara/Nada — all real GSM8K cases)."""
+
+    def test_offset_ratio_by_possessive_standard(self):
+        self.assertEqual(reading.solve(
+            "Kennedy's house is 600 square feet larger than 4 times Benedict's house. If Kennedy's house is "
+            "10000 square feet, how many square feet is Benedict's house?"), 2350)
+
+    def test_comparative_adjective_by_possessive_standard(self):
+        self.assertEqual(reading.solve(
+            "Brenda weighs 10 pounds more than 3 times Mel's weight. If Brenda weighs 220 pounds, how much "
+            "does Mel weigh?"), 70)
+
+    def test_age_possessive_stays_unmerged(self):
+        # the age domain owns "N times Y's AGE" via its own operator-based path — merging here regressed a
+        # real case (Sarah/Mark/Billy/Ana). Direct check: _merge_times_multiplier must leave "three"/"times"
+        # UNMERGED when the possessed noun is "age".
+        rp = reading.analyze("Sarah's age is equal to three times Mark's age minus 4.")
+        surfaces = [reading._key(u.surface) for u in rp.units]
+        self.assertIn("three", surfaces)
+        self.assertIn("times", surfaces)
+        self.assertNotIn("three times", surfaces)
+
+
 class TestIncrement98AgeShiftGuard(unittest.TestCase):
     """#98 - a RELATIONAL age under a TEMPORAL SHIFT was first DECLINED (precision-first), then SOLVED in
     #101 (see TestIncrement101AgeShiftSolve for the shifted-algebra cases). These remaining cases pin the
