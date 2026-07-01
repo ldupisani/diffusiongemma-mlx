@@ -4543,6 +4543,23 @@ class TestPercentChange(unittest.TestCase):
             "How much did he pay for everything?"), "undetermined")
 
 
+class TestStativeSubjectElision(unittest.TestCase):
+    """"X is A and is B" — the subjectless STATIVE conjunct borrows the left subject → an independent
+    premise, so an age/comparative chain grounds. SYNTHETIC."""
+
+    def test_age_chain_elided_subject(self):
+        # Ali 8; Ali = Yusaf + 3 → Yusaf 5; Umar = 2×Yusaf = 10.
+        self.assertEqual(reading.solve(
+            "Ali is 8 years old and is 3 years older than Yusaf. Umar is twice as old as Yusaf. "
+            "How old is Umar?"), 10)
+
+    def test_question_clause_not_elided(self):
+        # the subjectless QUESTION clause "how old is Sam?" must NOT borrow "Drew" (regression guard).
+        self.assertEqual(reading.solve(
+            "In five years Sam will be 3 times as old as Drew. If Drew is currently 12 years old, "
+            "how old is Sam?"), 46)
+
+
 class TestOffsetSumPure(unittest.TestCase):
     """2-entity PURE additive offset + combined total → std = (T∓c)/2. SYNTHETIC."""
 

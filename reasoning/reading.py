@@ -4326,6 +4326,19 @@ def _is_elided_clause(text: str) -> bool:
         any(s in units[k].features.get("senses", []) for s in ("name", "noun")) for k in range(qi))
 
 
+def _clause_subject(text: str):
+    """The SUBJECT surface of a clause — the first name/noun BEFORE its first content verb — or None if the
+    clause opens straight with a verb (a subjectless conjunct like "is 3 years older than Yusaf")."""
+    units = analyze(text).units
+    vi = next((k for k, u in enumerate(units) if "verb" in u.features.get("senses", [])
+               and _key(u.surface) not in ("do", "does", "did")), None)
+    if vi is None:
+        return None
+    subj = next((units[k] for k in range(vi)
+                 if any(s in units[k].features.get("senses", []) for s in ("name", "noun", "pronoun"))), None)
+    return subj.surface if subj is not None else None
+
+
 def _supply_verb(clause: str, verb: str):
     """Insert `verb` after the elided clause's subject (its first name/noun) — "Mary 5 apples" +
     "has" → "Mary has 5 apples". None if there's no subject word to anchor to."""
@@ -4372,12 +4385,23 @@ def _split_clauses(sentence: str) -> list:
                 #                                          together so _purchase reads the per-item price
             if _has_verb(left):
                 if _has_verb(right):
-                    # NOTE: SUBJECT elision ("She gave X and bought Y" → the right clause's verb has no
-                    # subject and binds to a stray post-verb noun) was prototyped and REVERTED. With a
-                    # question-clause guard it was precision-NEUTRAL (56.7→56.8% dev) but RAISED absolute
-                    # confident-wrongs 39→41: supplying the subject exposes multi-step gaps we don't yet
-                    # close (per-recipient "each" distribution, "had $N left" inversion, running sums), so
-                    # previously-declined problems commit a partial answer. Defer until those compose.
+                    # STATIVE subject elision: "Ali is 8 and is 3 years older than Yusaf" — the right conjunct
+                    # has a verb but NO subject; supply the left's. GATED to a COPULA/stative right verb
+                    # (is/are/was/were/has/have/had): the general elision (below) was REVERTED because it
+                    # mis-fired on ACTION verbs ("She gave X and bought Y" → per-recipient/running-sum gaps,
+                    # confident-wrongs 39→41), but a stative "is/has N more/older than Y" is a clean relation.
+                    rwords = {_key(w) for w in right.split()}
+                    is_question = right.rstrip().endswith("?") \
+                        or rwords & {"how", "what", "which", "who", "whom", "whose", "why", "when", "where"}
+                    if not is_question and _clause_subject(right) is None:
+                        lsubj = _clause_subject(left)
+                        rverb = next((_key(u.surface) for u in analyze(right).units
+                                      if "verb" in u.features.get("senses", [])), None)
+                        if lsubj is not None and rverb in ("is", "are", "was", "were", "has", "have", "had"):
+                            return _split_clauses(left) + _split_clauses(f"{lsubj} {right}")
+                    # NOTE: general SUBJECT elision (action-verb right conjunct) stays REVERTED — it exposes
+                    # multi-step gaps (per-recipient "each" distribution, "had $N left" inversion, running sums)
+                    # that turn previously-declined problems into partial-answer confident-wrongs.
                     return _split_clauses(left) + _split_clauses(right)
                 if _is_elided_clause(right):           # the right borrows the left's verb (elision)
                     synth = _supply_verb(right, _main_verb(left))
