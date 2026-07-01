@@ -5123,6 +5123,73 @@ def _percent_change(premises: list, question: str):
     return round(r, 9) if isinstance(r, float) else r
 
 
+_GROUP_PAIRS = [("boys", "girls"), ("men", "women"), ("male", "female"), ("males", "females"),
+                ("boy", "girl"), ("man", "woman"), ("gentlemen", "ladies")]
+_GROUP_WORDS = {w for pr in _GROUP_PAIRS for w in pr}
+
+
+def _group_relation(a: str, b: str):
+    """'same' if the two group words are identical, 'comp' if they are a known complementary pair
+    (boys/girls, men/women, …), else None (unrelated → can't infer a fraction)."""
+    if a == b:
+        return "same"
+    return "comp" if any({a, b} == {x, y} for x, y in _GROUP_PAIRS) else None
+
+
+def _group_after_copula(r: "Reading"):
+    """The first partition-group word (boys/girls/…) appearing after a copula in a reading — the predicate
+    of "P% … ARE boys". None if there's no such group noun."""
+    for i, u in enumerate(r.units):
+        if _key(u.surface) in ("are", "is", "were", "was"):
+            g = next((_key(v.surface) for v in r.units[i + 1:] if _key(v.surface) in _GROUP_WORDS), None)
+            if g is not None:
+                return g
+    return None
+
+
+def _percent_population(premises: list, question: str):
+    """A TWO-GROUP population partition — a percent splits a population into complementary groups (boys/girls,
+    men/women); recover the asked group. Every group's count is total × fraction, where fraction = P if the
+    group is the percent's group, else 1−P (the complement). Two entry points share the formula: a TOTAL is
+    given ("50 people, 30% are boys → girls = 50 × 0.70 = 35"), or ONE GROUP'S COUNT is given ("60% are girls,
+    boys = 300 → girls = 300 × 0.6/0.4 = 450", since total = C/f_base). TIGHTLY gated — exactly one number +
+    one percent in the premises (nothing in the question), the percent's group and the question's group both
+    resolvable to same/complement of each other, and a recognized base. None otherwise."""
+    readings = [analyze(p) for p in premises]
+    pcts = [(r, u) for r in readings for u in r.units if "percent" in u.features.get("senses", [])]
+    vals = [(r, u) for r in readings for u in r.units if "value" in u.features.get("senses", [])
+            and u.features.get("value") is not None]
+    if len(pcts) != 1 or len(vals) != 1:
+        return None
+    qr = analyze(question)
+    if any("value" in u.features.get("senses", []) and u.features.get("value") is not None for u in qr.units):
+        return None
+    P = pcts[0][1].features["value"]
+    G1 = _group_after_copula(pcts[0][0])                 # the percent's group ("… are boys")
+    Gq = next((_key(u.surface) for u in qr.units if _key(u.surface) in _GROUP_WORDS), None)   # asked group
+    if G1 is None or Gq is None:
+        return None
+
+    def frac(g):
+        rel = _group_relation(g, G1)
+        return P if rel == "same" else (1 - P) if rel == "comp" else None
+
+    fq = frac(Gq)
+    if fq is None or not 0 < fq < 1:
+        return None
+    val_r, val_u = vals[0]
+    C = val_u.features["value"]
+    Gc = next((_key(u.surface) for u in val_r.units if _key(u.surface) in _GROUP_WORDS), None)
+    if Gc is None:                                        # the number is the TOTAL population → group = N × f
+        r = _compute(f"{_num(C)} * {_num(fq)}")
+    else:                                                 # the number is ONE group's count → total = C / f_base
+        fc = frac(Gc)
+        if fc is None or fc <= 0:
+            return None
+        r = _compute(f"{_num(C)} * {_num(fq)} / {_num(fc)}")
+    return round(r, 9) if isinstance(r, float) else r
+
+
 def _percent_original(premises: list, question: str):
     """The INVERSE of `_percent_change`: a known money value is a PERCENT of an unknown ORIGINAL → recover the
     original by division. Three frames (by how the percent relates the value to the original): "$15000 cost
@@ -5698,6 +5765,11 @@ def solve(text: str):
     _porig = _percent_original(premises, question)
     if _porig is not None:
         return _porig
+    # PERCENT POPULATION — "50 people, 30% boys. How many girls?" → 50×0.70 = 35; "60% girls, 300 boys →
+    # girls?" → 300×0.6/0.4 = 450. A two-group partition; recover the asked group by its fraction.
+    _ppop = _percent_population(premises, question)
+    if _ppop is not None:
+        return _ppop
     # POOL-AND-REDISTRIBUTE — "combine their candies and share equally, how many will EACH have?" → Σ/N.
     # Tried before GUARD 3 (the pooled amounts are all "used" so it wouldn't trip, but keep recognizers
     # together). Same math as the average branch but cued by a share-equally premise + a per-each question.

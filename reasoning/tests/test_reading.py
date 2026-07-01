@@ -4542,6 +4542,28 @@ class TestPercentChange(unittest.TestCase):
             "How much did he pay for everything?"), "undetermined")
 
 
+class TestPercentPopulation(unittest.TestCase):
+    """TWO-GROUP population partition — a percent splits a population into complementary groups; recover the
+    asked group by its fraction (P for the percent's group, 1−P for the complement). Total given → N×f;
+    one group's count given → C×f_q/f_base. SYNTHETIC."""
+
+    def test_total_given_complement(self):
+        # 40 people, 30% boys → girls = 40 × 0.70 = 28.
+        self.assertEqual(reading.solve(
+            "At a meeting there are 40 people. 30% of them are boys. How many girls are at the meeting?"), 28)
+
+    def test_total_given_same_group(self):
+        # 40 people, 30% boys → boys = 40 × 0.30 = 12.
+        self.assertEqual(reading.solve(
+            "At a meeting there are 40 people. 30% of them are boys. How many boys are at the meeting?"), 12)
+
+    def test_group_count_given(self):
+        # 60% girls, boys = 200 → girls = 200 × 0.6/0.4 = 300.
+        self.assertEqual(reading.solve(
+            "60% of the students are girls and the number of boys is 200. "
+            "How many girls are there?"), 300)
+
+
 class TestPercentOriginal(unittest.TestCase):
     """PERCENT ORIGINAL (inverse) — a money value is a % of an unknown original; recover it by division. Frame
     picks the divisor: "of" → ÷P; discount/less → ÷(1−P); more → ÷(1+P). Question must ask the ORIGINAL.
