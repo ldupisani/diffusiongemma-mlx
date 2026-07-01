@@ -5953,6 +5953,34 @@ def _anchored_difference_system(premises: list, question: str):
                     f"({_num(a2)} * {_num(pivot)} + ({_num(b2)}))")
 
 
+def _anchored_average_system(premises: list, question: str):
+    """The ANCHORED-AVERAGE twin: the question asks for the MEAN of the N entities (Σ ÷ N) instead of the
+    sum — "Rachel weighs 75 pounds, 6 pounds less than Jimmy and 15 pounds more than Adam. What is the
+    average weight of the three people?" → Σ=216 over {Rachel,Jimmy,Adam}, ÷3 = 72. Reuses the exact sum
+    machinery (`_anchored_affine_coeffs`, shared with `_anchored_sum_system`); the only new behaviour is
+    the division. SAFETY: never divide by a GUESSED N — the question must STATE a group count that matches
+    the number of entities the coeffs captured (`n in q_ints`), so a system that captured a subset (a
+    missing/unsupported relation, e.g. an "as tall as" equality) DECLINES rather than dividing by the wrong
+    denominator. Age-typed averages ("average age of the three") already decline inside
+    `_anchored_affine_coeffs`, so this never competes with the age domain's own average branch."""
+    ql = question.lower()
+    if "average" not in ql:
+        return None                                                  # not an average question
+    if any(w in ql for w in ("altogether", "in all", " total", "combined", "in total")):
+        return None                                                  # a sum question is the other twin's shape
+    got = _anchored_affine_coeffs(premises, question)
+    if got is None:
+        return None
+    coeff, pivot = got
+    n = len(coeff)
+    q_ints = {int(u.features["value"]) for u in analyze(question).units
+              if "value" in u.features.get("senses", []) and float(u.features["value"]).is_integer()}
+    if n not in q_ints:                                              # the stated group size must match N
+        return None
+    total = " + ".join(f"({_num(a)} * {_num(pivot)} + ({_num(b)}))" for a, b in coeff.values())
+    return _compute(f"({total}) / {n}")
+
+
 def _residual_sum_system(premises: list, question: str):
     """The RESIDUAL twin: a stated total names THREE (or more) entities ("Jermaine, Terrence, and Emilee earn
     a total of $90"), but only SOME of them are related/anchored elsewhere ("Jermaine earns $5 more than
@@ -6807,6 +6835,8 @@ _EARLY_SYSTEMS = [
     ("anchored_single", _anchored_single_system),
     # ANCHORED-DIFFERENCE (bare anchor, 'how many more X than Y'): "Ann 60 cards … how many more than Anton?" → 30.
     ("anchored_difference", _anchored_difference_system),
+    # ANCHORED-AVERAGE (bare anchor, 'average X of the N people'): "Rachel 75, 6 less than Jimmy, 15 more than Adam … average of the three?" → 72.
+    ("anchored_average", _anchored_average_system),
     # RESIDUAL SUM (stated total names 3+, asked one never related): "Jermaine/Terrence/Emilee $90 … Emilee?" → 25.
     ("residual_sum", _residual_sum_system),
 ]

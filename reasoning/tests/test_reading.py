@@ -4569,6 +4569,38 @@ class TestAnchoredDifferenceSystem(unittest.TestCase):
             reading.analyze("Amanda needs 12 more marbles to have twice as many marbles as Katrina")))
 
 
+class TestAnchoredAverageSystem(unittest.TestCase):
+    """`_anchored_average_system` — the AVERAGE twin of `_anchored_sum_system`: the question asks for the MEAN
+    of the N entities (Σ ÷ N). Reuses the exact sum machinery; the only new behaviour is the division. The
+    stated group count in the question must MATCH the number of entities the coeffs captured, so a partial
+    system (a missing/unsupported relation) divides by no wrong denominator — it declines. +1 dev-train
+    (the real Rachel weight-average GSM8K case)."""
+
+    def test_average_of_the_three(self):
+        # Nora=30, Owen=36 (30+6), Pat=21 (30-9); Σ=87; ÷3 = 29.
+        self.assertEqual(reading.solve(
+            "Nora weighs 30 pounds, 6 pounds less than Owen and 9 pounds more than Pat. What is the average "
+            "weight of the three people?"), 29)
+
+    def test_sum_twin_still_owns_total_question(self):
+        # the SUM question stays with `_anchored_sum_system` (Σ=87), unaffected by the average twin.
+        self.assertEqual(reading.solve(
+            "Nora weighs 30 pounds, 6 pounds less than Owen and 9 pounds more than Pat. What is the total "
+            "weight of the three people?"), 87)
+
+    def test_stated_count_must_match_entity_count(self):
+        # the system has 3 entities but the question says "four" — never divide by a guessed/mismatched N.
+        self.assertEqual(reading.solve(
+            "Nora weighs 30 pounds, 6 pounds less than Owen and 9 pounds more than Pat. What is the average "
+            "weight of the four people?"), "undetermined")
+
+    def test_no_stated_count_declines(self):
+        # no group size stated → we don't guess N → decline.
+        self.assertEqual(reading.solve(
+            "Nora weighs 30 pounds, 6 pounds less than Owen and 9 pounds more than Pat. What is the average "
+            "weight of the people?"), "undetermined")
+
+
 class TestResidualSumSystem(unittest.TestCase):
     """`_residual_sum_system` — a stated total names 3+ entities, but the ASKED one is never related or
     anchored anywhere else (unlike `_affine_system`, which requires every entity to reduce to the pivot).
