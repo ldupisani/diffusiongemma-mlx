@@ -4360,6 +4360,31 @@ def _clause_subject(text: str):
     return subj.surface if subj is not None else None
 
 
+def _is_value_first_relation(text: str) -> bool:
+    """A VALUE-FIRST coordinate relation whose subject AND verb are elided: "2 fewer toys than Amanda",
+    "twice as many peppers as cucumbers". It OPENS with a value/multiplier (so `_is_elided_clause` — which
+    needs a subject before the value — rejects it as a bare object like "2 oranges"), but a COMPARATIVE
+    (more/less/fewer) or a MULTIPLIER makes it a relation, and a NAME standard after "than"/"as" pins the
+    other entity. GATED to a NAME standard (a common-noun standard "than cucumbers" isn't yet an entity) so
+    the split only fires where `_affine_relation` can consume the synthesized clause. Distinguishes the
+    relation-conjunct from a genuine phrase-join ("3 apples and 2 oranges" — no comparative, no factor)."""
+    units = analyze(text).units
+    qi = next((k for k, u in enumerate(units)
+               if any(s in u.features.get("senses", []) for s in ("value", "multiplier"))), None)
+    if qi is None or qi != 0:                          # must OPEN with the value/multiplier (subject elided)
+        return False
+    has_comp = any(_key(u.surface) in ("more", "less", "fewer") and "comparative" in u.features.get("senses", [])
+                   for u in units)
+    has_mult = any("multiplier" in u.features.get("senses", []) for u in units)
+    if not (has_comp or has_mult):
+        return False
+    for k, u in enumerate(units):                      # a NAME standard right after "than"/"as"
+        if _key(u.surface) in ("than", "as") and k + 1 < len(units) \
+                and "name" in units[k + 1].features.get("senses", []):
+            return True
+    return False
+
+
 def _supply_verb(clause: str, verb: str):
     """Insert `verb` after the elided clause's subject (its first name/noun) — "Mary 5 apples" +
     "has" → "Mary has 5 apples". None if there's no subject word to anchor to."""
@@ -4433,6 +4458,14 @@ def _split_clauses(sentence: str) -> list:
                     synth = _supply_verb(right, _main_verb(left))
                     if synth:
                         return _split_clauses(left) + _split_clauses(synth)
+                if _is_value_first_relation(right):    # VALUE-FIRST coordinate relation: "Anna has 3× toys as
+                    # Mandy and 2 fewer toys than Amanda" — the right conjunct elides BOTH subject and verb
+                    # (it opens with the value). Supply the left's subject + main verb so it learns as an
+                    # independent relation. Gated (comparative/ratio + name standard) so a bare "and 2 oranges"
+                    # phrase-join never triggers it.
+                    lsubj, lverb = _clause_subject(left), _main_verb(left)
+                    if lsubj is not None and lverb is not None:
+                        return _split_clauses(left) + _split_clauses(f"{lsubj} {lverb} {right}")
             i = sentence.find(sep, i + 1)
     return [sentence]
 
@@ -4860,6 +4893,12 @@ def _sum_ratio_system(premises: list, question: str):
         if has_factor and any(_key(u.surface) in ("more", "less", "older", "younger", "fewer")
                               for u in rp.units):
             return None
+        # A STANDALONE OFFSET relation ("Anna has 2 fewer toys than Amanda") alongside the ratios is the same
+        # incompleteness in a separate clause: _ratio_relation drops it (comparative), so the pure-ratio system
+        # would silently ignore Amanda and mis-solve off the remaining ratio (Anna=3·Mandy → 142/4 = 35.5).
+        # This is an AFFINE system — defer to `_affine_system`. (A pure-ratio system has no offset relations.)
+        if _pure_offset_relation(rp) is not None:
+            return None
     rels = {}                                                          # subject → (factor, standard)
     rel_mod = rel_desc = None
     for p in premises:
@@ -5078,6 +5117,110 @@ def _offset_sum_system(premises: list, question: str):
     std_v = _compute(f"({_num(total)} - ({_num(c)})) / {_num(k + 1)}")
     subj_v = _compute(f"{_num(total)} - ({_num(std_v)})")
     return subj_v if asked == subj_e else std_v
+
+
+def _affine_relation(rp: "Reading"):
+    """Any single AFFINE relation in a clause → (subject, factor, standard, offset) with subject = factor ×
+    standard + offset, unifying the three relation extractors: `_offset_ratio_relation` ("8 more than twice
+    Y" → k=2, c=8), `_ratio_relation` ("k× as many as Y" → c=0), `_pure_offset_relation` ("N more than Y" →
+    k=1). None if the clause holds no two-name relation."""
+    orr = _offset_ratio_relation(rp)
+    if orr is not None:
+        subj, k, std, c = orr
+        return subj, k, std, c
+    rr = _ratio_relation(rp)
+    if rr is not None:
+        subj, k, std = rr
+        return subj, k, std, 0.0
+    por = _pure_offset_relation(rp)
+    if por is not None:
+        subj, std, c = por
+        return subj, 1.0, std, c
+    return None
+
+
+def _affine_system(premises: list, question: str):
+    """An N-UNKNOWN MIXED AFFINE system — the generalization that subsumes both `_sum_ratio_system` (pure
+    ratios) and `_offset_sum_system` (one 2-entity affine relation). Each entity is an AFFINE function of a
+    single free PIVOT (value = A·pivot + B); relations may be ratio (X = k·Y), offset (X = Y ± c) OR combined
+    (X = k·Y ± c), and MIX freely across ≥2 entities, pinned by a COMBINED TOTAL. "Anna = 3·Mandy and 2 fewer
+    than Amanda; 142 toys total → Mandy 20": reduce to the pivot Mandy (A: 1,3,3; B: 0,0,2), pivot = (142−ΣB)/
+    ΣA = 140/7 = 20. Runs ONLY after the two mature solvers decline (a pure-ratio or single-affine shape is
+    theirs), so it can only ADD coverage. A double-defined subject (Anna is subject of both its relations) is
+    handled by INVERTING the second into a relation for the other entity (Amanda = Anna + 2). TIGHTLY gated:
+    a combined total, ≥2 relations (a genuine system), a UNIQUE free pivot (one entity that is no relation's
+    subject), every entity reducible to it (connected, acyclic), and the asked entity among them. None
+    otherwise."""
+    qr = analyze(question)
+    qnames = [u for u in qr.units if "name" in u.features.get("senses", [])]
+    if not qnames:
+        return None
+    asked = _entity(qnames[0])
+    asked_measure = _queried_measure(question)
+    if asked_measure is not None and "verb" in analyze(asked_measure[0]).units[0].features.get("senses", []):
+        asked_measure = RESULT_MEASURE.get(asked_measure[0])
+    # GATE A — a SUM question ("how many altogether/in all/total") asks for Σ, not a single entity; this solver
+    # returns ONE entity's value, so decline (Mona/Jasmine/Rachel — the asked "entity" is just the first name).
+    if any(w in question.lower() for w in ("altogether", "in all", " total", "combined", "in total")):
+        return None
+    # GATE C — the ambiguous "N times more/less than Y" idiom (gold reads it as ×N, but with no "as many as"
+    # frame `_affine_relation` mis-reads it as a +N offset — Ali/Nada/John): decline the whole system.
+    for p in premises:
+        if re.search(r"\btimes (more|less|fewer)\b", p.lower()):
+            return None
+    rels = {}                                                          # subject → (k, std, c): subj = k·std + c
+    rel_mod = rel_desc = None
+    for p in premises:
+        rp = analyze(p)
+        rel = _affine_relation(rp)
+        if rel is None:
+            continue
+        subj_e, k, std_e, c = rel
+        if k == 0 or subj_e == std_e:
+            return None
+        if subj_e in rels:                                            # subject already defined → INVERT the
+            if std_e in rels:                                         # relation to define the OTHER entity;
+                return None                                           # both defined → over-constrained → bail
+            rels[std_e] = (1.0 / k, subj_e, -c / k)                   # std = (subj − c)/k
+        else:
+            rels[subj_e] = (k, std_e, c)
+        if asked_measure is not None and any(_descriptor(u)[0] == asked_measure[0] for u in rp.units):
+            rel_mod = _measure_mod(rp, asked_measure[0])
+            rel_desc = next((_descriptor(u) for u in rp.units
+                             if _descriptor(u)[0] == asked_measure[0]), None)
+    if len(rels) < 2:                                                 # a genuine SYSTEM (the 2-entity single
+        return None                                                  # relation is `_offset_sum_system`'s)
+    total = _combined_total(premises, asked_measure, rel_mod, rel_desc)
+    if total is None:
+        return None
+    # GATE B — the total must be the MAXIMUM stated premise value. In a sum-system the combined total is ≥ every
+    # part and every offset, so a LARGER unconsumed value means `_combined_total` grabbed the wrong number — it
+    # matches a total-cue clause's FIRST value, which is often a PEOPLE-COUNT ("Together 3 friends watched 411
+    # videos" → 3, not 411; "the three boys have 930 stamps" → 3, not 930). Reject rather than mis-solve.
+    stated = [u.features["value"] for p in premises for u in analyze(p).units
+              if "value" in u.features.get("senses", []) and u.features.get("value") is not None]
+    if stated and total < max(stated):
+        return None
+    entities = set(rels) | {std for _k, std, _c in rels.values()} | {asked}
+    free = [e for e in entities if e not in rels]                    # the pivot: the one entity that is no
+    if len(free) != 1:                                               # relation's subject
+        return None
+    coeff = {free[0]: (1.0, 0.0)}                                    # value[e] = A·pivot + B; propagate
+    for _ in range(len(entities) + 1):                              # affinely along the relation tree
+        for e, (k, std, c) in rels.items():
+            if std in coeff and e not in coeff:
+                a_std, b_std = coeff[std]
+                coeff[e] = (k * a_std, k * b_std + c)
+    if any(e not in coeff for e in entities):                        # disconnected / cyclic → reject
+        return None
+    sum_a = sum(a for a, _b in coeff.values())
+    sum_b = sum(b for _a, b in coeff.values())
+    if sum_a == 0:
+        return None
+    # T = Σ(A)·pivot + Σ(B)  ⇒  pivot = (T − ΣB)/ΣA;  answer = A[asked]·pivot + B[asked].
+    pivot = _compute(f"({_num(total)} - ({_num(sum_b)})) / {_num(sum_a)}")
+    a_ask, b_ask = coeff[asked]
+    return _compute(f"{_num(a_ask)} * {_num(pivot)} + ({_num(b_ask)})")
 
 
 def _inject_bare_ages(prem_readings: list, all_readings: list, facts_of: list, context: list) -> None:
@@ -5849,6 +5992,11 @@ def solve(text: str):
     _poff = _offset_sum_pure(premises, question)
     if _poff is not None:
         return _poff
+    # MIXED AFFINE SYSTEM (N entities, ratio + offset relations mixed, + a total) — the generalization the two
+    # 2-entity/pure-ratio solvers above decline. "Anna = 3·Mandy and 2 fewer than Amanda; 142 total → Mandy 20."
+    _affine = _affine_system(premises, question)
+    if _affine is not None:
+        return _affine
     # GUARD 8 — INVERSION / COUNTERFACTUAL: two shapes the forward fold structurally cannot solve, so it
     # would fold the literal numbers and commit garbage. Both are honest DECLINES (the safe "only-declines"
     # shape, like GUARD 7).

@@ -3882,11 +3882,13 @@ class TestSumRatioSystem(unittest.TestCase):
         self.assertEqual(reading.solve(
             "Sam and Drew have a combined age of 54. Sam is half of Drew's age. How old is Sam?"), 18)
 
-    def test_offset_tainted_system_declines(self):
-        # "5 more than twice" is an offset relation we can't fold → the whole system declines.
+    def test_offset_tainted_system_solved_by_affine(self):
+        # "5 more than twice" is an offset+ratio relation the PURE-ratio system can't fold — it declines —
+        # but `_affine_system` now solves the mixed system: Cy=2·Ky+5, Ky=½·Ay, Cy+Ky+Ay=100 → 2.5·Ay+5=100
+        # → Ay=38. (Previously this whole shape declined for safety; the affine solver lifts that.)
         self.assertEqual(reading.solve(
             "Cy, Ky, and Ay have a combined total of 100 stamps. Cy has 5 more than twice as many as Ky, "
-            "and Ky has half as many as Ay. How many stamps does Ay have?"), "undetermined")
+            "and Ky has half as many as Ay. How many stamps does Ay have?"), 38)
 
     def test_no_ratio_frame_declines(self):
         # "bought half the cards" is a count of an object, not a ratio between the two names → decline.
@@ -3899,6 +3901,40 @@ class TestSumRatioSystem(unittest.TestCase):
         self.assertEqual(reading.solve(
             "Ann, Bea and Cam decided to share 40 donuts. Ann took 8 donuts and Bea took three times as "
             "many as Cam. How many donuts did Cam take?"), 8)
+
+
+class TestAffineSystem(unittest.TestCase):
+    """`_affine_system` — the N-entity MIXED (ratio + offset) sum-system that generalizes the pure-ratio and
+    single-offset solvers. Each entity is affine in a free pivot (value = A·pivot + B), pinned by a total."""
+
+    def test_ratio_plus_offset_coordinate_split(self):
+        # Xita = 3·Yuma (ratio) and 2 fewer than Zane (offset, subject+verb ELIDED after "and"); 142 total →
+        # reduce to pivot Yuma: A=1,3,3  B=0,0,2 → Yuma = (142−2)/7 = 20.
+        self.assertEqual(reading.solve(
+            "Xita has 3 times as many toys as Yuma and 2 fewer toys than Zane. If they have 142 toys all "
+            "together, how many toys does Yuma have?"), 20)
+
+    def test_offset_ratio_chain_to_pivot(self):
+        # Ova = 2·Pim + 25 (offset+ratio), Pim = 3·Qax − 4 (offset+ratio); 383 total, asked the pivot Qax →
+        # 10·Qax + 13 = 383 → Qax = 37.
+        self.assertEqual(reading.solve(
+            "Ova, Pim, and Qax have a total of 383 chickens. Ova has 25 more than double the chickens that Pim "
+            "has. Pim has 4 less than triple the number of chickens that Qax has. How many chickens does Qax "
+            "have?"), 37)
+
+    def test_times_more_idiom_declines(self):
+        # GATE C — "4 times more than" is the ambiguous ×N idiom (no "as many as" frame), which the extractor
+        # would mis-read as a +4 offset. Decline the whole system.
+        self.assertEqual(reading.solve(
+            "Rui, Sol, and Tavi have a total of 67 coins. Rui has 5 less than Sol and Tavi has 4 times more "
+            "than Sol. How many coins does Tavi have?"), "undetermined")
+
+    def test_mis_grabbed_total_declines(self):
+        # GATE B — a people-count ("3 friends") sits before the real total in the total-cue clause, so the
+        # total-finder grabs 3; the larger unconsumed 411 signals the mis-grab → decline, not mis-solve.
+        self.assertEqual(reading.solve(
+            "Together 3 friends collected 411 shells. Uxo collected 43 more than Vin. Vin collected 17 less "
+            "than Wen. How many shells did Uxo collect?"), "undetermined")
 
 
 class TestDativeTransferCluster(unittest.TestCase):
