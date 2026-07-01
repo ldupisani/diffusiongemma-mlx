@@ -4622,6 +4622,15 @@ class TestProportion(unittest.TestCase):
         self.assertEqual(reading.solve(
             "Tom has 3 apples and 2 oranges. How many apples does Tom have?"), 3)
 
+    def test_rest_clause_does_not_crash(self):
+        # `_proportion` calls learn(p) with NO discourse/context args; learn() used to pass that bare `None`
+        # straight through to `_facts_from`/`_rest_quantity`, which iterates `context` unconditionally — a
+        # "the REST <verb>" premise ("she spent part... and saved the REST") crashed with a TypeError instead
+        # of declining. learn() now normalizes a missing context to []. Must decline, not raise.
+        self.assertEqual(reading.solve(
+            "Mona earns $80 a day. Every day, she spends part of her pay and saves the rest. After 20 days "
+            "of work, she spent $1360. How much did Mona save in 20 days?"), "undetermined")
+
 
 class TestRateExtrapolation(unittest.TestCase):
     """RATE × DURATION-IN-QUESTION — "drives 100 miles in 2 hours. How far will he go in 30 minutes?" →

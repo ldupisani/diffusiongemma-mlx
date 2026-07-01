@@ -3919,7 +3919,7 @@ def learn(statement: str, discourse: list = None, context: list = None) -> list:
     r = analyze(statement)
     if discourse is not None:
         _resolve_references(r, discourse)
-    facts = _facts_from(r, context)
+    facts = _facts_from(r, context if context is not None else [])
     if discourse is not None:                            # remember this statement's subject as a discourse
         verbs = [u for u in r.units if "verb" in u.features.get("senses", [])]  # entry (entity, is_name).
         non_cop = [v for v in verbs if _key(v.surface) not in ("is", "are", "was", "were", "be")]
