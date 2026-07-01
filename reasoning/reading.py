@@ -6122,6 +6122,43 @@ def _residual_sum_system(premises: list, question: str):
     return _compute(f"{_num(tot_val)} - ({' + '.join(_num(anchors[e]) for e in covered)})")
 
 
+def _two_relation_system(premises: list, question: str):
+    """TWO relations between the SAME entity PAIR, with NO anchor or total — a self-contained 2×2 linear
+    system. "Brett has 24 more blue marbles than red marbles. He has 5 times as many blue marbles as red
+    marbles. How many red marbles?" → blue = red+24 AND blue = 5·red, so red = (0−24)/(1−5) = 6. EVERY premise
+    must be an affine relation on the SAME (subject, standard) pair with DIFFERENT factors — parallel (k1==k2)
+    has no unique solution (two same-slope offsets at different times, e.g. "30 more … currently" / "80 more
+    … 2 years ago", correctly decline). Tightly gated: exactly two relations, nothing else, and the question
+    must ask for one of the two entities (works for a common-noun pair via `_asked_noun_entity`, or a named
+    pair via the question's name)."""
+    rels = []
+    for p in premises:
+        rel = _affine_relation(analyze(p))
+        if rel is None:
+            return None                                      # every premise must be one of the two relations
+        rels.append(rel)
+    if len(rels) != 2:
+        return None
+    (s1, k1, t1, c1), (s2, k2, t2, c2) = rels
+    if not (s1 == s2 and t1 == t2 and s1 != t1) or k1 == k2:
+        return None                                          # not the same pair, or parallel (no solution)
+    std = _compute(f"({_num(c2)} - ({_num(c1)})) / ({_num(k1)} - ({_num(k2)}))")
+    subj = _compute(f"{_num(k1)} * {_num(std)} + ({_num(c1)})")
+    # the asked entity is whichever of the pair the question names — a common-noun subtype (`_asked_noun_
+    # entity` / a noun key) OR a name. Match against {s1, t1} directly (a bare `_asked_noun_entity` can return
+    # the MEASURE noun, e.g. "coins", for a NAMED pair — so try all candidates and keep the one that IS an entity).
+    qr = analyze(question)
+    cands = [_asked_noun_entity(qr)] \
+        + [_entity(u) for u in qr.units if "name" in u.features.get("senses", [])] \
+        + [_noun_entity_key(u) for u in qr.units if "noun" in u.features.get("senses", [])]
+    asked = next((a for a in cands if a in (s1, t1)), None)
+    if asked == t1:
+        return std
+    if asked == s1:
+        return subj
+    return None                                              # asks for neither entity — not this shape
+
+
 def _inject_bare_ages(prem_readings: list, all_readings: list, facts_of: list, context: list) -> None:
     """BARE AGE — in an AGE-typed problem ("…as old as…", "older/younger than…"), a copula "X is N" with no
     unit ("If Job is 5") states X's AGE = N. The bare value quantifies no noun, so `_quantity` emits nothing
@@ -6888,6 +6925,8 @@ _EARLY_SYSTEMS = [
     ("anchored_average", _anchored_average_system),
     # RESIDUAL SUM (stated total names 3+, asked one never related): "Jermaine/Terrence/Emilee $90 … Emilee?" → 25.
     ("residual_sum", _residual_sum_system),
+    # TWO-RELATION 2x2 (same pair, no anchor/total): "24 more blue than red; 5 times as many blue as red → red 6".
+    ("two_relation", _two_relation_system),
 ]
 
 # LATE systems run AFTER the read-synthesize fixpoint has built `context` (they consume derived

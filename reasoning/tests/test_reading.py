@@ -4677,6 +4677,29 @@ class TestResidualSumSystem(unittest.TestCase):
             "undetermined")
 
 
+class TestTwoRelationSystem(unittest.TestCase):
+    """`_two_relation_system` — TWO relations between the SAME entity pair, no anchor/total: a 2×2 linear
+    system solved by elimination. +1 dev-train (the real Brett blue/red marbles case)."""
+
+    def test_offset_and_ratio_solve_for_standard(self):
+        # Alba = Bo + 15 AND Alba = 4·Bo → Bo = 15/(4−1) = 5.
+        self.assertEqual(reading.solve(
+            "Alba has 15 more coins than Bo. Alba has 4 times as many coins as Bo. How many coins does Bo "
+            "have?"), 5)
+
+    def test_asks_for_the_subject(self):
+        # same system, but the question asks for Alba: 4·5 = 20.
+        self.assertEqual(reading.solve(
+            "Alba has 15 more coins than Bo. Alba has 4 times as many coins as Bo. How many coins does Alba "
+            "have?"), 20)
+
+    def test_parallel_relations_decline(self):
+        # two SAME-slope offsets (k1==k2==1) have no unique solution — must decline, never divide by zero.
+        self.assertEqual(reading.solve(
+            "Alba has 15 more coins than Bo. Alba has 30 more coins than Bo. How many coins does Bo have?"),
+            "undetermined")
+
+
 class TestAnchoredSingleNeedsGuard(unittest.TestCase):
     """`_anchored_single_system` naively grabbed the FIRST name in the question as the ask — but "how many
     stamps does SHE NEED to ADD to have a collection AS LARGE AS Bert's?" is a DEFICIT-TO-TARGET question
