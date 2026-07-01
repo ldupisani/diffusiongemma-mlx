@@ -4002,6 +4002,56 @@ class TestAnchoredSumSystem(unittest.TestCase):
             "total?"), "undetermined")
 
 
+class TestAnchoredSingleSystem(unittest.TestCase):
+    """`_anchored_single_system` — the twin of `_anchored_sum_system` for when the question asks ONE named
+    entity's value instead of the sum. Shares `_anchored_affine_coeffs` with the sum twin. Required two new
+    generalizations to reach real cases: (1) `_pure_offset_relation` now accepts ANY comparative adjective
+    via `COMPARATIVE_SIGN` ("N pounds HEAVIER/lighter", "N inches TALLER/shorter"), not just "more"/"less"/
+    "fewer" (excluding "older"/"younger", which stay the age domain's); (2) the pivot back-substitutes when
+    the anchor sits on a DEPENDENT entity, not just the free one. +11 dev-holdout this increment (Billy/Brad/
+    Carl, Jana/Kelly/Jess, Tyler/Sam/Peter, and others — all real GSM8K weight/height comparative chains)."""
+
+    def test_comparative_adjective_chain_to_free_pivot(self):
+        # Nia=40 (anchor, the free pivot itself): Omar=Nia+9=49, Pria=Omar-14=35 (a "heavier"/"lighter" chain,
+        # not "more"/"less"). Mirrors the real Billy/Brad/Carl weight case.
+        self.assertEqual(reading.solve(
+            "Omar weighs 9 pounds more than Nia. Pria weighs 14 pounds less than Omar. Nia weighs 40 "
+            "pounds. How much does Pria weigh?"), 35)
+
+    def test_anchor_on_dependent_entity_back_substitutes(self):
+        # The anchor (Ivy=88) sits on a DEPENDENT entity, not the free pivot (Ren): Ivy = Ren − 12, so
+        # pivot Ren = 88 + 12 = 100; Zael = Ren + 7 = 107. Proves the back-substitution generalization (the
+        # real Ed/Al/Ben/Carl GSM8K case has this shape — the anchor is 2 hops from the free entity).
+        self.assertEqual(reading.solve(
+            "Ivy is 12 pounds lighter than Ren. Ivy weighs 88 pounds. Zael is 7 pounds heavier than Ren. "
+            "How much does Zael weigh?"), 107)
+
+    def test_difference_question_declines(self):
+        # "how many MORE does X have COMPARED TO Y" asks a DIFFERENCE, not a raw entity value — the naive
+        # "first name in the question" heuristic would wrongly return Anthony's raw value (21) instead of
+        # declining to the existing compared-to machinery (which answers 2). Regression guard.
+        self.assertEqual(reading.solve(
+            "Scott has 7 marbles. Anthony has 3 times as many marbles as Scott, and Jim has 2 less marbles "
+            "than Anthony. How many more marbles does Anthony have compared to Jim?"), 2)
+
+    def test_age_typed_problem_declines(self):
+        # An AGE-typed system (temporal-shift semantics `_anchored_affine_coeffs` doesn't model) must decline
+        # THIS solver even though it structurally parses as a plain anchor+ratio — the dedicated age machinery
+        # owns "old"/"age" text. Direct call (the real case still solves 28 via the age domain once this
+        # solver steps aside).
+        self.assertIsNone(reading._anchored_affine_coeffs(
+            ["In two years, Tom will be three times as old as Sam.", "Sam is currently 8 years old."],
+            "How old is Tom?"))
+
+    def test_rate_adjective_ratio_declines(self):
+        # "twice as FAST as" is a ratio over SPEED, not a direct value ratio — speed scales INVERSELY with
+        # the stated per-mile TIME, so folding it as a plain value ratio would silently invert the answer
+        # (the real Celia/Lexie GSM8K case: naive folding gives 40, gold is 300). `_ratio_relation` must
+        # decline the whole clause so this system honestly declines rather than mis-solve.
+        self.assertIsNone(reading._affine_relation(
+            reading.analyze("Celia runs twice as fast as Lexie.")))
+
+
 class TestDativeTransferCluster(unittest.TestCase):
     """Three fixes landed TOGETHER to solve "Reggie's father gave him $48. Reggie bought 5 books, each of which
     cost $2. How much left?" → 48 − 5·2 = 38: (1) DATIVE transfer "<giver> gave <recipient> $N" → recipient +N,
