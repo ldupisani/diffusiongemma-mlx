@@ -5232,6 +5232,95 @@ def _affine_system(premises: list, question: str):
     return _compute(f"{_num(a_ask)} * {_num(pivot)} + ({_num(b_ask)})")
 
 
+def _anchor_fact(rp: "Reading"):
+    """A single ANCHOR fact: an ABSOLUTE value stated for exactly one NAMED entity, with no relation to any
+    other entity ("Cecil has $600", "If David has 15 shells" → (Cecil, 600) / (David, 15)). None if the clause
+    carries a comparative/multiplier/fraction (that's a RELATION, not an anchor) or doesn't name exactly one
+    entity holding exactly one value — the anchor is what `_anchored_sum_system` pins its free pivot to when
+    the problem states no combined total."""
+    if any("comparative" in u.features.get("senses", []) for u in rp.units) \
+            or any("multiplier" in u.features.get("senses", []) for u in rp.units) \
+            or any(_fraction_parts(u.surface) is not None for u in rp.units):
+        return None
+    names = [u for u in rp.units if "name" in u.features.get("senses", [])]
+    if len(names) != 1:
+        return None
+    if not any("verb" in u.features.get("senses", []) for u in rp.units):
+        return None
+    vals = [u for u in rp.units if "value" in u.features.get("senses", []) and u.features.get("value") is not None]
+    if len(vals) != 1:
+        return None
+    return _entity(names[0]), vals[0].features["value"]
+
+
+def _anchored_sum_system(premises: list, question: str):
+    """The ANCHORED-SUM twin of `_affine_system`: N entities related by ratio/offset/combined-affine relations,
+    but instead of a COMBINED TOTAL pinning the pivot, one entity has a stated ABSOLUTE value (an "anchor") and
+    NO total is given — the question instead asks for the SUM of every entity. "Cecil has $600. Catherine has
+    $250 less than twice Cecil's money. Carmela has $50 more than twice Cecil's money. How much do they have
+    altogether?" → pivot=Cecil=600 directly (no division needed); answer = Σ(A_e·600 + B_e) = 2800. Runs only
+    when `_affine_system` (a stated total) and the pure/offset sum-systems all decline — a SUM question
+    ("altogether"/"in all"/"total") with NO stated total is this solver's shape, not theirs. TIGHTLY gated: a
+    sum-cue question, no combined-total cue in the premises (that's the other solvers' territory), exactly ONE
+    anchor fact whose entity is the free pivot (not itself a relation's subject), every entity reduces to it,
+    and no "N times more/less" idiom (the same ambiguous shape `_affine_system` declines). None otherwise."""
+    if not any(w in question.lower() for w in ("altogether", "in all", " total", "combined", "in total")):
+        return None                                                  # not a SUM question — not this shape
+    if any(w in p.lower() for p in premises
+           for w in ("combined", "total", "together", "between them", "share", "shared", "altogether")):
+        return None                                                  # a stated total is _affine_system's turf
+    for p in premises:
+        if re.search(r"\btimes (more|less|fewer)\b", p.lower()):
+            return None                                             # ambiguous ×N idiom → decline (GATE C)
+    asked_measure = _queried_measure(question)
+    if asked_measure is not None and "dozen" in asked_measure[1]:
+        return None                        # the anchor's "6 dozen" already converts to raw units internally,
+        #                                     so a "how many DOZEN" question needs a ÷12 we don't do → decline
+    rels, anchors = {}, {}
+    for p in premises:
+        rp = analyze(p)
+        rel = _affine_relation(rp)
+        anc = None if rel is not None else _anchor_fact(rp)
+        if rel is None and anc is None:
+            return None                    # an UNCLASSIFIED premise (e.g. a depletion action like "gave out
+            #                                 half her apples", or an unsupported relation frame like "an equal
+            #                                 number … as") may hide information this solver can't fold — an
+            #                                 unused-given firewall of its own (these self-contained systems run
+            #                                 before GUARD 3, so they must guard the same way)
+        if rel is not None:
+            subj_e, k, std_e, c = rel
+            if k == 0 or subj_e == std_e:
+                return None
+            if subj_e in rels:                                     # subject already defined → invert into
+                if std_e in rels:                                  # a relation for the OTHER entity, like
+                    return None                                     # `_affine_system`
+                rels[std_e] = (1.0 / k, subj_e, -c / k)
+            else:
+                rels[subj_e] = (k, std_e, c)
+        else:
+            e, v = anc
+            if e in anchors:
+                return None
+            anchors[e] = v
+    if len(rels) < 1 or len(anchors) != 1:
+        return None
+    entities = set(rels) | {std for _k, std, _c in rels.values()}
+    anchor_e = next(iter(anchors))
+    if anchor_e not in entities or anchor_e in rels:
+        return None                       # the anchor must be the free PIVOT, not itself relation-defined
+    coeff = {anchor_e: (1.0, 0.0)}                                  # value[e] = A·pivot + B, propagated from
+    for _ in range(len(entities) + 1):                              # the anchor along the relation tree
+        for e, (k, std, c) in rels.items():
+            if std in coeff and e not in coeff:
+                a_std, b_std = coeff[std]
+                coeff[e] = (k * a_std, k * b_std + c)
+    if any(e not in coeff for e in entities):                       # disconnected / cyclic → reject
+        return None
+    pivot = anchors[anchor_e]
+    total = _compute(" + ".join(f"({_num(a)} * {_num(pivot)} + ({_num(b)}))" for a, b in coeff.values()))
+    return total
+
+
 def _inject_bare_ages(prem_readings: list, all_readings: list, facts_of: list, context: list) -> None:
     """BARE AGE — in an AGE-typed problem ("…as old as…", "older/younger than…"), a copula "X is N" with no
     unit ("If Job is 5") states X's AGE = N. The bare value quantifies no noun, so `_quantity` emits nothing
@@ -6006,6 +6095,12 @@ def solve(text: str):
     _affine = _affine_system(premises, question)
     if _affine is not None:
         return _affine
+    # ANCHORED-SUM SYSTEM (the twin of the mixed affine system for when NO total is stated but one entity has
+    # a bare absolute value, and the question asks for the SUM of all entities). "Cecil has $600; Catherine is
+    # $250 less than twice Cecil; Carmela is $50 more than twice Cecil. How much altogether?" → 2800.
+    _anchored = _anchored_sum_system(premises, question)
+    if _anchored is not None:
+        return _anchored
     # GUARD 8 — INVERSION / COUNTERFACTUAL: two shapes the forward fold structurally cannot solve, so it
     # would fold the literal numbers and commit garbage. Both are honest DECLINES (the safe "only-declines"
     # shape, like GUARD 7).

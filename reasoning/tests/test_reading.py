@@ -3938,6 +3938,70 @@ class TestAffineSystem(unittest.TestCase):
             "many marbles does Uxo have?"), 160)
 
 
+class TestAnchoredSumSystem(unittest.TestCase):
+    """`_anchored_sum_system` — the twin of `_affine_system` for when NO combined total is stated but one
+    entity has a bare ABSOLUTE value (an "anchor"), and the question asks for the SUM of every entity: pivot
+    = the anchor's value directly (no division). "Cecil has $600; Catherine $250 less than twice Cecil;
+    Carmela $50 more than twice Cecil. Altogether?" → 2800 (dev-train real case, +4 dev this increment)."""
+
+    def test_two_entity_anchor_offset_sum(self):
+        # Wren=12 (anchor), Tam=Wren+7=19, sum=31. The simplest shape: one anchor + one pure offset relation.
+        self.assertEqual(reading.solve(
+            "Wren bought 12 apples. Tam bought 7 more apples than Wren. How many apples did they buy "
+            "altogether?"), 31)
+
+    def test_three_entity_mixed_ratio_offset_sum(self):
+        # Nils=$80 (anchor); Priya=2*80-15=145; Odele=2*80+9=169; sum=394. Mirrors the real Cecil/Catherine/
+        # Carmela GSM8K case (money, both entities affine in the SAME anchor).
+        self.assertEqual(reading.solve(
+            "Nils has $80. Priya has $15 less than twice Nils's money. Odele has $9 more than twice Nils's "
+            "money. How much money do they have altogether?"), 394)
+
+    def test_four_entity_chain_sum(self):
+        # A 4-deep relation CHAIN off one anchor: Kian=6, Lior=3*6=18, Mave=18+4=22, Suri=22/2=11, sum=57.
+        self.assertEqual(reading.solve(
+            "Kian has 6 marbles. Lior has 3 times as many marbles as Kian. Mave has 4 more marbles than "
+            "Lior. Suri has half as many marbles as Mave. What is the total number of marbles they all "
+            "have?"), 57)
+
+    def test_stated_total_declines_this_solver(self):
+        # A stated combined total is `_affine_system`'s turf, not this solver's — must still solve (via the
+        # other system), not decline outright, proving the two solvers don't collide.
+        self.assertEqual(reading.solve(
+            "Anna has 3 times as many toys as Mandy and 2 fewer toys than Amanda. If they have 142 toys "
+            "combined, how many toys does Mandy have?"), 20)
+
+    def test_unclassified_premise_declines(self):
+        # An UNCONSUMED premise (a depletion action on a pronoun, no name) must decline THIS solver rather
+        # than silently drop information: "gave out half her apples" is neither a relation nor an anchor, so
+        # folding just Frank+Susan's raw pre-depletion values would be a confident wrong (144, not 78). Calls
+        # the solver directly (the real Frank/Susan case still solves 78 through other machinery once this
+        # guard steps aside — proving the guard fixed the mis-fire without breaking the case outright).
+        self.assertIsNone(reading._anchored_sum_system(
+            ["Frank picked 36 apples.", "Susan picked 3 times as many apples as Frank.",
+             "If Susan gave out half of her apples", "Frank sold a third of his"],
+            "how many in total do they have left?"))
+
+    def test_missing_entity_relation_declines(self):
+        # An entity NAMED in the premises but whose defining relation isn't captured (here: an anaphoric
+        # "that many" instead of a second name) must decline THIS solver — silently summing only the captured
+        # entities would drop Jerome and under-count (37, not 87). Calls the solver directly (the real Seth/
+        # Jerome/Veronica case still solves 87 through other machinery once this guard steps aside).
+        self.assertIsNone(reading._anchored_sum_system(
+            ["Seth lost 17 pounds.", "Jerome lost three times that many pounds",
+             "Veronica lost 2 pounds more than Seth."],
+            "How many pounds did the 3 people lose in total?"))
+
+    def test_dozen_measure_declines(self):
+        # The anchor's "N dozen" converts to raw units internally ("6 dozen eggs" → 72), so a question asking
+        # for the total in DOZEN (not raw) units needs a ÷12 this solver doesn't do → decline rather than
+        # answer in the wrong scale (312, not 26). The real Benjamin/Carla/Trisha GSM8K case.
+        self.assertEqual(reading.solve(
+            "Benjamin collects 6 dozen eggs a day. Carla collects 3 times the number of eggs that Benjamin "
+            "collects. Trisha collects 4 dozen less than Benjamin. How many dozen eggs do the three collect "
+            "total?"), "undetermined")
+
+
 class TestDativeTransferCluster(unittest.TestCase):
     """Three fixes landed TOGETHER to solve "Reggie's father gave him $48. Reggie bought 5 books, each of which
     cost $2. How much left?" → 48 − 5·2 = 38: (1) DATIVE transfer "<giver> gave <recipient> $N" → recipient +N,
