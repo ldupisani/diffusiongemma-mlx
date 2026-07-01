@@ -137,7 +137,7 @@ def diff(before_path: str = None, after_path: str = None) -> str:
     return "\n".join(out)
 
 
-def collisions(limit: int = None) -> str:
+def collisions(slice_arg: str = None, limit: int = None) -> str:
     """Audit the `_EARLY_SYSTEMS` registry for cross-solver COLLISIONS — a problem that MORE THAN ONE
     early system claims. The live dispatch returns the FIRST claimer and silently masks the rest, so a
     second claimer that DISAGREES on the value is a latent bug: reordering the registry (or adding a
@@ -146,10 +146,18 @@ def collisions(limit: int = None) -> str:
     coverage number and the unit suite both hide.
 
     Runs every early system (no short-circuit) on the IDENTICAL (premises, question) the live dispatch
-    computes (`reading._parse_problem`), over the inspectable dev slices, mirroring solve()'s
-    unknown-word precision guard so only LIVE-REACHABLE problems count. Reports how many reachable
-    problems have ≥2 claimers, and flags any where the claimers disagree (which MUST be 0)."""
-    cases = [(s, r["question"]) for s in _SLICES for r in _load(s)]
+    computes (`reading._parse_problem`), mirroring solve()'s unknown-word precision guard so only
+    LIVE-REACHABLE problems count. Reports how many reachable problems have ≥2 claimers, and flags any
+    where the claimers disagree (which MUST be 0).
+
+    FIREWALL: this compares solvers to EACH OTHER, never to the gold, so it leaks no coverage-fitting
+    signal and is safe to run on TEST as an aggregate robustness check. But per "never inspect
+    individual TEST items", the per-problem listing is shown for DEV slices only; a TEST run prints
+    counts only. `slice_arg`: None/"dev" → both inspectable dev slices; "test"/"dev-train"/"dev-holdout"
+    → that slice."""
+    slices = _SLICES if slice_arg in (None, "dev") else (slice_arg,)
+    detail = "test" not in slices                     # firewall: no per-item listing on TEST
+    cases = [(s, r["question"]) for s in slices for r in _load(s)]
     if limit:
         cases = cases[:limit]
     reached, multi = 0, []
@@ -175,14 +183,17 @@ def collisions(limit: int = None) -> str:
         if len(claims) >= 2:
             multi.append((slc, question, claims))
     disagree = [(s, q, c) for s, q, c in multi if len({str(v) for _, v in c}) > 1]
-    out = [f"early-system collision audit over dev (reached early dispatch: {reached})",
+    out = [f"early-system collision audit over {'+'.join(slices)} (reached early dispatch: {reached})",
            f"  problems with >=2 claimers: {len(multi)}",
            f"  of those, claimers DISAGREE on the value: {len(disagree)}   <- latent bugs, MUST be 0"]
-    for slc, q, claims in multi:
-        vals = {str(v) for _, v in claims}
-        tag = "DISAGREE" if len(vals) > 1 else "agree   "
-        shown = ", ".join(f"{lab}={v}" for lab, v in claims)
-        out.append(f"  [{slc:11}] {tag}: {shown}  {' '.join(q.split())[:64]}")
+    if detail:
+        for slc, q, claims in multi:
+            vals = {str(v) for _, v in claims}
+            tag = "DISAGREE" if len(vals) > 1 else "agree   "
+            shown = ", ".join(f"{lab}={v}" for lab, v in claims)
+            out.append(f"  [{slc:11}] {tag}: {shown}  {' '.join(q.split())[:64]}")
+    else:
+        out.append("  (per-item listing suppressed on TEST — aggregate-only firewall)")
     return "\n".join(out)
 
 
@@ -195,7 +206,10 @@ if __name__ == "__main__":
     elif cmd == "diff":
         print(diff(rest[0] if len(rest) > 0 else None, rest[1] if len(rest) > 1 else None))
     elif cmd == "collisions":
-        print(collisions(int(rest[0]) if rest else None))
+        # collisions [slice] [limit] — slice ∈ dev|dev-train|dev-holdout|test (default dev)
+        slice_arg = rest[0] if rest and not rest[0].isdigit() else None
+        lim = next((int(a) for a in rest if a.isdigit()), None)
+        print(collisions(slice_arg, lim))
     else:
         print(__doc__)
         sys.exit(2)
