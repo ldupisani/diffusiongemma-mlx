@@ -6159,6 +6159,46 @@ def _two_relation_system(premises: list, question: str):
     return None                                              # asks for neither entity — not this shape
 
 
+_GOAL_VERBS = {"collect", "save", "earn", "raise", "reach", "gather", "sell", "read", "make", "buy",
+               "score", "run", "walk", "swim", "bake", "catch", "pick", "plant", "build", "write",
+               "complete", "finish", "produce", "grow", "donate", "sew", "knit", "get"}
+
+
+def _target_contributions_system(premises: list, question: str):
+    """TARGET minus CONTRIBUTIONS: a stated GOAL to reach ("need to collect 100 cans") minus the amounts
+    gathered so far, answering "how many MORE are still needed". "Alyssa and Abigail need to collect 100
+    empty cans. Alyssa collected 30, Abigail collected 43. How many more should they collect?" → 100−73 = 27.
+    Read from the RAW premise values because the general fold drops them (the elided-object "collected 30" is
+    a bare Predication, no measure). Distinguished from the "needs N MORE to HAVE k× Y" DEFICIT idiom (which
+    it must NOT touch — Amanda/Lena) by a target premise with "need … to <goal-verb>" and NO "more"/"to have".
+    Tightly gated: EVERY premise is the goal (exactly one value), a bare name+count contribution (1-2 values,
+    no "more"/"need"), or value-free — anything else declines."""
+    ql = question.lower()
+    if "how many more" not in ql and "how much more" not in ql:
+        return None
+    target, contrib = None, []
+    for p in premises:
+        pl = f" {p.lower()} "
+        rp = analyze(p)
+        vs = [u.features["value"] for u in rp.units if "value" in u.features.get("senses", [])]
+        nm = [u for u in rp.units if "name" in u.features.get("senses", [])]
+        is_goal = "need" in pl and " to " in pl and "more" not in pl and "to have" not in pl \
+            and any(f" {g}" in pl for g in _GOAL_VERBS)
+        if is_goal:
+            if target is not None or len(vs) != 1:
+                return None                                  # two goals / an ambiguous target → not this shape
+            target = vs[0]
+        elif nm and 1 <= len(vs) <= 2 and "more" not in pl and "need" not in pl:
+            contrib.extend(vs)                               # a per-name amount gathered so far
+        elif not vs:
+            continue                                         # a value-free premise (context) is harmless
+        else:
+            return None                                      # an unaccounted value → decline
+    if target is None or not contrib:
+        return None
+    return _compute(f"{_num(target)} - ({' + '.join(_num(c) for c in contrib)})")
+
+
 def _inject_bare_ages(prem_readings: list, all_readings: list, facts_of: list, context: list) -> None:
     """BARE AGE — in an AGE-typed problem ("…as old as…", "older/younger than…"), a copula "X is N" with no
     unit ("If Job is 5") states X's AGE = N. The bare value quantifies no noun, so `_quantity` emits nothing
@@ -6927,6 +6967,8 @@ _EARLY_SYSTEMS = [
     ("residual_sum", _residual_sum_system),
     # TWO-RELATION 2x2 (same pair, no anchor/total): "24 more blue than red; 5 times as many blue as red → red 6".
     ("two_relation", _two_relation_system),
+    # TARGET − CONTRIBUTIONS: "need to collect 100 cans; collected 30, 43; how many more to collect?" → 27.
+    ("target_contributions", _target_contributions_system),
 ]
 
 # LATE systems run AFTER the read-synthesize fixpoint has built `context` (they consume derived

@@ -4700,6 +4700,25 @@ class TestTwoRelationSystem(unittest.TestCase):
             "undetermined")
 
 
+class TestTargetContributionsSystem(unittest.TestCase):
+    """`_target_contributions_system` — a stated GOAL ("need to collect N") minus the amounts gathered so
+    far, answering "how many MORE are needed". Reads raw premise values (the general fold drops the
+    elided-object "collected 20"). +1 dev-train (the real Alyssa/Abigail cans case)."""
+
+    def test_target_minus_two_contributions(self):
+        # goal 90; Nia 20, Owen 30 → 90 − 50 = 40.
+        self.assertEqual(reading.solve(
+            "Nia and Owen need to collect 90 cans for their project. Nia collected 20 while Owen collected "
+            "30 cans. How many more cans should they collect?"), 40)
+
+    def test_deficit_idiom_not_touched(self):
+        # "needs N MORE to HAVE k× Y" is the DEFICIT idiom, NOT a goal-minus-contributions — this solver must
+        # decline it (a "more"/"to have" in the target premise is the disqualifier), leaving it to decline.
+        self.assertIsNone(reading._target_contributions_system(
+            ["Bea needs 5 more coins to have twice as many coins as Cal", "Cal has 10 coins"],
+            "how many more coins does Bea need?"))
+
+
 class TestAnchoredSingleNeedsGuard(unittest.TestCase):
     """`_anchored_single_system` naively grabbed the FIRST name in the question as the ask — but "how many
     stamps does SHE NEED to ADD to have a collection AS LARGE AS Bert's?" is a DEFICIT-TO-TARGET question
