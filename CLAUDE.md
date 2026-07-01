@@ -130,7 +130,11 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   divergence would silently leak the firewall). Snapshots default to `$DIFG_DATA_DIR/reading_diff/`
   (gitignored — GSM8K questions never enter version control); never imported by the unit tests. 0 model
   calls. Workflow: `snapshot before.json` (at HEAD) → edit → `snapshot after.json` → `diff`. CLI:
-  `python -m reasoning.reading_diff snapshot [path]` and `… diff [before.json] [after.json]`.
+  `python -m reasoning.reading_diff snapshot [path]` and `… diff [before.json] [after.json]`. Also
+  `… collisions` — audits the `_EARLY_SYSTEMS` registry for cross-solver COLLISIONS (a dev problem
+  claimed by ≥2 arithmetic system-solvers whose values disagree — the `_name_count` family-isolation
+  failure mode; must be 0). Required after adding/reordering any system-solver; see the playbook's
+  "arithmetic system-solvers are a REGISTRY" corollary.
 - **`backend.py`** — pluggable inference backend (see below).
 - **`reasoning/mcp_server.py`** — exposes the reasoning project as an MCP service (FastMCP, stdio):
   `ask` (route → coded answer + domain + model-call count; 0-call compound split; non-coded types

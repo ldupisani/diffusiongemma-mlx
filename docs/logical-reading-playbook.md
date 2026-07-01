@@ -32,6 +32,35 @@ target; a global flag cannot.
 > verb fixed the design and the bug at the same time. When a fact comes out wrong, suspect a word
 > that isn't carrying (or binding) its obligation.
 
+### Architectural corollary — the arithmetic system-solvers are a REGISTRY, and a shared discriminator isolates families
+
+The word-problem arithmetic layer (GSM8K) grew a family of *system solvers* — `_affine_system`,
+the `_anchored_*` twins, the `_noun_*` coordinate-noun family, the rate/percent recognizers — each
+a self-contained recognizer that reads senses off the obligation graph (`analyze()`) and returns an
+answer or `None`. **These are REGISTERED, not hand-inlined in `solve()`:** `_EARLY_SYSTEMS` (before
+the read–synthesize fixpoint) and `_LATE_SYSTEMS` (after it) are two ordered dispatch tables;
+`solve()` returns the first non-`None`. **To add a system, append it to the registry in priority
+order — never re-inline an `if _x is not None: return _x` branch.** (The chain was 27 inlined
+branches before this was fixed; that accretion was itself a drift from "registered, never
+special-cased.")
+
+The failure mode this layer is prone to is a **cross-solver collision** — two recognizers claiming
+the same premise-set. This domain's `_name_count` bug and a batch of 5 TEST regressions were all
+collisions: a solver silently accepting a premise that belonged to a *different* family. The
+isolation gate is the shared **`_name_count`** primitive (`reading.py`): the NAMED-entity family
+requires exactly 2 names per relation / 1 per anchor; the COMMON-NOUN fallback fires only at 0–1
+names. **Every named system MUST gate on `_name_count` before trusting a relation/anchor** (else it
+picks up a noun-fallback relation that means something else — e.g. a per-unit rate mis-read as a
+flat count, 700 vs gold 100000). This gate is intrinsic per-premise extraction logic, not a hoistable
+global filter — leave it at each call site.
+
+**Required per-increment check:** after adding or reordering any early system, run
+`python -m reasoning.reading_diff collisions`. It runs every `_EARLY_SYSTEMS` solver (no
+short-circuit) on each dev problem and flags any claimed by ≥2 systems whose values *disagree* —
+which must be **0**. This turns the collision class into a detectable regression instead of one the
+live first-return silently masks (and which the aggregate coverage number and the unit suite both
+hide). A benign overlap where both claimers agree is acceptable and reported as `agree`.
+
 ## Goal & stance
 
 - Deterministic reasoning, **not an LLM**. A valid statement gets a definitive, auditable reading;
