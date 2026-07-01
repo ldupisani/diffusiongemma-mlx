@@ -3974,11 +3974,12 @@ class TestBackwardDepletion(unittest.TestCase):
             "Randy had some money. Smith gave him another $200. Randy then gave Sally $1200. If Randy has "
             "$2000 left, how much money did Randy have at first?"), 3000)
 
-    def test_unused_given_declines(self):
-        # a dropped operation (the 2nd spend never parsed) leaves a stated value uncaptured → decline.
-        self.assertNotIsInstance(reading.solve(
+    def test_then_continuation_backward(self):
+        # the "then spent another $1.25" continuation now supplies the elided subject, so both spends are
+        # captured and the backward inversion solves: 6 + 1.75 + 1.25 = 9.
+        self.assertEqual(reading.solve(
             "Josh has some money. He spent $1.75 on a drink, and then spent another $1.25. If he had $6 left, "
-            "how much money did Josh have at first?"), (int, float))
+            "how much money did Josh have at first?"), 9)
 
 
 class TestActionAmountAcrossTimes(unittest.TestCase):
@@ -4541,6 +4542,23 @@ class TestPercentChange(unittest.TestCase):
         self.assertEqual(reading.solve(
             "Bob buys 5 toys that each cost $3. He gets a 20% discount. "
             "How much did he pay for everything?"), "undetermined")
+
+
+class TestBackwardThenContinuation(unittest.TestCase):
+    """A "then <verb>…" continuation supplies the elided subject (same-subject sequential action), and
+    `_backward_inversion` is tried for any question phrasing (not just "at first"). SYNTHETIC."""
+
+    def test_backward_any_phrasing(self):
+        # unknown initial, two spends, $6 left → 6 + 1.75 + 1.25 = 9 (question is not "at first"-phrased).
+        self.assertEqual(reading.solve(
+            "Josh has some money. He spent $1.75 on a drink, and then spent another $1.25. "
+            "If he had $6 left, how much money did Josh have?"), 9)
+
+    def test_forward_then_continuation(self):
+        # the second spend is captured forward too: 9 − 1.75 − 1.25 = 6.
+        self.assertEqual(reading.solve(
+            "Josh has 9 dollars. He spent $1.75 on a drink, and then spent another $1.25. "
+            "How much money does Josh have left?"), 6)
 
 
 class TestMeasureComparative(unittest.TestCase):

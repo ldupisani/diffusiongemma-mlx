@@ -4418,7 +4418,12 @@ def _split_clauses(sentence: str) -> list:
                         lsubj = _clause_subject(left)
                         rverb = next((_key(u.surface) for u in analyze(right).units
                                       if "verb" in u.features.get("senses", [])), None)
-                        if lsubj is not None and rverb in ("is", "are", "was", "were", "has", "have", "had"):
+                        # a "then <verb>…" continuation ("spent $1.75 … and then spent another $1.25") is the
+                        # SAME subject acting again — supply it for ANY verb (the "then" cue makes the sequential
+                        # same-subject reading unambiguous, unlike a bare action-verb conjunct).
+                        then_cont = right.lower().startswith("then ")
+                        if lsubj is not None and (then_cont
+                                                  or rverb in ("is", "are", "was", "were", "has", "have", "had")):
                             return _split_clauses(left) + _split_clauses(f"{lsubj} {right}")
                     # NOTE: general SUBJECT elision (action-verb right conjunct) stays REVERTED — it exposes
                     # multi-step gaps (per-recipient "each" distribution, "had $N left" inversion, running sums)
@@ -5968,6 +5973,13 @@ def solve(text: str):
     _ppop = _percent_population(premises, question)
     if _ppop is not None:
         return _ppop
+    # BACKWARD INVERSION (general) — "Josh has some money; spent $1.75 + $1.25; $6 left. How much did he
+    # have?" → 6 + 1.75 + 1.25 = 9. GUARD 8 only tries this for "at first"-phrased questions; try it here for
+    # any phrasing too. Its own gates (unquantified initial, exactly one "left"-cued final, ≥1 delta, NO
+    # unused given) keep it from firing on forward problems (a stated initial trips the unused-given gate).
+    _binv = _backward_inversion(premises, question)
+    if _binv is not None:
+        return _binv
     # POOL-AND-REDISTRIBUTE — "combine their candies and share equally, how many will EACH have?" → Σ/N.
     # Tried before GUARD 3 (the pooled amounts are all "used" so it wouldn't trip, but keep recognizers
     # together). Same math as the average branch but cued by a share-equally premise + a per-each question.
