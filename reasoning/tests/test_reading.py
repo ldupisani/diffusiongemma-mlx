@@ -4052,6 +4052,32 @@ class TestAnchoredSingleSystem(unittest.TestCase):
             reading.analyze("Celia runs twice as fast as Lexie.")))
 
 
+class TestAnchoredDifferenceSystem(unittest.TestCase):
+    """`_anchored_difference_system` — the third anchored twin, for a question naming TWO entities and asking
+    how much MORE one has than the other. Reuses `_anchored_affine_coeffs`; declines when the question isn't
+    comparative (that's the single-value twin's shape) or doesn't name exactly two entities. +1 dev-holdout
+    (the real Anton/Heike/Ann GSM8K case)."""
+
+    def test_two_entity_ratio_difference(self):
+        # Heike=10 (from Nia=6x=60... here: Yui=6*Zeke=60 -> Zeke=10), Ravi=3*Zeke=30, Yui-Ravi=60-30=30.
+        self.assertEqual(reading.solve(
+            "Ravi has three times as many cards as Zeke. Yui has six times as many cards as Zeke. If Yui "
+            "has 60 cards, how many more cards does Yui have than Ravi?"), 30)
+
+    def test_single_value_question_not_difference(self):
+        # no comparative sense in the question → the single-value twin's shape, not this one.
+        self.assertEqual(reading.solve(
+            "Omar weighs 9 pounds more than Nia. Nia weighs 40 pounds. How much does Omar weigh?"), 49)
+
+    def test_needs_to_have_idiom_declines(self):
+        # "X NEEDS N more to HAVE k times as many as Y" states a DEFICIT (X + N = k·Y), the OPPOSITE equation
+        # from "X HAS N more than k times Y" (X = k·Y + N) the affine extractors otherwise assume — silently
+        # applying the wrong equation would confidently invert the answer (the real Amanda/Katrina/Mabel
+        # GSM8K case: naive folding gives 39, gold is 63). `_affine_relation` must decline the whole clause.
+        self.assertIsNone(reading._affine_relation(
+            reading.analyze("Amanda needs 12 more marbles to have twice as many marbles as Katrina")))
+
+
 class TestImperativeQuestionClause(unittest.TestCase):
     """`solve()` used to require a literal "?" ANYWHERE in the text, so a GSM8K problem phrased as an
     IMPERATIVE ("Calculate the total…", "Find X's weight.", ending in "." — ~4% of the corpus) was declined

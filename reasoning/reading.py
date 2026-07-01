@@ -4784,12 +4784,16 @@ def _ratio_relation(rp: Reading):
     verb, the standard is the OTHER name, the factor is the clause's multiplier or fraction. Covers "A has k×
     as many/much <M> as B", "A is k× as old as B", "A is 1/3 the age of B", "A is twice B's age", "A is half
     of B's age". None if there's no factor, not exactly two names, a comparative/offset (pure-ratio only —
-    "N more/less than" is a different, firewall-risky shape), or the ratio is over a RATE ADJECTIVE ("twice
+    "N more/less than" is a different, firewall-risky shape), the ratio is over a RATE ADJECTIVE ("twice
     as FAST/quick as") — speed doesn't scale like a plain value (twice as fast = HALF the time, not double),
     so folding it as a direct ratio on whatever value the standard states elsewhere is a silent inversion bug;
-    that shape belongs to the dedicated rate-cluster machinery, not this generic value-ratio extractor."""
+    that shape belongs to the dedicated rate-cluster machinery, not this generic value-ratio extractor — or
+    the clause is governed by "needs"/"need" ("Amanda NEEDS to have twice as many as Katrina" states a TARGET
+    Amanda doesn't hold yet, not Amanda's current value — misreading it as a plain ratio is a silent
+    deficit/current-state conflation this extractor doesn't model)."""
     if any("comparative" in u.features.get("senses", []) for u in rp.units) \
-            or any(_key(u.surface) in ("more", "less", "older", "younger", "fewer", "fast", "quick", "quickly")
+            or any(_key(u.surface) in ("more", "less", "older", "younger", "fewer", "fast", "quick", "quickly",
+                                        "need", "needs")
                    for u in rp.units):
         return None
     mult = next((u for u in rp.units if "multiplier" in u.features.get("senses", [])), None)
@@ -4833,7 +4837,13 @@ def _offset_ratio_relation(rp: Reading):
     years Tom has" → D = ½·T − 5). POSITIONAL parse: the OFFSET value precedes the comparative ("8 more"), the
     FACTOR is a multiplier AFTER "than" ("twice"). Requires an explicit multiplier — a bare "N more than Y"
     (no factor) is the firewall-risky offset shape we keep declining, not this one. Exactly two names, the
-    standard in a genuine ratio frame (after as/of/that), like `_ratio_relation`. None otherwise."""
+    standard in a genuine ratio frame (after as/of/that), like `_ratio_relation`. None if the clause is
+    governed by "needs"/"need" — "Amanda NEEDS 12 more to have twice as many as Katrina" states a DEFICIT to
+    reach a target (Amanda + 12 = 2·Katrina), the OPPOSITE equation from "Amanda HAS 12 more than twice as
+    many as Katrina" (Amanda = 2·Katrina + 12) this extractor assumes; silently applying the wrong equation
+    is a confident-wrong risk, not a parsing nuance to special-case here."""
+    if any(_key(u.surface) in ("need", "needs") for u in rp.units):
+        return None
     comp = next((u for u in rp.units if _key(u.surface) in ("more", "less", "fewer")
                  and "comparative" in u.features.get("senses", [])), None)
     if comp is None:
@@ -5009,7 +5019,11 @@ def _pure_offset_relation(rp: "Reading"):
     extractor doesn't do; letting it also claim age comparatives caused real regressions (a plain "younger
     than" premise no longer reached the age solver). The no-multiplier twin of `_offset_ratio_relation`; safe
     only inside a sum-system (the total pins the pair, so the bare offset — normally too under-determined to
-    fold — becomes solvable). Exactly two names, standard after "than"/"as". None otherwise."""
+    fold — becomes solvable). Exactly two names, standard after "than"/"as". None if the clause is governed
+    by "needs"/"need" — "Loris needs 3 more to have the same as Lamont" states a DEFICIT (Loris + 3 = Lamont),
+    the OPPOSITE equation from "Loris has 3 more than Lamont" (Loris = Lamont + 3) this extractor assumes."""
+    if any(_key(u.surface) in ("need", "needs") for u in rp.units):
+        return None
     comp = next((u for u in rp.units if "comparative" in u.features.get("senses", [])
                  and _key(u.surface) not in ("older", "younger")), None)
     if comp is None:
@@ -5383,6 +5397,34 @@ def _anchored_single_system(premises: list, question: str):
         return None
     a, b = coeff[asked]
     return _compute(f"{_num(a)} * {_num(pivot)} + ({_num(b)})")
+
+
+def _anchored_difference_system(premises: list, question: str):
+    """The ANCHORED-DIFFERENCE twin: same anchor-pinned relation graph, but the question names TWO entities
+    and asks how much MORE one has than the other — "Anton has three times as many cards as Heike. Ann has
+    six times as many cards as Heike. If Ann has 60 cards, how many more cards does Ann have than Anton?" →
+    Heike=10 (from Ann=60=6·Heike), Anton=30, Ann−Anton=30. Requires the question to carry a comparative
+    sense (declined by `_anchored_single_system`, so the two never collide) and EXACTLY two names — the first
+    named (textually) minus the second, matching the "X … more … than Y" surface order."""
+    qr = analyze(question)
+    if not any("comparative" in u.features.get("senses", []) for u in qr.units):
+        return None
+    qnames = [u for u in qr.units if "name" in u.features.get("senses", [])]
+    if len(qnames) != 2:
+        return None
+    e1, e2 = _entity(qnames[0]), _entity(qnames[1])
+    if e1 == e2:
+        return None
+    got = _anchored_affine_coeffs(premises, question)
+    if got is None:
+        return None
+    coeff, pivot = got
+    if e1 not in coeff or e2 not in coeff:
+        return None
+    a1, b1 = coeff[e1]
+    a2, b2 = coeff[e2]
+    return _compute(f"({_num(a1)} * {_num(pivot)} + ({_num(b1)})) - "
+                    f"({_num(a2)} * {_num(pivot)} + ({_num(b2)}))")
 
 
 def _inject_bare_ages(prem_readings: list, all_readings: list, facts_of: list, context: list) -> None:
@@ -6175,6 +6217,11 @@ def solve(text: str):
     _anchored_1 = _anchored_single_system(premises, question)
     if _anchored_1 is not None:
         return _anchored_1
+    # ANCHORED-DIFFERENCE SYSTEM (the twin for "how many more does X have than Y"): "Anton has 3x Heike's
+    # cards; Ann has 6x Heike's cards; Ann has 60 cards. How many more does Ann have than Anton?" → 30.
+    _anchored_d = _anchored_difference_system(premises, question)
+    if _anchored_d is not None:
+        return _anchored_d
     # GUARD 8 — INVERSION / COUNTERFACTUAL: two shapes the forward fold structurally cannot solve, so it
     # would fold the literal numbers and commit garbage. Both are honest DECLINES (the safe "only-declines"
     # shape, like GUARD 7).
