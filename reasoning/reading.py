@@ -1728,6 +1728,7 @@ def _universal(verb, reading: Reading) -> bool:
                 return True
     return False
 
+# --- reference resolution: coreference, entities, possessives, pronoun gender ---------------
 
 @dataclass(frozen=True)
 class Referent:
@@ -1916,6 +1917,7 @@ GROWTH_VERBS = {"grow", "gain", "increase", "rise", "lengthen"}   # a rate of th
 RESULT_MEASURE = {v: MONEY for v in ("earn", "spend", "pay", "cost", "save", "make", "give", "get",
                                      "receive", "sell", "buy", "charge", "collect", "win", "owe", "raise")}
 
+# --- FACT MODEL & EXTRACTION: read Quantity/Rate/Age/Distribution facts from a reading ------
 
 def _time_order(times: list, context: list):
     """A linear (chronological) ordering of the given time nodes from the Before closure, or None if
@@ -3133,6 +3135,7 @@ def _predication(reading: Reading):
                        _verb_negated(verbs[0], reading), _universal(verbs[0], reading),
                        _descriptor(obj) if obj is not None else None)
 
+# --- predicates & relations: Membership/Subset/Relation + predication verdicts --------------
 
 @dataclass(frozen=True)
 class Membership:
@@ -3391,6 +3394,7 @@ def _age_solve_for_t(r: Reading, context: list):
         else f"({_num(k)} * {_num(x_now)} - {_num(y_now)}) / (1 - {_num(k)})"
     return _compute(f"{_num(x_now)} + ({t})")
 
+# --- ANSWERING & FACT ASSEMBLY: answer() / learn() / _facts_from() --------------------------
 
 def answer(question: str, context: list, discourse: list = None):
     """Answer a question against a context of facts. A yes/no question ("Did the student pass?")
@@ -4372,6 +4376,7 @@ def synthesize(facts: list, readings: list = None) -> list:
                     changed = True
     return facts
 
+# --- clause & question analysis: split clauses, find the question, per-clause helpers -------
 
 def _has_verb(text: str) -> bool:
     # do/does/did are PRIMARILY auxiliaries; a clause fragment shouldn't count as having its own verb on
@@ -4656,6 +4661,7 @@ def _queried_measure(question: str):
     coll = _follow(_follow(interro, "queries"), "collection")
     return _descriptor(coll) if coll is not None else None
 
+# --- decline-safety guards: DECLINE when an operative quantity/rate/multiplier is dropped ---
 
 def _period_unapplied(question_reading: Reading, premise_readings: list, context: list) -> bool:
     """DECLINE-SAFETY: True when the question asks for a per-PERIOD total ("…how many in N weeks/days?")
@@ -4881,6 +4887,7 @@ def _asked_noun_entity(qr: Reading):
                 return _noun_entity_key(nxt)
     return None
 
+# --- ARITHMETIC SYSTEM-SOLVERS: relation extraction, then the solver families (see registry) ---
 
 def _ratio_relation(rp: Reading):
     """A single pure-RATIO relation in a clause → (subject, factor, standard), where subject = factor ×
@@ -5427,6 +5434,7 @@ def _affine_system(premises: list, question: str):
     a_ask, b_ask = coeff[asked]
     return _compute(f"{_num(a_ask)} * {_num(pivot)} + ({_num(b_ask)})")
 
+# --- system family: common-noun / coordinate-noun entities ----------------------------------
 
 def _noun_affine_system(premises: list, question: str):
     """The COORDINATE/SUBTYPE-NOUN twin of `_affine_system`: entities are COMMON NOUNS (via
@@ -5669,6 +5677,7 @@ def _noun_residual_sum_system(premises: list, question: str):
     covered_sum = " + ".join(f"({_num(a)} * {_num(pivot)} + ({_num(b)}))" for a, b in coeff.values())
     return _compute(f"{_num(total)} - ({covered_sum})")
 
+# --- system family: anchored (no stated total — one entity has a bare absolute value) -------
 
 def _anchor_fact(rp: "Reading"):
     """A single ANCHOR fact: an ABSOLUTE value stated for exactly one NAMED entity, with no relation to any
@@ -6065,6 +6074,7 @@ def _inject_bare_ages(prem_readings: list, all_readings: list, facts_of: list, c
 
 _DEPLETION_VERBS = {"take", "eat", "remove", "drink", "consume", "use", "sell", "spend", "lose", "pick"}
 
+# --- system family: scene depletion & backward inversion ------------------------------------
 
 def _scene_depletion(question: str, context: list, prem_readings: list):
     """A POOL depleted by takes — "There were 349 pieces of candy in a bowl. Talitha took 108, Solomon took
@@ -6196,6 +6206,7 @@ _PCT_Q_ACCEPT = {"pay", "pays", "paid", "new", "final", "cost", "costs", "now", 
 _PCT_Q_BLOCK = {"original", "save", "saved", "savings", "total", "left", "remain", "remaining",
                 "remained", "difference", "many", "before", "without", "raise"}
 
+# --- system family: percent + self-multiple -------------------------------------------------
 
 def _self_multiple_sum(premises: list, question: str):
     """SELF-REFERENTIAL MULTIPLE + SUM — one subject does an amount over two periods, the second a MULTIPLE of
@@ -6408,6 +6419,7 @@ def _proportion(premises: list, question: str):
         return _compute(f"{_num(oth.amount)} * {_num(qval.features['value'])} / {_num(cnt.amount)}")
     return None
 
+# --- system family: rates (per-unit extrapolation / difference / sum / race / remainder) ----
 
 def _rate_extrapolation(premises: list, question: str, context: list):
     """RATE × DURATION-IN-QUESTION — "Luis drives 80 miles in 2 hours. How far will he go in 15 minutes?" →
@@ -6837,6 +6849,7 @@ _LATE_SYSTEMS = [
     ("equal_share", lambda P, Q, C, R: _equal_share(Q, C, P)),
 ]
 
+# --- THE SOLVER: parse a problem, then dispatch through the system registries ---------------
 
 def _parse_problem(text: str):
     """Split a word-problem paragraph into (premises, question). Returns None when there is no
