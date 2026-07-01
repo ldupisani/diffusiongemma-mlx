@@ -4193,6 +4193,36 @@ class TestNounAffineSystem(unittest.TestCase):
             "how many toys does Mandy have?"))
 
 
+class TestNounAnchoredSumSystem(unittest.TestCase):
+    """`_noun_anchored_sum_system` — the anchor-based twin of `_noun_affine_system`: no combined/category
+    total is stated, but one COMMON-NOUN entity has a bare anchor value (via `_noun_anchor_fact`, tolerating
+    an outer possessor name like "Hannah's family"). The question asks for a CATEGORY SUM ("how many ANIMALS
+    do they have?") — a noun that ISN'T one of the specific relation entities. +3 dev-holdout (Hannah's-farm,
+    Sandro's-children, and a green/red-apples GSM8K case)."""
+
+    def test_anchor_chain_category_sum(self):
+        # pig=10 (anchor), cow=2*10-3=17, goat=17+6=23, sum=50.
+        self.assertEqual(reading.solve(
+            "Priya's family has ten pigs on their farm. They also have three fewer than twice as many cows "
+            "as pigs and six more goats than cows. How many animals do they have on their farm?"), 50)
+
+    def test_two_entity_sum_no_total_cue(self):
+        # daughters=6*sons=18, sons=3 (anchor) -> sum=21. No "altogether"/"total" cue at all — the category
+        # noun "children" (distinct from "daughter"/"son") is itself the sum signal.
+        self.assertEqual(reading.solve(
+            "Wesley has six times as many daughters as sons. If he currently has three sons, how many "
+            "children does he have?"), 21)
+
+    def test_negated_question_declines(self):
+        # "how many of her houses are NOT yellow?" is a COMPLEMENT sum (total minus the excluded entity),
+        # not a full Σ over every entity — conflating the two gave a confident wrong (190 vs gold 160).
+        self.assertIsNone(reading._noun_anchored_sum_system(
+            ["Isabella has three times as many green houses as yellow houses.",
+             "She also has 40 fewer yellow houses than red houses.",
+             "If she has 90 green houses"],
+            "how many of her houses are not yellow?"))
+
+
 class TestImperativeQuestionClause(unittest.TestCase):
     """`solve()` used to require a literal "?" ANYWHERE in the text, so a GSM8K problem phrased as an
     IMPERATIVE ("Calculate the total…", "Find X's weight.", ending in "." — ~4% of the corpus) was declined

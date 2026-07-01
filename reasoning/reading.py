@@ -5448,6 +5448,85 @@ def _noun_affine_system(premises: list, question: str):
     return _compute(f"{_num(a_ask)} * {_num(pivot)} + ({_num(b_ask)})")
 
 
+def _noun_anchored_sum_system(premises: list, question: str):
+    """The ANCHOR-based twin of `_noun_affine_system`: no combined/category total is stated, but ONE entity
+    has a bare absolute value (a noun ANCHOR — "Hannah's family has ten PIGS", via `_noun_anchor_fact`,
+    ignoring the outer possessor Hannah). The question asks for a CATEGORY SUM ("how many ANIMALS do they
+    have?") — a noun that is NOT itself one of the specific relation entities, implying Σ over all of them
+    (unlike `_anchored_sum_system`'s name family, which needs an explicit "altogether"/"total" cue — a
+    category noun in the question already signals the sum here). Same "0-1 names per premise" safety check
+    as `_noun_affine_system` (never competes with the 2-name system), and the SAME unused-given firewall as
+    the named anchored family: every premise must classify as a relation or an anchor. "Hannah's family has
+    ten pigs. They have three fewer than twice as many cows as pigs and six more goats than cows. How many
+    animals do they have?" → pig=10 (anchor), cow=2·10−3=17, goat=17+6=23, Σ=50. Declines a NEGATED question
+    ("how many of her houses are NOT yellow?") — that's a COMPLEMENT sum (total minus ONE excluded entity),
+    not a full Σ over every entity; conflating the two is a confident-wrong the diff harness caught (a
+    full-Σ answer of 190 vs the complement's correct 160)."""
+    if any("negation" in u.features.get("senses", []) for u in analyze(question).units):
+        return None
+    for p in premises:
+        if any(w in p.lower() for w in ("total", "combined", "altogether", "together")):
+            return None                                    # a stated total is _noun_affine_system's turf
+        if re.search(r"\btimes (more|less|fewer)\b", p.lower()):
+            return None                                    # ambiguous ×N idiom → decline (GATE C)
+    rels, anchors = {}, {}
+    for p in premises:
+        rp = analyze(p)
+        if sum(1 for u in rp.units if "name" in u.features.get("senses", [])) == 2:
+            return None                                    # a genuine 2-name relation is _affine_system's turf
+        rel = _affine_relation(rp)
+        anc = None if rel is not None else _noun_anchor_fact(rp)
+        if rel is None and anc is None:
+            return None                                    # unused-given firewall, like the named family
+        if rel is not None:
+            subj_e, k, std_e, c = rel
+            if k == 0 or subj_e == std_e:
+                return None
+            if subj_e in rels:
+                if std_e in rels:
+                    return None
+                rels[std_e] = (1.0 / k, subj_e, -c / k)
+            else:
+                rels[subj_e] = (k, std_e, c)
+        else:
+            e, v = anc
+            if e in anchors:
+                return None
+            anchors[e] = v
+    if len(rels) < 1 or len(anchors) != 1:
+        return None
+    entities = set(rels) | {std for _k, std, _c in rels.values()}
+    anchor_e, anchor_v = next(iter(anchors.items()))
+    if anchor_e not in entities:
+        return None
+    free = [e for e in entities if e not in rels]
+    if len(free) != 1:
+        return None
+    coeff = {free[0]: (1.0, 0.0)}
+    for _ in range(len(entities) + 1):
+        for e, (k, std, c) in rels.items():
+            if std in coeff and e not in coeff:
+                a_std, b_std = coeff[std]
+                coeff[e] = (k * a_std, k * b_std + c)
+    if any(e not in coeff for e in entities):
+        return None
+    a_anc, b_anc = coeff[anchor_e]
+    if a_anc == 0:
+        return None
+    pivot = _compute(f"({_num(anchor_v)} - ({_num(b_anc)})) / {_num(a_anc)}")
+    qr = analyze(question)
+    many = next((u for u in qr.units if _key(u.surface) in ("many", "much")
+                 and "quantifier" in u.features.get("senses", [])), None)
+    asked_u = _follow(many, "collection") if many is not None else None
+    if asked_u is None:
+        return None
+    asked = _noun_entity_key(asked_u)
+    if asked in coeff:
+        return None                                        # a specific entity ask — not this SUM shape
+    total = " + ".join(f"({_num(a)} * {_num(pivot)} + ({_num(b)}))" for a, b in coeff.values())
+    return _compute(total)
+
+
 def _anchor_fact(rp: "Reading"):
     """A single ANCHOR fact: an ABSOLUTE value stated for exactly one NAMED entity, with no relation to any
     other entity ("Cecil has $600", "If David has 15 shells" → (Cecil, 600) / (David, 15)). Also covers a
@@ -5475,6 +5554,27 @@ def _anchor_fact(rp: "Reading"):
     if len(names) != 1:
         return None
     return _entity(names[0]), vals[0].features["value"]
+
+
+def _noun_anchor_fact(rp: "Reading"):
+    """A COMMON-NOUN anchor, tolerating an OUTER POSSESSOR name ("Hannah's family has ten PIGS" → (pig, 10),
+    ignoring Hannah — unlike `_anchor_fact`, which prioritizes a bare name subject and would wrongly anchor
+    to Hannah herself). Used by `_noun_anchored_sum_system`, the anchor-based twin of `_noun_affine_system`
+    for when no combined/category total is stated. None under the same comparative/multiplier/fraction/
+    single-value/verb gates as `_anchor_fact`, or if the value doesn't quantify a genuine noun."""
+    if any("comparative" in u.features.get("senses", []) for u in rp.units) \
+            or any("multiplier" in u.features.get("senses", []) for u in rp.units) \
+            or any(_fraction_parts(u.surface) is not None for u in rp.units):
+        return None
+    if not any("verb" in u.features.get("senses", []) for u in rp.units):
+        return None
+    vals = [u for u in rp.units if "value" in u.features.get("senses", []) and u.features.get("value") is not None]
+    if len(vals) != 1:
+        return None
+    qn = _follow(vals[0], "quantifies")
+    if qn is None or "noun" not in qn.features.get("senses", []):
+        return None
+    return _noun_entity_key(qn), vals[0].features["value"]
 
 
 def _anchored_affine_coeffs(premises: list, question: str):
@@ -6461,6 +6561,12 @@ def solve(text: str):
     _noun_affine = _noun_affine_system(premises, question)
     if _noun_affine is not None:
         return _noun_affine
+    # COORDINATE-NOUN ANCHORED-SUM SYSTEM (no total stated, but one noun entity has a bare anchor value; the
+    # question asks for a CATEGORY SUM). "Hannah's family has ten pigs. They have three fewer than twice as
+    # many cows as pigs and six more goats than cows. How many animals do they have?" → 50.
+    _noun_anchored = _noun_anchored_sum_system(premises, question)
+    if _noun_anchored is not None:
+        return _noun_anchored
     # ANCHORED-SUM SYSTEM (the twin of the mixed affine system for when NO total is stated but one entity has
     # a bare absolute value, and the question asks for the SUM of all entities). "Cecil has $600; Catherine is
     # $250 less than twice Cecil; Carmela is $50 more than twice Cecil. How much altogether?" → 2800.
