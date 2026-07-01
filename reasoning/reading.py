@@ -1175,7 +1175,15 @@ def condense(reading: Reading) -> bool:
     for i in range(1, len(reading.units) - 1):           # NOUN-NOUN compound — head-FINAL: "8 flower
         left, right = reading.units[i], reading.units[i + 1]   # stickers" is 8 stickers (head) of the
         prev = reading.units[i - 1].features.get("senses") or []
-        if (prev == ["value"] or "quantifier" in prev) \
+        prevk = _key(reading.units[i - 1].surface)
+        # ALSO merge the two COMPARATIVE-context measure phrases that the value/quantifier gate misses, so a
+        # measure-to-measure comparison keeps its head: "2 fewer ANIMAL STICKERS" (modifier after a comparative
+        # that itself follows a value) and the standard "than FLOWER STICKERS" / "as many BLUE MARBLES" (after
+        # than/as). Without this the compound fragments and the comparison can't ground (Victor).
+        comp_ctx = ("comparative" in prev and i >= 2
+                    and reading.units[i - 2].features.get("senses") == ["value"]) \
+            or prevk in ("than", "as")
+        if (prev == ["value"] or "quantifier" in prev or comp_ctx) \
                 and left.features.get("senses") == ["noun"] and right.features.get("senses") == ["noun"] \
                 and not left.features.get("hyphen_bound") and not _has_rate_marker(reading) \
                 and _compound_modifier(left) and _compound_modifier(right):
@@ -2379,6 +2387,19 @@ def _comparative_quantity(reading: Reading, context: list):
             measure = None
         else:
             measure = _descriptor(noun)
+    # MEASURE-to-MEASURE: the standard is another MEASURE of the SAME subject (same head noun, different
+    # attribute) — "2 fewer ANIMAL stickers than FLOWER stickers" → animal = subject's flower count ± N.
+    # (Distinct from the entity-standard grounding below, which reads ANOTHER person's holdings.)
+    if standard is not None and subject is not None and measure is not None \
+            and "name" not in standard.features.get("senses", []) and "noun" in standard.features.get("senses", []):
+        std_measure = _descriptor(standard)
+        if std_measure[0] == measure[0] and std_measure != measure:
+            base = _holdings(_entity(subject), std_measure, context or [])
+            if base is not None:
+                op = "-" if COMPARATIVE_SIGN.get(_key(comp.surface), 1) < 0 else "+"
+                return Quantity(_entity(subject), measure,
+                                _compute(f"{_num(base)} {op} {_num(value_unit.features['value'])}"),
+                                _lemma(verbs[-1].surface), derived=True)
     if standard is not None:                             # explicit "… than Y" — Y's holdings, but expressed
         referent = _holdings(_entity(standard), measure, context or [])   # in the SUBJECT's frame: _holdings
         if referent is not None:                         # is signed (a loss nets −17.5), while stored amounts

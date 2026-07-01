@@ -4543,6 +4543,24 @@ class TestPercentChange(unittest.TestCase):
             "How much did he pay for everything?"), "undetermined")
 
 
+class TestMeasureComparative(unittest.TestCase):
+    """MEASURE-to-MEASURE comparative — "N fewer/more <measA> than <measB>" for the SAME subject (same head
+    noun, different attribute): the compound keeps its head, and the derived measure grounds against the
+    subject's holding of the standard measure. SYNTHETIC."""
+
+    def test_fewer_across_measures(self):
+        # animal = flower − 2 = 8 − 2 = 6.
+        self.assertEqual(reading.solve(
+            "Victor has 8 flower stickers. He has 2 fewer animal stickers than flower stickers. "
+            "How many animal stickers does Victor have?"), 6)
+
+    def test_total_across_measures(self):
+        # flower 8 + animal 6 = 14.
+        self.assertEqual(reading.solve(
+            "Victor has 8 flower stickers. He has 2 fewer animal stickers than flower stickers. "
+            "How many stickers does Victor have in total?"), 14)
+
+
 class TestStativeSubjectElision(unittest.TestCase):
     """"X is A and is B" — the subjectless STATIVE conjunct borrows the left subject → an independent
     premise, so an age/comparative chain grounds. SYNTHETIC."""
