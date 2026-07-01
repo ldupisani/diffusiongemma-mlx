@@ -4729,14 +4729,22 @@ class TestNounAnchoredSumSystem(unittest.TestCase):
             "Wesley has six times as many daughters as sons. If he currently has three sons, how many "
             "children does he have?"), 21)
 
-    def test_negated_question_declines(self):
-        # "how many of her houses are NOT yellow?" is a COMPLEMENT sum (total minus the excluded entity),
-        # not a full Σ over every entity — conflating the two gave a confident wrong (190 vs gold 160).
-        self.assertIsNone(reading._noun_anchored_sum_system(
-            ["Isabella has three times as many green houses as yellow houses.",
-             "She also has 40 fewer yellow houses than red houses.",
-             "If she has 90 green houses"],
-            "how many of her houses are not yellow?"))
+    def test_negated_question_is_complement_sum(self):
+        # "how many of her houses are NOT yellow?" is a COMPLEMENT sum: Σ over every entity EXCEPT the one
+        # named after "not". green=90 (anchor), yellow=30, red=70 → not-yellow = green+red = 160 (the full
+        # Σ of 190 would be the wrong answer). Reuses the full-Σ machinery, dropping the excluded term.
+        self.assertEqual(reading.solve(
+            "Bea has three times as many green marbles as yellow marbles. She also has 40 fewer yellow "
+            "marbles than red marbles. If she has 90 green marbles, how many of her marbles are not "
+            "yellow?"), 160)
+
+    def test_negation_of_unknown_entity_declines(self):
+        # a negation whose excluded token ISN'T one of the system's entities ("not shiny") can't be resolved
+        # to a term to drop → decline rather than guess (never emit the full Σ for an unresolved complement).
+        self.assertEqual(reading.solve(
+            "Bea has three times as many green marbles as yellow marbles. She also has 40 fewer yellow "
+            "marbles than red marbles. If she has 90 green marbles, how many of her marbles are not "
+            "shiny?"), "undetermined")
 
 
 class TestNounResidualSumSystem(unittest.TestCase):

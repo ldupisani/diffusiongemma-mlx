@@ -5522,17 +5522,15 @@ def _noun_anchored_sum_system(premises: list, question: str):
     as `_noun_affine_system` (never competes with the 2-name system), and the SAME unused-given firewall as
     the named anchored family: every premise must classify as a relation or an anchor. "Hannah's family has
     ten pigs. They have three fewer than twice as many cows as pigs and six more goats than cows. How many
-    animals do they have?" → pig=10 (anchor), cow=2·10−3=17, goat=17+6=23, Σ=50. Declines a NEGATED question
-    ("how many of her houses are NOT yellow?") — that's a COMPLEMENT sum (total minus ONE excluded entity),
-    not a full Σ over every entity; conflating the two is a confident-wrong the diff harness caught (a
-    full-Σ answer of 190 vs the complement's correct 160). Also declines when the question carries its OWN
+    animals do they have?" → pig=10 (anchor), cow=2·10−3=17, goat=17+6=23, Σ=50. Handles a NEGATED question
+    as a COMPLEMENT sum (Σ over every entity EXCEPT the one named after "not"): "how many of her houses are
+    NOT yellow?" → green+red = 160 (not the full Σ of 190) — but only when the excluded token is itself a
+    known entity; an unresolvable negation still declines. Also declines when the question carries its OWN
     numeric value ("...and 5 students to every teacher, how many TEACHERS are there?") — a real confident-
     wrong (180 vs gold 36) came from a conversion clause getting glued onto the question by clause-splitting;
     a bare "how many X" question never has a number of its own, so a stray one signals unaccounted info this
     solver has no way to fold in (here, a students-per-teacher ratio, not a category sum at all)."""
     qr_check = analyze(question)
-    if any("negation" in u.features.get("senses", []) for u in qr_check.units):
-        return None
     if any("value" in u.features.get("senses", []) and u.features.get("value") is not None
            for u in qr_check.units):
         return None
@@ -5590,7 +5588,21 @@ def _noun_anchored_sum_system(premises: list, question: str):
     asked = _asked_noun_entity(qr)
     if asked is None or asked in coeff:
         return None                                        # a specific entity ask — not this SUM shape
-    total = " + ".join(f"({_num(a)} * {_num(pivot)} + ({_num(b)}))" for a, b in coeff.values())
+    # COMPLEMENT sum: "how many <category> are NOT <subtype>?" → Σ over every entity EXCEPT the excluded one
+    # (the subtype named right after "not"/"n't"). Reuses the full-Σ machinery verbatim, dropping one term.
+    # Tightly gated: the excluded token must ITSELF be one of the system's entities — a negation we can't
+    # resolve to a known entity DECLINES (conflating a complement with the full Σ was a confident-wrong, 190
+    # vs the complement's 160: Isabella's green/yellow/red houses, "not yellow" → green+red).
+    qtok = [_key(w.surface) for u in qr.units for w in u.words]
+    if any(s == "negation" for u in qr.units for s in u.features.get("senses", [])):
+        excluded = next((qtok[i + 1] for i, w in enumerate(qtok[:-1])
+                         if w in ("not", "n't") and qtok[i + 1] in coeff), None)
+        if excluded is None:
+            return None
+        summed = {e: c for e, c in coeff.items() if e != excluded}
+    else:
+        summed = coeff
+    total = " + ".join(f"({_num(a)} * {_num(pivot)} + ({_num(b)}))" for a, b in summed.values())
     return _compute(total)
 
 
