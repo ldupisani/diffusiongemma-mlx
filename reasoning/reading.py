@@ -5453,6 +5453,55 @@ def _anchored_difference_system(premises: list, question: str):
                     f"({_num(a2)} * {_num(pivot)} + ({_num(b2)}))")
 
 
+def _residual_sum_system(premises: list, question: str):
+    """The RESIDUAL twin: a stated total names THREE (or more) entities ("Jermaine, Terrence, and Emilee earn
+    a total of $90"), but only SOME of them are related/anchored elsewhere ("Jermaine earns $5 more than
+    Terrence"; "Terrence earns $30") — the ASKED entity (Emilee) is never mentioned again at all. Unlike
+    `_affine_system` (which requires every named entity to reduce to the pivot), this solves for the ONE
+    entity left OUT of that graph: residual = total − Σ(every OTHER named entity's value). Tightly gated: the
+    total clause must name ≥3 entities, the OTHER premises (anchor/relation graph, via the shared
+    `_anchored_affine_coeffs`) must cover ALL BUT EXACTLY ONE of them, and the asked entity must BE that one
+    uncovered residual — else this isn't the residual shape (or another solver already owns it)."""
+    tot_names = tot_val = tot_clause = None
+    for p in premises:
+        if not any(w in p.lower() for w in ("total", "combined", "altogether", "together")):
+            continue
+        rp = analyze(p)
+        name_units = [u for u in rp.units if "name" in u.features.get("senses", [])]
+        # a comma/"and"-joined subject list ("Jermaine, Terrence, and Emilee") merges into ONE unit whose
+        # surface spans multiple words — split back into individual entity keys, skipping "and" itself.
+        names = [_key(w.surface) for u in name_units for w in u.words if _key(w.surface) != "and"]
+        if len(names) < 3:
+            continue
+        vals = [u for u in rp.units if "value" in u.features.get("senses", []) and u.features.get("value") is not None]
+        if not vals:
+            continue
+        tot_names, tot_val, tot_clause = names, vals[0].features["value"], p
+        break
+    if tot_val is None:
+        return None
+    qr = analyze(question)
+    qnames = [u for u in qr.units if "name" in u.features.get("senses", [])]
+    if not qnames:
+        return None
+    asked = _entity(qnames[0])
+    if asked not in tot_names:
+        return None
+    rest = [p for p in premises if p is not tot_clause]
+    got = _anchored_affine_coeffs(rest, question)
+    if got is None:
+        return None
+    coeff, pivot = got
+    covered = [e for e in tot_names if e in coeff]
+    residual = [e for e in tot_names if e not in coeff]
+    if len(residual) != 1 or residual[0] != asked:
+        return None                              # not the residual shape — 0 or ≥2 uncovered, or the asked
+    #                                               entity isn't the uncovered one (another solver's turf)
+    covered_sum = " + ".join(f"({_num(a)} * {_num(pivot)} + ({_num(b)}))" for a, b in
+                             (coeff[e] for e in covered))
+    return _compute(f"{_num(tot_val)} - ({covered_sum})")
+
+
 def _inject_bare_ages(prem_readings: list, all_readings: list, facts_of: list, context: list) -> None:
     """BARE AGE — in an AGE-typed problem ("…as old as…", "older/younger than…"), a copula "X is N" with no
     unit ("If Job is 5") states X's AGE = N. The bare value quantifies no noun, so `_quantity` emits nothing
@@ -6248,6 +6297,13 @@ def solve(text: str):
     _anchored_d = _anchored_difference_system(premises, question)
     if _anchored_d is not None:
         return _anchored_d
+    # RESIDUAL SUM SYSTEM: a stated total names 3+ entities but the ASKED one is never related/anchored
+    # anywhere else — solve it as total minus every OTHER entity's (anchor+relation-derived) value.
+    # "Jermaine, Terrence, and Emilee earn a total of $90. Jermaine earns $5 more than Terrence. Terrence
+    # earns $30. How much does Emilee earn?" → 90 − (35 + 30) = 25.
+    _residual = _residual_sum_system(premises, question)
+    if _residual is not None:
+        return _residual
     # GUARD 8 — INVERSION / COUNTERFACTUAL: two shapes the forward fold structurally cannot solve, so it
     # would fold the literal numbers and commit garbage. Both are honest DECLINES (the safe "only-declines"
     # shape, like GUARD 7).

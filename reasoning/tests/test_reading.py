@@ -4138,6 +4138,27 @@ class TestAnchoredDifferenceSystem(unittest.TestCase):
             reading.analyze("Amanda needs 12 more marbles to have twice as many marbles as Katrina")))
 
 
+class TestResidualSumSystem(unittest.TestCase):
+    """`_residual_sum_system` — a stated total names 3+ entities, but the ASKED one is never related or
+    anchored anywhere else (unlike `_affine_system`, which requires every entity to reduce to the pivot).
+    Solves it as total minus every OTHER entity's (anchor+relation-derived) value. +1 dev-holdout (the real
+    Jermaine/Terrence/Emilee GSM8K case)."""
+
+    def test_residual_entity_from_total(self):
+        # Terrence=30 (anchor), Jermaine=Terrence+5=35 (rel); Priya never appears again -> 90-35-30=25.
+        self.assertEqual(reading.solve(
+            "Priya, Selim, and Talia earn a total of $90. Selim earns $5 more than Talia in a month. If "
+            "Talia earns $30, how much does Priya earn?"), 25)
+
+    def test_covered_entity_declines(self):
+        # asking for an entity that IS covered by a relation (Selim) is `_affine_system`'s/other systems'
+        # shape — not a residual — so this solver must decline (it fires only for the UNCOVERED entity).
+        self.assertIsNone(reading._residual_sum_system(
+            ["Priya, Selim, and Talia earn a total of $90.", "Selim earns $5 more than Talia in a month.",
+             "If Talia earns $30"],
+            "how much does Selim earn?"))
+
+
 class TestImperativeQuestionClause(unittest.TestCase):
     """`solve()` used to require a literal "?" ANYWHERE in the text, so a GSM8K problem phrased as an
     IMPERATIVE ("Calculate the total…", "Find X's weight.", ending in "." — ~4% of the corpus) was declined
