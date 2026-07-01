@@ -6117,15 +6117,20 @@ def solve(text: str):
     `ARITHMETIC_LOG` is reset here, so after a solve it holds exactly the audited programs this answer ran."""
     ARITHMETIC_LOG.clear()
     sentences = _sentences(text)
-    if not any(s.endswith("?") for s in sentences):
-        return None
     clauses = [c for s in sentences for c in _split_clauses(s)]   # split into independent clauses
     # the QUESTION clause holds the interrogative ("How many …"); for "Q if P?" the trailing "?" lands on
-    # the condition P, so prefer an interrogative-bearing clause over the bare "?"-clause.
+    # the condition P, so prefer an interrogative-bearing clause over the bare "?"-clause. Some GSM8K
+    # problems phrase the question as an IMPERATIVE instead ("Calculate the total…", "Find X's weight.",
+    # ending in "." not "?" — ~4% of the corpus): a clause OPENING with a compute-imperative verb is the
+    # question clause too, lowest priority (an interrogative or a literal "?" both take precedence).
     wh = {"how", "what", "which", "who", "whom", "whose", "why"}
+    imperative_verbs = {"calculate", "determine", "find", "compute"}
     interro = [k for k, c in enumerate(clauses) if {_key(w) for w in c.split()} & wh]
+    imperative = [k for k, c in enumerate(clauses) if c.split() and _key(c.split()[0]) in imperative_verbs]
     qpos = (interro[-1] if interro else
             max((k for k, c in enumerate(clauses) if c.rstrip().endswith("?")), default=None))
+    if qpos is None:
+        qpos = imperative[-1] if imperative else None
     if qpos is None:
         return None
     question = clauses[qpos]                              # the question clause; the rest are premises

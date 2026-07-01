@@ -4052,6 +4052,32 @@ class TestAnchoredSingleSystem(unittest.TestCase):
             reading.analyze("Celia runs twice as fast as Lexie.")))
 
 
+class TestImperativeQuestionClause(unittest.TestCase):
+    """`solve()` used to require a literal "?" ANYWHERE in the text, so a GSM8K problem phrased as an
+    IMPERATIVE ("Calculate the total…", "Find X's weight.", ending in "." — ~4% of the corpus) was declined
+    before any machinery even ran, regardless of whether the rest of the problem was otherwise solvable. A
+    clause opening with a compute-imperative verb (calculate/determine/find/compute) is now recognized as the
+    question clause too (lowest priority — an interrogative or literal "?" still wins). +2 dev-train this
+    increment (Al/Ben/Carl/Ed-style weight chain, a rate-ratio case), 0 broke/wrong (diff-verified)."""
+
+    def test_imperative_close_no_question_mark(self):
+        # ends with a period, not "?" — used to decline immediately regardless of the chain being solvable.
+        self.assertEqual(reading.solve(
+            "Omar weighs 9 pounds more than Nia. Pria weighs 14 pounds less than Omar. Nia weighs 40 "
+            "pounds. Find how much Pria weighs."), 35)
+
+    def test_imperative_after_leading_if_clause(self):
+        # "If P, calculate X." — the leading "If" clause becomes a premise exactly like "If P, how many X?"
+        self.assertEqual(reading.solve(
+            "Wren bought 12 apples. If Tam bought 7 more apples than Wren, calculate how many apples they "
+            "bought altogether."), 31)
+
+    def test_interrogative_with_question_mark_still_preferred(self):
+        # a literal "?" with a wh-word must still win over any imperative-looking wording (no collision).
+        self.assertEqual(reading.solve(
+            "Tom has 3 apples. Sam has 5 apples. How many apples do they have in total?"), 8)
+
+
 class TestDativeTransferCluster(unittest.TestCase):
     """Three fixes landed TOGETHER to solve "Reggie's father gave him $48. Reggie bought 5 books, each of which
     cost $2. How much left?" → 48 − 5·2 = 38: (1) DATIVE transfer "<giver> gave <recipient> $N" → recipient +N,
