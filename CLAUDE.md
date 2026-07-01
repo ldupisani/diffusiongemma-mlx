@@ -135,6 +135,17 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   claimed by ≥2 arithmetic system-solvers whose values disagree — the `_name_count` family-isolation
   failure mode; must be 0). Required after adding/reordering any system-solver; see the playbook's
   "arithmetic system-solvers are a REGISTRY" corollary.
+- **`reasoning/reading_rulestats.py`** — read-only **rule-usage frequency** for `reading.solve`: which RULE
+  produced each correctly-solved question, and how often. A "rule" is a named system-solver (`_EARLY_SYSTEMS`/
+  `_LATE_SYSTEMS`), a `solve()`-level recognizer (partition/container_giveaway/equal_share/backward_*), or the
+  general `answer()` fold (holdings/event-count/remainder/combined-Σ/difference/age-algebra — sub-bucketed by a
+  question-shape heuristic). Attribution exploits `solve()`'s short-circuit dispatch (one rule wins per solve):
+  it wraps every rule with a recording shim INSIDE a self-restoring context (`_instrumented`), so importing or
+  running it leaves the engine's dispatch untouched. Reuses `reading_bench._load`/`_gold` (same partition + gold
+  parsing); counts are an aggregate tally so `--slice test` is firewall-safe; never imported by the unit tests.
+  0 model calls. Use it to see where solve's coverage actually comes from (the anchored family dominates; age
+  algebra silently carries ~⅓ of the general fold) and to sanity-check a new solver actually fires. CLI:
+  `python -m reasoning.reading_rulestats [--slice dev|dev-train|dev-holdout|test] [--limit N] [--commits]`.
 - **`backend.py`** — pluggable inference backend (see below).
 - **`reasoning/mcp_server.py`** — exposes the reasoning project as an MCP service (FastMCP, stdio):
   `ask` (route → coded answer + domain + model-call count; 0-call compound split; non-coded types
