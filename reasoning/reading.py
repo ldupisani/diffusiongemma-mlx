@@ -3991,6 +3991,162 @@ def learn(statement: str, discourse: list = None, context: list = None) -> list:
     return facts
 
 
+def _facts_from(reading: Reading, context: list = None) -> list:
+    r = reading
+    to = _temporal_order(r)                              # "<time> is after/before <time>" → Before fact
+    if to is not None:
+        return [to]
+    dist = _distribution(r)                              # "<name> shared <measure> between <recipients>"
+    if dist is not None:                                 # → unknown-amount node + a Distribution relation
+        return dist
+    # FUTURE age with a SUB-YEAR shift the year-machinery can't convert ("In 18 months, she will be 10 years
+    # old") — storing a plain current age (10) ignores the shift and the relation off it commits a wrong
+    # (Antonio = 10/2 = 5). The age path is year-only, so DECLINE rather than fold the months as years.
+    if any(_key(u.surface) == "will" and "auxiliary" in u.features.get("senses", []) for u in r.units) \
+            and any(_key(u.surface) == "old" for u in r.units):
+        off_prep = next((u for u in r.units if "preposition" in u.features.get("senses", [])
+                         and _key(u.surface) in ("in", "after")), None)
+        off_obj = _follow(off_prep, "object") if off_prep is not None else None
+        if off_obj is not None and _descriptor(off_obj)[0] in ("month", "week", "day"):
+            return []
+    verbs = [u for u in r.units if "verb" in u.features.get("senses", [])]
+    if len(verbs) == 1:                                  # a group-subject STATEMENT ("Tom and Mary have
+        subj = _follow(verbs[0], "subject")              # 5 apples") is distributive/collective — ambiguous,
+        if subj is not None and "members" in subj.features \
+                and not any(_key(u.surface) in ("total", "combined") for u in r.units):   # but an explicit
+            return []                                    # TOTAL ("they walk a TOTAL of 70 miles") is an
+            #                                              unambiguous collective → let the fact form
+    if any("existential" in u.features.get("senses", []) for u in r.units):   # "there are N <coll>" → N
+        for u in r.units:                                # instances (existential-gated, so "Tom has three
+            if "value" in u.features.get("senses", []):  # apples"/"three years younger" stay arithmetic)
+                coll = _follow(u, "quantifies")
+                if coll is not None:
+                    return [_descriptor(coll)] * int(u.features["value"])
+    sa = _simultaneous_ages(r)                           # "X was A years old when Y was B years old" → both
+    if sa is not None:                                   # ages (a constant-gap pair) at the same reference
+        return sa
+    fa = _future_age(r)                                  # "(in N years) E will be X years old" → E_now=X−N?
+    if fa is not None:
+        return [fa]
+    ca = _comparative_age(r, context)                    # "X is N years older than Y" → Y_age ± N?
+    if ca is not None:
+        return [ca]
+    ra = _relational_age(r, context)                     # "X is N times as old as Y" → X_age = N × Y_age?
+    if ra is not None:
+        return [ra]
+    pas = _possessive_age_statement(r)                    # "Ron's age is 43" → Quantity(ron, year, 43)
+    if pas is not None:
+        return [pas]
+    pap = _possessive_age_parts(r)                        # "X's age is k× Y's age" / "X is k× Y's age" →
+    if pap is not None:                                   # X_age = k × Y_age (the possessive frame)
+        subj_e, std_e, k = pap
+        delta = _time_offset(r)                           # "In Δ years, X will be k× Y's age" shifts BOTH
+        std_now = any(_key(u.surface) in ("now", "today", "currently") for u in r.units)   # …unless Y is
+        #                                                  anchored to the present ("the age Y is CURRENTLY")
+        y = _holdings(std_e, ("year", frozenset()), context)
+        if y is not None:                                 # FORWARD: X_now = k·(Y_now+Δ) − Δ; std_now drops +Δ
+            y_ref = _num(y) if std_now else f"({_num(y)} + {_num(delta)})"
+            x = f"{_num(k)} * {y_ref} - {_num(delta)}" if delta else f"{_num(k)} * {_num(y)}"
+            return [Quantity(subj_e, ("year", frozenset()), _compute(x), "be")]
+        x_now = _holdings(subj_e, ("year", frozenset()), context)   # BACKWARD: subject known, derive standard
+        if x_now is not None and k:                       # Y_now = (X_now+Δ)/k − Δ ("Suzy 20; Suzy+4 = 2·(Mary+4)"
+            tail = "" if std_now else f" - {_num(delta)}"   # → Mary = 24/2 − 4 = 8); std_now drops the −Δ
+            yv = f"({_num(x_now)} + {_num(delta)}) / {_num(k)}{tail}" if delta \
+                else f"{_num(x_now)} / {_num(k)}"
+            return [Quantity(std_e, ("year", frozenset()), _compute(yv), "be")]
+        return []                                         # neither age known → DEFER (fixpoint chains), and
+        #                                                   crucially don't fall to _frequency (bogus Freq)
+    if _relational_age_factor(r) is not None and _copula_args(r)[0] is not None:
+        return []                                        # Y's age not yet known → DEFER (the fixpoint
+        # chains the multi-hop: Anne=2×Emile, Emile=6×Maude, Maude=8 → 96; never a bare predication)
+    mult = next((u for u in r.units if "multiplier" in u.features.get("senses", [])), None)
+    scaled = _follow(mult, "scales") if mult is not None else None
+    if scaled is not None and ("quantifier" in scaled.features.get("senses", [])     # "twice as many" /
+                               or _key(scaled.surface) in (COUNT_NOUNS | DIMENSIONS)):  # the number / as long
+        rq = _relational_quantity(r, context)            # "<entity> has twice as many" → derived, or
+        return [rq] if rq is not None else []            # decline (no referent) — never a bare predication
+    frac = next((u for u in r.units if _fraction_parts(u.surface) is not None), None)  # unit OR non-unit
+    if frac is not None:                                  # "<fraction> OF <referent>" — a partitive part
+        fi = r.units.index(frac)                          # of a holding ("loses half of them" → 0.5×held;
+        if fi + 1 < len(r.units) and _key(r.units[fi + 1].surface) == "of":   # "a third of …"; NOT a Freq)
+            pq = _partitive_quantity(r, context)
+            return [pq] if pq is not None else []        # unresolved → defer (fixpoint retries; else declines)
+    s = _subset(r)                                       # "Every X is a Y" → universal membership?
+    if s is not None:
+        return [s]
+    m = _membership(r)                                   # "<name> is a <noun>" → membership?
+    if m is not None:
+        return [m]
+    prop = _property(r)                                  # "<subject> is <adjective>" → property?
+    if prop is not None:
+        return [prop]
+    rel = _relation(r)                                   # "<A> is <comparative> than <B>" → relation?
+    if rel is not None:
+        return [rel]
+    rr = _rate_relations(r)                              # "Carole reads as fast as Anna but half Brianna's
+    if rr is not None:                                    # speed" → relational rate(s) (resolved bidirectionally)
+        return rr
+    fr = _frequency(r)                                   # "<entity> <verb>s twice" → frequency?
+    if fr is not None:
+        return [fr]
+    trr = _time_range_rate(r)                            # "writes from 1 PM to 4 PM every night" → 3 h/day?
+    if trr is not None:
+        return [trr]
+    por = _per_occurrence_rate(r)                        # "for every sandwich … eats 4 apples" → 4/sandwich?
+    if por is not None:
+        return [por]
+    rate = _rate(r, context)                             # "<entity> earns $12 per hour" → rate?
+    if rate is not None:                                 # a trailing "for one week" → a duration alongside it
+        dur = _for_duration(r, rate)
+        return [rate, dur] if dur is not None else [rate]
+    cq = _comparative_quantity(r, context)               # "<A> has 30 less <X> than <B>" → derived?
+    if cq is not None:
+        return [cq]
+    comp = next((u for u in r.units if "comparative" in u.features.get("senses", [])), None)
+    if comp is not None and _follow(comp, "standard") is not None \
+            and any("value" in u.features.get("senses", []) for u in r.units):
+        return []                                        # a comparative-quantity structure we couldn't
+        # resolve (the standard's count is unknown — a forward ref) → DEFER (don't fall through to a
+        # flat _quantity); the solve() fixpoint will retry it once the standard is learned.
+    pq = _percent_quantity(r, context)                   # "puts 20% more money" → 0.2 × holding?
+    if pq is not None:
+        return [pq]
+    rq = _rest_quantity(r, context)                      # "the REST failed" → total − Σ(stated subsets)?
+    if rq is not None:
+        return [rq]
+    if any(_key(u.surface) in REST_WORDS for u in r.units):
+        return []                                        # "the rest …" but no total yet → DEFER (the
+        # solve() fixpoint retries once the population total / subsets are learned, e.g. a trailing "if")
+    pct = next((u for u in r.units if "percent" in u.features.get("senses", [])), None)
+    if pct is not None and _follow(pct, "base") is None \
+            and len([u for u in r.units if "verb" in u.features.get("senses", [])]) == 1 \
+            and any("noun" in u.features.get("senses", []) for u in r.units):
+        return []                                        # percent-of-holding, referent not yet known → defer
+    cq = _container_quantity(r)                          # "20 packets of 100 grams" → 20×100 = 2000?
+    if cq:                                               # (conjoined of-phrases → a product each)
+        return cq
+    pu = _purchase(r, context)                           # "buys 4 candy bars that cost $2 each" → −$8?
+    if pu is not None:
+        return pu
+    dq = _distributed_quantity(r)                        # "gave 4 stickers each to 3 friends" → 4×3?
+    if dq is not None:
+        return [dq]
+    tq = _transfer_quantity(r)                           # "sold clips to 48 friends" → 48 clips (one each)
+    if tq is not None:
+        return tq
+    dt = _dative_transfer(r)                             # "Tom gave Reggie $48" → Reggie +48 AND Tom −48
+    if dt is not None:
+        return dt
+    q = _quantity(r)                                     # "<entity> has 3 apples and 2 oranges" → list
+    if q:
+        return q
+    p = _predication(r)                                  # subject-verb statement?
+    if p is not None:
+        return [p]
+    d = collection_descriptor(r)                         # bare collection phrase?
+    return [d] if d is not None else []
+
+
 # --- the read–SYNTHESIZE loop: reading BINDS what's present, synthesis DERIVES what's implied --------
 # Reading discharges obligations by binding to words that are THERE. Some obligations have no such word
 # — their target exists only by IMPLICATION (a time never explicitly ordered but derivable by
@@ -4215,162 +4371,6 @@ def synthesize(facts: list, readings: list = None) -> list:
                     facts.append(f)
                     changed = True
     return facts
-
-
-def _facts_from(reading: Reading, context: list = None) -> list:
-    r = reading
-    to = _temporal_order(r)                              # "<time> is after/before <time>" → Before fact
-    if to is not None:
-        return [to]
-    dist = _distribution(r)                              # "<name> shared <measure> between <recipients>"
-    if dist is not None:                                 # → unknown-amount node + a Distribution relation
-        return dist
-    # FUTURE age with a SUB-YEAR shift the year-machinery can't convert ("In 18 months, she will be 10 years
-    # old") — storing a plain current age (10) ignores the shift and the relation off it commits a wrong
-    # (Antonio = 10/2 = 5). The age path is year-only, so DECLINE rather than fold the months as years.
-    if any(_key(u.surface) == "will" and "auxiliary" in u.features.get("senses", []) for u in r.units) \
-            and any(_key(u.surface) == "old" for u in r.units):
-        off_prep = next((u for u in r.units if "preposition" in u.features.get("senses", [])
-                         and _key(u.surface) in ("in", "after")), None)
-        off_obj = _follow(off_prep, "object") if off_prep is not None else None
-        if off_obj is not None and _descriptor(off_obj)[0] in ("month", "week", "day"):
-            return []
-    verbs = [u for u in r.units if "verb" in u.features.get("senses", [])]
-    if len(verbs) == 1:                                  # a group-subject STATEMENT ("Tom and Mary have
-        subj = _follow(verbs[0], "subject")              # 5 apples") is distributive/collective — ambiguous,
-        if subj is not None and "members" in subj.features \
-                and not any(_key(u.surface) in ("total", "combined") for u in r.units):   # but an explicit
-            return []                                    # TOTAL ("they walk a TOTAL of 70 miles") is an
-            #                                              unambiguous collective → let the fact form
-    if any("existential" in u.features.get("senses", []) for u in r.units):   # "there are N <coll>" → N
-        for u in r.units:                                # instances (existential-gated, so "Tom has three
-            if "value" in u.features.get("senses", []):  # apples"/"three years younger" stay arithmetic)
-                coll = _follow(u, "quantifies")
-                if coll is not None:
-                    return [_descriptor(coll)] * int(u.features["value"])
-    sa = _simultaneous_ages(r)                           # "X was A years old when Y was B years old" → both
-    if sa is not None:                                   # ages (a constant-gap pair) at the same reference
-        return sa
-    fa = _future_age(r)                                  # "(in N years) E will be X years old" → E_now=X−N?
-    if fa is not None:
-        return [fa]
-    ca = _comparative_age(r, context)                    # "X is N years older than Y" → Y_age ± N?
-    if ca is not None:
-        return [ca]
-    ra = _relational_age(r, context)                     # "X is N times as old as Y" → X_age = N × Y_age?
-    if ra is not None:
-        return [ra]
-    pas = _possessive_age_statement(r)                    # "Ron's age is 43" → Quantity(ron, year, 43)
-    if pas is not None:
-        return [pas]
-    pap = _possessive_age_parts(r)                        # "X's age is k× Y's age" / "X is k× Y's age" →
-    if pap is not None:                                   # X_age = k × Y_age (the possessive frame)
-        subj_e, std_e, k = pap
-        delta = _time_offset(r)                           # "In Δ years, X will be k× Y's age" shifts BOTH
-        std_now = any(_key(u.surface) in ("now", "today", "currently") for u in r.units)   # …unless Y is
-        #                                                  anchored to the present ("the age Y is CURRENTLY")
-        y = _holdings(std_e, ("year", frozenset()), context)
-        if y is not None:                                 # FORWARD: X_now = k·(Y_now+Δ) − Δ; std_now drops +Δ
-            y_ref = _num(y) if std_now else f"({_num(y)} + {_num(delta)})"
-            x = f"{_num(k)} * {y_ref} - {_num(delta)}" if delta else f"{_num(k)} * {_num(y)}"
-            return [Quantity(subj_e, ("year", frozenset()), _compute(x), "be")]
-        x_now = _holdings(subj_e, ("year", frozenset()), context)   # BACKWARD: subject known, derive standard
-        if x_now is not None and k:                       # Y_now = (X_now+Δ)/k − Δ ("Suzy 20; Suzy+4 = 2·(Mary+4)"
-            tail = "" if std_now else f" - {_num(delta)}"   # → Mary = 24/2 − 4 = 8); std_now drops the −Δ
-            yv = f"({_num(x_now)} + {_num(delta)}) / {_num(k)}{tail}" if delta \
-                else f"{_num(x_now)} / {_num(k)}"
-            return [Quantity(std_e, ("year", frozenset()), _compute(yv), "be")]
-        return []                                         # neither age known → DEFER (fixpoint chains), and
-        #                                                   crucially don't fall to _frequency (bogus Freq)
-    if _relational_age_factor(r) is not None and _copula_args(r)[0] is not None:
-        return []                                        # Y's age not yet known → DEFER (the fixpoint
-        # chains the multi-hop: Anne=2×Emile, Emile=6×Maude, Maude=8 → 96; never a bare predication)
-    mult = next((u for u in r.units if "multiplier" in u.features.get("senses", [])), None)
-    scaled = _follow(mult, "scales") if mult is not None else None
-    if scaled is not None and ("quantifier" in scaled.features.get("senses", [])     # "twice as many" /
-                               or _key(scaled.surface) in (COUNT_NOUNS | DIMENSIONS)):  # the number / as long
-        rq = _relational_quantity(r, context)            # "<entity> has twice as many" → derived, or
-        return [rq] if rq is not None else []            # decline (no referent) — never a bare predication
-    frac = next((u for u in r.units if _fraction_parts(u.surface) is not None), None)  # unit OR non-unit
-    if frac is not None:                                  # "<fraction> OF <referent>" — a partitive part
-        fi = r.units.index(frac)                          # of a holding ("loses half of them" → 0.5×held;
-        if fi + 1 < len(r.units) and _key(r.units[fi + 1].surface) == "of":   # "a third of …"; NOT a Freq)
-            pq = _partitive_quantity(r, context)
-            return [pq] if pq is not None else []        # unresolved → defer (fixpoint retries; else declines)
-    s = _subset(r)                                       # "Every X is a Y" → universal membership?
-    if s is not None:
-        return [s]
-    m = _membership(r)                                   # "<name> is a <noun>" → membership?
-    if m is not None:
-        return [m]
-    prop = _property(r)                                  # "<subject> is <adjective>" → property?
-    if prop is not None:
-        return [prop]
-    rel = _relation(r)                                   # "<A> is <comparative> than <B>" → relation?
-    if rel is not None:
-        return [rel]
-    rr = _rate_relations(r)                              # "Carole reads as fast as Anna but half Brianna's
-    if rr is not None:                                    # speed" → relational rate(s) (resolved bidirectionally)
-        return rr
-    fr = _frequency(r)                                   # "<entity> <verb>s twice" → frequency?
-    if fr is not None:
-        return [fr]
-    trr = _time_range_rate(r)                            # "writes from 1 PM to 4 PM every night" → 3 h/day?
-    if trr is not None:
-        return [trr]
-    por = _per_occurrence_rate(r)                        # "for every sandwich … eats 4 apples" → 4/sandwich?
-    if por is not None:
-        return [por]
-    rate = _rate(r, context)                             # "<entity> earns $12 per hour" → rate?
-    if rate is not None:                                 # a trailing "for one week" → a duration alongside it
-        dur = _for_duration(r, rate)
-        return [rate, dur] if dur is not None else [rate]
-    cq = _comparative_quantity(r, context)               # "<A> has 30 less <X> than <B>" → derived?
-    if cq is not None:
-        return [cq]
-    comp = next((u for u in r.units if "comparative" in u.features.get("senses", [])), None)
-    if comp is not None and _follow(comp, "standard") is not None \
-            and any("value" in u.features.get("senses", []) for u in r.units):
-        return []                                        # a comparative-quantity structure we couldn't
-        # resolve (the standard's count is unknown — a forward ref) → DEFER (don't fall through to a
-        # flat _quantity); the solve() fixpoint will retry it once the standard is learned.
-    pq = _percent_quantity(r, context)                   # "puts 20% more money" → 0.2 × holding?
-    if pq is not None:
-        return [pq]
-    rq = _rest_quantity(r, context)                      # "the REST failed" → total − Σ(stated subsets)?
-    if rq is not None:
-        return [rq]
-    if any(_key(u.surface) in REST_WORDS for u in r.units):
-        return []                                        # "the rest …" but no total yet → DEFER (the
-        # solve() fixpoint retries once the population total / subsets are learned, e.g. a trailing "if")
-    pct = next((u for u in r.units if "percent" in u.features.get("senses", [])), None)
-    if pct is not None and _follow(pct, "base") is None \
-            and len([u for u in r.units if "verb" in u.features.get("senses", [])]) == 1 \
-            and any("noun" in u.features.get("senses", []) for u in r.units):
-        return []                                        # percent-of-holding, referent not yet known → defer
-    cq = _container_quantity(r)                          # "20 packets of 100 grams" → 20×100 = 2000?
-    if cq:                                               # (conjoined of-phrases → a product each)
-        return cq
-    pu = _purchase(r, context)                           # "buys 4 candy bars that cost $2 each" → −$8?
-    if pu is not None:
-        return pu
-    dq = _distributed_quantity(r)                        # "gave 4 stickers each to 3 friends" → 4×3?
-    if dq is not None:
-        return [dq]
-    tq = _transfer_quantity(r)                           # "sold clips to 48 friends" → 48 clips (one each)
-    if tq is not None:
-        return tq
-    dt = _dative_transfer(r)                             # "Tom gave Reggie $48" → Reggie +48 AND Tom −48
-    if dt is not None:
-        return dt
-    q = _quantity(r)                                     # "<entity> has 3 apples and 2 oranges" → list
-    if q:
-        return q
-    p = _predication(r)                                  # subject-verb statement?
-    if p is not None:
-        return [p]
-    d = collection_descriptor(r)                         # bare collection phrase?
-    return [d] if d is not None else []
 
 
 def _has_verb(text: str) -> bool:
