@@ -5101,6 +5101,49 @@ _PCT_Q_BLOCK = {"original", "save", "saved", "savings", "total", "left", "remain
                 "remained", "difference", "many", "before", "without", "raise"}
 
 
+def _self_multiple_sum(premises: list, question: str):
+    """SELF-REFERENTIAL MULTIPLE + SUM — one subject does an amount over two periods, the second a MULTIPLE of
+    the first (the multiplier refers BACK to the first, not to another entity): "Roger rode 2 miles this
+    morning, then 5 times THAT AMOUNT in the evening. How many miles total?" → 2 + 5·2 = 2·(1+5) = 12; "Tom
+    read 10 pages … and twice AS MANY in the evening" → 10·3 = 30. TIGHTLY gated: EXACTLY one base value + one
+    multiplier + one subject NAME (a second name would make "as many as <Y>" a cross-entity ratio, not
+    anaphoric); an anaphoric back-reference ("that amount/much/many" or a bare "as many/as much" — which, with
+    a single name, cannot be "as <name>"); a two-period join ("and"/"then"); and a TOTAL question (bare "how
+    many <M> did <subj> VERB", or an explicit total cue — never a single-period ask). Answer = base·(1+k)."""
+    readings = [analyze(p) for p in premises]
+    text = " ".join(premises).lower()
+    # Require the EXPLICIT back-reference "that amount/much/many". A bare "as many/as much" is unreliable — it
+    # may carry a STANDARD ("as many fish AS cats and dogs combined" → aggregate ratio, Ed 15) or sit in a RATE
+    # ("$600 every weekday and twice as much on the weekend" → per-day, restaurant) — both mis-fire as base·(1+k).
+    anaphor = any(ph in text for ph in ("that amount", "that much", "that many"))
+    if not anaphor or not (" and " in text or " then " in text):
+        return None
+    vals = [u for rp in readings for u in rp.units if "value" in u.features.get("senses", [])
+            and u.features.get("value") is not None]
+    mults = [u for rp in readings for u in rp.units if "multiplier" in u.features.get("senses", [])]
+    names = {_entity(u) for rp in readings for u in rp.units if "name" in u.features.get("senses", [])}
+    if len(vals) != 1 or len(mults) != 1 or len(names) != 1:
+        return None
+    qr = analyze(question)
+    if any("value" in u.features.get("senses", []) and u.features.get("value") is not None for u in qr.units):
+        return None
+    # TOTAL question only — a bare "how many <M> did <subj> VERB" (no single-period qualifier) or an explicit
+    # total cue. A period word ("evening", "Tuesday") in the question asks ONE part → out of scope → decline.
+    ql = question.lower()
+    period_words = ("morning", "afternoon", "evening", "night", "monday", "tuesday", "wednesday",
+                    "thursday", "friday", "saturday", "sunday", "first", "second")
+    if any(w in ql for w in period_words):
+        return None
+    mu = mults[0]
+    k = (mu.features["fraction"][0] / mu.features["fraction"][1]) if "fraction" in mu.features \
+        else mu.features.get("value")
+    if k is None:
+        return None
+    base = vals[0].features["value"]
+    r = _compute(f"{_num(base)} * {_num(1 + k)}")
+    return round(r, 9) if isinstance(r, float) else r
+
+
 def _percent_change(premises: list, question: str):
     """Apply a single PERCENT CHANGE to a stated money base and report the NEW value — "a bicycle sold for
     $220 last year was increased by 15%. What is the new price?" → 220 × 1.15 = 253; "$2000 ticket, 30%
@@ -5769,6 +5812,10 @@ def solve(text: str):
     _rrace = _rate_race(premises, question, context)
     if _rrace is not None:
         return _rrace
+    # SELF-MULTIPLE SUM — "rode 2 miles, then 5 times that amount. Total?" → 2×(1+5) = 12.
+    _sms = _self_multiple_sum(premises, question)
+    if _sms is not None:
+        return _sms
     # PERCENT CHANGE — "$220 bike increased 15%. New price?" → 253; "$2000, 30% discount. Pays?" → 1400.
     _pct = _percent_change(premises, question)
     if _pct is not None:

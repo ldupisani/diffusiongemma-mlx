@@ -4542,6 +4542,29 @@ class TestPercentChange(unittest.TestCase):
             "How much did he pay for everything?"), "undetermined")
 
 
+class TestSelfMultipleSum(unittest.TestCase):
+    """One subject, two periods, the second a MULTIPLE of the first via an explicit back-reference ("that
+    amount/much/many") → base·(1+k). SYNTHETIC."""
+
+    def test_that_amount_sum(self):
+        # 2 + 5×2 = 2·6 = 12.
+        self.assertEqual(reading.solve(
+            "Roger rode 2 miles this morning, and then 5 times that amount in the evening. "
+            "How many miles did Roger ride?"), 12)
+
+    def test_that_amount_total_cue(self):
+        # 3 + 4×3 = 3·5 = 15.
+        self.assertEqual(reading.solve(
+            "Anna ran 3 miles on Monday and then 4 times that amount on Tuesday. "
+            "How many miles did Anna run in total?"), 15)
+
+    def test_aggregate_ratio_not_self(self):
+        # "twice as many fish AS cats and dogs combined" carries a standard — NOT anaphoric → don't misfire.
+        self.assertEqual(reading.solve(
+            "Ed has 2 dogs, 3 cats and twice as many fish as cats and dogs combined. "
+            "How many pets does Ed have?"), "undetermined")
+
+
 class TestRelativeClauseSplit(unittest.TestCase):
     """"<Name>, who VERBs …" splits into an independent premise (who → the antecedent), so a ratio/comparative
     CHAIN resolves. SYNTHETIC."""
