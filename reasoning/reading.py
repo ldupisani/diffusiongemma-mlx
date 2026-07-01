@@ -3677,7 +3677,15 @@ def answer(question: str, context: list, discourse: list = None):
             query = _descriptor(coll)
         else:                                            # bound nothing (e.g. "how much did he RUN") →
             query = None                                 # can't tell what's asked → decline, not MONEY
-    remainder = any(_key(u.surface) in _REMAINDER for u in r.units)
+    # "how much CHANGE (did he get back / was he given)" = the MONEY returned after a purchase — the noun
+    # "change" names the money-left query, computed exactly like "how much money is left" (have − Σspent).
+    # Gate: a "how much" question mentioning "change" (the verb "change [tires]" pairs with "how many/how
+    # long", never "how much", so requiring `much` excludes it). Sets the money query + remainder and rides
+    # the proven remainder path below, which declines safely whenever it can't net one have against the spends.
+    change_q = much is not None and any(_key(u.surface) == "change" for u in r.units)
+    if change_q:
+        query = MONEY
+    remainder = change_q or any(_key(u.surface) in _REMAINDER for u in r.units)
     named = any("name" in u.features.get("senses", []) for u in r.units)   # NAMED entities ("Tom and Mary
     if combined_q and not named:                         # altogether") need the per-entity fold, not this
         gq = query                                       # "How many INCHES are all snakes COMBINED?" — a
@@ -3770,6 +3778,11 @@ def answer(question: str, context: list, discourse: list = None):
         q_time = next((_key(u.surface) for u in r.units if "time" in u.features.get("senses", [])), None)
     else:
         entities = None
+    if change_q:                                         # "how much change" is ALWAYS the money REMAINDER
+        entities = None                                  # (have − Σspent), never an entity-verb count: the
+        #                                                  vacuous trailing verb ("get [back]"/"receive") has
+        #                                                  no matching events, so skip the verb fold and take
+        #                                                  the remainder path below (like "how much money is left").
     if query is not None and entities is not None:
         if entities:
             terms = []                                   # each conjunct's contribution, summed once at the end

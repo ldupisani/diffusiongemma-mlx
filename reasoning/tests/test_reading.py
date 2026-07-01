@@ -5437,5 +5437,38 @@ class TestTestSliceRegressionFixes(unittest.TestCase):
             "the average age of the three in three years if Harriet is 21 years old now."), 45)
 
 
+class TestIncrement141ChangeIsMoneyRemainder(unittest.TestCase):
+    """#141 — "how much CHANGE (did he get back / was he given / receive)" is the money returned after a
+    purchase = the MONEY remainder (have - Σspent), the same computation as "how much money is left". The
+    noun "change" names the money-left query and forces the remainder path, regardless of the vacuous
+    trailing verb (get/receive/given). The verb sense of "change" ("how many tires did he change") pairs
+    with how-many/how-long, never "how much", so it is not stolen."""
+
+    def test_change_get_back(self):
+        self.assertEqual(reading.solve(
+            "Blake spends $40 on oranges, $50 on apples, and $60 on mangoes. If he has $300, how much "
+            "change did he get back?"), 150)
+
+    def test_change_receive_form(self):
+        self.assertEqual(reading.solve(
+            "Tom has $20. He spent $8 on apples. How much change did he receive?"), 12)
+
+    def test_change_was_given_form(self):
+        self.assertEqual(reading.solve(
+            "Tom has $20. He spent $8 on apples. How much change was he given?"), 12)
+
+    def test_change_matches_money_left_synonym(self):
+        # "change" and "money is left" resolve to the SAME number (same remainder computation).
+        prem = "Blake spends $40 on oranges, $50 on apples, and $60 on mangoes. If he has $300, "
+        self.assertEqual(reading.solve(prem + "how much change was he given?"),
+                         reading.solve(prem + "how much money is left?"))
+
+    def test_change_verb_sense_not_stolen(self):
+        # "change" as the ACTION verb ("how many tires did he change") is a count question, not money —
+        # requiring "how much" keeps it out of the money-remainder branch (stays a non-money reading).
+        out = reading.solve("He changed 4 tires on Monday. How many tires did he change?")
+        self.assertNotEqual(out, 150)
+
+
 if __name__ == "__main__":
     unittest.main()
