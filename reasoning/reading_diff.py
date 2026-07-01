@@ -137,6 +137,55 @@ def diff(before_path: str = None, after_path: str = None) -> str:
     return "\n".join(out)
 
 
+def collisions(limit: int = None) -> str:
+    """Audit the `_EARLY_SYSTEMS` registry for cross-solver COLLISIONS — a problem that MORE THAN ONE
+    early system claims. The live dispatch returns the FIRST claimer and silently masks the rest, so a
+    second claimer that DISAGREES on the value is a latent bug: reordering the registry (or adding a
+    solver ahead of it) would flip the answer. This is exactly the failure class behind this domain's
+    `_name_count` family-isolation bug and its 5 TEST regressions — a masked collision the aggregate
+    coverage number and the unit suite both hide.
+
+    Runs every early system (no short-circuit) on the IDENTICAL (premises, question) the live dispatch
+    computes (`reading._parse_problem`), over the inspectable dev slices, mirroring solve()'s
+    unknown-word precision guard so only LIVE-REACHABLE problems count. Reports how many reachable
+    problems have ≥2 claimers, and flags any where the claimers disagree (which MUST be 0)."""
+    cases = [(s, r["question"]) for s in _SLICES for r in _load(s)]
+    if limit:
+        cases = cases[:limit]
+    reached, multi = 0, []
+    for slc, text in cases:
+        parsed = reading._parse_problem(text)
+        if parsed is None:
+            continue
+        premises, question = parsed
+        # mirror solve()'s unknown-word guard: a problem that trips it returns before the early
+        # dispatch runs, so any overlap there is not reachable by the live path.
+        readings = [reading.analyze(c) for c in premises + [question]]
+        if any(d.kind == "unknown-word" for rr in readings for d in reading.deficiencies(rr)):
+            continue
+        reached += 1
+        claims = []
+        for label, fn in reading._EARLY_SYSTEMS:
+            try:
+                r = fn(premises, question)
+            except Exception as e:                      # a crashing solver is a decline for this audit
+                r = None
+            if r is not None:
+                claims.append((label, r))
+        if len(claims) >= 2:
+            multi.append((slc, question, claims))
+    disagree = [(s, q, c) for s, q, c in multi if len({str(v) for _, v in c}) > 1]
+    out = [f"early-system collision audit over dev (reached early dispatch: {reached})",
+           f"  problems with >=2 claimers: {len(multi)}",
+           f"  of those, claimers DISAGREE on the value: {len(disagree)}   <- latent bugs, MUST be 0"]
+    for slc, q, claims in multi:
+        vals = {str(v) for _, v in claims}
+        tag = "DISAGREE" if len(vals) > 1 else "agree   "
+        shown = ", ".join(f"{lab}={v}" for lab, v in claims)
+        out.append(f"  [{slc:11}] {tag}: {shown}  {' '.join(q.split())[:64]}")
+    return "\n".join(out)
+
+
 if __name__ == "__main__":
     args = sys.argv[1:]
     cmd = args[0] if args else "diff"
@@ -145,6 +194,8 @@ if __name__ == "__main__":
         print(snapshot(rest[0] if rest else None))
     elif cmd == "diff":
         print(diff(rest[0] if len(rest) > 0 else None, rest[1] if len(rest) > 1 else None))
+    elif cmd == "collisions":
+        print(collisions(int(rest[0]) if rest else None))
     else:
         print(__doc__)
         sys.exit(2)

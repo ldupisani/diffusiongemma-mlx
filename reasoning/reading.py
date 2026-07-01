@@ -6842,13 +6842,11 @@ _LATE_SYSTEMS = [
 ]
 
 
-def solve(text: str):
-    """Read a whole word-problem paragraph (premises + a trailing question) and answer the question —
-    threading coreference (`discourse`) and the growing `context` across the premises (split into
-    independent CLAUSES first, so the fixpoint sees each fact separately). Returns the raw `answer()`
-    result. The programmatic entry the GSM8K coverage harness scores. None if there's no question.
-    `ARITHMETIC_LOG` is reset here, so after a solve it holds exactly the audited programs this answer ran."""
-    ARITHMETIC_LOG.clear()
+def _parse_problem(text: str):
+    """Split a word-problem paragraph into (premises, question). Returns None when there is no
+    question clause. Factored out of solve() so the collision harness (reading_diff --collisions)
+    sees the IDENTICAL premise/question decomposition the live dispatch does — a divergence would
+    make the collision audit lie about what the registry actually claims."""
     sentences = _sentences(text)
     clauses = [c for s in sentences for c in _split_clauses(s)]   # split into independent clauses
     # the QUESTION clause holds the interrogative ("How many …"); for "Q if P?" the trailing "?" lands on
@@ -6868,6 +6866,20 @@ def solve(text: str):
         return None
     question = clauses[qpos]                              # the question clause; the rest are premises
     premises = clauses[:qpos] + clauses[qpos + 1:]        # (a leading "If P," clause is now a premise)
+    return premises, question
+
+
+def solve(text: str):
+    """Read a whole word-problem paragraph (premises + a trailing question) and answer the question —
+    threading coreference (`discourse`) and the growing `context` across the premises (split into
+    independent CLAUSES first, so the fixpoint sees each fact separately). Returns the raw `answer()`
+    result. The programmatic entry the GSM8K coverage harness scores. None if there's no question.
+    `ARITHMETIC_LOG` is reset here, so after a solve it holds exactly the audited programs this answer ran."""
+    ARITHMETIC_LOG.clear()
+    parsed = _parse_problem(text)
+    if parsed is None:
+        return None
+    premises, question = parsed
     readings = [analyze(c) for c in premises + [question]]
     # PRECISION GUARD 1 — unrecognized word: a partial parse may have dropped the fact that mattered,
     # so we DECLINE rather than commit off a fragment ("definitive-or-decline": never answer what we
