@@ -1684,6 +1684,8 @@ LEXICON.update({
     "jellybean": ["noun"], "cabinet": ["noun"], "doll": ["noun"], "turtle": ["noun"],
     "sibling": ["noun"], "athlete": ["noun"], "lemon": ["noun"], "blueberry": ["noun"], "peach": ["noun"],
     "strawberry": ["noun"], "contest": ["noun"], "baby": ["noun"],
+    # second-wave count-nouns (same verified-gain sweep, re-run after the batch above unblocked co-occurring words)
+    "seed": ["noun"], "sunflower": ["noun"], "softball": ["noun"], "shower": ["noun"],
 })
 PLURALS.update({
     "bananas": "banana", "erasers": "eraser", "crayons": "crayon", "berries": "berry",
@@ -1693,7 +1695,8 @@ PLURALS.update({
     "jellybeans": "jellybean", "cabinets": "cabinet", "dolls": "doll",
     "turtles": "turtle", "siblings": "sibling", "athletes": "athlete", "lemons": "lemon",
     "blueberries": "blueberry", "peaches": "peach", "strawberries": "strawberry", "contests": "contest",
-    "babies": "baby",
+    "babies": "baby", "seeds": "seed", "sunflowers": "sunflower", "softballs": "softball",
+    "showers": "shower",
 })
 # NOTE: groundwork nouns/adjectives/pronouns (fruit/paper/side/…/herself) were re-tested with decline-safety
 # GUARDS 11–14 in place and STILL drop TEST 40.0→36.4% (a noun unlocks a held-out wrong in an as-yet-unguarded
