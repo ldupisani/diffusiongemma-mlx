@@ -3143,10 +3143,6 @@ class Membership:
     negated: bool = False
 
 
-def _has_copula(reading: Reading) -> bool:
-    return _copula_unit(reading) is not None
-
-
 def _has_sense(unit, sense) -> bool:
     return unit is not None and sense in unit.features.get("senses", [])
 
