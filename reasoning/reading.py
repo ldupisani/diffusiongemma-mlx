@@ -1823,6 +1823,12 @@ LOSS_VERBS = {"lose", "sell", "give", "spend", "eat", "use", "drop"}
 COMPARATIVE_SIGN = {"less": -1, "fewer": -1, "younger": -1, "shorter": -1, "lighter": -1,
                     "slower": -1, "cheaper": -1, "smaller": -1, "lower": -1, "poorer": -1}
 
+# POSSESSION verbs a ratio's STANDARD can sit before, in lieu of an elided "that"/"which" ("as much money
+# DARWIN HAS" = "...as Darwin has") — deliberately narrow (NOT any verb) so a mistagged common noun ("CDs")
+# followed by an unrelated passive modifier ("the CDs SOLD at $10 each") doesn't get misread as a name-ratio.
+POSSESSION_VERBS = {"has", "had", "have", "owns", "owned", "gets", "got", "receives", "received",
+                    "holds", "held"}
+
 
 def _verb_sign(lemma: str) -> int:
     """+1 for a gain or the 'have' baseline, -1 for a loss verb — how this quantity folds."""
@@ -4829,13 +4835,17 @@ def _ratio_relation(rp: Reading):
         return None
     std = next(u for u in names if u is not subj)
     # the standard must sit in a genuine RATIO FRAME — after "as" ("as old as B"), after "of" ("the age of
-    # B"), or as a possessor ("B's age"). Else the factor isn't relating the two names (e.g. "bought half the
-    # CDs" — a count of an object, not a ratio between people) → reject.
+    # B"), as a possessor ("B's age"), or an IMPLICIT relative clause with the "that"/"which" elided ("as
+    # much money DARWIN HAS" = "...as Darwin has"; the standard is immediately followed by a POSSESSION verb
+    # — deliberately narrow, not ANY verb, so a mistagged common noun standard ("the CDs SOLD at $10") isn't
+    # misread as a name-ratio via an unrelated passive modifier). Else the factor isn't relating the two
+    # names (e.g. "bought half the CDs" — a count of an object, not a ratio between people) → reject.
     si = rp.units.index(std)
     prev = _key(rp.units[si - 1].surface) if si > 0 else ""
     nxt = rp.units[si + 1] if si + 1 < len(rp.units) else None
     if prev not in ("as", "of", "that") \
-            and not (nxt is not None and "possessive" in nxt.features.get("senses", [])):
+            and not (nxt is not None and ("possessive" in nxt.features.get("senses", [])
+                                           or _key(nxt.surface) in POSSESSION_VERBS)):
         return None                                                   # "that B Ved" is a relative-clause
         #                                                               standard ("1/4 of the apples that
         #                                                               Kylie picked"); "the CDs" is not
@@ -4886,10 +4896,11 @@ def _offset_ratio_relation(rp: Reading):
         return None
     std = next(u for u in names if u is not subj)
     si = rp.units.index(std)                                          # the standard must sit in a ratio frame
-    prev = _key(rp.units[si - 1].surface) if si > 0 else ""           # (after as/of/that), like _ratio_relation
-    nxt = rp.units[si + 1] if si + 1 < len(rp.units) else None
+    prev = _key(rp.units[si - 1].surface) if si > 0 else ""           # (after as/of/that, or an implicit
+    nxt = rp.units[si + 1] if si + 1 < len(rp.units) else None        # relative "Y HAS"), like _ratio_relation
     if prev not in ("as", "of", "that") \
-            and not (nxt is not None and "possessive" in nxt.features.get("senses", [])):
+            and not (nxt is not None and ("possessive" in nxt.features.get("senses", [])
+                                           or _key(nxt.surface) in POSSESSION_VERBS)):
         return None
     return _entity(subj), k, _entity(std), sign * off.features["value"]
 

@@ -2879,8 +2879,12 @@ class TestIncrement99NumberOfReferent(unittest.TestCase):
     "<multiplier> as many (as X)": the multiplier scales the count-noun "number"/"amount" (not the
     quantifier "many"), and the referent supplies the count. "twice the number of marbles" -> 2 x the
     prior count. Found via the widened firewall (the 'twice/double the number of X' wrongs). The
-    trailing RELATIVE clause ("the number that X has") is a separate, harder parse (the relative-clause
-    verb mis-reads the matrix verb as an auxiliary) — left as a precision-safe DECLINE, not a wrong."""
+    trailing RELATIVE clause ("the number that X has") was originally left declined here — the general
+    relational-quantity path (`_derived_quantity`, used by `learn()`) mis-reads the matrix verb as an
+    auxiliary — but 4ao's `_ratio_relation`/`_offset_ratio_relation` frame-check extension (accept an
+    IMPLICIT relative clause, standard immediately followed by ITS OWN verb: "money DARWIN HAS") now solves
+    it via the SEPARATE, tightly-gated anchored-single-system path (exactly two names, positional subj/verb
+    split), independent of the general path's issue."""
 
     def test_twice_the_number_implicit_referent(self):
         self.assertEqual(reading.solve("Tom has 6 marbles. Megan owns twice the number of marbles. "
@@ -2894,14 +2898,40 @@ class TestIncrement99NumberOfReferent(unittest.TestCase):
         self.assertEqual(reading.solve("Frank has 36 apples. Susan has three times the number of apples. "
                                        "How many apples does Susan have?"), 108)
 
-    def test_trailing_relative_clause_declines(self):
-        # "the number (that) X has" — the relative-clause verb isn't parsed yet; DECLINE, never a wrong
+    def test_trailing_relative_clause_now_solves(self):
+        # "the number (that) X has" — now solved via the anchored-single-system's implicit-relative frame.
         self.assertEqual(reading.solve("Tom has 6 marbles. Megan has twice the number Tom has. "
-                                       "How many marbles does Megan have?"), "undetermined")
+                                       "How many marbles does Megan have?"), 12)
 
     def test_the_number_without_multiplier_unaffected(self):
         # a plain "the number" with no multiplier is not a relational quantity (no spurious fact)
         self.assertEqual(reading.solve("Tom has 6 marbles. How many marbles does Tom have?"), 6)
+
+
+class TestImplicitRelativePossessionFrame(unittest.TestCase):
+    """`_ratio_relation`/`_offset_ratio_relation`'s standard-frame check now also accepts an IMPLICIT
+    relative clause with "that"/"which" elided — the standard immediately followed by a POSSESSION verb
+    ("as much money DARWIN HAS" = "...as Darwin has"). Deliberately NARROW (a fixed verb set: has/had/have/
+    owns/gets/receives/holds), not ANY verb — diff-mining caught a real confident-wrong from the broader
+    "any verb" version: a mistagged common noun standard ("the CDs") followed by an unrelated PASSIVE
+    modifier ("sold at $10 each") was misread as a name-ratio (66.67 vs gold 1000). +3 dev (Mia/Darwin,
+    Jacob/Edward, Rubert/James — all real GSM8K cases)."""
+
+    def test_offset_ratio_implicit_possession(self):
+        self.assertEqual(reading.solve(
+            "Mia has $20 more than twice as much money Darwin has. If Darwin has $45, how much money "
+            "does Mia have?"), 110)
+
+    def test_pure_ratio_implicit_possession_chain(self):
+        self.assertEqual(reading.solve(
+            "Edward has 40 shoes. Jacob has half the number of shoes Edward has. How many shoes does "
+            "Jacob have?"), 20)
+
+    def test_unrelated_passive_modifier_declines(self):
+        # "the CDs SOLD at $10 each" — a mistagged common-noun standard ("CDs") followed by an UNRELATED
+        # passive participle, not the standard's own possession verb — must NOT be read as a name-ratio.
+        self.assertIsNone(reading._ratio_relation(
+            reading.analyze("Prince bought half the CDs sold at $10 each")))
 
 
 class TestIncrement100DoubleTriple(unittest.TestCase):
