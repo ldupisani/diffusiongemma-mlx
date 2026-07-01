@@ -3929,12 +3929,13 @@ class TestAffineSystem(unittest.TestCase):
             "Rui, Sol, and Tavi have a total of 67 coins. Rui has 5 less than Sol and Tavi has 4 times more "
             "than Sol. How many coins does Tavi have?"), "undetermined")
 
-    def test_mis_grabbed_total_declines(self):
-        # GATE B — a people-count ("3 friends") sits before the real total in the total-cue clause, so the
-        # total-finder grabs 3; the larger unconsumed 411 signals the mis-grab → decline, not mis-solve.
+    def test_people_count_before_total_measure_matched(self):
+        # `_combined_total` prefers the value quantifying the ASKED MEASURE: "3 friends collected 411 shells"
+        # → the total is 411 shells (asked=shell), not the 3-friends count. Reduce to pivot Wen: A=1,1,1
+        # B=26,-17,0 → Wen = (411−9)/3 = 134, Uxo = 134 + 26 = 160.
         self.assertEqual(reading.solve(
             "Together 3 friends collected 411 shells. Uxo collected 43 more than Vin. Vin collected 17 less "
-            "than Wen. How many shells did Uxo collect?"), "undetermined")
+            "than Wen. How many shells did Uxo collect?"), 160)
 
 
 class TestDativeTransferCluster(unittest.TestCase):

@@ -4980,8 +4980,17 @@ def _combined_total(premises: list, asked_measure, rel_mod, rel_desc):
                          if asked_measure is not None and _descriptor(u)[0] == asked_measure[0]), None)
         if rel_desc is not None and tot_desc is not None and rel_desc != tot_desc:
             continue                                                   # condensed-qualifier 'red' ≠ 'blue'
-        tv = next((u for u in rp.units if "value" in u.features.get("senses", [])
-                   and u.features.get("value") is not None), None)
+        vals = [u for u in rp.units if "value" in u.features.get("senses", [])
+                and u.features.get("value") is not None]
+        # Prefer the value that quantifies the ASKED MEASURE — a total clause often leads with a PEOPLE-COUNT
+        # ("Together 3 friends collected 411 shells" → the total is 411 shells, not 3 friends; "the three boys
+        # have 930 stamps" → 930, not 3). Fall back to the first value (a measure-less money total "$76").
+        tv = None
+        if asked_measure is not None:
+            tv = next((u for u in vals if _follow(u, "quantifies") is not None
+                       and _descriptor(_follow(u, "quantifies"))[0] == asked_measure[0]), None)
+        if tv is None and vals:
+            tv = vals[0]
         if tv is not None:
             return tv.features["value"]
     return None
