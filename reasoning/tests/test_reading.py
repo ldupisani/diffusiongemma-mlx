@@ -4510,6 +4510,36 @@ class TestRateExtrapolation(unittest.TestCase):
             "In minutes, how much faster will Bob run a 30 mile race?"), 60)
 
 
+class TestPercentChange(unittest.TestCase):
+    """PERCENT CHANGE — apply a single % change to a stated money base, report the NEW value. One money value
+    + one percent + exactly one direction cue (raise/increase ↑ XOR discount/off/down ↓) + a new-value
+    question (pay/new/cost, none of original/save/total/left). SYNTHETIC."""
+
+    def test_increase_new_value(self):
+        # 200 × (1 + 0.10) = 220.
+        self.assertEqual(reading.solve(
+            "A bike was sold for $200 last year. This year the price was increased by 10%. "
+            "What is the new price?"), 220)
+
+    def test_discount_pay(self):
+        # 50 × (1 − 0.20) = 40.
+        self.assertEqual(reading.solve(
+            "Anna bought a shirt with a 20% discount. If the price is $50, "
+            "how much did Anna pay after the discount?"), 40)
+
+    def test_inverse_find_original_declines(self):
+        # "40% of the original … original price?" is the inverse (÷) shape, not a new-value change — DECLINE.
+        self.assertEqual(reading.solve(
+            "Bob spent $6000 on a car which cost 40% of the original price. "
+            "What was the original price of the car?"), "undetermined")
+
+    def test_multi_step_percent_declines(self):
+        # a 3rd number (5 toys) makes it multi-step (per-item × discount) — DECLINE, don't commit 3×0.8.
+        self.assertEqual(reading.solve(
+            "Bob buys 5 toys that each cost $3. He gets a 20% discount. "
+            "How much did he pay for everything?"), "undetermined")
+
+
 class TestRateDifference(unittest.TestCase):
     """RATE DIFFERENCE × DURATION — "A reads M/day, B reads N/day. How many MORE does A read in K weeks?" →
     (M − N) × (K → days). Two rates (same measure & per_unit) and nothing else; the question's subject is A,

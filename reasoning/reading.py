@@ -5079,6 +5079,50 @@ def _backward_inversion(premises: list, question: str):
     return _compute(f"{_num(finals[0].amount)} - ({delta_sum})")
 
 
+# NB: no "rose"/"risen" — they collide with the common name "Rose" (a false UP cue that breaks the XOR).
+_PCT_UP = {"raise", "raised", "raises", "increase", "increased", "increases"}
+_PCT_DOWN = {"discount", "discounts", "off", "sale", "decrease", "decreased", "decreases",
+             "down", "lower", "lowered", "reduced", "reduce", "cheaper"}
+_PCT_Q_ACCEPT = {"pay", "pays", "paid", "new", "final", "cost", "costs", "now", "charge"}
+# inverse (find-the-whole) / aggregate (multi-period) / count question words → not the new-value shape.
+_PCT_Q_BLOCK = {"original", "save", "saved", "savings", "total", "left", "remain", "remaining",
+                "remained", "difference", "many", "before", "without", "raise"}
+
+
+def _percent_change(premises: list, question: str):
+    """Apply a single PERCENT CHANGE to a stated money base and report the NEW value — "a bicycle sold for
+    $220 last year was increased by 15%. What is the new price?" → 220 × 1.15 = 253; "$2000 ticket, 30%
+    discount. How much does he pay?" → 2000 × 0.70 = 1400. TIGHTLY gated to the clean 1-step shape: EXACTLY
+    one money value (a value-sense unit with a measure) and EXACTLY one percent across the premises (a 3rd
+    number ⇒ multi-step ⇒ decline); EXACTLY one direction cue (raise/increase ↑ XOR discount/off/down ↓ —
+    "N% more/less than the ORIGINAL" is the inverse find-the-whole shape, deliberately NOT a cue here); and a
+    question asking for the NEW value (an accept word pay/new/cost, and none of the inverse/aggregate/count
+    words original/save/total/left/many). None if any gate fails — every other percent problem stays declined."""
+    readings = [analyze(p) for p in premises]
+    pcts = [u for rp in readings for u in rp.units if "percent" in u.features.get("senses", [])]
+    # EVERY value-sense number counts (incl. bare object counts like "3 shirts" that lack a measure) — a 3rd
+    # number means the problem is multi-step (per-item, quantity) ⇒ decline. The single base must be money.
+    vals = [u for rp in readings for u in rp.units if "value" in u.features.get("senses", [])
+            and u.features.get("value") is not None]
+    if len(pcts) != 1 or len(vals) != 1 or "measure" not in vals[0].features:
+        return None
+    qr = analyze(question)                               # a NUMBER in the question (e.g. "buy 2 pounds … for
+    if any("value" in u.features.get("senses", []) and u.features.get("value") is not None   # a 4 member
+           for u in qr.units):                           # family") means it scales the new value ⇒ multi-step
+        return None
+    keys = {_key(u.surface) for rp in readings for u in rp.units}
+    up, down = keys & _PCT_UP, keys & _PCT_DOWN
+    if bool(up) == bool(down):                           # need EXACTLY one direction (XOR); ambiguous ⇒ decline
+        return None
+    qkeys = {_key(w) for w in question.lower().split()}
+    if not (qkeys & _PCT_Q_ACCEPT) or (qkeys & _PCT_Q_BLOCK):
+        return None
+    base, p = vals[0].features["value"], pcts[0].features["value"]
+    factor = 1 + p if up else 1 - p
+    r = _compute(f"{_num(base)} * {_num(factor)}")       # snap binary drift (early return skips solve()'s snap)
+    return round(r, 9) if isinstance(r, float) else r
+
+
 def _proportion(premises: list, question: str):
     """A direct PROPORTION — "If 12 bags of oranges weigh 24 pounds, how much do 8 bags weigh?" → 24 × 8/12 =
     16. A premise pairs a COUNT (12 bags) with a measure (24 pounds) for the same entity and verb; the
@@ -5608,6 +5652,10 @@ def solve(text: str):
     _rrace = _rate_race(premises, question, context)
     if _rrace is not None:
         return _rrace
+    # PERCENT CHANGE — "$220 bike increased 15%. New price?" → 253; "$2000, 30% discount. Pays?" → 1400.
+    _pct = _percent_change(premises, question)
+    if _pct is not None:
+        return _pct
     # POOL-AND-REDISTRIBUTE — "combine their candies and share equally, how many will EACH have?" → Σ/N.
     # Tried before GUARD 3 (the pooled amounts are all "used" so it wouldn't trip, but keep recognizers
     # together). Same math as the average branch but cued by a share-equally premise + a per-each question.
