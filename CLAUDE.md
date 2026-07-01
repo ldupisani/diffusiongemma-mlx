@@ -121,6 +121,16 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   refinement: tune on dev-train, validate on dev-holdout BEFORE the single TEST look — `dev-holdout` is a
   cheap TEST proxy). The full selection+validation process is in **`docs/reading-coverage-methodology.md`**.
   CLI: `python -m reasoning.reading_bench --slice dev|dev-train|dev-holdout|test [--limit N]`.
+- **`reasoning/reading_diff.py`** — the per-increment **safety net** (before/after diff over dev-train +
+  dev-holdout). The aggregate `reading_bench` number AND the unit suite both HIDE confident-wrongs: an
+  increment can post a +1 net gain while silently turning previously-correct answers wrong. This runs
+  `reading.solve` over the two inspectable dev slices and buckets the delta into SOLVED / BROKE /
+  DECL→WRONG; an increment SHIPS iff BROKE and DECL→WRONG are both 0 and NET > 0 (diff-neutral → record,
+  don't commit). Reuses `reading_bench._load`/`_gold` for the SAME holdout partition + gold parsing (a
+  divergence would silently leak the firewall). Snapshots default to `$DIFG_DATA_DIR/reading_diff/`
+  (gitignored — GSM8K questions never enter version control); never imported by the unit tests. 0 model
+  calls. Workflow: `snapshot before.json` (at HEAD) → edit → `snapshot after.json` → `diff`. CLI:
+  `python -m reasoning.reading_diff snapshot [path]` and `… diff [before.json] [after.json]`.
 - **`backend.py`** — pluggable inference backend (see below).
 - **`reasoning/mcp_server.py`** — exposes the reasoning project as an MCP service (FastMCP, stdio):
   `ask` (route → coded answer + domain + model-call count; 0-call compound split; non-coded types
