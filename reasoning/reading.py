@@ -3423,15 +3423,22 @@ def answer(question: str, context: list, discourse: list = None):
             gq = next(iter(measures))
             qs = [f for f in context if isinstance(f, Quantity) and f.measure == gq and f.amount is not None]
             owners = {f.entity for f in qs}
+            offset = 0
             if len(owners) == 1:                         # VALUE-LIST: average the individual amounts
                 terms = [f.amount for f in qs]
             else:                                        # MULTI-OWNER: one net holding per owner
                 terms = [_holdings(o, gq, context) for o in owners]
+                if gq == ("year", frozenset()):          # "average AGE of the three IN N YEARS" — each
+                    offset = _time_offset(r)             # member ages by N first, like the sibling TOTAL
+            #                                               AGE branch below
             stated_n = next((u.features["value"] for u in r.units if "value" in u.features.get("senses", [])
                              and float(u.features["value"]).is_integer()), None)
             if terms and all(t is not None for t in terms) and len(terms) >= 2 \
                     and (stated_n is None or len(terms) == stated_n):
-                return _compute(f"({' + '.join(_num(t) for t in terms)}) / {len(terms)}")
+                expr = f"({' + '.join(_num(t) for t in terms)})"
+                if offset:
+                    expr = f"({expr} + {_num(offset)} * {len(terms)})"
+                return _compute(f"{expr} / {len(terms)}")
         return "undetermined"
 
     # TOTAL AGE over a set — "what is the total of their ages now?" / "what will be their total age in N
@@ -5514,8 +5521,16 @@ def _noun_anchored_sum_system(premises: list, question: str):
     animals do they have?" → pig=10 (anchor), cow=2·10−3=17, goat=17+6=23, Σ=50. Declines a NEGATED question
     ("how many of her houses are NOT yellow?") — that's a COMPLEMENT sum (total minus ONE excluded entity),
     not a full Σ over every entity; conflating the two is a confident-wrong the diff harness caught (a
-    full-Σ answer of 190 vs the complement's correct 160)."""
-    if any("negation" in u.features.get("senses", []) for u in analyze(question).units):
+    full-Σ answer of 190 vs the complement's correct 160). Also declines when the question carries its OWN
+    numeric value ("...and 5 students to every teacher, how many TEACHERS are there?") — a real confident-
+    wrong (180 vs gold 36) came from a conversion clause getting glued onto the question by clause-splitting;
+    a bare "how many X" question never has a number of its own, so a stray one signals unaccounted info this
+    solver has no way to fold in (here, a students-per-teacher ratio, not a category sum at all)."""
+    qr_check = analyze(question)
+    if any("negation" in u.features.get("senses", []) for u in qr_check.units):
+        return None
+    if any("value" in u.features.get("senses", []) and u.features.get("value") is not None
+           for u in qr_check.units):
         return None
     for p in premises:
         if any(w in p.lower() for w in ("total", "combined", "altogether", "together")):
@@ -5665,12 +5680,15 @@ def _anchor_fact(rp: "Reading"):
     COMMON-NOUN anchor with NO names ("A pet store has six dogs for sale.", "If there are 11 blue balls" →
     (dog, 6) / (blue, 11)) — the coordinate-noun/subtype-partition affine family's twin of the named case;
     the entity is whatever the value's `quantifies` link points to. None if the clause carries a comparative/
-    multiplier/fraction (that's a RELATION, not an anchor) or doesn't name exactly one entity holding exactly
-    one value — the anchor is what `_anchored_sum_system` pins its free pivot to when the problem states no
-    combined total."""
+    multiplier/fraction (that's a RELATION, not an anchor), a RECURRENCE marker ("every"/"each"/"per" —
+    "Sofie plans to walk 10 miles EVERY DAY" is a per-day RATE, not a flat anchor; folding the bare 10
+    directly gave a real confident-wrong, 5 vs gold 35, dropping the "in 7 days" multiplication this solver
+    has no mechanism to apply), or doesn't name exactly one entity holding exactly one value — the anchor is
+    what `_anchored_sum_system` pins its free pivot to when the problem states no combined total."""
     if any("comparative" in u.features.get("senses", []) for u in rp.units) \
             or any("multiplier" in u.features.get("senses", []) for u in rp.units) \
-            or any(_fraction_parts(u.surface) is not None for u in rp.units):
+            or any(_fraction_parts(u.surface) is not None for u in rp.units) \
+            or any(_key(u.surface) in ("every", "each", "per") for u in rp.units):
         return None
     names = [u for u in rp.units if "name" in u.features.get("senses", [])]
     if not any("verb" in u.features.get("senses", []) for u in rp.units):
@@ -5693,10 +5711,12 @@ def _noun_anchor_fact(rp: "Reading"):
     ignoring Hannah — unlike `_anchor_fact`, which prioritizes a bare name subject and would wrongly anchor
     to Hannah herself). Used by `_noun_anchored_sum_system`, the anchor-based twin of `_noun_affine_system`
     for when no combined/category total is stated. None under the same comparative/multiplier/fraction/
-    single-value/verb gates as `_anchor_fact`, or if the value doesn't quantify a genuine noun."""
+    recurrence-marker/single-value/verb gates as `_anchor_fact` (a "per day"-style rate isn't a flat anchor),
+    or if the value doesn't quantify a genuine noun."""
     if any("comparative" in u.features.get("senses", []) for u in rp.units) \
             or any("multiplier" in u.features.get("senses", []) for u in rp.units) \
-            or any(_fraction_parts(u.surface) is not None for u in rp.units):
+            or any(_fraction_parts(u.surface) is not None for u in rp.units) \
+            or any(_key(u.surface) in ("every", "each", "per") for u in rp.units):
         return None
     if not any("verb" in u.features.get("senses", []) for u in rp.units):
         return None
@@ -5725,7 +5745,15 @@ def _anchored_affine_coeffs(premises: list, question: str):
     doesn't have a UNIQUE free entity (one that's no relation's subject) reachable from the anchor by
     forward propagation (disconnected / cyclic); the anchor itself may sit ANYWHERE in the graph, not just on
     the free entity — "Ed weighs 146 and is 38 lighter than Al" anchors the DEPENDENT entity Ed, so the pivot
-    (Al's ultimate free ancestor) is recovered by back-substituting the anchor's equation."""
+    (Al's ultimate free ancestor) is recovered by back-substituting the anchor's equation; or an ANCHOR's
+    value and a relation's OFFSET value carry UNCONVERTED, different measures ("Movie C was 1.25 HOURS"
+    anchoring in hours, "5 MINUTES longer" offsetting in minutes) — this solver never converts units, so
+    folding them together silently mixed hours and minutes as if they were the same number (a real confident-
+    wrong: 1.5625 vs gold 20 minutes). Deliberately narrow: only the ANCHOR's own value (unambiguous — an
+    anchor premise has exactly one value) and a relation's OFFSET value (when c≠0, matched by magnitude) are
+    checked — an INCIDENTAL value elsewhere in a relation clause ("half as many pages as Lucy IN 1 HOUR", a
+    rate's constant duration, never itself part of the arithmetic) must NOT count, or it wrongly declines a
+    correct pure-ratio system (a regression this exact fix introduced and then had to narrow)."""
     if re.search(r"\b(old|older|younger|age|ages|aged)\b", " ".join(premises + [question]).lower()):
         return None
     if any(w in p.lower() for p in premises
@@ -5734,7 +5762,7 @@ def _anchored_affine_coeffs(premises: list, question: str):
     for p in premises:
         if re.search(r"\btimes (more|less|fewer)\b", p.lower()):
             return None                                             # ambiguous ×N idiom → decline (GATE C)
-    rels, anchors = {}, {}
+    rels, anchors, measures = {}, {}, set()
     for p in premises:
         rp = analyze(p)
         nc = _name_count(rp)
@@ -5748,6 +5776,16 @@ def _anchored_affine_coeffs(premises: list, question: str):
             subj_e, k, std_e, c = rel
             if k == 0 or subj_e == std_e:
                 return None
+            if c != 0:                     # the OFFSET's own measure (matched by magnitude — the ONE value
+                off_u = next((u for u in rp.units if "value" in u.features.get("senses", [])   # this
+                              and u.features.get("value") is not None                          # relation's
+                              and abs(u.features["value"]) == abs(c)), None)                    # arithmetic
+                if off_u is not None:                                                           # actually
+                    qn = _follow(off_u, "quantifies")                                          # uses — NOT
+                    m = _descriptor(qn) if qn is not None else off_u.features.get("measure")    # every value
+                    if m is not None and m[0] not in COUNT_NOUNS:               # in the clause; "the NUMBER
+                        measures.add(m[0])                                      # of X" resolves to "number"
+                        #                                                         itself, not X — skip it
             if subj_e in rels:                                     # subject already defined → invert into
                 if std_e in rels:                                  # a relation for the OTHER entity, like
                     return None                                     # `_affine_system`
@@ -5759,6 +5797,15 @@ def _anchored_affine_coeffs(premises: list, question: str):
             if e in anchors:
                 return None
             anchors[e] = v
+            vals = [u for u in rp.units if "value" in u.features.get("senses", [])
+                    and u.features.get("value") is not None]
+            if len(vals) == 1:                          # an anchor premise has EXACTLY one value (unambiguous)
+                qn = _follow(vals[0], "quantifies")
+                m = _descriptor(qn) if qn is not None else vals[0].features.get("measure")
+                if m is not None and m[0] not in COUNT_NOUNS:
+                    measures.add(m[0])
+    if len(measures) > 1:
+        return None                             # mixed, unconverted units → decline rather than mis-fold
     if len(rels) < 1 or len(anchors) != 1:
         return None
     entities = set(rels) | {std for _k, std, _c in rels.values()}
@@ -5788,14 +5835,17 @@ def _anchored_affine_coeffs(premises: list, question: str):
 def _anchored_sum_system(premises: list, question: str):
     """The ANCHORED-SUM twin of `_affine_system`: instead of a COMBINED TOTAL pinning the pivot, one entity
     has a stated ABSOLUTE value (an "anchor") and NO total is given — the question instead asks for the SUM
-    of every entity. "Cecil has $600. Catherine has $250 less than twice Cecil's money. Carmela has $50 more
-    than twice Cecil's money. How much do they have altogether?" → pivot=Cecil=600 directly (no division
-    needed); answer = Σ(A_e·600 + B_e) = 2800. Runs only when `_affine_system` (a stated total) and the pure/
-    offset sum-systems all decline — a SUM question ("altogether"/"in all"/"total") with NO stated total is
-    this solver's shape, not theirs. Delegates the relation/anchor extraction to `_anchored_affine_coeffs`
-    (shared with `_anchored_single_system`); adds its OWN sum-cue gate and a "dozen"-measure decline (the
-    anchor's "6 dozen" already converts to raw units internally, so a "how many DOZEN" question needs a ÷12
-    we don't do)."""
+    of every entity, OR of SPECIFIC named entities if the question names 2+ of them directly ("how many
+    marbles do CARL AND CAL have combined?" sums only those two, not every entity in the system — a real
+    confident-wrong (392 vs gold 336) surfaced this: a 3-entity system where the question named only 2).
+    "Cecil has $600. Catherine has $250 less than twice Cecil's money. Carmela has $50 more than twice
+    Cecil's money. How much do they have altogether?" → pivot=Cecil=600 directly (no division needed);
+    answer = Σ(A_e·600 + B_e) = 2800. Runs only when `_affine_system` (a stated total) and the pure/offset
+    sum-systems all decline — a SUM question ("altogether"/"in all"/"total") with NO stated total is this
+    solver's shape, not theirs. Delegates the relation/anchor extraction to `_anchored_affine_coeffs` (shared
+    with `_anchored_single_system`); adds its OWN sum-cue gate and a "dozen"-measure decline (the anchor's
+    "6 dozen" already converts to raw units internally, so a "how many DOZEN" question needs a ÷12 we don't
+    do)."""
     if not any(w in question.lower() for w in ("altogether", "in all", " total", "combined", "in total")):
         return None                                                  # not a SUM question — not this shape
     asked_measure = _queried_measure(question)
@@ -5805,7 +5855,17 @@ def _anchored_sum_system(premises: list, question: str):
     if got is None:
         return None
     coeff, pivot = got
-    return _compute(" + ".join(f"({_num(a)} * {_num(pivot)} + ({_num(b)}))" for a, b in coeff.values()))
+    # a comma/"and"-joined name list ("Carl and Cal") merges into ONE unit spanning multiple words — split
+    # back into individual entity keys by word, skipping "and" (same gotcha as `_residual_sum_system`).
+    qnames = [_key(w.surface) for u in analyze(question).units if "name" in u.features.get("senses", [])
+              for w in u.words if _key(w.surface) != "and"]
+    if len(qnames) >= 2:
+        if not all(e in coeff for e in qnames):
+            return None                # a named entity outside the system — not this solver's shape
+        summed = {e: coeff[e] for e in qnames}
+    else:
+        summed = coeff                 # no specific names (e.g. "how much do THEY have altogether") — sum all
+    return _compute(" + ".join(f"({_num(a)} * {_num(pivot)} + ({_num(b)}))" for a, b in summed.values()))
 
 
 def _anchored_single_system(premises: list, question: str):

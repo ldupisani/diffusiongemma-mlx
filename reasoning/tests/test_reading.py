@@ -4281,6 +4281,79 @@ class TestVocabAndFamilyIsolation(unittest.TestCase):
             "how many pigs does the farmer have?"))
 
 
+class TestTestSliceRegressionFixes(unittest.TestCase):
+    """A TEST-slice checkpoint (aggregate-only per the firewall discipline, but inspected once this session to
+    debug a real regression) found this session's work introduced 5 NEW confident-wrongs on TEST despite 0
+    broke/decl-wrong on dev-train+holdout throughout — TEST is a disjoint partition whose specific questions
+    exposed gaps the dev diff harness structurally can't see. Each is a genuinely distinct root cause,
+    bisected to a specific increment and fixed here:
+    (1) `_anchored_sum_system` summed EVERY entity even when the question names only SOME of them ("how many
+        marbles do CARL AND CAL have combined?" in a 3-entity system) — now sums only the named subset when
+        the question names 2+ entities (handling the same "merged multi-word name unit" gotcha as
+        `_residual_sum_system`).
+    (2) `_anchored_affine_coeffs` had no unit-consistency check at all — an ANCHOR's value and a relation's
+        OFFSET value in different, unconverted measures (hours vs minutes) got folded as if identical. Fixed
+        narrowly (only the anchor's own value and a matched-by-magnitude offset value, NOT every incidental
+        value in a clause — an early overly-broad version wrongly declined correct pure-rate systems where a
+        constant "in 1 hour" duration appears in every clause) — and skips COUNT_NOUNS ("the NUMBER of X"
+        resolves to "number", not X, a spurious measure mismatch of its own).
+    (3) `_noun_anchored_sum_system` treated ANY asked noun outside the entity set as a category sum, even
+        when the question clause carried its OWN unaccounted number (a "5 students to every teacher"
+        conversion glued onto the question by clause-splitting) — now declines when the question itself
+        contains a value.
+    (4) `_anchor_fact`/`_noun_anchor_fact` treated a "N units EVERY DAY" premise as a flat anchor, ignoring
+        that it's a PER-DAY RATE needing multiplication by a stated duration — now decline on any
+        every/each/per recurrence marker.
+    (5) The general age-domain `average` branch (learn.py's wh-question dispatch) never applied a stated
+        temporal shift ("average age of the three IN THREE YEARS") the way its sibling `total age` branch
+        already did — dormant because it was unreachable before 4am's imperative-question-clause fix ever
+        let such text past solve()'s entry guard. Now offsets each term before dividing, like its sibling."""
+
+    def test_sum_only_named_entities_in_question(self):
+        # Sean=56 (anchor), Carl=4*56=224, Cal=2*Sean=112 (since Sean=half of Cal) -> Carl+Cal=336, NOT +Sean.
+        self.assertEqual(reading.solve(
+            "Carl has four times as many marbles as Sean and Sean has half as many marbles as Cal. If Sean "
+            "has 56 marbles, how many marbles do Carl and Cal have combined?"), 336)
+
+    def test_mixed_units_decline_but_pure_rate_still_solves(self):
+        # unit mismatch (hours anchor vs minutes offset) must decline...
+        self.assertEqual(reading.solve(
+            "Movie A was one-fourth the length of Movie B. Movie B was 5 minutes longer than Movie C. Movie "
+            "C was 1.25 hours. How many minutes long was Movie A?"), "undetermined")
+        # ...but a genuinely uniform rate (the SAME "in 1 hour" duration in every clause) must still solve —
+        # the fix that added the unit check must not treat an incidental, repeated duration as a conflict.
+        self.assertEqual(reading.solve(
+            "Carter can read half as many pages as Lucy in 1 hour. Lucy can read 20 more pages than Oliver "
+            "in 1 hour. Oliver can read 40 pages. How many pages can Carter read in 1 hour?"), 30)
+
+    def test_count_noun_wrapper_not_a_measure_mismatch(self):
+        # "the NUMBER of Aaron's brothers" resolves the value's quantifies-link to "number", not "brother" —
+        # must not be treated as a competing measure against the anchor's own "brother"-quantified value.
+        self.assertEqual(reading.solve(
+            "Aaron has four brothers. If the number of Bennett's brothers is two less than twice the number "
+            "of Aaron's brothers, what is the number of Bennett's brothers?"), 6)
+
+    def test_unaccounted_number_in_question_declines(self):
+        # "...and 5 students to every teacher, how many teachers are there?" — the conversion clause got
+        # glued onto the question by clause-splitting; a bare category-sum question never has its own number.
+        self.assertEqual(reading.solve(
+            "There are twice as many boys as girls at Dr. Wertz's school. If there are 60 girls and 5 "
+            "students to every teacher, how many teachers are there?"), "undetermined")
+
+    def test_recurring_rate_anchor_declines(self):
+        # "Sofie plans to walk 10 miles EVERY DAY" is a per-day rate needing x7 for "in seven days" -- not a
+        # flat anchor.
+        self.assertEqual(reading.solve(
+            "In 7 days, Sofie will walk twice as far as Brian. If Sofie plans to walk 10 miles every day, "
+            "how many miles will Brian walk in seven days?"), "undetermined")
+
+    def test_average_age_applies_temporal_shift(self):
+        # Adrian=3*21=63, Zack=2*21=42 (Harriet is HALF of Zack); in 3 years: 66+24+45=135, /3=45.
+        self.assertEqual(reading.solve(
+            "Adrian's age is three times the age of Harriet, and Harriet is half the age of Zack. Calculate "
+            "the average age of the three in three years if Harriet is 21 years old now."), 45)
+
+
 class TestImperativeQuestionClause(unittest.TestCase):
     """`solve()` used to require a literal "?" ANYWHERE in the text, so a GSM8K problem phrased as an
     IMPERATIVE ("Calculate the total…", "Find X's weight.", ending in "." — ~4% of the corpus) was declined
