@@ -4527,17 +4527,43 @@ class TestPercentChange(unittest.TestCase):
             "Anna bought a shirt with a 20% discount. If the price is $50, "
             "how much did Anna pay after the discount?"), 40)
 
-    def test_inverse_find_original_declines(self):
-        # "40% of the original … original price?" is the inverse (÷) shape, not a new-value change — DECLINE.
+    def test_spend_remainder_declines(self):
+        # "spent P% … how much left" is a 2-step remainder (÷ then −), not a new-value change — forward
+        # resolver must not misfire (no accept word / "left" is not the new value), and it isn't an
+        # "original" question so the inverse resolver stays out too → DECLINE.
         self.assertEqual(reading.solve(
-            "Bob spent $6000 on a car which cost 40% of the original price. "
-            "What was the original price of the car?"), "undetermined")
+            "Anna spent 35% of her allowance. If she spent $14, how much money is left in her allowance?"),
+            "undetermined")
 
     def test_multi_step_percent_declines(self):
         # a 3rd number (5 toys) makes it multi-step (per-item × discount) — DECLINE, don't commit 3×0.8.
         self.assertEqual(reading.solve(
             "Bob buys 5 toys that each cost $3. He gets a 20% discount. "
             "How much did he pay for everything?"), "undetermined")
+
+
+class TestPercentOriginal(unittest.TestCase):
+    """PERCENT ORIGINAL (inverse) — a money value is a % of an unknown original; recover it by division. Frame
+    picks the divisor: "of" → ÷P; discount/less → ÷(1−P); more → ÷(1+P). Question must ask the ORIGINAL.
+    SYNTHETIC."""
+
+    def test_of_frame(self):
+        # 6000 is 40% of the original → 6000 / 0.40 = 15000.
+        self.assertEqual(reading.solve(
+            "Bob spent $6000 on a car which cost 40% of the original price. "
+            "What was the original price of the car?"), 15000)
+
+    def test_discount_frame(self):
+        # paid $240 at a 20% discount → 240 / (1 − 0.20) = 300.
+        self.assertEqual(reading.solve(
+            "Anna bought a pair of shoes at a 20% discount. If she paid $240, "
+            "what was the original price of the shoes?"), 300)
+
+    def test_less_frame(self):
+        # $75 is 25% less than the original → 75 / 0.75 = 100.
+        self.assertEqual(reading.solve(
+            "Bob spent $75 on a used bike, which is 25% less than the original price. "
+            "What was the original price of the bike?"), 100)
 
 
 class TestRateDifference(unittest.TestCase):

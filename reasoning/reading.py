@@ -5123,6 +5123,44 @@ def _percent_change(premises: list, question: str):
     return round(r, 9) if isinstance(r, float) else r
 
 
+def _percent_original(premises: list, question: str):
+    """The INVERSE of `_percent_change`: a known money value is a PERCENT of an unknown ORIGINAL → recover the
+    original by division. Three frames (by how the percent relates the value to the original): "$15000 cost
+    40% OF the original → 15000 / 0.40 = 37500"; "$480 at a 20% DISCOUNT → 480 / (1 − 0.20) = 600"; "$7500 is
+    25% LESS than the original → 480 / 0.75"; "$X is 25% MORE than the original → X / 1.25". TIGHTLY gated like
+    the forward twin — exactly one money value + one percent (no other number in premises OR question ⇒ decline),
+    a question asking for the ORIGINAL (the token that makes the forward resolver decline, so the two never
+    collide), and a recognized frame. None otherwise."""
+    if "original" not in {_key(w) for w in question.lower().split()}:
+        return None
+    readings = [analyze(p) for p in premises]
+    pcts = [(rp, i, u) for rp in readings for i, u in enumerate(rp.units)
+            if "percent" in u.features.get("senses", [])]
+    vals = [u for rp in readings for u in rp.units if "value" in u.features.get("senses", [])
+            and u.features.get("value") is not None]
+    if len(pcts) != 1 or len(vals) != 1 or "measure" not in vals[0].features:
+        return None
+    qr = analyze(question)
+    if any("value" in u.features.get("senses", []) and u.features.get("value") is not None for u in qr.units):
+        return None
+    rp, pi, punit = pcts[0]
+    p, x = punit.features["value"], vals[0].features["value"]
+    pnext = _key(rp.units[pi + 1].surface) if pi + 1 < len(rp.units) else ""
+    keys = {_key(u.surface) for r in readings for u in r.units}
+    if pnext == "of":                                    # "P% OF the original" → X = P · original
+        factor = p
+    elif keys & {"more", "increased", "increase", "higher"}:   # "P% MORE than original" → X = (1+P) · original
+        factor = 1 + p
+    elif keys & {"discount", "off", "sale", "less", "decrease", "decreased", "lower", "reduced", "cheaper"}:
+        factor = 1 - p                                   # "P% DISCOUNT / LESS than original" → X = (1−P) · original
+    else:
+        return None
+    if factor <= 0:
+        return None
+    r = _compute(f"{_num(x)} / {_num(factor)}")
+    return round(r, 9) if isinstance(r, float) else r
+
+
 def _proportion(premises: list, question: str):
     """A direct PROPORTION — "If 12 bags of oranges weigh 24 pounds, how much do 8 bags weigh?" → 24 × 8/12 =
     16. A premise pairs a COUNT (12 bags) with a measure (24 pounds) for the same entity and verb; the
@@ -5656,6 +5694,10 @@ def solve(text: str):
     _pct = _percent_change(premises, question)
     if _pct is not None:
         return _pct
+    # PERCENT ORIGINAL (inverse) — "$15000 is 40% of the original. Original price?" → 15000/0.40 = 37500.
+    _porig = _percent_original(premises, question)
+    if _porig is not None:
+        return _porig
     # POOL-AND-REDISTRIBUTE — "combine their candies and share equally, how many will EACH have?" → Σ/N.
     # Tried before GUARD 3 (the pooled amounts are all "used" so it wouldn't trip, but keep recognizers
     # together). Same math as the average branch but cued by a share-equally premise + a per-each question.
