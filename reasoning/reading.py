@@ -5527,6 +5527,92 @@ def _noun_anchored_sum_system(premises: list, question: str):
     return _compute(total)
 
 
+def _noun_residual_sum_system(premises: list, question: str):
+    """The SUBTYPE-PARTITION twin: adjective-qualified subtypes of ONE head noun ("red/blue/green BALLS"),
+    where the total is stated directly in the SAME (bare, unqualified) head noun ("Ryan has 40 balls" — no
+    hypernym/category guessing needed, unlike `_noun_affine_system`'s total), and the ASKED entity is the
+    explicit textual "the REST are <qualifier>" residual — never itself defined by a relation. "Ryan has 40
+    balls. There are twice as many red balls as blue while the rest are green. If there are 11 blue balls,
+    how many green balls are there?" → red=2·11=22, green=40−22−11=7. Same unused-given firewall (every
+    premise must classify as the total, an anchor, a relation, or the "rest" marker) and 0-1-names-per-
+    premise safety check as the rest of the coordinate-noun family."""
+    if any(w in question.lower() for w in ("altogether", "in all", " total", "combined", "in total")):
+        return None                                        # an explicit sum cue is a different shape
+    for p in premises:
+        if re.search(r"\btimes (more|less|fewer)\b", p.lower()):
+            return None
+    rels, anchors, residual, total = {}, {}, None, None
+    for p in premises:
+        rest_m = re.match(r"^(the\s+)?rest\s+(are|is)\s+([a-z]+)", p.strip(), re.I)
+        if rest_m:
+            if residual is not None:
+                return None
+            residual = _key(rest_m.group(3))
+            continue
+        rp = analyze(p)
+        if sum(1 for u in rp.units if "name" in u.features.get("senses", [])) == 2:
+            return None                                     # a genuine 2-name relation is _affine_system's turf
+        rel = _affine_relation(rp)
+        if rel is not None:
+            subj_e, k, std_e, c = rel
+            if k == 0 or subj_e == std_e:
+                return None
+            if subj_e in rels:
+                if std_e in rels:
+                    return None
+                rels[std_e] = (1.0 / k, subj_e, -c / k)
+            else:
+                rels[subj_e] = (k, std_e, c)
+            continue
+        vals = [u for u in rp.units if "value" in u.features.get("senses", []) and u.features.get("value") is not None]
+        qn = _follow(vals[0], "quantifies") if len(vals) == 1 else None
+        if qn is not None and "noun" in qn.features.get("senses", []):
+            if qn.features.get("attributes"):                # a QUALIFIED noun — a per-subtype anchor
+                e = _noun_entity_key(qn)
+                if e in anchors:
+                    return None
+                anchors[e] = vals[0].features["value"]
+            else:                                             # a BARE noun — the head-noun TOTAL
+                if total is not None:
+                    return None
+                total = vals[0].features["value"]
+            continue
+        return None                                          # unclassified premise — the same firewall as
+        #                                                       the rest of the anchored family
+    if residual is None or total is None or len(rels) < 1 or len(anchors) != 1:
+        return None
+    entities = set(rels) | {std for _k, std, _c in rels.values()}
+    if residual in entities:
+        return None                                          # the residual must be UNCOVERED by any relation
+    anchor_e, anchor_v = next(iter(anchors.items()))
+    if anchor_e not in entities:
+        return None
+    free = [e for e in entities if e not in rels]
+    if len(free) != 1:
+        return None
+    coeff = {free[0]: (1.0, 0.0)}
+    for _ in range(len(entities) + 1):
+        for e, (k, std, c) in rels.items():
+            if std in coeff and e not in coeff:
+                a_std, b_std = coeff[std]
+                coeff[e] = (k * a_std, k * b_std + c)
+    if any(e not in coeff for e in entities):
+        return None
+    a_anc, b_anc = coeff[anchor_e]
+    if a_anc == 0:
+        return None
+    pivot = _compute(f"({_num(anchor_v)} - ({_num(b_anc)})) / {_num(a_anc)}")
+    qr = analyze(question)
+    many = next((u for u in qr.units if _key(u.surface) in ("many", "much")
+                 and "quantifier" in u.features.get("senses", [])), None)
+    asked_u = _follow(many, "collection") if many is not None else None
+    if asked_u is None or _noun_entity_key(asked_u) != residual:
+        return None                                          # only the RESIDUAL entity — a covered entity
+        #                                                       is a different (unbuilt) single-ask variant
+    covered_sum = " + ".join(f"({_num(a)} * {_num(pivot)} + ({_num(b)}))" for a, b in coeff.values())
+    return _compute(f"{_num(total)} - ({covered_sum})")
+
+
 def _anchor_fact(rp: "Reading"):
     """A single ANCHOR fact: an ABSOLUTE value stated for exactly one NAMED entity, with no relation to any
     other entity ("Cecil has $600", "If David has 15 shells" → (Cecil, 600) / (David, 15)). Also covers a
@@ -6567,6 +6653,12 @@ def solve(text: str):
     _noun_anchored = _noun_anchored_sum_system(premises, question)
     if _noun_anchored is not None:
         return _noun_anchored
+    # SUBTYPE-PARTITION SYSTEM (adjective-qualified subtypes of ONE head noun, total stated directly in that
+    # SAME noun, asked entity is the explicit "the rest are X" residual). "Ryan has 40 balls. Twice as many
+    # red as blue; the rest are green. If there are 11 blue balls, how many green balls?" → 7.
+    _noun_residual = _noun_residual_sum_system(premises, question)
+    if _noun_residual is not None:
+        return _noun_residual
     # ANCHORED-SUM SYSTEM (the twin of the mixed affine system for when NO total is stated but one entity has
     # a bare absolute value, and the question asks for the SUM of all entities). "Cecil has $600; Catherine is
     # $250 less than twice Cecil; Carmela is $50 more than twice Cecil. How much altogether?" → 2800.

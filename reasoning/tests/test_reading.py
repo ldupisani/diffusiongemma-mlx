@@ -4223,6 +4223,27 @@ class TestNounAnchoredSumSystem(unittest.TestCase):
             "how many of her houses are not yellow?"))
 
 
+class TestNounResidualSumSystem(unittest.TestCase):
+    """`_noun_residual_sum_system` — the SUBTYPE-PARTITION twin: adjective-qualified subtypes of ONE head
+    noun ("red/blue/green balls"), the total stated directly in that SAME (bare) noun ("Ryan has 40 balls"
+    — no hypernym/category guessing, unlike `_noun_affine_system`), and the asked entity is the explicit
+    "the REST are <qualifier>" residual. +2 dev (the real Ryan/balls and Josh/marbles GSM8K cases)."""
+
+    def test_subtype_partition_residual(self):
+        # red=2*11=22, green=40-22-11=7.
+        self.assertEqual(reading.solve(
+            "Ian has 40 balls. There are twice as many red balls as blue while the rest are green. If "
+            "there are 11 blue balls, how many green balls are there?"), 7)
+
+    def test_covered_entity_not_residual_declines(self):
+        # asking for a COVERED entity (red) is a different (unbuilt) single-ask variant, not the residual
+        # this solver answers — must decline rather than guess.
+        self.assertIsNone(reading._noun_residual_sum_system(
+            ["Ian has 40 balls.", "There are twice as many red balls as blue while the rest are green.",
+             "If there are 11 blue balls"],
+            "how many red balls are there?"))
+
+
 class TestImperativeQuestionClause(unittest.TestCase):
     """`solve()` used to require a literal "?" ANYWHERE in the text, so a GSM8K problem phrased as an
     IMPERATIVE ("Calculate the total…", "Find X's weight.", ending in "." — ~4% of the corpus) was declined
