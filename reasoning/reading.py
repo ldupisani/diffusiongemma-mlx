@@ -6764,6 +6764,46 @@ def _equal_share(question: str, context: list, premises: list):
     return result
 
 
+# --- ARITHMETIC SYSTEM-SOLVER REGISTRY -------------------------------------------------------
+# The word-problem system solvers are REGISTERED here, not hand-inlined in solve() — honoring the
+# engine's founding rule ("new reasoning is REGISTERED, never special-cased"). Each is a
+# self-contained recognizer: given (premises, question) it returns an answer, or None to pass.
+# solve() tries them in list order and returns the first non-None. This single ordered table is the
+# ONE chokepoint the cross-solver collision class (two solvers claiming the same premise-set — the
+# failure mode behind this domain's `_name_count` bug and 5 TEST regressions) is audited against;
+# see `reading_diff --collisions`.
+#
+# EARLY systems run BEFORE the read-synthesize fixpoint: their relations DEFER to no fact, so a
+# stated factor/offset/total would trip the unused-given GUARD 3 if left to the general fold. All
+# share the uniform signature f(premises, question); each re-analyzes its own premises and is
+# tightly gated (pure context, every premise number consumed). To add one, append it here in
+# priority order — do NOT re-inline a branch in solve().
+_EARLY_SYSTEMS = [
+    # N-UNKNOWN SUM+RATIO-CHAIN: "Amy/Jeremy/Chris combined 132 → Jeremy 66" (subsumes 2-entity Jean/Jane).
+    ("sum_ratio", _sum_ratio_system),
+    # OFFSET SUM-system (affine twin): "Justin + Sabrina 50; Justin 8 more than twice Sabrina → Sabrina 14."
+    ("offset_sum", _offset_sum_system),
+    # PURE OFFSET SUM (no factor): "Anais 30 more toys than Kamari; 160 altogether → Kamari 65."
+    ("offset_sum_pure", _offset_sum_pure),
+    # MIXED AFFINE (N entities, ratio+offset mixed, +total): "Anna=3·Mandy & 2 fewer than Amanda; 142 → Mandy 20."
+    ("affine", _affine_system),
+    # COORDINATE/SUBTYPE-NOUN AFFINE (common-noun entities): "twice as many pigs as cows, 4 more cows than goats; 56 animals → goats 11."
+    ("noun_affine", _noun_affine_system),
+    # COORDINATE-NOUN ANCHORED-SUM (no total, one noun anchor, category-sum ask): "Hannah's family: 10 pigs … how many animals?" → 50.
+    ("noun_anchored_sum", _noun_anchored_sum_system),
+    # SUBTYPE-PARTITION (adjective subtypes of one head noun, total in same noun, 'the rest' ask): "Ryan 40 balls … green balls?" → 7.
+    ("noun_residual_sum", _noun_residual_sum_system),
+    # ANCHORED-SUM (no total, one bare anchor, sum ask): "Cecil $600 … how much altogether?" → 2800.
+    ("anchored_sum", _anchored_sum_system),
+    # ANCHORED-SINGLE (bare anchor, single named ask): "Ed weighs 146 … Find Carl's weight." → 220.
+    ("anchored_single", _anchored_single_system),
+    # ANCHORED-DIFFERENCE (bare anchor, 'how many more X than Y'): "Ann 60 cards … how many more than Anton?" → 30.
+    ("anchored_difference", _anchored_difference_system),
+    # RESIDUAL SUM (stated total names 3+, asked one never related): "Jermaine/Terrence/Emilee $90 … Emilee?" → 25.
+    ("residual_sum", _residual_sum_system),
+]
+
+
 def solve(text: str):
     """Read a whole word-problem paragraph (premises + a trailing question) and answer the question —
     threading coreference (`discourse`) and the growing `context` across the premises (split into
@@ -6796,69 +6836,15 @@ def solve(text: str):
     # didn't fully read).
     if any(d.kind == "unknown-word" for r in readings for d in deficiencies(r)):
         return "undetermined"
-    # N-UNKNOWN SUM+RATIO-CHAIN recognizer — tried EARLY (before the unused-given GUARD 3): its relations
-    # ("Amy = ⅓·Jeremy") DEFER to no fact, so the stated factors and total would trip GUARD 3 and decline
-    # before the part-chain. Self-contained (re-analyzes premises, needs no context), tightly gated → safe to
-    # short-circuit here. "Amy/Jeremy/Chris combined 132 → Jeremy 66"; subsumes the 2-entity Jean/Jane case.
-    _ratio = _sum_ratio_system(premises, question)
-    if _ratio is not None:
-        return _ratio
-    # OFFSET SUM-system (the affine twin: subject = factor × standard + offset, + a combined total → solve for
-    # a part). Tried right after the pure-ratio system (which declines offset-tainted systems) and equally
-    # early, for the same reason — its relation defers to no fact, so the stated offset/factor/total would
-    # trip GUARD 3. "Justin + Sabrina 50 pencils; Justin 8 more than twice Sabrina → Sabrina 14."
-    _offset = _offset_sum_system(premises, question)
-    if _offset is not None:
-        return _offset
-    # PURE OFFSET SUM (no factor): "Anais has 30 more toys than Kamari; 160 altogether → Kamari 65."
-    _poff = _offset_sum_pure(premises, question)
-    if _poff is not None:
-        return _poff
-    # MIXED AFFINE SYSTEM (N entities, ratio + offset relations mixed, + a total) — the generalization the two
-    # 2-entity/pure-ratio solvers above decline. "Anna = 3·Mandy and 2 fewer than Amanda; 142 total → Mandy 20."
-    _affine = _affine_system(premises, question)
-    if _affine is not None:
-        return _affine
-    # COORDINATE/SUBTYPE-NOUN AFFINE SYSTEM (entities are common nouns, not names — "twice as many pigs as
-    # cows, 4 more cows than goats; 56 animals total, how many goats?" → 11).
-    _noun_affine = _noun_affine_system(premises, question)
-    if _noun_affine is not None:
-        return _noun_affine
-    # COORDINATE-NOUN ANCHORED-SUM SYSTEM (no total stated, but one noun entity has a bare anchor value; the
-    # question asks for a CATEGORY SUM). "Hannah's family has ten pigs. They have three fewer than twice as
-    # many cows as pigs and six more goats than cows. How many animals do they have?" → 50.
-    _noun_anchored = _noun_anchored_sum_system(premises, question)
-    if _noun_anchored is not None:
-        return _noun_anchored
-    # SUBTYPE-PARTITION SYSTEM (adjective-qualified subtypes of ONE head noun, total stated directly in that
-    # SAME noun, asked entity is the explicit "the rest are X" residual). "Ryan has 40 balls. Twice as many
-    # red as blue; the rest are green. If there are 11 blue balls, how many green balls?" → 7.
-    _noun_residual = _noun_residual_sum_system(premises, question)
-    if _noun_residual is not None:
-        return _noun_residual
-    # ANCHORED-SUM SYSTEM (the twin of the mixed affine system for when NO total is stated but one entity has
-    # a bare absolute value, and the question asks for the SUM of all entities). "Cecil has $600; Catherine is
-    # $250 less than twice Cecil; Carmela is $50 more than twice Cecil. How much altogether?" → 2800.
-    _anchored = _anchored_sum_system(premises, question)
-    if _anchored is not None:
-        return _anchored
-    # ANCHORED-SINGLE SYSTEM (the twin for a single named ASK instead of a sum): "Al is 25 pounds heavier than
-    # Ben; Ben 16 lighter than Carl; Ed weighs 146 and is 38 lighter than Al. Find Carl's weight." → 220.
-    _anchored_1 = _anchored_single_system(premises, question)
-    if _anchored_1 is not None:
-        return _anchored_1
-    # ANCHORED-DIFFERENCE SYSTEM (the twin for "how many more does X have than Y"): "Anton has 3x Heike's
-    # cards; Ann has 6x Heike's cards; Ann has 60 cards. How many more does Ann have than Anton?" → 30.
-    _anchored_d = _anchored_difference_system(premises, question)
-    if _anchored_d is not None:
-        return _anchored_d
-    # RESIDUAL SUM SYSTEM: a stated total names 3+ entities but the ASKED one is never related/anchored
-    # anywhere else — solve it as total minus every OTHER entity's (anchor+relation-derived) value.
-    # "Jermaine, Terrence, and Emilee earn a total of $90. Jermaine earns $5 more than Terrence. Terrence
-    # earns $30. How much does Emilee earn?" → 90 − (35 + 30) = 25.
-    _residual = _residual_sum_system(premises, question)
-    if _residual is not None:
-        return _residual
+    # ARITHMETIC SYSTEM-SOLVERS (EARLY) — tried before the read-synthesize fixpoint (each relation
+    # DEFERS to no fact, so a stated factor/offset/total would trip the unused-given GUARD 3 in the
+    # general fold). Each recognizer is self-contained (re-analyzes premises, needs no context) and
+    # tightly gated; solve() returns the first that claims the problem. The recognizers, their shapes,
+    # and their priority order live in the `_EARLY_SYSTEMS` registry above — append there to add one.
+    for _label, _system in _EARLY_SYSTEMS:
+        _r = _system(premises, question)
+        if _r is not None:
+            return _r
     # GUARD 8 — INVERSION / COUNTERFACTUAL: two shapes the forward fold structurally cannot solve, so it
     # would fold the literal numbers and commit garbage. Both are honest DECLINES (the safe "only-declines"
     # shape, like GUARD 7).
