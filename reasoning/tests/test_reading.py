@@ -4462,6 +4462,14 @@ class TestAnchoredSumSystem(unittest.TestCase):
             "Anna has 3 times as many toys as Mandy and 2 fewer toys than Amanda. If they have 142 toys "
             "combined, how many toys does Mandy have?"), 20)
 
+    def test_purpose_infinitive_to_share_does_not_block(self):
+        # "to share" is a PURPOSE infinitive (intent), not a distributed-total cue — it must NOT trip the
+        # combined-total guard in `_anchored_affine_coeffs` (which fires on a real "SHARED $X between …").
+        # Nora=20 (anchor), Owen=15, Pat=25; altogether = 60. (The real Mona/Jasmine/Rachel GSM8K case.)
+        self.assertEqual(reading.solve(
+            "Nora brought 20 cookies to share in class. Owen brought 5 fewer cookies than Nora. Pat brought "
+            "10 more cookies than Owen. How many cookies altogether did Nora, Owen, and Pat bring?"), 60)
+
     def test_unclassified_premise_declines(self):
         # An UNCONSUMED premise (a depletion action on a pronoun, no name) must decline THIS solver rather
         # than silently drop information: "gave out half her apples" is neither a relation nor an anchor, so

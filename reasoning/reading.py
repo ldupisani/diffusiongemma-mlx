@@ -5762,8 +5762,14 @@ def _anchored_affine_coeffs(premises: list, question: str):
     if re.search(r"\b(old|older|younger|age|ages|aged)\b", " ".join(premises + [question]).lower()):
         return None
     if any(w in p.lower() for p in premises
-           for w in ("combined", "total", "together", "between them", "share", "shared", "altogether")):
+           for w in ("combined", "total", "together", "between them", "altogether")):
         return None                                                  # a stated total is _affine_system's turf
+    # "share"/"shared" signals a DISTRIBUTED total ("Mr. Sam SHARED $5250 between his two sons") — but NOT
+    # the purpose infinitive "20 cookies TO SHARE in class" (intent, no total), which wrongly tripped this
+    # guard and blocked a legitimate anchored-sum ("Mona brought 20 … Jasmine 5 fewer … altogether?" → 60).
+    if any(re.search(r"\bshared?\b", p.lower()) and not re.search(r"\bto (be )?shared?\b", p.lower())
+           for p in premises):
+        return None
     for p in premises:
         if re.search(r"\btimes (more|less|fewer)\b", p.lower()):
             return None                                             # ambiguous ×N idiom → decline (GATE C)
