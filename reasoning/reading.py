@@ -1757,6 +1757,14 @@ LEXICON.update({
     # descriptor unifies with the spelled-out unit).
     "several": ["quantifier"], "earnings": ["noun"], "seconds": ["noun"],
     "represent": ["verb"], "represents": ["verb"], "represented": ["verb"],
+    # ninth-wave typed tier (the sweep's remaining typeable clusters): the supermarket cluster
+    # (mass/supermarket nouns, "proportional" adjective, "kg" a PLURALS abbreviation alias like cm),
+    # the dog-grooming cluster (burr/tick/fur/object nouns, "foreign" adjective, catch/caught verb),
+    # and "lot" ("eats a lot" — scene-setting; the quantity machinery makes no claim from it).
+    "mass": ["noun"], "supermarket": ["noun"], "proportional": ["adjective"],
+    "burr": ["noun"], "tick": ["noun"], "fur": ["noun"], "object": ["noun"],
+    "foreign": ["adjective"], "catch": ["verb"], "catches": ["verb"], "caught": ["verb"],
+    "lot": ["noun"],
 })
 PLURALS.update({
     "bananas": "banana", "erasers": "eraser", "crayons": "crayon", "berries": "berry",
@@ -1774,6 +1782,7 @@ PLURALS.update({
     "robins": "robin", "sparrows": "sparrow", "events": "event", "centers": "center",
     "jackets": "jacket", "pints": "pint",
     "seconds": "second", "cm": "centimeter",
+    "kg": "kilogram", "burrs": "burr", "ticks": "tick", "objects": "object",
 })
 # NOTE: groundwork nouns/adjectives/pronouns (fruit/paper/side/…/herself) were re-tested with decline-safety
 # GUARDS 11–14 in place and STILL drop TEST 40.0→36.4% (a noun unlocks a held-out wrong in an as-yet-unguarded
@@ -1782,6 +1791,7 @@ VERB_LEMMA.update({
     "scored": "score", "scores": "score", "scoring": "score",
     "asks": "ask", "asked": "ask",
     "represents": "represent", "represented": "represent",
+    "caught": "catch", "catches": "catch",
     "raises": "raise", "raised": "raise", "raising": "raise",
 })
 

@@ -5826,5 +5826,29 @@ class TestIncrement153CommonNounGenitive(unittest.TestCase):
             "twice her sister's age?"), "undetermined")
 
 
+class TestIncrement154NinthWaveTypedClusters(unittest.TestCase):
+    """#154 — ninth-wave typed clusters: supermarket cluster (mass/supermarket nouns, "proportional"
+    adjective, "kg" a PLURALS abbreviation alias of kilogram like cm), dog-grooming cluster
+    (burr/tick/fur/object nouns, "foreign" adjective, catch/caught verb), and "lot" ("eats a lot"
+    scene-setting — the quantity machinery makes no claim from it). Also lifted TWO TEST cases
+    (23→25 correct, wrong unchanged — precision 82.1%→83.3%)."""
+
+    def test_proportional_mass_rate(self):
+        self.assertEqual(reading.solve(
+            "The price paid for rice is proportional to the mass purchased. Sam paid $4 for 2 kg "
+            "of rice. How much will Sam pay for 12 kg?"), 24)
+
+    def test_dog_cluster_and_genitive(self):
+        # also exercises the common-noun genitive split ("the dog's fur")
+        self.assertEqual(reading.solve(
+            "A dog has 12 burrs and six times as many ticks as burrs. How many foreign objects "
+            "are caught in the dog's fur?"), 84)
+
+    def test_lot_is_scene_setting(self):
+        self.assertEqual(reading.solve(
+            "Tom is a boy who eats a lot. Tom has 40 marbles. Ben has 12 more marbles than Tom. "
+            "How many marbles do they have in total?"), 92)
+
+
 if __name__ == "__main__":
     unittest.main()
