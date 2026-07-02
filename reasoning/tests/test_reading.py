@@ -6764,5 +6764,36 @@ class TestIncrement189CombinedStandard(unittest.TestCase):
             "has 60 mangoes, how many mangoes does all of them have combined?"), 75)
 
 
+class TestIncrement191AgeShift(unittest.TestCase):
+    """#191 — the age-shift family (the biggest fully-read decline bucket, 49 cases; age algebra
+    is a TEST-carrying branch). `_age_shift_system`: ONE relation + ONE time-shifted anchor
+    ("in 5 years X will be 40" → X_now = 35), asked now or projected ("10 years from now").
+    `_age_simultaneous_system`: offset AND ratio in one sentence → std = off/(k−1)."""
+
+    def test_shifted_anchor_current_ask(self):
+        # (40 − 5) − 4 = 31 — an imperative question ("Calculate …")
+        self.assertEqual(reading.solve(
+            "Angelina is 4 years older than Justin is now. In 5 years, Angelina will be 40 "
+            "years old. Calculate the age of Justin currently."), 31)
+
+    def test_this_year_anchor_projected_ask(self):
+        # (12 + 3) + 10 = 25 — "younger by K" phrasing + a projected ask
+        self.assertEqual(reading.solve(
+            "Bush and Matt are brothers. Bush is younger than Matt by 3 years. This year "
+            "Bush will be 12 years old. What will be Matt's age 10 years from now?"), 25)
+
+    def test_simultaneous_offset_and_ratio(self):
+        # D + 7 = 2D → D = 7
+        self.assertEqual(reading.solve(
+            "Yuan is 7 years older than his brother David and twice his age. "
+            "How old is David?"), 7)
+
+    def test_two_shifted_anchors_decline(self):
+        # two anchors — over-determined for this shape; never pick one silently
+        self.assertNotIsInstance(reading.solve(
+            "Ann is 4 years older than Ben. In 5 years, Ann will be 40. In 3 years, Ben "
+            "will be 20. How old is Ben?"), (int, float))
+
+
 if __name__ == "__main__":
     unittest.main()

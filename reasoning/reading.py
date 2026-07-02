@@ -9387,6 +9387,106 @@ def _discounted_purchase_system(premises: list, question: str):
     return _gated_pos_int(result)
 
 
+# --- system family: age shift (time-shifted anchors, projected asks) --------------------------
+_AGE_REL = re.compile(r"\b([A-Z][a-z]+) is (?:(\d+) years? (older|younger) than ([A-Z][a-z]+)"
+                      r"|(younger|older) than ([A-Z][a-z]+) by (\d+) years?)")
+_AGE_ANCHOR = re.compile(r"(?:\b[Ii]n (\d+) years,? |\b[Tt]his year,? )?\b([A-Z][a-z]+) "
+                         r"(?:will be|is|turns) (\d+)(?: years? old)?\b(?: in (\d+) years)?")
+
+
+def _age_shift_system(premises: list, question: str):
+    """AGE SHIFT — one age relation plus a TIME-SHIFTED anchor, asked now or projected: "Angelina
+    is 4 years older than Justin. In 5 years, Angelina will be 40. Justin currently?" → (40−5)−4
+    = 31; "Bush is younger than Matt by 3 years. This year Bush will be 12. Matt's age 10 years
+    from now?" → (12+3)+10 = 25. The general fold's age algebra works at ONE time point; the
+    shifted anchor ("in 5 years … will be 40") and the projected ask ("10 years from now") are
+    what decline today. TIGHTLY gated: exactly ONE relation and ONE anchor, both naming known
+    people; the asked person is one of them; every digit accounted (relation offset, anchor age,
+    anchor shift, ask shift); ages stay positive at every referenced time. None otherwise."""
+    ql = question.lower()
+    qm = re.search(r"\b(?:how old (?:is|will) ([a-z]+)|what will (?:be )?([a-z]+)'?s? age"
+                   r"|calculate the age of ([a-z]+))", ql)
+    if qm is None or _has_comparative(ql):
+        return None
+    asked_l = next(g for g in qm.groups() if g)
+    fm = re.search(r"(\d+) years (?:from now|later)|in (\d+) years", ql)
+    if fm is not None:
+        ask_shift = float(next(g for g in fm.groups() if g))
+    elif re.search(r"\bnext year\b|\bin a year\b", ql):
+        ask_shift = 1.0
+    elif re.search(r"\blast year\b|\ba year ago\b", ql):
+        ask_shift = -1.0
+    elif re.search(r"\b(?:ago|next|last|after|before)\b", ql):
+        return None                                      # a temporal qualifier we don't model
+    else:
+        ask_shift = 0.0
+    if len(re.findall(r"\d+", ql)) != (1 if fm else 0):
+        return None                                      # a question digit beyond the ask shift
+    body = " ".join(premises)
+    rels = _AGE_REL.findall(body)
+    anchors = [m for m in _AGE_ANCHOR.finditer(body)
+               if _AGE_REL.match(body, m.start()) is None]   # a relation is not an anchor
+    if len(rels) != 1 or len(anchors) != 1:
+        return None
+    r = rels[0]
+    if r[1]:
+        subj, off, dir_, std = r[0], float(r[1]), r[2], r[3]
+    else:
+        subj, off, dir_, std = r[0], float(r[6]), r[4], r[5]
+    am = anchors[0]
+    anchor_name, anchor_age = am.group(2), float(am.group(3))
+    anchor_shift = float(am.group(1) or am.group(4) or 0)
+    if anchor_name not in (subj, std):
+        return None
+    if anchor_shift == 0 and ask_shift == 0:
+        return None                                      # a single-time-point problem is the general
+        #                                                  fold's age algebra — defer (never intercept)
+    now = {anchor_name: anchor_age - anchor_shift}
+    delta = off if dir_ == "older" else -off             # subj = std + delta
+    if subj in now:
+        now[std] = now[subj] - delta
+    else:
+        now[subj] = now[std] + delta
+    asked = next((n for n in (subj, std) if n.lower() == asked_l), None)
+    if asked is None or any(v <= 0 for v in now.values()):
+        return None
+    digits = re.findall(r"\d+(?:\.\d+)?", body)          # every body digit must be one we consumed
+    used = {str(int(x)) for x in (off, anchor_age, anchor_shift) if x} | {am.group(3), }
+    if any(d not in used for d in digits):
+        return None
+    result = _compute(f"{_num(now[asked])} + {_num(ask_shift)}")
+    return _gated_pos_int(result)
+
+
+_AGE_SIMUL = re.compile(r"\b([A-Z][a-z]+) is (\d+) years? older than (?:his |her )?(?:\w+ )?"
+                        r"([A-Z][a-z]+) and (twice|three times|four times) (?:his|her|their) age\b")
+
+
+def _age_simultaneous_system(premises: list, question: str):
+    """SIMULTANEOUS AGE RELATIONS — one sentence carrying BOTH an offset and a ratio on the same
+    pair: "Yuan is 7 years older than his brother David and twice his age. How old is David?" →
+    D+7 = kD → D = 7/(k−1) = 7. TIGHTLY gated: the exact one-sentence double-relation pattern;
+    a digit-free "how old is <the standard>" question; no other valued premise; an exact positive
+    integer. None otherwise."""
+    ql = question.lower()
+    m = re.search(r"how old is ([a-z]+)", ql)
+    if m is None or _has_digit(ql):
+        return None
+    body = " ".join(premises)
+    sm = _AGE_SIMUL.search(body)
+    if sm is None:
+        return None
+    subj, off, std = sm.group(1), float(sm.group(2)), sm.group(3)
+    k = {"twice": 2.0, "three times": 3.0, "four times": 4.0}[sm.group(4)]
+    if m.group(1) != std.lower() or k <= 1:
+        return None
+    for p in premises:                                   # nothing else valued
+        if _has_digit(p) and _AGE_SIMUL.search(p) is None:
+            return None
+    result = _compute(f"{_num(off)} / ({_num(k)} - 1)")
+    return _gated_pos_int(result)
+
+
 # --- system family: combined-standard count chain ---------------------------------------------
 _CSS_ASSIGN = re.compile(r"\b([A-Z][a-z]+) [a-z]+ (\d+(?:,\d{3})*) ")
 _CSS_REL = re.compile(r"\b([A-Z][a-z]+) [a-z]+ (twice|half|double|(?:two|three|four|five|\d+)"
@@ -9800,6 +9900,10 @@ _EARLY_SYSTEMS = [
     ("relational_price_week", _relational_price_week_system),
     # COMBINED-STANDARD COUNT CHAIN: "72; twice as many; half as many as BOTH combined; $2 each?" → 648.
     ("combined_standard_sum", _combined_standard_sum_system),
+    # AGE SHIFT: "4 years older; in 5 years she'll be 40; he now?" → 31; projected asks too.
+    ("age_shift", _age_shift_system),
+    # SIMULTANEOUS AGE: "7 years older than David and twice his age?" → 7/(2−1) = 7.
+    ("age_simultaneous", _age_simultaneous_system),
 ]
 
 # LATE systems run AFTER the read-synthesize fixpoint has built `context` (they consume derived
