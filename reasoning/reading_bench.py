@@ -150,6 +150,13 @@ def run(slice_name: str = "dev", limit=None, show: int = 6, all_wrongs: bool = F
     out.append(f"  coverage:  {100 * answered / n:.1f}%  (committed to a number)")
     out.append(f"  fully-read:{fully_read:4d}  ({100 * fully_read / n:.1f}%)  "
                f"— every word recognized (the vocabulary frontier; the ceiling for coverage)")
+    if fully_read:
+        # THE GENERALITY METRIC: coverage = ceiling × this. On the tuned slice (dev-train) this
+        # rate is inflated by one-case solvers built for its own fully-read declines (43.5% vs
+        # holdout 20.5% vs TEST 15.5% at 2026-07-02) — judge an increment's generality by the
+        # HOLDOUT/TEST rate, never the dev-train one.
+        out.append(f"  hit-rate:  {100 * answered / fully_read:.1f}%  of fully-read committed "
+                   f"(structure hit-rate within the vocabulary ceiling)")
 
     # DEV-HOLDOUT is a VALIDATION proxy (a cheap stand-in for the precious TEST look). It reports the
     # aggregate + a pass/fail verdict and the class-level blocker taxonomy (safe to read), but withholds

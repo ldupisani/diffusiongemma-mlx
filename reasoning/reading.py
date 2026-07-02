@@ -1927,6 +1927,25 @@ LEXICON.update({
     "pool": ["noun"], "swimming": ["adjective"],
     # #188: Bailey's 2×2 towel sets g224 (guest was already in)
     "towel": ["noun"], "bathroom": ["noun"], "master": ["adjective"],
+    # 17th wave — the CEILING wave (#190): measured-safe frequency batch. Selection rule differs
+    # from the verified-gain waves: these words appear ONLY in problems that still DECLINE with
+    # vocab injected (never in any wrong-on-inject problem — the fresh corpus sweep is the
+    # measurement), so on the inspectable slices they can only raise the fully-read CEILING,
+    # never flip an answer. CAVEAT (learned twice — sheep, then this wave): the sweep measures
+    # dev-TRAIN only; the holdout half of the diff is the real gate. It caught "socks" (George
+    # backward-change 189≠11) and "leg/legs" (Camden legs-per-dog 56≠72) — both EXCLUDED. Rationale: coverage = ceiling × hit-rate (methodology §9) — the
+    # ceiling is the general, TEST-moving axis. male/female additionally unlock the existing
+    # _GROUP_PAIRS percent-population machinery (they were in the pairs but not the LEXICON).
+    "lunch": ["noun"], "breakfast": ["noun"], "road": ["noun"], "bus": ["noun"], "gas": ["noun"],
+    "calorie": ["noun"], "seat": ["noun"], "bucket": ["noun"],
+    "science": ["noun"], "wife": ["noun"], "block": ["noun"], "row": ["noun"],
+    "word": ["noun"], "notebook": ["noun"], "zoo": ["noun"], "kitchen": ["noun"],
+    "factory": ["noun"], "delivery": ["noun"], "destination": ["noun"], "payment": ["noun"],
+    "expense": ["noun"], "batch": ["noun"], "capacity": ["noun"], "type": ["noun"],
+    "question": ["noun"], "color": ["noun"], "male": ["noun"], "female": ["noun"],
+    "hand": ["noun"], "space": ["noun"],
+    "initially": ["adverb"], "exactly": ["adverb"],
+    "online": ["adjective"], "current": ["adjective"],
 })
 PLURALS.update({
     "samosas": "samosa", "pakoras": "pakora", "vases": "vase", "pins": "pin", "boots": "boot",
@@ -1937,6 +1956,14 @@ PLURALS.update({
     "seagulls": "seagull", "roofs": "roof", "stones": "stone",
     "debuts": "debut", "showings": "showing", "beaches": "beach",
     "pools": "pool", "towels": "towel", "bathrooms": "bathroom",
+    "lunches": "lunch", "roads": "road", "buses": "bus", "calories": "calorie",
+    "seats": "seat", "buckets": "bucket", "wives": "wife",
+    "blocks": "block", "rows": "row", "words": "word",
+    "notebooks": "notebook", "zoos": "zoo", "kitchens": "kitchen", "factories": "factory",
+    "deliveries": "delivery", "destinations": "destination", "payments": "payment",
+    "expenses": "expense", "batches": "batch", "types": "type", "questions": "question",
+    "colors": "color", "males": "male", "females": "female", "hands": "hand",
+    "spaces": "space",
 })
 VERB_LEMMA.update({
     "scored": "score", "scores": "score", "scoring": "score",

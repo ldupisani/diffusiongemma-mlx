@@ -199,10 +199,40 @@ enumeration exclusion "the *two* of them … *eight* hoodies"). Integrated: **DE
 
 ---
 
-## 9. Current frontier (snapshot — update as it moves)
+## 9. The coverage funnel and the generality metric (2026-07-02)
+
+Coverage factorizes: **coverage = fully-read ceiling × structure hit-rate within fully-read**.
+The bench prints both plus the ratio (`hit-rate:`). Measured at campaigns #180–189:
+
+| slice | fully-read ceiling | coverage | hit-rate within fully-read |
+|---|---|---|---|
+| dev-train | 16.5% | 7.2% | **43.5%** |
+| dev-holdout | 14.6% | 3.0% | **20.5%** |
+| TEST | 14.2% | 2.2% | **15.5%** |
+
+Read this table before asking "why doesn't TEST move": the dev-train/TEST coverage gap is ~2.8× in
+HIT-RATE and only ~1.16× in ceiling — i.e. it is mostly a **selection artifact**: the mining pool
+was dev-train's own fully-read declines, so its hit-rate reflects one-case solvers built for
+exactly those problems. TEST's fully-read population contains *different* one-case problems that
+dev-mined bespoke systems can never cover. **The honest generality metric is the dev-holdout
+hit-rate (20.5%), which tracks TEST (15.5%)** — judge an increment's generality by its holdout
+delta (the diff labels its SOLVED lines per slice), never by its dev-train count. Confirmed by
+`reading_rulestats --slice test`: TEST correct solves come almost entirely from GENERAL machinery
+(fold 9, anchored family 12, affine 2, fraction 2, percent 1) — the ~35 whole-text one-case
+systems contribute 1 between them.
+
+What moves TEST, in leverage order:
+1. **Raise the ceiling generally** — at TEST's hit-rate, +1pp of fully-read ≈ +2 TEST problems.
+   The measured-safe batch: words whose EVERY dev-train appearance still *declines* after
+   injection (never wrong-on-inject) are pure ceiling-raisers on the inspectable slice.
+2. **Extend TEST-firing machinery** (fold branches, anchored/affine/fraction/percent families)
+   and large-population compositions from the corpus cue map — not one-case whole-text solvers.
+3. One-case solvers still pay on dev-train (and occasionally holdout) but should be priced as
+   dev-only work.
+
+## 10. Prior frontier notes (historical)
 
 - Decline-safety is **exhausted** for the cheap "absent-from-log" mechanism (GUARDs 11–15).
-- **Single-word vocab is dead** (`vocab-scan` found zero safe gains): coverage is **structure-blocked**,
-  not vocab-blocked at the margin.
+- **Single-word vocab is dead at the margin for immediate solves** (`vocab-scan`): remaining vocab
+  value is CEILING-raising (see §9.1) and family vocab verified by the post-system sweep.
 - Remaining work is **composition** (multi-step solves) — riskier per-increment, must clear the firewall.
-  The 2-unknown pure-ratio solver ships; the offset variant is deferred (§7).
