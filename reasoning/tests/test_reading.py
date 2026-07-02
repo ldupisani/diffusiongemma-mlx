@@ -6661,5 +6661,44 @@ class TestIncrement184FractionPartitionRest(unittest.TestCase):
             "girls. How many students are girls?"), (int, float))
 
 
+class TestIncrement186DoublingPeriodsAndPriceWeek(unittest.TestCase):
+    """#186 — `_doubling_periods_nth_system` (a first-period value doubling each period, asked a
+    NAMED later period → a·2^(n−1); the nth-TERM twin of the doubling-days SUM) and
+    `_relational_price_week_system` ((n₁·p + n₂·k·p)·7 — one category's price K times the
+    other's, daily counts, a per-week ask)."""
+
+    def test_doubling_months_by_name(self):
+        # January → May is the 5th term: 10·2⁴ = 160
+        self.assertEqual(reading.solve(
+            "Brianne saves $10 in January. Each month, she saves twice as much as her "
+            "previous month's savings. How much will she save in May?"), 160)
+
+    def test_doubling_ordinal_weeks(self):
+        # 5 · 2³ = 40
+        self.assertEqual(reading.solve(
+            "Kim saves $5 in the first week. Each week she saves twice as much as the "
+            "previous week. How much will she save in the fourth week?"), 40)
+
+    def test_target_residual_shape_declines(self):
+        # "wants to save $80 … fifth week" is the RESIDUAL to the goal (gold 20), never 4·2⁴
+        self.assertNotIsInstance(reading.solve(
+            "Hannah wants to save $80 for five weeks. In the first week, she saved $4 and "
+            "she plans to save twice as much as her savings as the previous week. How much "
+            "will she save in the fifth week?"), (int, float))
+
+    def test_relational_price_pair_week(self):
+        # (8·3 + 10·2·3) · 7 = 588
+        self.assertEqual(reading.solve(
+            "Jose owns a garden. He charges $3 for kids and twice that amount for adults. "
+            "If 8 kids and 10 adults visit his garden per day, how much money will he earn "
+            "per week?"), 588)
+
+    def test_price_pair_month_ask_declines(self):
+        # only a WEEK ask is modeled (a month would need the 4-weeks convention decision)
+        self.assertNotIsInstance(reading.solve(
+            "He charges $3 for kids and twice that amount for adults. If 8 kids and 10 "
+            "adults visit per day, how much money will he earn per month?"), (int, float))
+
+
 if __name__ == "__main__":
     unittest.main()

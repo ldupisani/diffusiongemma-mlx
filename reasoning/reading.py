@@ -1923,6 +1923,8 @@ LEXICON.update({
     "throwing": ["noun"], "scare": ["verb"],
     "debut": ["noun"], "showing": ["noun"],
     "beach": ["noun"], "nearby": ["adjective"],
+    # #186-187 candidates: Jose's pool g588 (swim verb was in; "swimming pool" = adj+noun)
+    "pool": ["noun"], "swimming": ["adjective"],
 })
 PLURALS.update({
     "samosas": "samosa", "pakoras": "pakora", "vases": "vase", "pins": "pin", "boots": "boot",
@@ -9339,6 +9341,135 @@ def _discounted_purchase_system(premises: list, question: str):
     return _gated_pos_int(result)
 
 
+# --- system family: doubling periods, nth term ------------------------------------------------
+_MONTHS = ("january", "february", "march", "april", "may", "june", "july", "august",
+           "september", "october", "november", "december")
+_ORDINAL_WORDS = {"first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5, "sixth": 6,
+                  "seventh": 7, "eighth": 8, "ninth": 9, "tenth": 10}
+
+
+def _doubling_periods_nth_system(premises: list, question: str):
+    """DOUBLING PERIODS → NTH TERM — a first-period value that DOUBLES each period, asked for a
+    NAMED later period: "Brianne saves $10 in January. Each month, she saves twice as much as her
+    previous month's savings. How much will she save in May?" → 10·2⁴ = 160. The nth-TERM twin of
+    `_doubling_days_sum_system` (which answers the SUM); a month name or an ordinal week/month
+    names the period. TIGHTLY gated: a digit-free "how much/many … in <period>" question; ONE
+    base value anchored to the FIRST period (a month name / "the first week/month"); ONE
+    digit-free doubling premise ("twice as much as … previous <period>"); NO other value and NO
+    target/goal talk (a "wants to save $80 … fifth week" ask is the RESIDUAL, gold-verified — a
+    second value declines this system); 2 ≤ n ≤ 12; positive integer. None otherwise."""
+    ql = question.lower()
+    if not ("how much" in ql or "how many" in ql) or _has_digit(ql) or _has_comparative(ql):
+        return None
+    ask_month = next((m for m in _MONTHS if re.search(rf"\bin {m}\b", ql)), None)
+    om = re.search(r"\b(?:in|on) the (\w+) (week|month|day|year)\b", ql)
+    segs = [p.lower() for p in premises]
+    body = " ".join(segs)
+    if any(w in body + " " + ql for w in ("goal", "target", "reach", "at least", "total")):
+        return None
+    base = base_n = ask_n = None
+    unit = None
+    if ask_month is not None:
+        ask_n = _MONTHS.index(ask_month) + 1
+        unit = "month"
+    elif om is not None and om.group(1) in _ORDINAL_WORDS:
+        ask_n = _ORDINAL_WORDS[om.group(1)]
+        unit = om.group(2)
+    if ask_n is None:
+        return None
+    doubling = False
+    for si, seg in enumerate(segs):
+        has_d = _has_digit(seg)
+        if "twice as much" in seg and ("previous" in seg or "before" in seg):
+            if has_d:
+                return None                              # a valued doubling clause → not this shape
+            doubling = True
+            continue
+        bm = re.search(r"\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)", seg)
+        if bm is not None and base is None:
+            base = float(bm.group(1).replace(",", ""))
+            month = next((m for m in _MONTHS if re.search(rf"\bin {m}\b", seg)), None)
+            wm = re.search(r"\b(?:in|on) the (\w+) (week|month|day|year)\b", seg)
+            if month is not None:
+                base_n = _MONTHS.index(month) + 1
+                if unit != "month":
+                    return None
+            elif wm is not None and wm.group(1) in _ORDINAL_WORDS:
+                base_n = _ORDINAL_WORDS[wm.group(1)]
+                if wm.group(2) != unit:
+                    return None
+            else:
+                return None                              # a base value with no anchoring period
+            if re.search(r"\d", seg.replace(bm.group(1), "", 1)):
+                return None                              # a second value in the base premise
+        elif has_d:
+            return None                                  # an unclassified valued premise
+    if base is None or base <= 0 or base_n is None or not doubling:
+        return None
+    n = ask_n - base_n + 1
+    if not 2 <= n <= 12:
+        return None
+    result = _compute(f"{_num(base)} * {_num(2 ** (n - 1))}")   # the power folds to a literal
+    return _gated_pos_int(result)
+
+
+# --- system family: relational price pair × week ----------------------------------------------
+_RPW_PRICE = re.compile(r"\$\s*(\d+(?:\.\d+)?) for (\w+) and (twice|double|thrice|(?:two|three"
+                        r"|four|five) times) (?:that|the) (?:amount|much|price|rate) for (\w+)")
+_RPW_COUNTS = re.compile(r"\b(\d+) (\w+) and (\d+) (\w+)\b")
+
+
+def _relational_price_week_system(premises: list, question: str):
+    """RELATIONAL PRICE PAIR × WEEK — one category's price is K times the other's, daily counts
+    for both, asked per week: "charges $3 for kids and twice that amount for adults; 8 kids and
+    10 adults per day; how much per week?" → (8·3 + 10·2·3)·7 = 588. TIGHTLY gated: a digit-free
+    "how much … earn/make/charge" per-week question; ONE "$P for <cat1> and K times that amount
+    for <cat2>" premise; ONE "<n1> <cat1> and <n2> <cat2> … per day" premise whose categories
+    match the price premise's (either order); no other valued premise; positive integer. None
+    otherwise."""
+    ql = question.lower()
+    if "how much" not in ql or _has_digit(ql) or _has_comparative(ql) \
+            or not re.search(r"\b(?:earn|earns|make|makes|charge|charges|money)\b", ql) \
+            or not re.search(r"\b(?:per week|a week|every week|each week|weekly)\b", ql):
+        return None
+    price = counts = None
+    for p in premises:
+        pl = p.lower()
+        pm = _RPW_PRICE.search(pl)
+        cm = _RPW_COUNTS.search(pl)
+        if pm is not None and price is None:
+            k = {"twice": 2.0, "double": 2.0, "thrice": 3.0}.get(pm.group(3))
+            if k is None:
+                k = float(NUMBERS.get(pm.group(3).split()[0], 0))
+            if not k:
+                return None
+            price = (float(pm.group(1)),
+                     _singular_of(pm.group(2)) or pm.group(2), k,
+                     _singular_of(pm.group(4)) or pm.group(4))
+            if len(re.findall(r"\d+(?:\.\d+)?", pl)) != 1:
+                return None                              # a stray value beside the price pair
+        elif cm is not None and counts is None \
+                and any(c in pl for c in _PER_DAY_CUES):
+            counts = (float(cm.group(1)), _singular_of(cm.group(2)) or cm.group(2),
+                      float(cm.group(3)), _singular_of(cm.group(4)) or cm.group(4))
+            if len(re.findall(r"\d+(?:\.\d+)?", pl)) != 2:
+                return None                              # a stray value beside the two counts
+        elif _has_digit(p):
+            return None                                  # an unclassified valued premise
+    if price is None or counts is None:
+        return None
+    p1, cat1, k, cat2 = price
+    n1, c1, n2, c2 = counts
+    if (c1, c2) == (cat1, cat2):
+        pass
+    elif (c1, c2) == (cat2, cat1):
+        n1, n2 = n2, n1
+    else:
+        return None                                      # the counts must name the SAME categories
+    result = _compute(f"({_num(n1)} * {_num(p1)} + {_num(n2)} * {_num(k)} * {_num(p1)}) * 7")
+    return _gated_pos_int(result)
+
+
 # --- system family: relational product-sum (a count K-times another, per-unit prices) --------
 _RPS_REL = re.compile(r"\b(twice|thrice|half|double|(?:two|three|four|five|six|seven|eight|nine"
                       r"|ten|\d+) times)\s+(?:that (?:much|amount|number)|as (?:much|many))\b")
@@ -9535,6 +9666,10 @@ _EARLY_SYSTEMS = [
     ("discounted_purchase", _discounted_purchase_system),
     # RELATIONAL PRODUCT-SUM: "1000 lbs beef at $8; twice that much chicken at $3?" → 14000.
     ("relational_product_sum", _relational_product_sum_system),
+    # DOUBLING PERIODS NTH TERM: "$10 in January, doubling monthly; in May?" → 10·2⁴ = 160.
+    ("doubling_periods_nth", _doubling_periods_nth_system),
+    # RELATIONAL PRICE PAIR × WEEK: "$3 kids, twice for adults; 8+10 per day; per week?" → 588.
+    ("relational_price_week", _relational_price_week_system),
 ]
 
 # LATE systems run AFTER the read-synthesize fixpoint has built `context` (they consume derived
