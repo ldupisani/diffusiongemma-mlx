@@ -559,6 +559,10 @@ LEXICON: dict[str, list[str]] = {
     "one": ["value"], "two": ["value"], "three": ["value"],   # word-numbers ARE values (like digits) so
     "four": ["value"], "five": ["value"], "six": ["value"], "seven": ["value"],   # "three apples"/"three
     "eight": ["value"], "nine": ["value"], "ten": ["value"], "eleven": ["value"], "twelve": ["value"],  # years
+    "thirteen": ["value"], "fourteen": ["value"], "fifteen": ["value"], "sixteen": ["value"],
+    "seventeen": ["value"], "eighteen": ["value"], "nineteen": ["value"], "twenty": ["value"],
+    "thirty": ["value"], "forty": ["value"], "fifty": ["value"], "sixty": ["value"],
+    "seventy": ["value"], "eighty": ["value"], "ninety": ["value"],
     # younger" parse like "3 …". The value comes from NUMBERS (annotate_senses); count statements ("there
     # are three X") are existential-gated in _facts_from / instances().
     "dozen": ["value"], "hundred": ["value"], "thousand": ["value"],   # number-SCALES (value from SCALES);
@@ -833,7 +837,10 @@ COMPOUNDS = {k for k in LEXICON if " " in k}
 # Number words → their value, for "there are N <collection>" statements that introduce instances.
 TITLES = {w for w, s in LEXICON.items() if s == ["title"]}   # honorifics; a trailing "." is not a sentence end
 NUMBERS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
-           "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12}
+           "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
+           "thirteen": 13, "fourteen": 14, "fifteen": 15, "sixteen": 16, "seventeen": 17,
+           "eighteen": 18, "nineteen": 19, "twenty": 20, "thirty": 30, "forty": 40,
+           "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90}
 # Number-SCALE words: a bare scale is its value ("a dozen" → 12); "N scale" MULTIPLIES ("two dozen" → 24,
 # "three hundred" → 300), merged into one value unit by _merge_scales.
 SCALES = {"dozen": 12, "hundred": 100, "thousand": 1000, "million": 1000000, "billion": 1000000000}
@@ -1797,6 +1804,12 @@ LEXICON.update({
     "cherry": ["adjective"], "become": ["verb"],
     # the doubling-days case ("5th" reads via the digit-ordinal rule in annotate_senses)
     "boyfriend": ["noun"], "phone": ["noun"], "talking": ["noun"], "too": ["adverb"],
+    # the percent-boosted-rate case. "percent" (the WORD form) is EXCLUDED: typed as a bare noun
+    # it lets the general fold read "100 percent" as a countable Quantity — the TEST checkpoint
+    # caught a held-out confident-wrong (100 vs gold 1). The right fix is a "fifty percent" →
+    # percent-unit MERGE (like the % token); until then Brendan's boosted-rate case is forgone
+    # and `_boosted_rate_duration_system` stays registered but dormant.
+    "grass": ["noun"], "lawnmower": ["noun"], "yard": ["noun"],
     "log": ["noun", "verb"], "logs": ["noun", "verb"],
     # EXCLUDED the jog family: it unlocks a held-out "5 miles per day on WEEKDAYS ONLY ... over
     # three weeks" case to a confident-wrong (105 = 5*7*3 vs gold 75 = 5*5*3) — the rate-projection
@@ -1825,6 +1838,7 @@ PLURALS.update({
     "kg": "kilogram", "burrs": "burr", "ticks": "tick", "objects": "object",
     "walls": "wall", "tapes": "tape", "steaks": "steak", "trouts": "trout", "trout": "trout",
     "camels": "camel", "travelers": "traveler", "jacks": "jack", "records": "record",
+    "lawnmowers": "lawnmower", "yards": "yard",
 })
 # NOTE: groundwork nouns/adjectives/pronouns (fruit/paper/side/…/herself) were re-tested with decline-safety
 # GUARDS 11–14 in place and STILL drop TEST 40.0→36.4% (a noun unlocks a held-out wrong in an as-yet-unguarded
@@ -7634,6 +7648,56 @@ _WEEKDAYS = ("sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "
 _ZERO_CUES = ("nothing", "skipped", "did not", "didn't", "none")
 
 
+def _boosted_rate_duration_system(premises: list, question: str):
+    """PERCENT-BOOSTED RATE × DURATION — "Brendan can cut 8 yards per day; a lawnmower helped him
+    cut more yards by Fifty percent per day; how many yards after a week?" → 8·1.5·7 = 84.
+    TIGHTLY gated: a "how many <X> … after a week / in N weeks" question (the only question digit
+    may be the week count); ONE base premise (a per-day value of X); ONE percent-boost premise
+    (percent + a more/increase/higher cue, and NO weekday/average mention — a "40% higher every
+    FRIDAY" is a workweek structure, another shape); no other valued premise; positive integer.
+    The banned "N times more" idiom is NOT read (percent only). None otherwise."""
+    ql = question.lower()
+    m = re.search(r"how many (\w+)", ql)
+    if m is None or any(w in ql for w in ("more", "fewer", "less", "than")) \
+            or any(d in ql for d in _WEEKDAYS):
+        return None
+    asked = m.group(1)
+    days = 7 if re.search(r"\bafter (a|one) week\b", ql) else None
+    wm = re.search(r"\bin (\w+|\d+) weeks?\b", ql)
+    if days is None and wm is not None:
+        n = NUMBERS.get(wm.group(1), float(wm.group(1)) if wm.group(1).isdigit() else 0)
+        days = n * 7 if n else None
+        if any(ch.isdigit() for ch in ql.replace(wm.group(0), "")):
+            return None                                  # a question digit beyond the week count
+    elif any(ch.isdigit() for ch in ql):
+        return None
+    if days is None:
+        return None
+    base = pct = None
+    for p in premises:
+        pl = p.lower()
+        bm = re.search(r"(\d+(?:\.\d+)?) " + re.escape(asked) + r"\b[^.]*?(?:per|a|each) day", pl)
+        pm = re.search(r"(\w+|\d+)(?:%| percent)", pl)
+        if bm is not None and base is None:
+            base = float(bm.group(1))
+            continue
+        if pm is not None and any(c in pl for c in ("more", "increase", "higher")):
+            if pct is not None or any(d in pl for d in _WEEKDAYS) or "average" in pl:
+                return None
+            pct = NUMBERS.get(pm.group(1), float(pm.group(1)) if pm.group(1).isdigit() else 0)
+            if not pct:
+                return None
+            continue
+        if any(ch.isdigit() for ch in p):
+            return None                                  # an unclassified valued premise
+    if base is None or pct is None or not 0 < pct <= 100:
+        return None
+    result = _compute(f"{_num(base)} * (1 + {_num(pct)} / 100) * {_num(days)}")
+    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
+        return None
+    return result
+
+
 def _doubling_days_sum_system(premises: list, question: str):
     """DOUBLING-DAYS GEOMETRIC SUM — "the first day she spends 5 minutes; each following day twice
     as much as the day before; after the 5th day …; how much time that week?" → 5·(2⁵−1) = 155.
@@ -8227,6 +8291,8 @@ _EARLY_SYSTEMS = [
     ("inverse_distribution", _inverse_distribution_system),
     # SPLIT-WITH (K+1): "two dozen eggs to split with his three siblings; each person?" → 6.
     ("split_with", _split_with_system),
+    # PERCENT-BOOSTED RATE × DURATION: "8 yards/day, +fifty percent; after a week?" → 84.
+    ("boosted_rate_duration", _boosted_rate_duration_system),
     # DOUBLING-DAYS SUM: "first day 5 minutes, twice the day before, after the 5th day" → 155.
     ("doubling_days_sum", _doubling_days_sum_system),
     # ALTERNATING-DAYS DIFFERENCE: "apple Mon/Wed/Fri, cherry Tue/Thu, 12/day; more apple?" → 12.

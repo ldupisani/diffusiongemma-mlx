@@ -6198,5 +6198,26 @@ class TestIncrement168DoublingDaysSum(unittest.TestCase):
             "her boyfriend that week?"), "undetermined")
 
 
+class TestIncrement169NumberWordsTensTeens(unittest.TestCase):
+    """#169 — NUMBERS + LEXICON extended with the teens and tens (thirteen…ninety): word-number
+    values were capped at twelve, silently blocking cases like "fifteen packs of stickers".
+    Also `_boosted_rate_duration_system` (registered but DORMANT): its only case needs the WORD
+    form "fifty percent", and typing "percent" as a bare noun let the fold read "100 percent" as
+    a countable Quantity (a TEST-checkpoint-caught confident-wrong, 100 vs 1) — the word stays
+    unknown until a percent-unit merge lands."""
+
+    def test_teens_and_tens_word_numbers(self):
+        self.assertEqual(reading.solve(
+            "Yesterday, Vera bought fifteen packs of stickers. Today, she bought ten more packs "
+            "than yesterday. How many packs of stickers does Vera have in total?"), 40)
+
+    def test_word_percent_still_declines(self):
+        # "Fifty percent" is unreadable until the percent-unit merge — must decline, never commit
+        self.assertEqual(reading.solve(
+            "Rico can cut 8 yards of grass per day. He bought a lawnmower and it helped him to "
+            "cut more yards by Fifty percent per day. How many yards will Rico be able to cut "
+            "after a week?"), "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()
