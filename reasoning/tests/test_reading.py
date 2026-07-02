@@ -6211,12 +6211,34 @@ class TestIncrement169NumberWordsTensTeens(unittest.TestCase):
             "Yesterday, Vera bought fifteen packs of stickers. Today, she bought ten more packs "
             "than yesterday. How many packs of stickers does Vera have in total?"), 40)
 
-    def test_word_percent_still_declines(self):
-        # "Fifty percent" is unreadable until the percent-unit merge — must decline, never commit
+    def test_word_percent_now_solves(self):
+        # originally pinned DECLINING ("Fifty percent" unreadable); the `_merge_word_percent`
+        # feature (#170) landed and the dormant boosted-rate system activated: 8·1.5·7 = 84
         self.assertEqual(reading.solve(
             "Rico can cut 8 yards of grass per day. He bought a lawnmower and it helped him to "
             "cut more yards by Fifty percent per day. How many yards will Rico be able to cut "
-            "after a week?"), "undetermined")
+            "after a week?"), 84)
+
+
+class TestIncrement170WordPercentMerge(unittest.TestCase):
+    """#170 — `_merge_word_percent`: "<value> percent" fuses into ONE percent unit (the word-form
+    twin of the "20%" token), activating the dormant boosted-rate system (Brendan). A STANDALONE
+    "percent" stays unknown → GUARD 1 declines (the countable-"100 percent" wrong class). Plus
+    `_workweek_boost_system`: per-day average + one "N% higher" weekday inside an "open from
+    <day> to <day>" span → (span−1)·base + base·(1+p/100) (Krystian 216)."""
+
+    def test_workweek_one_boosted_day(self):
+        self.assertEqual(reading.solve(
+            "Nia works in the library. She borrows an average of 20 books every day. Every "
+            "Friday, her number of borrowed books is about 50% higher than the daily average. "
+            "How many books does she borrow in a week if the library is open from Monday to "
+            "Friday?"), 110)
+
+    def test_standalone_percent_still_declines(self):
+        # "what/how many percent" has no preceding value to merge — must stay a decline
+        self.assertEqual(reading.solve(
+            "Tom got 100 percent of the questions right. How many percent did Tom get?"),
+            "undetermined")
 
 
 if __name__ == "__main__":

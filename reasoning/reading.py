@@ -231,6 +231,29 @@ def _merge_scales(reading: Reading) -> Reading:
     return reading
 
 
+def _merge_word_percent(reading: Reading) -> Reading:
+    """Combine "<value> percent" into ONE percent unit — the WORD-form twin of the "20%" token:
+    "fifty percent" → a percent unit carrying 0.50 (the fraction, exactly as _as_percent gives the
+    % token). A STANDALONE "percent" (no preceding value — "what percent…") stays unmerged and
+    unknown, so GUARD 1 keeps declining those shapes. Runs after _merge_scales so a scaled value
+    ("two hundred percent") merges as a whole. Reversible."""
+    units = reading.units
+    for i in range(len(units) - 1):
+        if _key(units[i + 1].surface) == "percent" \
+                and "value" in units[i].features.get("senses", []) \
+                and units[i].features.get("value") is not None:
+            merged = Unit(words=sorted(units[i].words + units[i + 1].words, key=lambda w: w.index))
+            merged.features["senses"] = ["percent"]
+            merged.features["value"] = units[i].features["value"] / 100
+            reading.record("merge-word-percent", target=merged,
+                           before={"merged_from": [units[i], units[i + 1]], "at": i},
+                           after={"value": merged.features["value"]},
+                           reason="<value> percent → percent unit")
+            units[i:i + 2] = [merged]
+            return _merge_word_percent(reading)
+    return reading
+
+
 def _merge_times_multiplier(reading: Reading) -> Reading:
     """Fuse a NUMERIC multiplier "<value> times" into ONE multiplier unit (factor N), but ONLY in a
     relational frame — "three times as many", "four times as much", "three times that many" (the "that"
@@ -1396,6 +1419,7 @@ def analyze(text: str) -> Reading:
     annotate_number(r)
     annotate_senses(r)
     _merge_scales(r)         # "two dozen" → one value unit (24) before obligations bind it
+    _merge_word_percent(r)   # "fifty percent" → one percent unit (0.50), the word-form of "50%"
     _merge_times_multiplier(r)  # "three times as" → one multiplier unit (×3), like "twice"
     _merge_labels(r)         # "Grade 5" → a labeled noun (the number is an ordinal, not a quantity)
     _merge_label_letters(r)  # "Jar A" / "Class B" → one labeled NAME (distinct entities, not bare 'jar')
@@ -1804,12 +1828,13 @@ LEXICON.update({
     "cherry": ["adjective"], "become": ["verb"],
     # the doubling-days case ("5th" reads via the digit-ordinal rule in annotate_senses)
     "boyfriend": ["noun"], "phone": ["noun"], "talking": ["noun"], "too": ["adverb"],
-    # the percent-boosted-rate case. "percent" (the WORD form) is EXCLUDED: typed as a bare noun
-    # it lets the general fold read "100 percent" as a countable Quantity — the TEST checkpoint
-    # caught a held-out confident-wrong (100 vs gold 1). The right fix is a "fifty percent" →
-    # percent-unit MERGE (like the % token); until then Brendan's boosted-rate case is forgone
-    # and `_boosted_rate_duration_system` stays registered but dormant.
+    # the percent-boosted-rate case. The WORD "percent" is deliberately NOT a LEXICON entry:
+    # `_merge_word_percent` fuses "<value> percent" into a percent unit (the word-form of "50%"),
+    # and a STANDALONE "percent" stays unknown → GUARD 1 declines (typing it as a bare noun let
+    # the fold read "100 percent" as a countable Quantity — a TEST-checkpoint-caught wrong).
     "grass": ["noun"], "lawnmower": ["noun"], "yard": ["noun"],
+    # the workweek-boost case ("open from Monday to Friday")
+    "open": ["adjective", "verb"],
     "log": ["noun", "verb"], "logs": ["noun", "verb"],
     # EXCLUDED the jog family: it unlocks a held-out "5 miles per day on WEEKDAYS ONLY ... over
     # three weeks" case to a confident-wrong (105 = 5*7*3 vs gold 75 = 5*5*3) — the rate-projection
@@ -7648,6 +7673,49 @@ _WEEKDAYS = ("sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "
 _ZERO_CUES = ("nothing", "skipped", "did not", "didn't", "none")
 
 
+def _workweek_boost_system(premises: list, question: str):
+    """WORKWEEK WITH ONE BOOSTED DAY — "borrows an average of 40 books every day; every Friday
+    the number is 40% higher than the daily average; how many in a week if open from Monday to
+    Friday?" → 4·40 + 40·1.4 = 216. TIGHTLY gated: a digit-free "how many <X> … week" question
+    carrying a "from <weekday> to <weekday>" open-span; ONE per-day average premise; ONE boost
+    premise naming exactly ONE weekday (inside the span) with an "N% higher" factor; no other
+    valued premise; positive integer. None otherwise."""
+    ql = question.lower()
+    m = re.search(r"how many (\w+)", ql)
+    sm = re.search(r"from (\w+) to (\w+)", ql) \
+        or next((mm for p in premises if not any(ch.isdigit() for ch in p)
+                 for mm in [re.search(r"open from (\w+) to (\w+)", p.lower())] if mm), None)
+    if m is None or sm is None or "week" not in ql or any(ch.isdigit() for ch in ql):
+        return None                                      # the open-span may sit in a split-off premise
+    lo, hi = sm.group(1), sm.group(2)
+    if lo not in _WEEKDAYS or hi not in _WEEKDAYS:
+        return None
+    span = _WEEKDAYS.index(hi) - _WEEKDAYS.index(lo) + 1
+    if span < 2:
+        return None
+    base = pct = None
+    boost_day = None
+    for p in premises:
+        pl = p.lower()
+        bm = re.search(r"average of (\d+(?:\.\d+)?)[^.]*?(?:every|a|per|each) day", pl)
+        hm = re.search(r"(\d+(?:\.\d+)?)\s*% higher", pl)
+        days_here = [d for d in _WEEKDAYS if d in pl]
+        if bm is not None and base is None and not days_here:
+            base = float(bm.group(1))
+        elif hm is not None and pct is None and len(days_here) == 1:
+            pct, boost_day = float(hm.group(1)), days_here[0]
+        elif any(ch.isdigit() for ch in p):
+            return None                                  # an unclassified valued premise
+    if base is None or pct is None or not 0 < pct <= 100 \
+            or _WEEKDAYS.index(lo) > _WEEKDAYS.index(boost_day) \
+            or _WEEKDAYS.index(boost_day) > _WEEKDAYS.index(hi):
+        return None
+    result = _compute(f"{_num(base)} * {span - 1} + {_num(base)} * (1 + {_num(pct)} / 100)")
+    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
+        return None
+    return result
+
+
 def _boosted_rate_duration_system(premises: list, question: str):
     """PERCENT-BOOSTED RATE × DURATION — "Brendan can cut 8 yards per day; a lawnmower helped him
     cut more yards by Fifty percent per day; how many yards after a week?" → 8·1.5·7 = 84.
@@ -8291,6 +8359,8 @@ _EARLY_SYSTEMS = [
     ("inverse_distribution", _inverse_distribution_system),
     # SPLIT-WITH (K+1): "two dozen eggs to split with his three siblings; each person?" → 6.
     ("split_with", _split_with_system),
+    # WORKWEEK WITH ONE BOOSTED DAY: "avg 40/day, Friday 40% higher, open Mon–Fri" → 216.
+    ("workweek_boost", _workweek_boost_system),
     # PERCENT-BOOSTED RATE × DURATION: "8 yards/day, +fifty percent; after a week?" → 84.
     ("boosted_rate_duration", _boosted_rate_duration_system),
     # DOUBLING-DAYS SUM: "first day 5 minutes, twice the day before, after the 5th day" → 155.
