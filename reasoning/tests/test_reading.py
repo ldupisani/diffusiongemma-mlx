@@ -5619,5 +5619,47 @@ class TestIncrement147BakeVerb(unittest.TestCase):
             "Ann baked 12 muffins. She ate 3 muffins. How many muffins does Ann have left?"), 9)
 
 
+class TestIncrement148CommaQuantityList(unittest.TestCase):
+    """#148 — the COMMA-QUANTITY-LIST parse: (a) `_merge_labels` no longer merges across a comma boundary
+    ("dogs, 3" is a list boundary, never a "Grade 5" label), so each list value quantifies ITS OWN noun;
+    (b) the freed scene-setting cardinal ("…season, four players scored points") is exempted from GUARD 3/4
+    and the anchored family's premise firewall as a SET-SIZE cardinal — but ONLY when it equals the
+    problem's cast (named entities, or ordinal references when unnamed) and quantifies a person-group noun;
+    (c) `_is_value_first_relation`/`_noun_std_entity` skip a bare article ("than THE potatoes"); (d) a
+    value-first comparative list conjunct with NO than/as compares to the PREVIOUS list item ("237
+    potatoes, 60 fewer cucumbers" → cucumbers = potatoes − 60)."""
+
+    def test_comma_list_values_quantify_own_noun(self):
+        self.assertEqual(reading.solve(
+            "Rita has 2 dogs, 3 cats and 4 birds. How many cats does Rita have?"), 3)
+
+    def test_elided_standard_list_conjunct_category_sum(self):
+        # "2 fewer cats" = 2 fewer THAN THE DOGS (the previous list item); birds = 2× the cats
+        self.assertEqual(reading.solve(
+            "A farm has 10 dogs, 2 fewer cats and twice as many birds than the cats. "
+            "How many animals does the farm have?"), 34)
+
+    def test_set_size_cardinal_ordinal_cast(self):
+        # "three players" counts the ordinal-referenced cast (first/second/third) — not a datum
+        self.assertEqual(reading.solve(
+            "At a bowling alley, three players are having a pretzel eating contest. The first player "
+            "eats 8 pretzels. The second eats 6 pretzels. The third eats 2 more pretzels than the "
+            "second. How many do they eat in total?"), 22)
+
+    def test_set_size_cardinal_named_cast(self):
+        self.assertEqual(reading.solve(
+            "In the final game of the basketball season, two players scored points. Ann scored twice "
+            "as many points as Beth. If Beth scored 5 points, how many points in total did the team "
+            "score?"), 15)
+
+    def test_set_size_mismatch_still_declines(self):
+        # cardinal 3 ≠ cast 2 (only Ann and Beth are named) — the third player's points are unstated,
+        # so the freed "three" must still trip the unused-given firewall
+        self.assertEqual(reading.solve(
+            "In the final game of the basketball season, three players scored points. Ann scored twice "
+            "as many points as Beth. If Beth scored 5 points, how many points in total did the team "
+            "score?"), "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()
