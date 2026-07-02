@@ -6834,5 +6834,37 @@ class TestIncrement192AgeChain(unittest.TestCase):
             "how old is Job?"), (int, float))
 
 
+class TestIncrement193AgePastAnchor(unittest.TestCase):
+    """#193 — `_age_past_anchor_system`: an age relation stated AT A PAST TIME ("K years ago,
+    X was twice as old as Y") + one present anchor (plain now-age, "turned A years old K ago"
+    = A+K, or "currently twice N" = 2N), asked now or projected. Kin-noun entities (a mother /
+    her daughter) work alongside names; the offset relation may ride on HALF/TWICE the standard
+    ("5 years older than half Tom's age")."""
+
+    def test_past_ratio_kin_entities_projected(self):
+        # then: 36 = 2·18 → daughter now 23 → +3 = 26
+        self.assertEqual(reading.solve(
+            "5 years ago, a mother was twice as old as her daughter. If the mother is 41 "
+            "years old now, how old will the daughter be in 3 years?"), 26)
+
+    def test_word_number_ago_and_twice_n_anchor(self):
+        # Mohamed = 2·30 = 60; then: Kody = 56/2 = 28 → now 32
+        self.assertEqual(reading.solve(
+            "Four years ago, Kody was only half as old as Mohamed. If Mohamed is currently "
+            "twice 30 years old, how old is Kody?"), 32)
+
+    def test_turned_anchor_and_offset_on_half(self):
+        # Tom now 37; 7 years ago Tom 30 → Jim = 5 + 15 = 20 → now 27 → +2 = 29
+        self.assertEqual(reading.solve(
+            "Tom turned 32 years old 5 years ago. 7 years ago Jim was 5 years older than "
+            "half Tom's age. How old is Jim in 2 years?"), 29)
+
+    def test_two_anchors_not_claimed(self):
+        # over-determined for this shape — the system must pass (the fold declines it today)
+        self.assertNotIsInstance(reading.solve(
+            "3 years ago, Al was twice as old as Bo. Al is 20 years old now. Bo is 9 years "
+            "old now. How old is Bo?"), (int, float))
+
+
 if __name__ == "__main__":
     unittest.main()

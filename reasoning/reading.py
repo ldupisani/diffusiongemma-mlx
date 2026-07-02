@@ -9573,6 +9573,102 @@ def _age_chain_system(premises: list, question: str):
     return _gated_pos_int(result)
 
 
+# a past-anchor ENTITY: a name or a bare kinship noun ("a mother", "her daughter")
+_AP_ENT = r"(?:[A-Z][a-z]+|mother|father|mom|dad|daughter|son|sister|brother|grandmother|grandfather)"
+_AP_AGO = r"(\d+|[Oo]ne|[Tt]wo|[Tt]hree|[Ff]our|[Ff]ive|[Ss]ix|[Ss]even|[Ee]ight|[Nn]ine|[Tt]en)"
+_AP_RATIO_REL = re.compile(
+    rf"{_AP_AGO} years ago,? (?:a |the |his |her )?({_AP_ENT}) was (?:only )?"
+    rf"(twice|thrice|half|three times|four times) as old as (?:a |the |his |her )?({_AP_ENT})")
+_AP_OFFSET_REL = re.compile(
+    rf"{_AP_AGO} years ago,? (?:a |the |his |her )?({_AP_ENT}) was (\d+) years (older|younger) than "
+    rf"(?:(half|twice) (?:of )?)?(?:a |the |his |her )?({_AP_ENT})(?:['’]s age)?")
+
+
+def _ap_num(tok: str) -> float:
+    return float(NUMBERS.get(tok.lower(), tok if tok.isdigit() else 0) or 0)
+_AP_ANCHORS = [
+    (re.compile(rf"(?:a |the |his |her )?({_AP_ENT}) is (?:currently )?(\d+) years old(?: now)?"),
+     lambda m: (m.group(1), float(m.group(2)))),
+    (re.compile(rf"({_AP_ENT}) turned (\d+) years? old (\d+) years ago"),
+     lambda m: (m.group(1), float(m.group(2)) + float(m.group(3)))),
+    (re.compile(rf"({_AP_ENT}) is currently twice (\d+) years old"),
+     lambda m: (m.group(1), 2 * float(m.group(2)))),
+]
+
+
+def _age_past_anchor_system(premises: list, question: str):
+    """AGE RELATION AT A PAST TIME + A PRESENT ANCHOR — "5 years ago, a mother was twice as old
+    as her daughter. The mother is 41 years old now. How old will the daughter be in 3 years?" →
+    then: 36 = 2·18; now 23; +3 = 26. Anchor variants: plain now-age, "turned A years old K years
+    ago" (A+K), "currently twice N years old" (2N — Kody's Mohamed). The relation may carry a
+    ratio, an offset, or an offset on HALF/TWICE the standard ("5 years older than half Tom's
+    age"). TIGHTLY gated: exactly ONE past relation and ONE anchor naming one of its two people;
+    every digit accounted; ages positive at BOTH times; the ask names the other (or same) person,
+    now or shifted. None otherwise."""
+    ql = question.lower()
+    qm = re.search(r"how old (?:is|will) (?:the |his |her )?(\w+)(?: be)?", ql)
+    if qm is None or _has_comparative(ql):
+        return None
+    fm = re.search(r"in (\d+) years", ql)
+    ask_shift = float(fm.group(1)) if fm else 0.0
+    if len(re.findall(r"\d+", ql)) != (1 if fm else 0):
+        return None
+    body = " ".join(premises)
+    ratio_rels = list(_AP_RATIO_REL.finditer(body))
+    offset_rels = [m for m in _AP_OFFSET_REL.finditer(body)]
+    if len(ratio_rels) + len(offset_rels) != 1:
+        return None
+    anchors = []
+    for rex, mk in _AP_ANCHORS:
+        for m in rex.finditer(body):
+            if any(r.start() <= m.start() < r.end() for r in ratio_rels + offset_rels):
+                continue                                 # the relation's own text is not an anchor
+            anchors.append((m, mk(m)))
+    if len(anchors) != 1:
+        return None
+    am, (anchor_name, anchor_now) = anchors[0]
+    anchor_key = anchor_name.lower()
+    if ratio_rels:
+        m = ratio_rels[0]
+        k_ago, subj, std = _ap_num(m.group(1)), m.group(2).lower(), m.group(4).lower()
+        k = {"twice": 2.0, "thrice": 3.0, "half": 0.5, "three times": 3.0, "four times": 4.0}[m.group(3)]
+        rel = ("ratio", k)
+        rel_digits = {m.group(1)} if m.group(1).isdigit() else set()
+    else:
+        m = offset_rels[0]
+        k_ago, subj, std = _ap_num(m.group(1)), m.group(2).lower(), m.group(6).lower()
+        off = float(m.group(3)) * (1 if m.group(4) == "older" else -1)
+        halfk = {"half": 0.5, "twice": 2.0, None: 1.0}[m.group(5)]
+        rel = ("affine", (halfk, off))                   # subj_then = halfk·std_then + off
+        rel_digits = ({m.group(1)} if m.group(1).isdigit() else set()) | {m.group(3)}
+    if anchor_key not in (subj, std):
+        return None
+    then = {anchor_key: anchor_now - k_ago}
+    if rel[0] == "ratio":
+        if anchor_key == subj:
+            then[std] = then[subj] / rel[1]
+        else:
+            then[subj] = then[std] * rel[1]
+    else:
+        halfk, off = rel[1]
+        if anchor_key == std:
+            then[subj] = halfk * then[std] + off
+        else:
+            then[std] = (then[subj] - off) / halfk
+    if any(v <= 0 for v in then.values()):
+        return None
+    now = {e: v + k_ago for e, v in then.items()}
+    asked = qm.group(1)
+    if asked not in now:
+        return None
+    used = rel_digits | {am.group(i) for i in range(1, (am.lastindex or 0) + 1) if am.group(i)
+                         and am.group(i).isdigit()}
+    if any(d not in used for d in re.findall(r"\d+", body)):
+        return None                                      # a body digit we didn't consume
+    result = _compute(f"{_num(now[asked])} + {_num(ask_shift)}")
+    return _gated_pos_int(result)
+
+
 _AGE_SIMUL = re.compile(r"\b([A-Z][a-z]+) is (\d+) years? older than (?:his |her )?(?:\w+ )?"
                         r"([A-Z][a-z]+) and (twice|three times|four times) (?:his|her|their) age\b")
 
@@ -10019,6 +10115,8 @@ _EARLY_SYSTEMS = [
     ("age_shift", _age_shift_system),
     # NAMED AGE CHAIN: "mom 2× Eden, Eden 2× Devin, Devin 12; average of the three?" → 28.
     ("age_chain", _age_chain_system),
+    # AGE PAST ANCHOR: "5 years ago mother 2× daughter; mother 41 now; daughter in 3 years?" → 26.
+    ("age_past_anchor", _age_past_anchor_system),
     # SIMULTANEOUS AGE: "7 years older than David and twice his age?" → 7/(2−1) = 7.
     ("age_simultaneous", _age_simultaneous_system),
 ]
