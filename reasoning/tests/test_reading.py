@@ -6127,5 +6127,36 @@ class TestIncrement165RateDaysWeeks(unittest.TestCase):
             "total?"), (int, float))
 
 
+class TestIncrement166DayListTarget(unittest.TestCase):
+    """#166 — `_day_list_target_system` (EARLY, registered): day-tagged values across a week plus
+    a TARGET, asked "how many on <day> to reach/beat it". An "average of N a day" target is N·7
+    (reach); a "last week … N total" target needs one MORE (beat → N+1). Listed days without a
+    value need an explicit zero-cue ("read nothing", "skipped a day"); a bare mention of the
+    asked day ("On Saturday, he looks…") is scene-setting."""
+
+    def test_average_reach_target(self):
+        self.assertEqual(reading.solve(
+            "Lena wants to read an average of 40 pages a day. This week she read 30 pages on "
+            "Sunday, 55 pages on Monday, and 45 pages on Tuesday. She fell asleep early on "
+            "Wednesday so she read nothing. On Thursday she read 60 pages, and on Friday she "
+            "read 50 pages. How many pages does she have to read on Saturday to reach her "
+            "goal?"), 40)
+
+    def test_beat_last_week_target(self):
+        self.assertEqual(reading.solve(
+            "Nate wants to do more jumping jacks every week than he did the week before. He "
+            "recorded that last week he did 200 total jumping jacks. On Sunday he did 30. On "
+            "Monday he did 40. On Tuesday he skipped a day. On Wednesday he did 50. On Thursday "
+            "he did 35. On Friday he did 25. How many does he have to do on Saturday to make "
+            "sure he beats last week's number?"), 21)
+
+    def test_underlisted_days_decline(self):
+        # only two listed days — the residual would silently assume zeros for the rest
+        self.assertEqual(reading.solve(
+            "Lena wants to read an average of 40 pages a day. This week she read 30 pages on "
+            "Sunday and 55 pages on Monday. How many pages does she have to read on Saturday "
+            "to reach her goal?"), "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()

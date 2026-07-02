@@ -1785,6 +1785,12 @@ LEXICON.update({
     # thirteenth wave (the rate x days x weeks system's cases): habit verbs; "log(s)" is BOTH the
     # verb ("Bob logs 10 hours") and the pond-noun ("frogs climbed onto logs")
     "exercise": ["noun", "verb"], "exercised": ["verb"], "exercises": ["verb"],
+    # fourteenth wave (the day-list-target system's cases): reading-goal + jumping-jack clusters
+    "asleep": ["adjective"], "early": ["adjective"], "sure": ["adjective"],
+    "fell": ["verb"], "reach": ["verb"], "soccer": ["noun"], "nothing": ["noun"],
+    "beats": ["verb"], "beat": ["verb"], "looks": ["verb"], "recorded": ["verb"],
+    "records": ["noun", "verb"], "record": ["noun", "verb"], "skipped": ["verb"],
+    "jack": ["noun"], "jumping": ["adjective"],
     "log": ["noun", "verb"], "logs": ["noun", "verb"],
     # EXCLUDED the jog family: it unlocks a held-out "5 miles per day on WEEKDAYS ONLY ... over
     # three weeks" case to a confident-wrong (105 = 5*7*3 vs gold 75 = 5*5*3) — the rate-projection
@@ -1812,7 +1818,7 @@ PLURALS.update({
     "seconds": "second", "cm": "centimeter",
     "kg": "kilogram", "burrs": "burr", "ticks": "tick", "objects": "object",
     "walls": "wall", "tapes": "tape", "steaks": "steak", "trouts": "trout", "trout": "trout",
-    "camels": "camel", "travelers": "traveler",
+    "camels": "camel", "travelers": "traveler", "jacks": "jack", "records": "record",
 })
 # NOTE: groundwork nouns/adjectives/pronouns (fruit/paper/side/…/herself) were re-tested with decline-safety
 # GUARDS 11–14 in place and STILL drop TEST 40.0→36.4% (a noun unlocks a held-out wrong in an as-yet-unguarded
@@ -1824,6 +1830,8 @@ VERB_LEMMA.update({
     "caught": "catch", "catches": "catch",
     "covers": "cover", "covered": "cover",
     "exercised": "exercise", "exercises": "exercise", "logs": "log",
+    "fell": "fall", "beats": "beat", "looks": "look", "recorded": "record",
+    "skipped": "skip",
     "raises": "raise", "raised": "raise", "raising": "raise",
 })
 
@@ -7616,6 +7624,75 @@ def _herd_rate_week_system(premises: list, question: str):
     return _compute(f"{_num(count.amount)} * {_num(rate.amount)} * 7")
 
 
+_WEEKDAYS = ("sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday")
+_ZERO_CUES = ("nothing", "skipped", "did not", "didn't", "none")
+
+
+def _day_list_target_system(premises: list, question: str):
+    """DAY-LIST TARGET RESIDUAL — day-tagged values across a week plus a TARGET, asked "how many
+    on <day> to reach/beat it": "average of 50 pages a day; read 43 Sun, 65 Mon, 28 Tue, nothing
+    Wed, 70 Thu, 56 Fri; how many on Saturday to reach his goal?" → 50·7 − 262 = 88. A "beats last
+    week's N" target needs one MORE: N + 1 − Σ. TIGHTLY gated: a digit-free question naming a
+    weekday plus a reach/beat cue; every OTHER weekday named in the premises carries a value or an
+    explicit zero-cue ("read nothing", "skipped a day"); exactly one target premise (an "average
+    of N … a day" or a "last week … N total"); every digit accounted; ≥4 listed days; a positive
+    integer residual. None otherwise."""
+    ql = question.lower()
+    q_day = next((d for d in _WEEKDAYS if d in ql), None)
+    if q_day is None or any(ch.isdigit() for ch in ql) \
+            or not any(c in ql for c in ("reach", "beat", "goal", "average")):
+        return None
+    avg = last_total = None
+    day_vals: dict = {}
+    for p in premises:
+        pl = p.lower()
+        am = re.search(r"average of (\d+(?:\.\d+)?)[^.]*?(?:a|per|each) day", pl)
+        lm = re.search(r"last week [^.]*?(\d+(?:\.\d+)?) total", pl)
+        days_here = [d for d in _WEEKDAYS if d in pl]
+        if am is not None:
+            avg = float(am.group(1))
+            continue
+        if lm is not None:
+            last_total = float(lm.group(1))
+            continue
+        if not days_here:
+            if any(ch.isdigit() for ch in p):
+                return None                              # a valued premise outside the day list
+            continue
+        # pair each listed day with the value (or zero-cue) in ITS comma/and segment
+        for seg in re.split(r",| and ", pl):
+            seg_day = next((d for d in _WEEKDAYS if d in seg), None)
+            if seg_day is None:
+                continue
+            if seg_day == q_day:
+                if re.search(r"\d", seg):
+                    return None                          # the asked day PRE-VALUED → not this shape
+                continue                                 # a bare mention ("On Saturday, he looks…")
+            if seg_day in day_vals:
+                return None                              # a duplicate day
+            nm = re.search(r"(\d+(?:\.\d+)?)", seg)
+            if nm is not None:
+                day_vals[seg_day] = float(nm.group(1))
+            elif any(c in seg for c in _ZERO_CUES) or any(c in pl for c in _ZERO_CUES):
+                day_vals[seg_day] = 0.0
+            else:
+                return None                              # a listed day with no value and no zero-cue
+    if len(day_vals) < 4 or (avg is None) == (last_total is None):
+        return None                                     # exactly ONE kind of target
+    if avg is not None:
+        target = avg * 7
+        if "beat" in ql:
+            return None                                 # an average target answers "reach", not "beat"
+    else:
+        if "beat" not in ql:
+            return None
+        target = last_total + 1                         # strictly MORE than last week
+    result = _compute(f"{_num(target)} - ({' + '.join(_num(v) for v in day_vals.values())})")
+    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
+        return None
+    return result
+
+
 def _rate_days_weeks_system(premises: list, question: str):
     """HOURS/DAY × DAYS/WEEK × WEEKS — "exercise 1 hour a day, 5 days a week, for 8 weeks; how many
     hours?" → 40; "1 hour 30 minutes every day … after two weeks?" → 1.5·7·14/7 = 21; "10 hours
@@ -8071,6 +8148,8 @@ _EARLY_SYSTEMS = [
     ("inverse_distribution", _inverse_distribution_system),
     # SPLIT-WITH (K+1): "two dozen eggs to split with his three siblings; each person?" → 6.
     ("split_with", _split_with_system),
+    # DAY-LIST TARGET RESIDUAL: "avg 50/day; 43 Sun … 56 Fri; how many Saturday?" → 350−262 = 88.
+    ("day_list_target", _day_list_target_system),
     # HOURS/DAY × DAYS/WEEK × WEEKS: "1 hour a day, 5 days a week, for 8 weeks?" → 40.
     ("rate_days_weeks", _rate_days_weeks_system),
     # WEEKLY TIME + DELTA: "2 hours each day; increase weekly by 4 hours; per week?" → 18.
