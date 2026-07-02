@@ -7709,10 +7709,10 @@ def _fraction_depletion_chain_system(premises: list, question: str):
     fraction cue in the text captured as a step; every digit accounted; no each/times/literal
     losses; a positive integer remainder. None otherwise."""
     ql = question.lower()
-    if not re.search(r"\b(?:left|remain|remains|remaining|still)\b", ql) \
+    if not re.search(r"\b(?:left|remain|remains|remaining|still)\b|to finish", ql) \
             or not ("how many" in ql or "how much" in ql) \
             or _has_digit(ql) or _has_comparative(ql):
-        return None
+        return None                                      # "must she read … to finish" asks the remainder
     segs = [p.lower() for p in premises]
     body = " ".join(segs)
     if " each" in body or "times" in body or _FC_STEP.search(ql):
@@ -7791,6 +7791,48 @@ _FPR_STEP = re.compile(
     r"|fifths|sixth|sixths|seventh|sevenths|eighth|eighths|ninth|ninths|tenth|tenths)|\d+/\d+)"
     r"(?:\s+of\s+(?:all\s+)?(?:the\s+|their\s+|his\s+|her\s+)?[a-z]+)?"
     r"\s+(?:are|were|is|was|had been)\s+([a-z]+)")
+
+
+def _pool_literal_relational_remaining_system(premises: list, question: str):
+    """POOL − LITERAL − K×LITERAL, ASK A FRACTION OF THE REMAINING — "a 120-page book; yesterday
+    she read 12 pages; today twice as many as yesterday; she wants to read half of the remaining
+    pages tomorrow — how many?" → (120 − 12 − 24)/2 = 42. The literal+relational consumption pair
+    materializes no usable facts (the relational step anchors to 'yesterday', a time word), so
+    RAW text is read. TIGHTLY gated: a digit-free "how many <item> should/must/need" ask; ONE
+    "<f> of the remaining <item>" cue; ONE "<P>-<item> book" (or "<P> <item>" copula) pool; ONE
+    literal step; ONE "k times as many … as yesterday/that" relational step; nothing else valued;
+    a positive integer. None otherwise."""
+    ql = question.lower()
+    m = re.search(r"how many (\w+)", ql)
+    if m is None or _has_digit(ql) \
+            or not re.search(r"\b(?:should|must|need|needs) \w+ read\b|\bshould \w+ read\b|"
+                             r"\bhow many \w+ (?:should|must)\b", ql):
+        return None
+    item = _singular_of(m.group(1)) or m.group(1)
+    body = " ".join(p.lower() for p in premises) + " " + ql
+    fm = re.search(rf"(half|a third|a quarter|two-thirds|\d+/\d+) of the remaining {re.escape(item)}s?\b",
+                   body)
+    if fm is None:
+        return None
+    f = _fraction_value(fm.group(1))
+    if f is None or not 0 < f < 1:
+        return None
+    pm = re.search(rf"(\d+)[- ]{re.escape(item)} book\b", body) \
+        or re.search(rf"is (\d+) {re.escape(item)}s? long\b", body)
+    lm = re.search(rf"read (\d+) {re.escape(item)}s?\b", body)
+    km = re.search(r"read (twice|three times|four times) as many [a-z]+ as (?:she |he )?"
+                   r"(?:read )?(?:yesterday|that)\b", body)
+    if pm is None or lm is None or km is None:
+        return None
+    pool, lit = float(pm.group(1)), float(lm.group(1))
+    k = {"twice": 2.0, "three times": 3.0, "four times": 4.0}[km.group(1)]
+    used = {pm.group(1), lm.group(1)}
+    if any(d not in used for d in re.findall(r"\d+", body)):
+        return None                                      # a stray value → not this shape
+    result = _compute(f"({_num(pool)} - {_num(lit)} - {_num(k)} * {_num(lit)}) * {_num(f)}")
+    if isinstance(result, float):
+        result = round(result, 9)
+    return _gated_pos_int(result)
 
 
 def _fraction_partition_rest_system(premises: list, question: str):
@@ -10072,6 +10114,8 @@ _EARLY_SYSTEMS = [
     ("fraction_depletion_chain", _fraction_depletion_chain_system),
     # FRACTION PARTITION + REST (copula-labeled fractions of one total, ask the unlabeled rest): "72 total; half laptops, one-third netbooks; desktops?" → 12.
     ("fraction_partition_rest", _fraction_partition_rest_system),
+    # POOL − LITERAL − K×LITERAL, half-of-remaining ask: "120 pages; 12 + twice that; half the rest?" → 42.
+    ("pool_literal_relational_remaining", _pool_literal_relational_remaining_system),
     # ANCHORED-SUM (no total, one bare anchor, sum ask): "Cecil $600 … how much altogether?" → 2800.
     ("anchored_sum", _anchored_sum_system),
     # ANCHORED-SINGLE (bare anchor, single named ask): "Ed weighs 146 … Find Carl's weight." → 220.

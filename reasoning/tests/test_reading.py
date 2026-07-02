@@ -6891,5 +6891,32 @@ class TestIncrement194AgeFutureVsNow(unittest.TestCase):
             "be twice her sister's age?"), 8)
 
 
+class TestIncrement195FractionLiteralChains(unittest.TestCase):
+    """#195 — the fraction+literal vein: `_pool_literal_relational_remaining_system` (pool −
+    literal − k×literal, ask a fraction of the remaining) and the depletion chain's ask gate
+    extended with the "to finish" remainder cue (Coral's real wording)."""
+
+    def test_pool_literal_relational_half_remaining(self):
+        # (120 − 12 − 24) / 2 = 42
+        self.assertEqual(reading.solve(
+            "Julie is reading a 120-page book. Yesterday, she was able to read 12 pages and "
+            "today, she read twice as many pages as yesterday. If she wants to read half of "
+            "the remaining pages tomorrow, how many pages should she read?"), 42)
+
+    def test_depletion_chain_to_finish_ask(self):
+        # 600·½·0.7 = 210 — "must she read the third week in order to finish" = the remainder
+        self.assertEqual(reading.solve(
+            "Coral is reading a book that is 600 pages long. She reads half of it in the "
+            "first week, and 30 percent of the remaining pages the second week. How many "
+            "pages must she read the third week in order to finish the book?"), 210)
+
+    def test_stray_value_declines(self):
+        # an extra number beside the pool/literal means the chain is not fully modeled
+        self.assertNotIsInstance(reading.solve(
+            "Julie is reading a 120-page book with 8 chapters. Yesterday she read 12 pages "
+            "and today she read twice as many pages as yesterday. If she wants to read half "
+            "of the remaining pages tomorrow, how many pages should she read?"), (int, float))
+
+
 if __name__ == "__main__":
     unittest.main()
