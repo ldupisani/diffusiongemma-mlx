@@ -5818,12 +5818,12 @@ class TestIncrement153CommonNounGenitive(unittest.TestCase):
             "Lena sold twice as many apples as Rosa at the farmer's market. Rosa sold 30 apples. "
             "How many apples did they sell in total?"), 90)
 
-    def test_kinship_genitive_still_declines(self):
-        # "her sister's age" must keep declining until a relational age frame exists — committing
-        # here was the exact confident-wrong the kinship exclusion prevents
+    def test_kinship_genitive_age_now_solves(self):
+        # originally pinned as a DECLINE (the bare split turned this into a confident-wrong);
+        # the `years_until_ratio` frame (#162) now answers it: 20+t = 2(4+t) → t = 12
         self.assertEqual(reading.solve(
             "If Dana is 20 years old and her little sister is 4, in how many years would Dana be "
-            "twice her sister's age?"), "undetermined")
+            "twice her sister's age?"), 12)
 
 
 class TestIncrement154NinthWaveTypedClusters(unittest.TestCase):
@@ -6022,6 +6022,31 @@ class TestIncrement161TwelfthWaveVocab(unittest.TestCase):
         self.assertEqual(reading.solve(
             "Ken and Bo went fishing. Bo caught 4 trouts and Ken caught three times as many trouts "
             "as Bo. How many trouts did they catch in total?"), 16)
+
+
+class TestIncrement162YearsUntilRatio(unittest.TestCase):
+    """#162 — `_years_until_ratio_system` (EARLY, registered) + the kinship-genitive tokenizer
+    split lifted: "A is 18, her little sister is 5; in how many years would she be twice her
+    sister's age?" → A+t = k(B+t) → t = (A − k·B)/(k−1). The bare-copula age ("sister is 5")
+    drops from the general fold, so the system reads raw premises."""
+
+    def test_twice_kinship_genitive(self):
+        self.assertEqual(reading.solve(
+            "If Rosa is 18 years old and her little sister is 5, in how many years would she be "
+            "twice her sister's age?"), 8)
+
+    def test_three_times_named_genitive(self):
+        # 31 + t = 3·(9 + t) → t = 2
+        self.assertEqual(reading.solve(
+            "Maya is 31 years old and her daughter Lily is 9 years old. In how many years would "
+            "Maya be three times Lily's age?"), 2)
+
+    def test_non_integer_t_declines(self):
+        # 18 + t = 2(6 + t) -> t = 6 is fine, but 19/6 shape: 19 + t = 2(6+t) -> t = 7 ... use a
+        # genuinely fractional case: 18 + t = 3(5 + t) -> t = 1.5 — must decline
+        self.assertEqual(reading.solve(
+            "If Vera is 18 years old and her little sister is 5, in how many years would she be "
+            "three times her sister's age?"), "undetermined")
 
 
 if __name__ == "__main__":

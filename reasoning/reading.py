@@ -124,14 +124,14 @@ def _split_contraction(tok: str) -> list:
             return two(core[:-2], "is")
         if core[:1].isupper():                            # a NAME's genitive — "Leo's" → Leo + 's (the
             return two(core[:-2], "'s")                   # possessive marker, so the name is recognised)
-        if "noun" in LEXICON.get(low[:-2], ()) \
-                and low[:-2] not in KINSHIP:              # a known COMMON NOUN's genitive — "farmer's"
+        if "noun" in LEXICON.get(low[:-2], ()):           # a known COMMON NOUN's genitive — "farmer's"
             return two(core[:-2], "'s")                   # → farmer + 's; an UNKNOWN core stays one
     return [tok]                                          # unknown token (GUARD 1 declines, as before).
-                                                          # A KINSHIP genitive ("her sister's age") is
-                                                          # excluded: relational age-algebra has no frame
-                                                          # for it yet — splitting it turned a safe decline
-                                                          # into a confident-wrong (Beth, 5≠8)
+                                                          # KINSHIP genitives were excluded until the
+                                                          # `years_until_ratio` frame landed — the split
+                                                          # alone turned "twice her sister's age" (Beth)
+                                                          # into a confident-wrong (5≠8); the EARLY system
+                                                          # now answers it before that path
 
 
 def _split_hyphen(tok: str) -> list:
@@ -7601,6 +7601,48 @@ def _herd_rate_week_system(premises: list, question: str):
     return _compute(f"{_num(count.amount)} * {_num(rate.amount)} * 7")
 
 
+def _years_until_ratio_system(premises: list, question: str):
+    """YEARS-UNTIL-RATIO — "Beth is 18, her little sister is 5; in how many years would she be
+    TWICE her sister's age?" → both advance together: A+t = k·(B+t) → t = (A − k·B)/(k−1) = 8.
+    The general fold cannot touch this: the sister's bare-copula age ("her little sister is 5")
+    drops entirely (a valueless Predication), and the kinship genitive frame has no owner. Reads
+    RAW premises. TIGHTLY gated: an "in how many years" question with a WORD multiplier and a
+    genitive "<Y>'s age" (or "as old as <Y>") standard; exactly TWO "<person> is N" age premises,
+    one of them the standard Y; k > 1, both ages positive, t a positive integer. None otherwise."""
+    ql = question.lower()
+    if "in how many years" not in ql or ("age" not in ql and "as old as" not in ql):
+        return None
+    mult = None
+    if "twice" in ql:
+        mult = 2.0
+    else:
+        tm = re.search(r"\b(\w+) times\b", ql)
+        if tm is not None and NUMBERS.get(tm.group(1)):
+            mult = float(NUMBERS[tm.group(1)])
+    if mult is None or mult <= 1:
+        return None
+    sm = re.search(r"(\w+)[’']s age", ql) or re.search(r"as old as (?:her |his |their )?(\w+)", ql)
+    if sm is None:
+        return None
+    standard = sm.group(1)
+    ages = []                                            # (person-word, age) via the bare copula
+    for p in premises:
+        for person, val in re.findall(r"(\w+) is (\d+(?:\.\d+)?)\b", p.lower()):
+            if person in ("she", "he", "it", "that", "there", "this"):
+                return None                              # a pronoun subject — can't attribute the age
+            ages.append((person, float(val)))
+    if len(ages) != 2:
+        return None
+    std = next((a for a in ages if a[0] == standard), None)
+    subj = next((a for a in ages if a[0] != standard), None)
+    if std is None or subj is None or std[1] <= 0 or subj[1] <= 0:
+        return None
+    result = _compute(f"({_num(subj[1])} - {_num(mult)} * {_num(std[1])}) / ({_num(mult)} - 1)")
+    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
+        return None
+    return result
+
+
 def _remainder_after_rate_system(premises: list, question: str):
     """REMAINDER AFTER A RATED STRETCH — "381 pages in the book; already read 149; reads 20 pages a
     day for a week; how many pages are still left?" → 381 − 149 − 20·7 = 92. TIGHTLY gated: a
@@ -7800,6 +7842,8 @@ _EARLY_SYSTEMS = [
     ("weekday_weekend", _weekday_weekend_system),
     # REMAINDER AFTER A RATED STRETCH: "381 pages; already read 149; 20/day for a week; left?" → 92.
     ("remainder_after_rate", _remainder_after_rate_system),
+    # YEARS-UNTIL-RATIO: "Beth 18, sister 5; in how many years twice her sister's age?" → 8.
+    ("years_until_ratio", _years_until_ratio_system),
 ]
 
 # LATE systems run AFTER the read-synthesize fixpoint has built `context` (they consume derived
