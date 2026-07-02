@@ -5967,5 +5967,29 @@ class TestIncrement158RateWeekExpansion(unittest.TestCase):
             "How many more pages a day does Ray read than Tom?"), 10)
 
 
+class TestIncrement159WeekdayWeekendSplit(unittest.TestCase):
+    """#159 — `_weekday_weekend_system` (EARLY, registered): a per-day rate on WEEKDAYS (5) plus a
+    RELATIONAL per-day rate on WEEKEND days (2), asked per week → R·5 + k·R·2. Reads raw premises
+    (the relational weekend clause materializes no fact); exactly one digit-bearing premise (the
+    weekday one); the weekend multiplier is a WORD (twice/three times/half)."""
+
+    def test_times_multiplier(self):
+        self.assertEqual(reading.solve(
+            "Lena reads 6 pages each day during weekdays. On each weekend day, she reads twice the "
+            "number of pages she reads on the weekdays. How many pages does she read in a week?"), 54)
+
+    def test_half_multiplier_school_week(self):
+        self.assertEqual(reading.solve(
+            "Leo runs 4 miles each day during the school week. He runs half as far each day on the "
+            "weekend. How many miles does he run in a week?"), 24)
+
+    def test_explicit_weekend_number_declines(self):
+        # a digit-bearing weekend premise is another shape (two explicit rates) — the system must
+        # not claim it with the relational formula
+        self.assertEqual(reading.solve(
+            "Lena reads 6 pages each day during weekdays. On each weekend day, she reads 12 pages. "
+            "How many pages does she read in a week?"), "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()

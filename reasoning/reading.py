@@ -7595,6 +7595,53 @@ def _herd_rate_week_system(premises: list, question: str):
     return _compute(f"{_num(count.amount)} * {_num(rate.amount)} * 7")
 
 
+def _weekday_weekend_system(premises: list, question: str):
+    """WEEKDAY/WEEKEND SPLIT — a per-day rate on WEEKDAYS (5) plus a RELATIONAL per-day rate on
+    WEEKEND days (2), asked per week: "8 episodes each day during weekdays; on each weekend day
+    three times the weekday number; how many in a week?" → 8·5 + 24·2 = 88. Reads RAW premises (the
+    relational weekend clause materializes no fact). TIGHTLY gated: a digit-free "how many <asked>
+    … week" question; exactly ONE premise carries digits — the WEEKDAY one (a weekday cue + a
+    per-day cue + the asked measure); the WEEKEND premise (a weekend cue) carries the multiplier as
+    a WORD (twice / three times / half); the result is a positive integer. None otherwise."""
+    ql = question.lower()
+    m = re.search(r"how many (\w+)", ql)
+    if m is None or "week" not in ql or any(ch.isdigit() for ch in ql) \
+            or any(w in ql for w in ("more", "fewer", "less", "than", "weekend", "weekday")):
+        return None
+    asked = _singular_of(m.group(1)) or m.group(1)
+    weekday_cues = ("weekday", "weekdays", "school week")
+    digit_premises = [p for p in premises if any(ch.isdigit() for ch in p)]
+    if len(digit_premises) != 1:
+        return None
+    wd = digit_premises[0]
+    wdl = wd.lower()
+    if not any(c in wdl for c in weekday_cues) or not any(c in wdl for c in _PER_DAY_CUES) \
+            or not any((_singular_of(_key(w)) or _key(w)) == asked for w in wd.split()):
+        return None
+    nums = re.findall(r"\d+(?:\.\d+)?", wd)
+    if len(nums) != 1:
+        return None
+    rate = float(nums[0])
+    we = next((p for p in premises if p is not wd and "weekend" in p.lower()), None)
+    if we is None or any(ch.isdigit() for ch in we):
+        return None
+    wel = we.lower()
+    mult = None
+    tm = re.search(r"\b(\w+) times\b", wel)
+    if "twice" in wel:
+        mult = 2.0
+    elif "half" in wel:
+        mult = 0.5
+    elif tm is not None and NUMBERS.get(tm.group(1)):
+        mult = float(NUMBERS[tm.group(1)])
+    if mult is None:
+        return None
+    result = _compute(f"{_num(rate)} * 5 + {_num(mult)} * {_num(rate)} * 2")
+    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
+        return None
+    return result
+
+
 def _piece_count_system(premises: list, question: str):
     """PIECE COUNT ACROSS UNITS — "Matt orders 15 POUNDS of beef. He cuts that into 12-OUNCE steaks.
     How many steaks does he get?" → 15·16 / 12 = 20. A TOTAL measure in one unit is divided into
@@ -7693,6 +7740,8 @@ _EARLY_SYSTEMS = [
     ("daily_share", _daily_share_system),
     # HERD RATE × WEEK: "52 cows, each gives 5 liters a day; how many liters in a week?" → 1820.
     ("herd_rate_week", _herd_rate_week_system),
+    # WEEKDAY/WEEKEND SPLIT: "8 episodes a day on weekdays, 3× on weekend days; per week?" → 88.
+    ("weekday_weekend", _weekday_weekend_system),
 ]
 
 # LATE systems run AFTER the read-synthesize fixpoint has built `context` (they consume derived
