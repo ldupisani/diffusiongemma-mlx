@@ -1731,8 +1731,12 @@ LEXICON.update({
     # bare LEXICON nouns with NO PLURALS entry (the engine makes no number claim for an unmapped 's'-final
     # word, which the quantity machinery tolerates). "throw" ("free throw contest") gets no plural map so
     # the verb "throws" is never read as a plural noun. EXCLUDED "fruit": the diff caught it unlocking a
-    # held-out pounds/ounces conversion case to a confident-wrong (-29 vs 6) — re-add once unit
-    # conversion composes (its dev-train fruit-basket case is forgone until then). EXCLUDED "clothes":
+    # held-out pounds/ounces case to a confident-wrong (-29 vs 6). Re-tested after the #156 holdings-fold
+    # conversion landed — STILL wrong: the case is a mixed-unit PARTITION (a group total in pounds,
+    # member shares in ounces, remainder asked in pounds), a different path from the holdings remainder.
+    # No dev-train twin exists, so the shape can't be developed under the firewall (never tune to
+    # holdout); "fruit" stays out until a partition-conversion increment lands on other evidence.
+    # EXCLUDED "clothes":
     # the TEST checkpoint caught it unlocking one held-out confident-wrong (500 vs 300) with zero TEST
     # gain — dropping it also forgoes the dev-train mall-garments purchase case, which needs it to pass
     # the unknown-word guard.
