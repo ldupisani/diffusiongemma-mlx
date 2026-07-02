@@ -1697,8 +1697,10 @@ LEXICON.update({
     # color-subtype counting ("how many pink marbles"). Typed as adjectives, matching the existing colors.
     "pink": ["adjective"], "purple": ["adjective"], "black": ["adjective"], "white": ["adjective"],
     "gray": ["adjective"], "grey": ["adjective"], "gold": ["adjective"], "silver": ["adjective"],
-    # EXCLUDED "brown": the diff caught it unlocking a held-out fraction-of-remaining chain to a
-    # confident-wrong (Mary gives away half her blue shirts → 49≠37) — same class as the excluded "peanut".
+    # "brown" is safe via the subtype fraction remainder (`_subtype_fraction_remainder_system`): the Mary
+    # case ("half of her blue shirts and a third of her brown shirts" → 37) that made it a confident-wrong
+    # (49≠37, the single-pool system grabbing the first pool) now solves; the single-pool twin defers.
+    "brown": ["adjective"],
     # third-wave count-nouns + typed modifiers (sweep re-run after colors; container/stationery clusters)
     # "pen" is now safe: the chain-count×price composition (`_chain_count_price`) handles the Dorothy case
     # (22 pens × $1.50 = $33) that previously made it a confident-wrong.
@@ -7231,7 +7233,11 @@ def _chain_count_price(premises: list, question: str):
 _FRAC_WORDS = {"half": 0.5, "a third": 1 / 3, "a quarter": 0.25, "a fourth": 0.25, "a fifth": 0.2,
                "a sixth": 1 / 6, "one-half": 0.5, "one-third": 1 / 3, "one-fourth": 0.25, "one-fifth": 0.2,
                "one-sixth": 1 / 6, "two-thirds": 2 / 3, "three-fourths": 0.75, "three-quarters": 0.75,
-               "two-fifths": 0.4, "three-fifths": 0.6}
+               "two-fifths": 0.4, "three-fifths": 0.6,
+               # UNHYPHENATED spellings ("one third of her brown shirts") — same values as the hyphenated
+               "one half": 0.5, "one third": 1 / 3, "one quarter": 0.25, "one fourth": 0.25,
+               "one fifth": 0.2, "one sixth": 1 / 6, "two thirds": 2 / 3, "three fourths": 0.75,
+               "three quarters": 0.75, "two fifths": 0.4, "three fifths": 0.6}
 _LOSS_VERBS = ("ate", "eat", "eaten", "gave", "give", "gives", "given", "spent", "spend", "took", "take",
                "taken", "used", "use", "removed", "remove", "scared", "scare", "lost", "lose", "sold",
                "sell", "drank", "drink", "threw", "throw")
@@ -7336,9 +7342,16 @@ def _subtype_fraction_remainder_system(premises: list, question: str):
         return None                                          # single pool → the single-pool twin's shape
     if not any(re.search(rf"\b{v}\b", low) for v in _LOSS_VERBS):
         return None
-    fracs = re.findall(rf"(half|a third|a quarter|a fourth|a fifth|a sixth|one-\w+|two-\w+|three-\w+|\d+/\d+)"
+    fracs = re.findall(rf"(half|(?:a|one|two|three)[ -]\w+|\d+/\d+)"
                        rf"\s+of\s+(?:the\s+|her\s+|his\s+|their\s+|its\s+)?([a-z]+)\s+{item}s?\b", low)
     if not fracs:
+        return None
+    # EVERY fraction cue in the text must be one we captured — an unrecognized form ("one third" before it
+    # was lexicalized, "four sevenths") that the tight regex misses would silently drop a reduction and
+    # commit a PARTIAL remainder (the exact 49≠37 confident-wrong class this system exists to kill)
+    cues = re.findall(r"\b(half|halves|thirds?|quarters?|fourths?|fifths?|sixths?|sevenths?|eighths?"
+                      r"|ninths?|tenths?|\d+/\d+)\b", low)
+    if len(cues) != len(fracs):
         return None
     reductions, used = [], set()
     for fs, qual in fracs:
@@ -7438,6 +7451,8 @@ _EARLY_SYSTEMS = [
     ("chain_count_price", _chain_count_price),
     # FRACTION-OF-BASE REMAINDER (single pool − Σ(fraction×pool | literal)): "148 peanuts; ate ¼ of the peanuts; ate 29; how many remain?" → 148−37−29 = 82. BEFORE the depletion fold (which drops the fraction → 119).
     ("fraction_remainder", _fraction_remainder_system),
+    # SUBTYPE FRACTION REMAINDER (multi-pool twin — each fraction binds to ITS OWN subtype pool): "26 blue shirts and 36 brown shirts; gives away half of the blue and a third of the brown; how many left?" → 62−25 = 37. The single-pool twin DEFERS ≥2-qualified-pool shapes here (its ≥2-subtype gate), so the two never both claim.
+    ("subtype_fraction_remainder", _subtype_fraction_remainder_system),
     # ANCHORED-SUM (no total, one bare anchor, sum ask): "Cecil $600 … how much altogether?" → 2800.
     ("anchored_sum", _anchored_sum_system),
     # ANCHORED-SINGLE (bare anchor, single named ask): "Ed weighs 146 … Find Carl's weight." → 220.

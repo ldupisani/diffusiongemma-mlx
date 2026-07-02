@@ -5661,5 +5661,41 @@ class TestIncrement148CommaQuantityList(unittest.TestCase):
             "score?"), "undetermined")
 
 
+class TestIncrement149SubtypeFractionRemainder(unittest.TestCase):
+    """#149 — SUBTYPE FRACTION REMAINDER (the multi-pool twin of _fraction_remainder_system, now
+    REGISTERED): ≥2 qualified subtype pools of the questioned item, each fraction loss binding to ITS OWN
+    subtype → Σpools − Σ(fᵢ·poolᵢ). The single-pool twin defers ≥2-qualified-pool shapes here, so the two
+    never both claim. Also: unhyphenated fraction words ("one third") lexicalized, and a fraction-cue-count
+    guard — an UNRECOGNIZED fraction form anywhere declines the whole system rather than committing a
+    partial remainder (the 49≠37 confident-wrong class). 'brown' re-enabled (adjective)."""
+
+    def test_two_pools_two_fractions(self):
+        self.assertEqual(reading.solve(
+            "Rita has 20 blue marbles and 30 red marbles. If she gives away half of her blue marbles "
+            "and a third of her red marbles, how many marbles does she have left?"), 30)
+
+    def test_unhyphenated_fraction_word(self):
+        self.assertEqual(reading.solve(
+            "Rita has 20 blue marbles and 30 red marbles. If she gives away half of her blue marbles "
+            "and one third of her red marbles, how many marbles does she have left?"), 30)
+
+    def test_unrecognized_fraction_declines(self):
+        # "four sevenths" isn't a lexicalized fraction — committing 62 - 10 would be a partial remainder
+        self.assertEqual(reading.solve(
+            "Rita has 20 blue marbles and 30 red marbles. If she gives away half of her blue marbles "
+            "and four sevenths of her red marbles, how many marbles does she have left?"), "undetermined")
+
+    def test_fraction_of_unknown_subtype_declines(self):
+        self.assertEqual(reading.solve(
+            "Rita has 20 blue marbles and 30 red marbles. If she gives away half of her green marbles, "
+            "how many marbles does she have left?"), "undetermined")
+
+    def test_single_pool_twin_not_stolen(self):
+        # one pool + literal loss stays the single-pool twin's shape (deferral gates never both claim)
+        self.assertEqual(reading.solve(
+            "There were 148 peanuts in a jar. Brock ate one-fourth of the peanuts and Bonita ate 29 "
+            "peanuts. How many peanuts remain in the jar?"), 82)
+
+
 if __name__ == "__main__":
     unittest.main()
