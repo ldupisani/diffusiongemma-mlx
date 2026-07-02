@@ -6158,5 +6158,24 @@ class TestIncrement166DayListTarget(unittest.TestCase):
             "to reach her goal?"), "undetermined")
 
 
+class TestIncrement167AlternatingDaysDiff(unittest.TestCase):
+    """#167 — `_alternating_days_diff_system` (EARLY, registered): two disjoint weekday-list
+    category premises + one per-day rate, asked "how many more <catA> than <catB> in one week"
+    → rate · (|daysA| − |daysB|)."""
+
+    def test_three_vs_two_days(self):
+        self.assertEqual(reading.solve(
+            "On Mondays, Wednesdays and Fridays, Rita bakes apple pies. On Tuesdays and "
+            "Thursdays, she bakes cherry pies. If she bakes 8 pies per day, how many more apple "
+            "pies does she bake than cherry pies in one week?"), 8)
+
+    def test_equal_days_never_commits(self):
+        # 2 vs 2 days — the difference shape requires strictly more; must not commit a number
+        self.assertNotIsInstance(reading.solve(
+            "On Mondays and Wednesdays, Rita bakes apple pies. On Tuesdays and Thursdays, she "
+            "bakes cherry pies. If she bakes 8 pies per day, how many more apple pies does she "
+            "bake than cherry pies in one week?"), (int, float))
+
+
 if __name__ == "__main__":
     unittest.main()

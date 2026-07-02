@@ -1791,6 +1791,8 @@ LEXICON.update({
     "beats": ["verb"], "beat": ["verb"], "looks": ["verb"], "recorded": ["verb"],
     "records": ["noun", "verb"], "record": ["noun", "verb"], "skipped": ["verb"],
     "jack": ["noun"], "jumping": ["adjective"],
+    # the alternating-bake-days case: "cherry" the pie subtype (an adjective, like the colors)
+    "cherry": ["adjective"], "become": ["verb"],
     "log": ["noun", "verb"], "logs": ["noun", "verb"],
     # EXCLUDED the jog family: it unlocks a held-out "5 miles per day on WEEKDAYS ONLY ... over
     # three weeks" case to a confident-wrong (105 = 5*7*3 vs gold 75 = 5*5*3) — the rate-projection
@@ -7628,6 +7630,43 @@ _WEEKDAYS = ("sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "
 _ZERO_CUES = ("nothing", "skipped", "did not", "didn't", "none")
 
 
+def _alternating_days_diff_system(premises: list, question: str):
+    """ALTERNATING-DAYS CATEGORY DIFFERENCE — "On Mondays, Wednesdays and Fridays he bakes APPLE
+    pies. On Tuesdays and Thursdays he bakes CHERRY pies. He bakes 12 pies per day; how many MORE
+    apple pies than cherry pies in one week?" → 12 · (3 − 2) = 12. TIGHTLY gated: a "how many more
+    <catA> … than <catB>" week question (digit-free); exactly TWO weekday-list premises, each
+    naming one category and its days (disjoint sets, no digits); ONE per-day rate premise; the
+    "more" category has strictly more days; positive integer. None otherwise."""
+    ql = question.lower()
+    m = re.search(r"how many more (\w+) \w+ .*than (\w+)", ql)
+    if m is None or "week" not in ql or any(ch.isdigit() for ch in ql):
+        return None
+    cat_a, cat_b = m.group(1), m.group(2)
+    day_lists: dict = {}
+    rate = None
+    for p in premises:
+        pl = p.lower()
+        days = [d for d in _WEEKDAYS if d in pl]
+        rm = re.search(r"(\d+(?:\.\d+)?) \w+ (?:per|a|each) day", pl)
+        if days and not any(ch.isdigit() for ch in p):
+            cat = cat_a if cat_a in pl else (cat_b if cat_b in pl else None)
+            if cat is None or cat in day_lists:
+                return None
+            day_lists[cat] = set(days)
+        elif rm is not None and rate is None and not days:
+            rate = float(rm.group(1))
+        elif any(ch.isdigit() for ch in p):
+            return None                                  # an unclassified valued premise
+    if rate is None or set(day_lists) != {cat_a, cat_b} \
+            or day_lists[cat_a] & day_lists[cat_b] \
+            or len(day_lists[cat_a]) <= len(day_lists[cat_b]):
+        return None
+    result = _compute(f"{_num(rate)} * ({len(day_lists[cat_a])} - {len(day_lists[cat_b])})")
+    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
+        return None
+    return result
+
+
 def _day_list_target_system(premises: list, question: str):
     """DAY-LIST TARGET RESIDUAL — day-tagged values across a week plus a TARGET, asked "how many
     on <day> to reach/beat it": "average of 50 pages a day; read 43 Sun, 65 Mon, 28 Tue, nothing
@@ -8148,6 +8187,8 @@ _EARLY_SYSTEMS = [
     ("inverse_distribution", _inverse_distribution_system),
     # SPLIT-WITH (K+1): "two dozen eggs to split with his three siblings; each person?" → 6.
     ("split_with", _split_with_system),
+    # ALTERNATING-DAYS DIFFERENCE: "apple Mon/Wed/Fri, cherry Tue/Thu, 12/day; more apple?" → 12.
+    ("alternating_days_diff", _alternating_days_diff_system),
     # DAY-LIST TARGET RESIDUAL: "avg 50/day; 43 Sun … 56 Fri; how many Saturday?" → 350−262 = 88.
     ("day_list_target", _day_list_target_system),
     # HOURS/DAY × DAYS/WEEK × WEEKS: "1 hour a day, 5 days a week, for 8 weeks?" → 40.
