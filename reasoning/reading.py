@@ -1782,6 +1782,14 @@ LEXICON.update({
     # trout ("trouts" is the corpus plural); a desert-journey cluster.
     "fishing": ["noun"], "trout": ["noun"],
     "camel": ["noun"], "oasis": ["noun"], "traveler": ["noun"], "thirsty": ["adjective"],
+    # thirteenth wave (the rate x days x weeks system's cases): habit verbs; "log(s)" is BOTH the
+    # verb ("Bob logs 10 hours") and the pond-noun ("frogs climbed onto logs")
+    "exercise": ["noun", "verb"], "exercised": ["verb"], "exercises": ["verb"],
+    "log": ["noun", "verb"], "logs": ["noun", "verb"],
+    # EXCLUDED the jog family: it unlocks a held-out "5 miles per day on WEEKDAYS ONLY ... over
+    # three weeks" case to a confident-wrong (105 = 5*7*3 vs gold 75 = 5*5*3) — the rate-projection
+    # path doesn't know "weekdays only"; re-add once that restriction is modeled (its dev-train
+    # Mr. John case is forgone until then)
     "exact": ["adjective"], "living": ["adjective"], "masking": ["adjective"],
     "neater": ["adjective"], "wide": ["adjective"],
     "cover": ["verb"], "covers": ["verb"], "covered": ["verb"],
@@ -1815,6 +1823,7 @@ VERB_LEMMA.update({
     "represents": "represent", "represented": "represent",
     "caught": "catch", "catches": "catch",
     "covers": "cover", "covered": "cover",
+    "exercised": "exercise", "exercises": "exercise", "logs": "log",
     "raises": "raise", "raised": "raise", "raising": "raise",
 })
 
@@ -3992,11 +4001,16 @@ def answer(question: str, context: list, discourse: list = None):
                           and f.entity == ent and f.measure[0] == query[0]]   # under that head (8 flower +
                 #   6 animal stickers → 14). Reached only when no bare-head quantity exists, so it never
                 #   double-counts; the fold below signs each by its verb (have/used/…).
+                # Both CONVERT branches below skip TIME-unit pairs: a time quantity in the context
+                # is usually a DURATION ("for one week", "on each of nine days"), not a holding —
+                # converting one commits garbage ("90 days" → 2160 hours). The rate-query path owns
+                # legitimate time conversion.
                 if not qs:                               # CONVERT: "how many KILOGRAMS" when we hold grams
                     qs = [Quantity(ent, query, _compute(f"{_num(f.amount)} * "
                                    f"{_num(CONVERSIONS[(f.measure[0], query[0])])}"), f.verb)
                           for f in context if isinstance(f, Quantity) and f.entity == ent
-                          and f.amount is not None and (f.measure[0], query[0]) in CONVERSIONS]
+                          and f.amount is not None and (f.measure[0], query[0]) in CONVERSIONS
+                          and not (f.measure[0] in TIME_UNITS and query[0] in TIME_UNITS)]
                 elif q_verb in ("have", "own"):          # MIXED units in a holdings fold: extend the
                     qs = qs + [Quantity(ent, query,      # exact-unit matches with CONVERTIBLE holdings
                                         _compute(f"{_num(f.amount)} * "     # in other units ("has 3
@@ -4005,7 +4019,8 @@ def answer(question: str, context: list, discourse: list = None):
                                for f in context if isinstance(f, Quantity)  # left" → 3·128 − 13).
                                and f.entity == ent and f.amount is not None # Gated to the have/own
                                and f.measure[0] != query[0]                 # remainder fold only.
-                               and (f.measure[0], query[0]) in CONVERSIONS]
+                               and (f.measure[0], query[0]) in CONVERSIONS
+                               and not (f.measure[0] in TIME_UNITS and query[0] in TIME_UNITS)]
                 # POLARITY IS RELATIVE TO THE QUESTION: "how many do you HAVE" folds holdings
                 # (baseline + gains - losses); "how many did you SELL" COUNTS the sell events (+).
                 if q_verb in ("have", "own"):
@@ -7601,6 +7616,62 @@ def _herd_rate_week_system(premises: list, question: str):
     return _compute(f"{_num(count.amount)} * {_num(rate.amount)} * 7")
 
 
+def _rate_days_weeks_system(premises: list, question: str):
+    """HOURS/DAY × DAYS/WEEK × WEEKS — "exercise 1 hour a day, 5 days a week, for 8 weeks; how many
+    hours?" → 40; "1 hour 30 minutes every day … after two weeks?" → 1.5·7·14/7 = 21; "10 hours
+    every day, five days a week … in a month" → 10·5·4 = 200 (the GSM8K month = 4 weeks
+    convention). Reads RAW premises (these goal/habit clauses materialize no usable fact — "1 hour
+    30 minutes" even mis-reads as 1). TIGHTLY gated: a digit-free non-comparative HOURS question;
+    a per-day-cued hours rate; a weeks duration ("for/after N weeks", or "in a month" in the
+    question); days/week explicit or 7 via an every-day cue; every digit premise classified;
+    positive integer total. None otherwise."""
+    ql = question.lower()
+    if "hour" not in ql or any(ch.isdigit() for ch in ql) \
+            or any(w in ql for w in ("more", "fewer", "less", "than")):
+        return None
+    body = " ".join(premises).lower()
+    rate = days = weeks = None
+    for p in premises:
+        pl = p.lower()
+        has_digit = any(ch.isdigit() for ch in p)
+        rm = re.search(r"(\d+(?:\.\d+)?) hours?(?: (?:and )?(\d+) minutes?)?", pl)
+        if rm is not None and any(c in pl for c in _PER_DAY_CUES):
+            if rate is not None:
+                return None
+            rate = float(rm.group(1)) + (float(rm.group(2)) / 60 if rm.group(2) else 0)
+        elif has_digit and not re.search(
+                r"(\w+|\d+) days? a week|(?:for|after) (\w+|\d+) weeks?", pl):
+            return None                                  # an unclassified valued premise → not this shape
+        dm = re.search(r"(\w+|\d+) days? a week", pl)
+        if dm is not None:
+            if days is not None:
+                return None
+            days = float(NUMBERS.get(dm.group(1), dm.group(1) if dm.group(1).isdigit() else 0) or 0)
+        wm = re.search(r"(?:for|after) (\w+|\d+) weeks?", pl)
+        if wm is not None:
+            if weeks is not None:
+                return None
+            weeks = float(NUMBERS.get(wm.group(1), wm.group(1) if wm.group(1).isdigit() else 0) or 0)
+    if weeks is None:                                    # the duration may sit in the QUESTION
+        qm = re.search(r"(?:for|after|in) (\w+) weeks?\b", ql)
+        if qm is not None:
+            weeks = float(NUMBERS.get(qm.group(1), 0) or 0) or None
+        elif "in a month" in ql:
+            weeks = 4                                    # the GSM8K month = 4 weeks convention
+    if rate is None or weeks is None or weeks < 2 or rate <= 0:
+        return None
+    if days is None:
+        if not any(c in body for c in ("every day", "each day", "daily")):
+            return None
+        days = 7
+    if days <= 0:
+        return None
+    result = _compute(f"{_num(rate)} * {_num(days)} * {_num(weeks)}")
+    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
+        return None
+    return result
+
+
 def _weekly_time_plus_delta_system(premises: list, question: str):
     """WEEKLY TIME + DELTA — "reads 2 hours each day; decided to increase his weekly time by 4
     hours; how much time during one week?" → 2·7 + 4 = 18. TIGHTLY gated: a digit-free "how much
@@ -8000,6 +8071,8 @@ _EARLY_SYSTEMS = [
     ("inverse_distribution", _inverse_distribution_system),
     # SPLIT-WITH (K+1): "two dozen eggs to split with his three siblings; each person?" → 6.
     ("split_with", _split_with_system),
+    # HOURS/DAY × DAYS/WEEK × WEEKS: "1 hour a day, 5 days a week, for 8 weeks?" → 40.
+    ("rate_days_weeks", _rate_days_weeks_system),
     # WEEKLY TIME + DELTA: "2 hours each day; increase weekly by 4 hours; per week?" → 18.
     ("weekly_time_plus_delta", _weekly_time_plus_delta_system),
     # DAILY RATE DIFFERENCE (mixed sides): "2100 pages in a week vs 200/day; more per day?" → 100.

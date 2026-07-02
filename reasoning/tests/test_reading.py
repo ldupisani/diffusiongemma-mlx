@@ -6101,5 +6101,31 @@ class TestIncrement164BespokeRateChains(unittest.TestCase):
             "brother?"), (int, float))
 
 
+class TestIncrement165RateDaysWeeks(unittest.TestCase):
+    """#165 — `_rate_days_weeks_system` (EARLY, registered): hours/day × days/week × weeks
+    ("1 hour a day, 5 days a week, for 8 weeks" → 40; "in a month" = the GSM8K 4-weeks
+    convention). Also: the holdings-fold CONVERT branches now SKIP time-unit pairs (a time
+    quantity in context is usually a DURATION, not a holding — converting "90 days" to 2160
+    hours was the Natasha confident-wrong the exercise vocab unlocked)."""
+
+    def test_rate_days_weeks(self):
+        self.assertEqual(reading.solve(
+            "Mia's goal is to exercise 2 hours a day, 4 days a week. If she hits her goal weekly "
+            "for 6 weeks, how many hours has Mia exercised?"), 48)
+
+    def test_month_is_four_weeks(self):
+        self.assertEqual(reading.solve(
+            "Every day, Rob logs 8 hours of work in his office. If he works for five days a week, "
+            "calculate the total number of hours he logs in a month."), 160)
+
+    def test_duration_facts_never_convert_to_hours(self):
+        # two-person mixed minutes/durations — the fold must not convert "nine days" to hours;
+        # this must stay a decline, never a committed number
+        self.assertNotIsInstance(reading.solve(
+            "Natasha exercised for 30 minutes every day for one week. Esteban exercised for 10 "
+            "minutes on each of nine days. How many hours did Natasha and Esteban exercise in "
+            "total?"), (int, float))
+
+
 if __name__ == "__main__":
     unittest.main()
