@@ -1699,11 +1699,10 @@ LEXICON.update({
     "local": ["adjective"], "bowling": ["adjective", "noun"],
     # fourth-wave: a mass noun measured by a known unit (garbage → pounds) + a place entity (city)
     "city": ["noun"], "garbage": ["noun"],
-    # "peanut" is now safe via the fraction-of-base remainder composition (`_fraction_remainder_system`):
-    # "148 peanuts, ate ¼ … remain?" now composes instead of dropping the fraction (was Brock 119≠82).
-    # EXCLUDED "nut": it also unlocks a pre-existing anchored_sum SUBSET bug (Bill/Harry/Sue: "how many do
-    # Bill AND Harry have combined?" sums all three, 720≠672) — unrelated to fractions; re-add once that's fixed.
-    "peanut": ["noun"],
+    # "peanut" is safe via the fraction-of-base remainder composition (`_fraction_remainder_system`);
+    # "nut" is safe now the anchored_sum SUBSET fix lands (Bill/Harry/Sue "how many do Bill AND Harry have
+    # combined?" → 672, not the all-three 720 it committed while "Bill" mis-tagged as a common noun).
+    "peanut": ["noun"], "nut": ["noun"],
 })
 PLURALS.update({
     "bananas": "banana", "erasers": "eraser", "crayons": "crayon", "berries": "berry",
@@ -1715,7 +1714,7 @@ PLURALS.update({
     "blueberries": "blueberry", "peaches": "peach", "strawberries": "strawberry", "contests": "contest",
     "babies": "baby", "seeds": "seed", "sunflowers": "sunflower", "softballs": "softball",
     "showers": "shower", "highlighters": "highlighter", "drawers": "drawer", "pens": "pen",
-    "desks": "desk", "alleys": "alley", "cities": "city", "peanuts": "peanut",
+    "desks": "desk", "alleys": "alley", "cities": "city", "peanuts": "peanut", "nuts": "nut",
 })
 # NOTE: groundwork nouns/adjectives/pronouns (fruit/paper/side/…/herself) were re-tested with decline-safety
 # GUARDS 11–14 in place and STILL drop TEST 40.0→36.4% (a noun unlocks a held-out wrong in an as-yet-unguarded
@@ -6000,10 +5999,17 @@ def _anchored_sum_system(premises: list, question: str):
     coeff, pivot = got
     # a comma/"and"-joined name list ("Carl and Cal") merges into ONE unit spanning multiple words — split
     # back into individual entity keys by word, skipping "and" (same gotcha as `_residual_sum_system`).
-    qnames = [_key(w.surface) for u in analyze(question).units if "name" in u.features.get("senses", [])
-              for w in u.words if _key(w.surface) != "and"]
+    qunits = analyze(question).units
+    named = [_key(w.surface) for u in qunits if "name" in u.features.get("senses", [])
+             for w in u.words if _key(w.surface) != "and"]
+    # ALSO count a capitalized question word that IS a system entity but was mis-tagged as a common noun
+    # ("Bill" → the money-noun sense, "Rose" → the flower) — else "how many do Bill and Harry have combined?"
+    # sees only one name, skips the subset, and wrongly sums ALL (Bill/Harry/Sue 720 ≠ 672).
+    cap_entities = [_key(w.surface) for u in qunits for w in u.words
+                    if w.surface[:1].isupper() and _key(w.surface) in coeff and _key(w.surface) not in named]
+    qnames = named + cap_entities
     if len(qnames) >= 2:
-        if not all(e in coeff for e in qnames):
+        if any(e not in coeff for e in qnames):
             return None                # a named entity outside the system — not this solver's shape
         summed = {e: coeff[e] for e in qnames}
     else:

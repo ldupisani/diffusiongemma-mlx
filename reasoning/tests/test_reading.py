@@ -5559,5 +5559,24 @@ class TestIncrement144FractionRemainder(unittest.TestCase):
         self.assertFalse(isinstance(result, (int, float)) and not isinstance(result, bool))
 
 
+class TestIncrement145AnchoredSumSubset(unittest.TestCase):
+    """#145 — anchored_sum SUBSET fix: when the question names a subset of the system's entities, sum ONLY
+    those. The subset detection counted only 'name'-sensed words, so a name mis-tagged as a common noun
+    ('Bill' → the money noun) was missed → the subset was skipped and ALL entities summed (Bill/Harry/Sue:
+    720 instead of the asked Bill+Harry = 672). Fix: also count a capitalized question word that IS a system
+    entity (in the coeff graph). The out-of-system safety-decline stays gated to a ≥2-name subset (a
+    single-name question still sums all — Jason/Jayden 660 must not regress to a decline)."""
+
+    def test_named_subset_sums_only_those(self):
+        self.assertEqual(reading.solve(
+            "Bill has 6 times as many marbles as Harry, and Harry has twice as many marbles as Sue. "
+            "If Sue has 48 marbles, how many do Bill and Harry have combined?"), 672)
+
+    def test_all_entities_when_no_names(self):
+        self.assertEqual(reading.solve(
+            "Bill has 6 times as many marbles as Harry, and Harry has twice as many marbles as Sue. "
+            "If Sue has 48 marbles, how many do they have altogether?"), 720)
+
+
 if __name__ == "__main__":
     unittest.main()
