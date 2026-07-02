@@ -6356,5 +6356,33 @@ class TestIncrement175WholeTextChainsB(unittest.TestCase):
             "will she spend so that she and her dog have enough apples to last for 3 weeks?"), 21)
 
 
+class TestIncrement176WholeTextChainsC(unittest.TestCase):
+    """#176 — the last two whole-text chains: `_phased_weeks_average_system` (phase totals with
+    a "same number as the total of the first <w> weeks" echo phase, ÷ the question's week span;
+    the phase weeks must sum to it) and `_pet_plus_food_cost_system` (base price + exact bag
+    count × bag price)."""
+
+    def test_phased_weeks_average(self):
+        # 2·7·2=28, echo 28, 4·7·1=28 → 84/7 = 12
+        self.assertEqual(reading.solve(
+            "Remy eats 2 apples a day for two weeks. Over the next four weeks, he eats the same "
+            "number of apples as the total of the first two weeks. Over the next one weeks, he "
+            "eats 4 apples a day. Over these 7 weeks, how many apples does he average a week?"), 12)
+
+    def test_pet_plus_food_cost(self):
+        self.assertEqual(reading.solve(
+            "Ana just got a new kitten that cost $20. She also bought enough food for 2 weeks. "
+            "She knows the kitten eats 1/2 cup of food a day. A bag of food with 3.5 cups costs "
+            "$3. How much did all of this cost her?"), 26)
+
+    def test_mismatched_phase_weeks_decline(self):
+        # phases sum to 8, the question says 7 — the average denominator would be wrong
+        self.assertEqual(reading.solve(
+            "Remy eats 2 apples a day for two weeks. Over the next four weeks, he eats the same "
+            "number of apples as the total of the first two weeks. Over the next two weeks, he "
+            "eats 4 apples a day. Over these 7 weeks, how many apples does he average a week?"),
+            "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()

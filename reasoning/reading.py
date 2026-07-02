@@ -7746,6 +7746,91 @@ def _ordinal_day_chain_residual_system(premises: list, question: str):
     return result
 
 
+def _phased_weeks_average_system(premises: list, question: str):
+    """PHASED WEEKS → AVERAGE — "1 apple a day for two weeks; the next three weeks the same
+    number as the total of the first two; the next two weeks 3 a day; over these 7 weeks, the
+    weekly average?" → (14 + 14 + 42) / 7 = 10. TIGHTLY gated: an "over these W weeks … average
+    a week" question whose ONLY digit is W; phase 1 "N a day for <w1> weeks"; a digit-free
+    "same number … total of the first <w1> weeks" echo phase; phase 3 "next <w3> weeks … M a
+    day"; the phase weeks summing to W; positive integer. None otherwise."""
+    ql = question.lower()
+    qm = re.search(r"over these (\d+) weeks", ql)
+    if qm is None or "average" not in ql \
+            or any(ch.isdigit() for ch in ql.replace(qm.group(0), "")):
+        return None
+    q_weeks = float(qm.group(1))
+    p1 = p2w = p3 = None
+    for p in premises:
+        pl = p.lower()
+        m1 = re.search(r"(\d+(?:\.\d+)?) \w+ a day for (\w+|\d+) weeks", pl)
+        m2 = re.search(r"next (\w+|\d+) weeks[^.]*same number[^.]*total of the first", pl)
+        m3 = re.search(r"next (\w+|\d+) weeks[^.]*?(\d+(?:\.\d+)?) \w+ a day", pl)
+        def wk(tok):
+            return NUMBERS.get(tok, float(tok) if tok.isdigit() else None)
+        if m3 is not None and m2 is None and p3 is None:
+            w = wk(m3.group(1))
+            if w is None:
+                return None
+            p3 = float(m3.group(2)) * 7 * w, w
+        elif m2 is not None and p2w is None and not any(ch.isdigit() for ch in p):
+            w = wk(m2.group(1))
+            if w is None:
+                return None
+            p2w = w
+        elif m1 is not None and p1 is None:
+            w = wk(m1.group(2))
+            if w is None:
+                return None
+            p1 = float(m1.group(1)) * 7 * w, w
+        elif any(ch.isdigit() for ch in p):
+            return None                                  # an unclassified valued premise
+    if p1 is None or p2w is None or p3 is None or p1[1] + p2w + p3[1] != q_weeks:
+        return None
+    total = p1[0] + p1[0] + p3[0]                        # the echo phase repeats phase 1's total
+    result = _compute(f"{_num(total)} / {_num(q_weeks)}")
+    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
+        return None
+    return result
+
+
+def _pet_plus_food_cost_system(premises: list, question: str):
+    """PET + CONSUMABLE COST — "a puppy that cost $10; enough food for 3 weeks; eats 1/3 cup a
+    day; a bag with 3.5 cups costs $2; how much did all of this cost?" → 10 + (21·⅓)/3.5·2 =
+    14. TIGHTLY gated: a digit-free "how much did all of this cost" question; ONE "cost $A"
+    base; ONE "for W weeks" duration; ONE "N/D cup a day" rate; ONE "bag … C cups costs $B"
+    premise; the bag division exact; positive integer. None otherwise."""
+    ql = question.lower()
+    if "how much did all of this cost" not in ql or any(ch.isdigit() for ch in ql):
+        return None
+    base = weeks = frac = bag_cups = bag_price = None
+    for p in premises:
+        pl = p.lower()
+        bm = re.search(r"cost \$(\d+(?:\.\d+)?)", pl)
+        wm = re.search(r"for (\d+) weeks", pl)
+        fm = re.search(r"(\d+)/(\d+) cup", pl)
+        gm = re.search(r"bag[^.]*?(\d+(?:\.\d+)?) cups costs \$(\d+(?:\.\d+)?)", pl)
+        if gm is not None and bag_cups is None:
+            bag_cups, bag_price = float(gm.group(1)), float(gm.group(2))
+        elif fm is not None and frac is None:
+            frac = float(fm.group(1)) / float(fm.group(2))
+        elif bm is not None and base is None:
+            base = float(bm.group(1))
+        elif wm is not None and weeks is None:
+            weeks = float(wm.group(1))
+        elif any(ch.isdigit() for ch in p):
+            return None                                  # an unclassified valued premise
+    if None in (base, weeks, frac, bag_cups, bag_price):
+        return None
+    cups = weeks * 7 * frac
+    bags = cups / bag_cups
+    if abs(bags - round(bags)) > 1e-9:
+        return None                                      # the bag division must be exact
+    result = _compute(f"{_num(base)} + {_num(round(bags))} * {_num(bag_price)}")
+    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
+        return None
+    return result
+
+
 def _pet_food_remainder_system(premises: list, question: str):
     """PET-FOOD REMAINDER — "three dogs; each eats 1/2 of a pound twice a day; bought 30 pounds;
     how many pounds left after a week?" → 30 − 3·0.5·2·7 = 9. TIGHTLY gated: a digit-free "how
@@ -8746,6 +8831,10 @@ _EARLY_SYSTEMS = [
     ("inverse_distribution", _inverse_distribution_system),
     # SPLIT-WITH (K+1): "two dozen eggs to split with his three siblings; each person?" → 6.
     ("split_with", _split_with_system),
+    # PHASED WEEKS AVERAGE: "1/day 2wk; next 3wk same as first total; next 2wk 3/day" → 10.
+    ("phased_weeks_average", _phased_weeks_average_system),
+    # PET + CONSUMABLE COST: "$10 puppy; 3wk food; ⅓ cup/day; 3.5-cup bag $2" → 14.
+    ("pet_plus_food_cost", _pet_plus_food_cost_system),
     # PET-FOOD REMAINDER: "3 dogs × ½lb × 2/day; 30 lb bought; left after a week?" → 9.
     ("pet_food_remainder", _pet_food_remainder_system),
     # ORCHARD PACK REVENUE: "10 trees × 12/day; 6-packs $2; after 3 weeks?" → 840.
