@@ -6535,5 +6535,51 @@ class TestIncrement180DiscountedPurchase(unittest.TestCase):
             "How much did he pay in total?"), (int, float))
 
 
+class TestIncrement181FractionDepletionChain(unittest.TestCase):
+    """#181 — `_fraction_depletion_chain_system`: one pool reduced by SEQUENTIAL partitive steps,
+    later steps anchored to the REMAINDER ("of the remaining", "of what she has left") →
+    N·Π(1−fᵢ). The single-pool fraction system EXCLUDES remaining/rest chains — this claims them.
+    Critical: with full vocab the general fold COMMITS A PARTIAL on this shape (drops the second
+    step), so the system must claim it before the fold."""
+
+    def test_money_chain_of_what_is_left(self):
+        # 40 · (1−½) · (1−¼) = 15 — the fold would commit 20 (dropping the quarter step)
+        self.assertEqual(reading.solve(
+            "Julia has $40. She spends half of her money to buy a new game. She then spends "
+            "a quarter of what she has left on food. How much money does she have left?"), 15)
+
+    def test_slash_fractions_of_the_remaining(self):
+        # 36 · ¾ · ⅔ = 18
+        self.assertEqual(reading.solve(
+            "Mary has 36 cows. She sells 1/4 of them. Then 1/3 of the remaining cows are "
+            "given to her brother. How many cows are left?"), 18)
+
+    def test_word_fractions_remainder_chain(self):
+        # 400 · ¾ · ½ = 150 — the "sheep" wrong-on-inject shape from the sweep, now claimed
+        self.assertEqual(reading.solve(
+            "Mary has 400 cows on her farm. She gave a quarter of her cows to her sister, and "
+            "gave half of the remaining cows to her brother. How many cows remain on the "
+            "farm?"), 150)
+
+    def test_percent_step_anchored_to_remainder(self):
+        # 600 · ½ · (1−0.30) = 210 — an anchored percent is a fraction here (never countable)
+        self.assertEqual(reading.solve(
+            "A book is 600 pages long. Coral reads half of it in the first week, and 30 "
+            "percent of the remaining pages the second week. How many pages remain after "
+            "the second week?"), 210)
+
+    def test_partition_shape_declines(self):
+        # two BASE-anchored fractions — the partition shape, not a depletion chain
+        self.assertNotIsInstance(reading.solve(
+            "There are 42 berries. Half of all the berries are red and a third of the "
+            "berries are blue. How many berries are left?"), (int, float))
+
+    def test_uncaptured_literal_loss_declines(self):
+        # a literal loss mixed into the chain is not modeled — decline, never a partial
+        self.assertNotIsInstance(reading.solve(
+            "Nora has 60 pears. She gives half of them to Kim. She gives 5 of the remaining "
+            "pears to Sam. How many pears are left?"), (int, float))
+
+
 if __name__ == "__main__":
     unittest.main()

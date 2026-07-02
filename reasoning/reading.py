@@ -7592,6 +7592,105 @@ def _subtype_fraction_remainder_system(premises: list, question: str):
                     f" - ({' + '.join(_num(x) for x in reductions)})")
 
 
+_FC_STEP = re.compile(
+    r"(half|(?:a|an|one|two|three)[ -](?:half|third|thirds|quarter|quarters|fourth|fourths|fifth"
+    r"|fifths|sixth|sixths|seventh|sevenths|eighth|eighths|ninth|ninths|tenth|tenths)"
+    r"|\d+/\d+|\d+(?:\.\d+)?\s*(?:%|percent))\s+of\s+((?:[a-z'’]+\s+){0,4}[a-z'’]+)")
+_FC_REMAINDER_ANCHOR = re.compile(r"\b(?:remaining|rest|remainder|left)\b")
+
+
+def _fraction_depletion_chain_system(premises: list, question: str):
+    """FRACTION DEPLETION CHAIN — one pool reduced by SEQUENTIAL partitive steps where later steps
+    anchor to the REMAINDER: "Julia has $40. She spends half of her money on a game. She spends a
+    quarter of what she has left. How much does she have left?" → 40·(1−½)·(1−¼) = 15; "36
+    seagulls; 1/4 of them scared away; 1/3 of the remaining birds fly off; how many left?" →
+    36·¾·⅔ = 18. The single-pool `_fraction_remainder_system` EXCLUDES remaining/rest chains
+    (deferral, so the family members never both claim); this is that chain shape. A percent step
+    ("30 percent of the remaining") is a fraction here — anchored, so the countable-percent wrong
+    class can't fire. TIGHTLY gated: a digit-free left/remain question with no comparative; ONE
+    base value (money "$40" or "N <item>"); the FIRST step is BASE-anchored (them/it/his money/the
+    <base item>) and its clause carries a depletion cue; every LATER step must be REMAINDER-anchored
+    (a second base-anchored step is the partition shape, not this one); ≥1 remainder step; every
+    fraction cue in the text captured as a step; every digit accounted; no each/times/literal
+    losses; a positive integer remainder. None otherwise."""
+    ql = question.lower()
+    if not re.search(r"\b(?:left|remain|remains|remaining|still)\b", ql) \
+            or not ("how many" in ql or "how much" in ql) \
+            or _has_digit(ql) or _has_comparative(ql):
+        return None
+    segs = [p.lower() for p in premises]
+    body = " ".join(segs)
+    if " each" in body or "times" in body or _FC_STEP.search(ql):
+        return None
+    if re.search(r"\b(?:at first|beginning|begin|originally|start with)\b", ql):
+        return None                                      # a backward find-the-initial ask — not ours
+    base = item = None
+    base_seg = -1
+    for si, seg in enumerate(segs):
+        mm = re.search(r"\$\s*(\d+(?:,\d{3})*(?:\.\d+)?)", seg)
+        mi = re.search(r"\b(\d+(?:,\d{3})*)\s+([a-z]+)", seg)
+        if mm is not None:
+            base, item, base_seg, base_span = float(mm.group(1).replace(",", "")), "money", si, mm.span()
+            break
+        if mi is not None and not re.match(r"\d+/", seg[mi.start():]):
+            noun = _singular_of(mi.group(2)) or mi.group(2)
+            base, item, base_seg, base_span = float(mi.group(1).replace(",", "")), noun, si, mi.span()
+            break
+    if base is None or base <= 0:
+        return None
+    steps = []                                           # (seg, pos, fraction, kind) in text order
+    spans = [[] for _ in segs]
+    spans[base_seg].append(base_span)
+    for si, seg in enumerate(segs):
+        for m in _FC_STEP.finditer(seg):
+            f = _fraction_value(m.group(1))
+            if f is None:
+                pm = re.match(r"(\d+(?:\.\d+)?)\s*(?:%|percent)", m.group(1))
+                if pm is None:
+                    return None
+                p = float(pm.group(1))
+                if not 0 < p < 100:
+                    return None
+                f = p / 100
+            anchor = m.group(2)
+            if _FC_REMAINDER_ANCHOR.search(anchor):
+                kind = "remainder"
+            elif re.match(r"(?:them|it|all\b|his |her |their |the |these |those )", anchor) \
+                    and (item in ("money",) and "money" in anchor
+                         or any((_singular_of(w) or w) == item for w in anchor.split())
+                         or re.match(r"(?:them|it)\b", anchor)):
+                kind = "base"
+            else:
+                return None                              # an anchor we can't place — never guess
+            if not 0 < f < 1:
+                return None
+            steps.append((si, m.start(), f, kind))
+            spans[si].append(m.span())
+    if len(steps) < 2 or steps[0][3] != "base" \
+            or any(k != "remainder" for _, _, _, k in steps[1:]):
+        return None
+    first_clause = segs[steps[0][0]]
+    if not (any(re.search(r"\b" + v, first_clause) for v in _LOSS_VERBS)
+            or " away" in first_clause or re.search(r"\bread", first_clause)):
+        return None                                      # the base step needs a depletion cue
+        #                                                  (reading pages consumes them — Coral)
+    cues = re.findall(r"\b(?:half|halves|thirds?|quarters?|fourths?|fifths?|sixths?|sevenths?"
+                      r"|eighths?|ninths?|tenths?|\d+/\d+|\d+(?:\.\d+)?\s*(?:%|percent))", body)
+    if len(cues) != len(steps):
+        return None                                      # an uncaptured fraction cue → partial chain
+    for si, seg in enumerate(segs):                      # every digit accounted
+        for m in re.finditer(r"\d+(?:,\d{3})*(?:\.\d+)?|\.\d+", seg):
+            if not any(a <= m.start() and m.end() <= b for a, b in spans[si]):
+                return None
+    expr = _num(base)
+    for _, _, f, _ in sorted(steps):
+        expr = f"({expr}) * (1 - {_num(f)})"
+    result = _compute(expr)
+    if isinstance(result, float):
+        result = round(result, 9)
+    return _gated_pos_int(result)
+
+
 def _equal_share(question: str, context: list, premises: list):
     """POOL-AND-REDISTRIBUTE — "Mark has 30 candies, Peter 25, John 35. They combine their candies and share
     them equally. How many will EACH have?" → (30+25+35)/3 = 30. Same Σ/N math as the `average` branch (#3l)
@@ -9104,6 +9203,76 @@ def _discounted_purchase_system(premises: list, question: str):
     return _gated_pos_int(result)
 
 
+# --- system family: relational product-sum (a count K-times another, per-unit prices) --------
+_RPS_REL = re.compile(r"\b(twice|thrice|half|double|(?:two|three|four|five|six|seven|eight|nine"
+                      r"|ten|\d+) times)\s+(?:that (?:much|amount|number)|as (?:much|many))\b")
+_RPS_PRICE = re.compile(r"\$\s*(\d+(?:,\d{3})*(?:\.\d+)?|\.\d+)\s*(?:per\s+[a-z]+|each|apiece)"
+                        r"|each\s+[a-z]+\s+costs?\s+\$\s*(\d+(?:,\d{3})*(?:\.\d+)?|\.\d+)")
+
+
+def _relational_product_sum_system(premises: list, question: str):
+    """RELATIONAL PRODUCT-SUM — a two-item purchase where the SECOND count is K times the first:
+    "1000 pounds of beef at $8 per pound; twice that much chicken at $3 per pound; total?" →
+    1000·8 + 2·1000·3 = 14000; "200 people buy tickets; three times as many show up for the
+    second showing; each ticket cost $25; how much did the show make?" → (200+600)·25 = 20000.
+    The relational clause materializes no fact in the fold, and `_revenue_product_sum` requires
+    literal alternating counts — so this shape declines everywhere today. TIGHTLY gated: a
+    digit-free "how much … cost/pay/spend/make/earn" total question; EXACTLY one plain count;
+    EXACTLY one relational multiplier; one shared per-unit price or two (first→base, second→the
+    relational item); no percent/discount/comparative; every digit accounted; positive integer.
+    None otherwise."""
+    ql = question.lower()
+    if "how much" not in ql and "calculate the total" not in ql:
+        return None
+    if not re.search(r"\b(?:cost|costs|pay|pays|paid|spend|spends|spent|make|made|earn|earned"
+                     r"|amount)\b", ql):
+        return None
+    if _has_digit(ql) or _has_comparative(ql):
+        return None
+    segs = [p.lower() for p in premises]
+    body = " ".join(segs)
+    if "%" in body or "percent" in body or "discount" in body or " off " in body \
+            or "change" in body or " per day" in body or " a day" in body:
+        return None
+    rels = list(_RPS_REL.finditer(body))
+    if len(rels) != 1:
+        return None
+    tok = rels[0].group(1)
+    k = {"twice": 2.0, "double": 2.0, "thrice": 3.0, "half": 0.5}.get(tok)
+    if k is None:
+        m = re.match(r"(two|three|four|five|six|seven|eight|nine|ten|\d+) times", tok)
+        k = NUMBERS.get(m.group(1), float(m.group(1)) if m.group(1).isdigit() else 0)
+    if not k:
+        return None
+    spans = [[] for _ in segs]
+    prices = []                                          # per-unit prices, in text order
+    for si, seg in enumerate(segs):
+        for m in _RPS_PRICE.finditer(seg):
+            prices.append(float((m.group(1) or m.group(2)).replace(",", "")))
+            spans[si].append(m.span())
+    if not 1 <= len(prices) <= 2:
+        return None
+    counts = []
+    for si, seg in enumerate(segs):
+        for m in re.finditer(r"\b\d+(?:,\d{3})*\b", seg):
+            if not any(a <= m.start() and m.end() <= b for a, b in spans[si]):
+                counts.append((si, m.span(), float(m.group(0).replace(",", ""))))
+    if len(counts) != 1:
+        return None                                      # exactly ONE plain count (the base)
+    si_c, span_c, n = counts[0]
+    spans[si_c].append(span_c)
+    for si, seg in enumerate(segs):                      # every digit accounted
+        for m in re.finditer(r"\d+(?:,\d{3})*(?:\.\d+)?|\.\d+", seg):
+            if not any(a <= m.start() and m.end() <= b for a, b in spans[si]):
+                return None
+    p1 = prices[0]
+    p2 = prices[1] if len(prices) == 2 else prices[0]
+    result = _compute(f"{_num(n)} * {_num(p1)} + {_num(k)} * {_num(n)} * {_num(p2)}")
+    if isinstance(result, float):
+        result = round(result, 9)
+    return _gated_pos_int(result)
+
+
 # --- ARITHMETIC SYSTEM-SOLVER REGISTRY -------------------------------------------------------
 # The word-problem system solvers are REGISTERED here, not hand-inlined in solve() — honoring the
 # engine's founding rule ("new reasoning is REGISTERED, never special-cased"). Each is a
@@ -9139,6 +9308,8 @@ _EARLY_SYSTEMS = [
     ("fraction_remainder", _fraction_remainder_system),
     # SUBTYPE FRACTION REMAINDER (multi-pool twin — each fraction binds to ITS OWN subtype pool): "26 blue shirts and 36 brown shirts; gives away half of the blue and a third of the brown; how many left?" → 62−25 = 37. The single-pool twin DEFERS ≥2-qualified-pool shapes here (its ≥2-subtype gate), so the two never both claim.
     ("subtype_fraction_remainder", _subtype_fraction_remainder_system),
+    # FRACTION DEPLETION CHAIN (sequential remainder-anchored steps — the single-pool twin EXCLUDES remaining/rest): "$40; spends half; a quarter of what's left; left?" → 40·½·¾ = 15.
+    ("fraction_depletion_chain", _fraction_depletion_chain_system),
     # ANCHORED-SUM (no total, one bare anchor, sum ask): "Cecil $600 … how much altogether?" → 2800.
     ("anchored_sum", _anchored_sum_system),
     # ANCHORED-SINGLE (bare anchor, single named ask): "Ed weighs 146 … Find Carl's weight." → 220.
