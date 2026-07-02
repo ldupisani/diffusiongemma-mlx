@@ -5528,5 +5528,36 @@ class TestIncrement143ChainCountPrice(unittest.TestCase):
             "Robert buys 4 pens. How many pens did they buy in total?"), 22)
 
 
+class TestIncrement144FractionRemainder(unittest.TestCase):
+    """#144 — FRACTION-OF-BASE REMAINDER: a single stated POOL reduced by loss clauses that are each a
+    FRACTION of that pool or a LITERAL, then "how many <item> left/remain?" → N − Σ(fraction×N | literal).
+    The fraction-partitive ("¼ of the peanuts") produces no fact in the general fold (which drops it and
+    commits N − literals), so `_fraction_remainder_system` reads the raw values. Tightly gated against the
+    treacherous cases: chained 'of the remaining', relative reductions ('2 less'), percent, derived/multi-
+    entity bases (only an explicit pool frame 'there were/made/baked/grew N <item>')."""
+
+    def test_fraction_plus_literal(self):
+        self.assertEqual(reading.solve(
+            "There were 148 peanuts in a jar. Brock ate one-fourth of the peanuts and Bonita ate 29 "
+            "peanuts. How many peanuts remain in the jar?"), 82)
+
+    def test_single_fraction_of_pool(self):
+        self.assertEqual(reading.solve(
+            "There were 30 apples in a basket. Tom ate one-third of the apples. How many apples are "
+            "left?"), 20)
+
+    def test_fraction_and_literal_separate_clauses(self):
+        self.assertEqual(reading.solve(
+            "There were 40 apples in a jar. Sam ate half of the apples. Kim ate 5 apples. How many "
+            "apples remain?"), 15)
+
+    def test_chained_of_the_remaining_declines(self):
+        # "a third of the remaining" chains the base — deliberately NOT modeled → decline (never miscompute)
+        result = reading.solve(
+            "There were 40 apples in a jar. Sam ate half of the apples and then ate a third of the "
+            "remaining apples. How many apples are left?")
+        self.assertFalse(isinstance(result, (int, float)) and not isinstance(result, bool))
+
+
 if __name__ == "__main__":
     unittest.main()

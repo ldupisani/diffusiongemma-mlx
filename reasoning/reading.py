@@ -1699,6 +1699,11 @@ LEXICON.update({
     "local": ["adjective"], "bowling": ["adjective", "noun"],
     # fourth-wave: a mass noun measured by a known unit (garbage → pounds) + a place entity (city)
     "city": ["noun"], "garbage": ["noun"],
+    # "peanut" is now safe via the fraction-of-base remainder composition (`_fraction_remainder_system`):
+    # "148 peanuts, ate ¼ … remain?" now composes instead of dropping the fraction (was Brock 119≠82).
+    # EXCLUDED "nut": it also unlocks a pre-existing anchored_sum SUBSET bug (Bill/Harry/Sue: "how many do
+    # Bill AND Harry have combined?" sums all three, 720≠672) — unrelated to fractions; re-add once that's fixed.
+    "peanut": ["noun"],
 })
 PLURALS.update({
     "bananas": "banana", "erasers": "eraser", "crayons": "crayon", "berries": "berry",
@@ -1710,7 +1715,7 @@ PLURALS.update({
     "blueberries": "blueberry", "peaches": "peach", "strawberries": "strawberry", "contests": "contest",
     "babies": "baby", "seeds": "seed", "sunflowers": "sunflower", "softballs": "softball",
     "showers": "shower", "highlighters": "highlighter", "drawers": "drawer", "pens": "pen",
-    "desks": "desk", "alleys": "alley", "cities": "city",
+    "desks": "desk", "alleys": "alley", "cities": "city", "peanuts": "peanut",
 })
 # NOTE: groundwork nouns/adjectives/pronouns (fruit/paper/side/…/herself) were re-tested with decline-safety
 # GUARDS 11–14 in place and STILL drop TEST 40.0→36.4% (a noun unlocks a held-out wrong in an as-yet-unguarded
@@ -7067,6 +7072,77 @@ def _chain_count_price(premises: list, question: str):
     return _compute(f"{_num(count)} * {price}")
 
 
+_FRAC_WORDS = {"half": 0.5, "a third": 1 / 3, "a quarter": 0.25, "a fourth": 0.25, "a fifth": 0.2,
+               "a sixth": 1 / 6, "one-half": 0.5, "one-third": 1 / 3, "one-fourth": 0.25, "one-fifth": 0.2,
+               "one-sixth": 1 / 6, "two-thirds": 2 / 3, "three-fourths": 0.75, "three-quarters": 0.75,
+               "two-fifths": 0.4, "three-fifths": 0.6}
+_LOSS_VERBS = ("ate", "eat", "eaten", "gave", "give", "gives", "given", "spent", "spend", "took", "take",
+               "taken", "used", "use", "removed", "remove", "scared", "scare", "lost", "lose", "sold",
+               "sell", "drank", "drink", "threw", "throw")
+
+
+def _fraction_value(s: str):
+    """A fraction word/slash ("half", "one-fourth", "a third", "5/6") → its float, else None."""
+    s = s.lower().strip()
+    if s in _FRAC_WORDS:
+        return _FRAC_WORDS[s]
+    m = re.match(r"(\d+)/(\d+)$", s)
+    return int(m.group(1)) / int(m.group(2)) if m else None
+
+
+def _fraction_remainder_system(premises: list, question: str):
+    """FRACTION-OF-BASE REMAINDER — a single stated POOL of an item, reduced by loss clauses that are each a
+    FRACTION OF THAT POOL or a LITERAL count, then "how many <item> left/remain?" → N − Σ(fraction×N | literal).
+    "There were 148 peanuts; Brock ate one-fourth of the peanuts; Bonita ate 29 peanuts; how many remain?" →
+    148 − 148·¼ − 29 = 82. Reads RAW premise values (the fraction-partitive "¼ of the peanuts" produces no
+    fact in the general fold — a stated 0.25 with no attached quantity — so a system is the safe route). VERY
+    tightly gated, because fraction-remainder is a treacherous class (chained "of the remaining", derived/
+    multi-entity bases, relative reductions all mis-compute): (1) a "left/remain" question naming the item;
+    (2) the base is an EXPLICIT single POOL frame of that item ("there were/made/baked/grew/had N <item>" —
+    NOT "bought", which starts a buy-chain with no single pool, Bonnie/Samuel); (3) every reduction is a loss
+    verb + (fraction OF the item | a literal count), with ≥1 fraction; (4) NO chained base ("remaining"/"rest"/
+    "of what"), NO relative reduction ("N less/more/than" — Bert's "2 less"), NO percent/each/times-as. None
+    otherwise (→ the general depletion fold, which would drop the fraction and commit N − literals)."""
+    ql = question.lower()
+    m_item = re.search(r"how many (\w+?)s?\s+(?:are|were|is|do|does|remain|left|will|has|have)", ql) \
+        or re.search(r"how many (\w+?)s?\b", ql)
+    if m_item is None or not re.search(r"\b(left|remain|remaining)\b", ql):
+        return None
+    if "how much" in ql or "more" in ql:
+        return None
+    item = re.escape(m_item.group(1))
+    body = " ".join(premises)
+    low = body.lower()
+    if any(w in low for w in ("remaining", "the rest", "of what", "percent", "%", " each ", "twice", "times as")):
+        return None
+    mb = re.search(rf"\b(?:there\s+(?:were|are|was)|had|has|made|baked|grew)\s+(\d+)\s+(?:\w+\s+)?{item}s?\b", low)
+    if mb is None:
+        return None
+    n = float(mb.group(1))
+    reductions, saw_fraction = [], False
+    for p in premises:
+        pl = p.lower()
+        if not any(re.search(rf"\b{v}\b", pl) for v in _LOSS_VERBS):
+            continue
+        if re.search(r"\b(less|more|fewer|than)\b", pl):
+            return None                                      # a RELATIVE reduction ("2 less") we don't model
+        mf = re.search(rf"(half|a third|a quarter|a fourth|a fifth|a sixth|one-\w+|two-\w+|three-\w+|\d+/\d+)"
+                       rf"\s+of\s+(?:the\s+(?:\w+\s+)?{item}s?|them|it)\b", pl)
+        if mf:
+            f = _fraction_value(mf.group(1))
+            if f is None:
+                return None
+            reductions.append(n * f)
+            saw_fraction = True
+            continue
+        ml = re.search(r"\b(\d+)\b", pl)                     # a literal reduction (Bonita ate 29)
+        if ml and float(ml.group(1)) != n:
+            reductions.append(float(ml.group(1)))
+    if not saw_fraction or not reductions:
+        return None                                          # require ≥1 fraction-of-base (the whole point)
+    return _compute(f"{_num(n)} - ({' + '.join(_num(x) for x in reductions)})")
+
+
 def _equal_share(question: str, context: list, premises: list):
     """POOL-AND-REDISTRIBUTE — "Mark has 30 candies, Peter 25, John 35. They combine their candies and share
     them equally. How many will EACH have?" → (30+25+35)/3 = 30. Same Σ/N math as the `average` branch (#3l)
@@ -7147,6 +7223,8 @@ _EARLY_SYSTEMS = [
     ("noun_residual_sum", _noun_residual_sum_system),
     # CHAIN-COUNT × UNIT-PRICE (money-spend total + per-item price over an anchored count chain): "Robert 4 pens, Julia 3×, Dorothy ½×; one pen $1.50; total spent?" → 22×1.50 = 33. BEFORE anchored_sum (which would commit the bare count 22).
     ("chain_count_price", _chain_count_price),
+    # FRACTION-OF-BASE REMAINDER (single pool − Σ(fraction×pool | literal)): "148 peanuts; ate ¼ of the peanuts; ate 29; how many remain?" → 148−37−29 = 82. BEFORE the depletion fold (which drops the fraction → 119).
+    ("fraction_remainder", _fraction_remainder_system),
     # ANCHORED-SUM (no total, one bare anchor, sum ask): "Cecil $600 … how much altogether?" → 2800.
     ("anchored_sum", _anchored_sum_system),
     # ANCHORED-SINGLE (bare anchor, single named ask): "Ed weighs 146 … Find Carl's weight." → 220.
