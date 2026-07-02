@@ -5578,5 +5578,30 @@ class TestIncrement145AnchoredSumSubset(unittest.TestCase):
             "If Sue has 48 marbles, how many do they have altogether?"), 720)
 
 
+class TestIncrement146ContainerContentsSum(unittest.TestCase):
+    """#146 — CONTAINER × CONTENTS product-sum (the count twin of revenue_product_sum): each container-count
+    pairs with a following CONTENTS-count of the questioned item, Σ(container·contents), minus any stated item
+    loss. "4 bags with 20 apples each, 6 bags with 25 each; sells 200; apples left?" → 4·20+6·25−200 = 30.
+    Gated against rate/measurement problems: a MEASUREMENT/time item (miles/minutes) or a 'per' rate declines
+    (Rosie's minutes 50≠30)."""
+
+    def test_container_contents_minus_loss(self):
+        self.assertEqual(reading.solve(
+            "Ella has 4 bags with 20 apples in each bag and six bags with 25 apples in each bag. If Ella "
+            "sells 200 apples, how many apples does Ella have left?"), 30)
+
+    def test_container_contents_no_loss(self):
+        self.assertEqual(reading.solve(
+            "Tom has 3 boxes with 10 books in each box and 5 boxes with 8 books in each box. How many "
+            "books does Tom have?"), 70)
+
+    def test_measurement_item_not_stolen(self):
+        # a per-hour RATE with a minutes/miles item is not container×contents — must not product-sum it
+        self.assertNotEqual(reading.solve(
+            "Rosie runs 6 miles per hour. She runs 1 hour on Monday, 30 minutes on Tuesday, 1 hour on "
+            "Wednesday, and 20 minutes on Thursday. If she wants to run 20 miles for the week, how many "
+            "minutes should she run on Friday?"), 50)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -7040,6 +7040,57 @@ def _revenue_product_sum(premises: list, question: str):
     return _compute(" + ".join(f"({p})" for p in products))
 
 
+_CC_LOSS = {"sell", "sold", "give", "gave", "given", "gives", "use", "used", "eat", "ate", "eaten",
+            "lost", "lose"}
+
+
+def _container_contents_sum(premises: list, question: str):
+    """CONTAINER × CONTENTS product-sum — "Ella has 4 bags with 20 apples each and 6 bags with 25 apples each;
+    she sells 200; how many apples are left?" → 4·20 + 6·25 − 200 = 30. The COUNT twin of `_revenue_product_sum`
+    (which pairs a count with a money PRICE): here each container-count pairs with a following CONTENTS-count of
+    the QUESTIONED item, and a stated item LOSS (sell/give/eat …) is subtracted. The counts/contents parse as
+    separate buy/have quantities that alternate (container, item); only the per-container products + sum are
+    missing. TIGHTLY gated: a "how many <item>" question (not how-much/each/per/more); NO dozen/percent/
+    fraction/relational/remaining cue (those are other shapes); STRICT (container, item) alternation with a
+    following item-count, ≥2 products, every non-loss quantity paired. Σ(container·contents) − Σloss. None
+    otherwise."""
+    ql = question.lower()
+    m = re.search(r"how many (\w+?)s?\b", ql)
+    if m is None or "how much" in ql or "each" in ql or " per " in ql or "more" in ql:
+        return None
+    item = m.group(1)
+    if item in UNIT_NOUNS:
+        return None                                          # a MEASUREMENT/time item (minutes/miles) is a
+        #                                                      rate/duration problem, not discrete containers (Rosie 50≠30)
+    body = " ".join(premises).lower()
+    if any(w in body for w in ("dozen", "%", "percent", "twice", "times as", "half", "remaining",
+                               "the rest", " per ")):        # " per " → a RATE problem, not containers
+        return None
+    disc, ctx = [], []
+    for p in premises:
+        f = learn(p, disc, ctx)
+        if f:
+            ctx += f
+    qs = [f for f in ctx if isinstance(f, Quantity) and f.amount is not None]
+    pairs, losses, pending = [], [], None
+    for f in qs:
+        if f.measure[0] != item:                             # a container-count (bags/boxes/pages …) — hold it
+            pending = f.amount
+        elif pending is not None:                            # (container, contents) → a product
+            pairs.append((pending, f.amount))
+            pending = None
+        elif f.verb in _CC_LOSS:                             # a stated item loss ("sells 200")
+            losses.append(f.amount)
+        else:
+            return None                                      # a bare item count with no container → not this shape
+    if len(pairs) < 2 or pending is not None:                # need ≥2 container×contents products, all paired
+        return None
+    expr = " + ".join(f"({_num(c)} * {_num(m2)})" for c, m2 in pairs)
+    if losses:
+        expr = f"({expr}) - ({' + '.join(_num(x) for x in losses)})"
+    return _compute(expr)
+
+
 def _unit_price(text: str):
     """A single per-ITEM money price stated in `text`, or None. Requires an explicit per-item cue (one/each/
     every/a/per <item> cost(s) $P, or "$P each/apiece", or "$P per <item>") so a bare total ("bought it for
@@ -7261,6 +7312,8 @@ _LATE_SYSTEMS = [
     ("shopping_total", lambda P, Q, C, R: _shopping_total(P, Q)),
     # REVENUE PRODUCT-SUM (sell/earn twin, "at $P" per-item price) — "sold 453 cakes at $12 and 126 pies at $7 … earn?" → 6318.
     ("revenue_product_sum", lambda P, Q, C, R: _revenue_product_sum(P, Q)),
+    # CONTAINER × CONTENTS product-sum (count twin) — "4 bags with 20 apples each, 6 bags with 25 each; sells 200; apples left?" → 30.
+    ("container_contents_sum", lambda P, Q, C, R: _container_contents_sum(P, Q)),
     # PROPORTION — "If 12 bags weigh 24 pounds, how much do 8 bags weigh?" → 24 × 8/12.
     ("proportion", lambda P, Q, C, R: _proportion(P, Q)),
     # RATE EXTRAPOLATION — "drives 80 miles in 2 hours. How far in 15 minutes?" → 80×0.25/2.
