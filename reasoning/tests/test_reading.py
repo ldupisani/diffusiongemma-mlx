@@ -6443,5 +6443,28 @@ class TestIncrement178JogUnlockAndSingles(unittest.TestCase):
             "minutes each day, calculate the amount of airflow it will create in one week."), 21000)
 
 
+class TestIncrement179DayListTwoDayAverage(unittest.TestCase):
+    """#179 — `_day_list_target_system` extended: comma-aware numbers ("9,400"), a severed
+    question tail absorbed as an asked day ("… on Friday" | "Saturday to meet his goal?"),
+    an average asked over TWO remaining days (residual / 2), and a listed+asked = 7 coverage
+    gate (an incomplete week would silently assume zeros)."""
+
+    def test_two_day_average_with_comma_numbers(self):
+        # 8000·7 = 56000 − 39900 = 16100 over 2 days → 8050
+        self.assertEqual(reading.solve(
+            "Ken wants to walk an average of 8,000 steps per day over the next week. On Sunday "
+            "he walked 8,400 steps. On Monday he walked 8,100 steps. On Tuesday he walked 7,300 "
+            "steps. On Wednesday he walked 8,200 steps. On Thursday he walked 7,900 steps. How "
+            "many steps does he need to average on Friday and Saturday to meet his goal?"), 8050)
+
+    def test_incomplete_week_declines(self):
+        # only four listed days + two asked — Thursday unaccounted; never assume a zero
+        self.assertEqual(reading.solve(
+            "Ken wants to walk an average of 8,000 steps per day over the next week. On Sunday "
+            "he walked 8,400 steps. On Monday he walked 8,100 steps. On Tuesday he walked 7,300 "
+            "steps. On Wednesday he walked 8,200 steps. How many steps does he need to average "
+            "on Friday and Saturday to meet his goal?"), "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()

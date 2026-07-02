@@ -1858,6 +1858,7 @@ LEXICON.update({
     # the Edric / vampire / fan singles
     "hourly": ["adjective"], "blood": ["noun"], "suck": ["verb"], "sucks": ["verb"],
     "survive": ["verb"], "vampire": ["noun"], "fan": ["noun"], "airflow": ["noun"],
+    "meet": ["verb"],
     "log": ["noun", "verb"], "logs": ["noun", "verb"],
     # EXCLUDED the jog family: it unlocks a held-out "5 miles per day on WEEKDAYS ONLY ... over
     # three weeks" case to a confident-wrong (105 = 5*7*3 vs gold 75 = 5*5*3) — the rate-projection
@@ -8504,41 +8505,57 @@ def _day_list_target_system(premises: list, question: str):
     of N … a day" or a "last week … N total"); every digit accounted; ≥4 listed days; a positive
     integer residual. None otherwise."""
     ql = question.lower()
-    q_day = next((d for d in _WEEKDAYS if d in ql), None)
-    if q_day is None or any(ch.isdigit() for ch in ql) \
-            or not any(c in ql for c in ("reach", "beat", "goal", "average")):
+    q_days = [d for d in _WEEKDAYS if d in ql]
+    if not 1 <= len(q_days) <= 2 or any(ch.isdigit() for ch in ql) \
+            or not any(c in ql for c in ("reach", "beat", "goal", "average", "meet")):
+        return None
+    num = r"(\d+(?:,\d{3})*(?:\.\d+)?)"                 # comma-aware ("9,400")
+    def val(tok):
+        return float(tok.replace(",", ""))
+    kept = []
+    for p in premises:                                   # a digit-free stray fragment naming a day
+        pl = p.lower()                                   # + a goal cue is the question's SEVERED
+        frag_days = [d for d in _WEEKDAYS if d in pl]    # tail ("… on Friday" | "Saturday to meet
+        if frag_days and not any(ch.isdigit() for ch in p) \
+                and any(c in pl for c in ("meet", "reach", "goal")) \
+                and all(d not in q_days for d in frag_days):
+            q_days += frag_days                          # his goal?") — absorb it as an asked day
+        else:
+            kept.append(p)
+    premises = kept
+    if not 1 <= len(q_days) <= 2:
         return None
     avg = last_total = None
     day_vals: dict = {}
     for p in premises:
         pl = p.lower()
-        am = re.search(r"average of (\d+(?:\.\d+)?)[^.]*?(?:a|per|each) day", pl)
-        lm = re.search(r"last week [^.]*?(\d+(?:\.\d+)?) total", pl)
+        am = re.search(r"average of " + num + r"[^.]*?(?:a|per|each) day", pl)
+        lm = re.search(r"last week [^.]*?" + num + r" total", pl)
         days_here = [d for d in _WEEKDAYS if d in pl]
         if am is not None:
-            avg = float(am.group(1))
+            avg = val(am.group(1))
             continue
         if lm is not None:
-            last_total = float(lm.group(1))
+            last_total = val(lm.group(1))
             continue
         if not days_here:
             if any(ch.isdigit() for ch in p):
                 return None                              # a valued premise outside the day list
             continue
         # pair each listed day with the value (or zero-cue) in ITS comma/and segment
-        for seg in re.split(r",| and ", pl):
+        for seg in re.split(r",(?!\d)| and ", pl):        # never split INSIDE "9,400"
             seg_day = next((d for d in _WEEKDAYS if d in seg), None)
             if seg_day is None:
                 continue
-            if seg_day == q_day:
+            if seg_day in q_days:
                 if re.search(r"\d", seg):
-                    return None                          # the asked day PRE-VALUED → not this shape
+                    return None                          # an asked day PRE-VALUED → not this shape
                 continue                                 # a bare mention ("On Saturday, he looks…")
             if seg_day in day_vals:
                 return None                              # a duplicate day
-            nm = re.search(r"(\d+(?:\.\d+)?)", seg)
+            nm = re.search(num, seg)
             if nm is not None:
-                day_vals[seg_day] = float(nm.group(1))
+                day_vals[seg_day] = val(nm.group(1))
             elif any(c in seg for c in _ZERO_CUES) or any(c in pl for c in _ZERO_CUES):
                 day_vals[seg_day] = 0.0
             else:
@@ -8550,10 +8567,13 @@ def _day_list_target_system(premises: list, question: str):
         if "beat" in ql:
             return None                                 # an average target answers "reach", not "beat"
     else:
-        if "beat" not in ql:
-            return None
+        if "beat" not in ql or len(q_days) != 1:
+            return None                                 # a beat-target asks ONE day
         target = last_total + 1                         # strictly MORE than last week
-    result = _compute(f"{_num(target)} - ({' + '.join(_num(v) for v in day_vals.values())})")
+    if len(day_vals) + len(q_days) != 7:
+        return None                                     # listed + asked must cover the week exactly
+    result = _compute(f"({_num(target)} - ({' + '.join(_num(v) for v in day_vals.values())}))"
+                      f" / {len(q_days)}")
     if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
         return None
     return result
