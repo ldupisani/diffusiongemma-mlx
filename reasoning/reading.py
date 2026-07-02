@@ -1835,6 +1835,9 @@ LEXICON.update({
     "grass": ["noun"], "lawnmower": ["noun"], "yard": ["noun"],
     # the workweek-boost case ("open from Monday to Friday")
     "open": ["adjective", "verb"],
+    # the sales-funnel case
+    "door-to-door": ["adjective"], "knife": ["noun"], "salesman": ["noun"],
+    "something": ["noun"], "visit": ["verb"], "visits": ["verb"],
     "log": ["noun", "verb"], "logs": ["noun", "verb"],
     # EXCLUDED the jog family: it unlocks a held-out "5 miles per day on WEEKDAYS ONLY ... over
     # three weeks" case to a confident-wrong (105 = 5*7*3 vs gold 75 = 5*5*3) — the rate-projection
@@ -1863,7 +1866,7 @@ PLURALS.update({
     "kg": "kilogram", "burrs": "burr", "ticks": "tick", "objects": "object",
     "walls": "wall", "tapes": "tape", "steaks": "steak", "trouts": "trout", "trout": "trout",
     "camels": "camel", "travelers": "traveler", "jacks": "jack", "records": "record",
-    "lawnmowers": "lawnmower", "yards": "yard",
+    "lawnmowers": "lawnmower", "yards": "yard", "knives": "knife",
 })
 # NOTE: groundwork nouns/adjectives/pronouns (fruit/paper/side/…/herself) were re-tested with decline-safety
 # GUARDS 11–14 in place and STILL drop TEST 40.0→36.4% (a noun unlocks a held-out wrong in an as-yet-unguarded
@@ -1876,7 +1879,7 @@ VERB_LEMMA.update({
     "covers": "cover", "covered": "cover",
     "exercised": "exercise", "exercises": "exercise", "logs": "log",
     "fell": "fall", "beats": "beat", "looks": "look", "recorded": "record",
-    "skipped": "skip",
+    "skipped": "skip", "visits": "visit", "visited": "visit",
     "raises": "raise", "raised": "raise", "raising": "raise",
 })
 
@@ -7673,6 +7676,48 @@ _WEEKDAYS = ("sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "
 _ZERO_CUES = ("nothing", "skipped", "did not", "didn't", "none")
 
 
+def _sales_funnel_week_system(premises: list, question: str):
+    """SALES FUNNEL × WEEK — "visits 50 houses a day; 20% of them buy; of those, half buy a $50
+    set and the other half a $150 set; how much does he sell a week working 5 days a week?" →
+    50 · 0.20 · (50+150)/2 · 5 = 5000. TIGHTLY gated: a "how much … sell/earn/make … week"
+    question whose ONLY digit is the days/week count; ONE per-day visit-count premise; ONE
+    "P% of them" conversion premise (no other value); exactly TWO "half buy … $A" price premises
+    (the two halves averaging is exact); no other valued premise; positive integer. None
+    otherwise."""
+    ql = question.lower()
+    if "how much" not in ql or "week" not in ql \
+            or not any(v in ql for v in ("sell", "earn", "make")):
+        return None
+    dm = re.search(r"(\d+) days? a week", ql)
+    if dm is None or any(ch.isdigit() for ch in ql.replace(dm.group(0), "")):
+        return None
+    days = float(dm.group(1))
+    visits = pct = None
+    halves = []
+    for p in premises:
+        pl = p.lower()
+        vm = re.search(r"(\d+(?:\.\d+)?) \w+ (?:per|a|each) day", pl)
+        cm = re.search(r"(\d+(?:\.\d+)?)\s*% of them buy", pl)
+        hm = re.search(r"half buy[^.]*?\$(\d+(?:\.\d+)?)", pl)
+        if hm is not None:
+            if len(halves) >= 2 or len(re.findall(r"\d+(?:\.\d+)?", pl.replace("$", ""))) != 1:
+                return None
+            halves.append(float(hm.group(1)))
+        elif cm is not None and pct is None:
+            pct = float(cm.group(1))
+        elif vm is not None and visits is None:
+            visits = float(vm.group(1))
+        elif any(ch.isdigit() for ch in p):
+            return None                                  # an unclassified valued premise
+    if visits is None or pct is None or len(halves) != 2 or not 0 < pct <= 100:
+        return None
+    result = _compute(f"{_num(visits)} * {_num(pct)} / 100 * "
+                      f"({_num(halves[0])} + {_num(halves[1])}) / 2 * {_num(days)}")
+    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
+        return None
+    return result
+
+
 def _workweek_boost_system(premises: list, question: str):
     """WORKWEEK WITH ONE BOOSTED DAY — "borrows an average of 40 books every day; every Friday
     the number is 40% higher than the daily average; how many in a week if open from Monday to
@@ -8359,6 +8404,8 @@ _EARLY_SYSTEMS = [
     ("inverse_distribution", _inverse_distribution_system),
     # SPLIT-WITH (K+1): "two dozen eggs to split with his three siblings; each person?" → 6.
     ("split_with", _split_with_system),
+    # SALES FUNNEL × WEEK: "50 houses/day; 20% buy; half $50, half $150; 5 days?" → 5000.
+    ("sales_funnel_week", _sales_funnel_week_system),
     # WORKWEEK WITH ONE BOOSTED DAY: "avg 40/day, Friday 40% higher, open Mon–Fri" → 216.
     ("workweek_boost", _workweek_boost_system),
     # PERCENT-BOOSTED RATE × DURATION: "8 yards/day, +fifty percent; after a week?" → 84.

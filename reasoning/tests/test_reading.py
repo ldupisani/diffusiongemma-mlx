@@ -6241,5 +6241,25 @@ class TestIncrement170WordPercentMerge(unittest.TestCase):
             "undetermined")
 
 
+class TestIncrement171SalesFunnelWeek(unittest.TestCase):
+    """#171 — `_sales_funnel_week_system` (EARLY, registered): visits/day × P% conversion ×
+    the average of the two half-split prices × days/week ("50 houses a day; 20% buy; half $50,
+    half $150; 5 days a week" → 5000). The two-halves average is exact; a single half-premise
+    declines (the funnel is incomplete)."""
+
+    def test_full_funnel(self):
+        self.assertEqual(reading.solve(
+            "Rita is a door-to-door salesman. She visits 30 houses a day. 10% of them buy "
+            "something from her. Of those that buy something half buy a $20 set of knives and "
+            "the other half buy a $40 set of knives. How much does she sell a week when she "
+            "works 4 days a week?"), 360)
+
+    def test_missing_half_declines(self):
+        self.assertEqual(reading.solve(
+            "Rita is a door-to-door salesman. She visits 30 houses a day. 10% of them buy "
+            "something from her. Of those that buy something half buy a $20 set of knives. "
+            "How much does she sell a week when she works 4 days a week?"), "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()
