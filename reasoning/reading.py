@@ -7746,6 +7746,106 @@ def _ordinal_day_chain_residual_system(premises: list, question: str):
     return result
 
 
+def _everyday_plus_half_subdays_system(premises: list, question: str):
+    """EVERY-DAY RATE + HALF-RATE SUB-ACTIVITY — "watches TV 4 hours every day; on game days he
+    plays for half as long as he watches TV; plays 3 days a week; how long watching TV and
+    playing?" → 4·7 + 2·3 = 34. The game-day count rides INSIDE the question clause. TIGHTLY
+    gated: a "how long" question whose ONLY digit is the "N days a week" count; ONE digit premise
+    (the every-day hours rate); a digit-free "half as long as" premise; positive integer. None
+    otherwise."""
+    ql = question.lower()
+    dm = re.search(r"(\d+) days? a week", ql)
+    if "how long" not in ql or dm is None \
+            or any(ch.isdigit() for ch in ql.replace(dm.group(0), "")):
+        return None
+    sub_days = float(dm.group(1))
+    rate = None
+    half_seen = False
+    for p in premises:
+        pl = p.lower()
+        rm = re.search(r"for (\d+(?:\.\d+)?) hours every day", pl)
+        if rm is not None and rate is None:
+            rate = float(rm.group(1))
+        elif "half as long as" in pl and not any(ch.isdigit() for ch in p):
+            half_seen = True
+        elif any(ch.isdigit() for ch in p):
+            return None                                  # an unclassified valued premise
+    if rate is None or not half_seen or not 0 < sub_days <= 7:
+        return None
+    result = _compute(f"{_num(rate)} * 7 + {_num(rate)} / 2 * {_num(sub_days)}")
+    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
+        return None
+    return result
+
+
+def _paired_daily_rate_week_system(premises: list, question: str):
+    """PAIRED DAILY RATES × TIMES-A-WEEK — "Five times a week, Onur bikes 250 km a day; Hanil
+    bikes 40 more km in a day; total distance the two friends bike in a week?" → (250 + 290)·5
+    = 2700. Both premises materialize ZERO facts (the double frequency drops everything).
+    TIGHTLY gated: a digit-free "total distance … two friends … week" question; ONE "<word>
+    times a week … N <unit> a day" premise; ONE "M more <unit> … a day" companion premise; no
+    other valued premise; positive integer. None otherwise."""
+    ql = question.lower()
+    if "total distance" not in ql or "two friends" not in ql or "week" not in ql \
+            or any(ch.isdigit() for ch in ql):
+        return None
+    base = delta = times = None
+    for p in premises:
+        pl = p.lower()
+        bm = re.search(r"(\w+) times a week[^.]*?(\d+(?:\.\d+)?) \w+ a day", pl)
+        dm = re.search(r"(\d+(?:\.\d+)?) more \w+", pl)
+        if bm is not None and base is None:
+            times = NUMBERS.get(bm.group(1))
+            base = float(bm.group(2))
+            if not times:
+                return None
+        elif dm is not None and delta is None:
+            delta = float(dm.group(1))
+        elif any(ch.isdigit() for ch in p):
+            return None                                  # an unclassified valued premise
+    if base is None or delta is None or times is None:
+        return None
+    result = _compute(f"({_num(base)} + {_num(base)} + {_num(delta)}) * {_num(times)}")
+    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
+        return None
+    return result
+
+
+def _weekday_production_revenue_system(premises: list, question: str):
+    """WEEKDAY PRODUCTION × WEEKS × PRICE — "makes cakes during the five weekdays; 4 cakes a day;
+    sells for $8; in 4 weeks sold all; how much money did she collect?" → 4·5·4·8 = 640. TIGHTLY
+    gated: a digit-free "how much money … collect/earn/make" question; a digit-free "during the
+    five weekdays" premise; ONE "makes N <item> a day" premise; ONE "$P" price premise; ONE
+    "in W weeks" premise; no other valued premise; positive integer. None otherwise."""
+    ql = question.lower()
+    if "how much money" not in ql or any(ch.isdigit() for ch in ql) \
+            or not any(v in ql for v in ("collect", "earn", "make")):
+        return None
+    body = " ".join(premises).lower()
+    if "during the five weekdays" not in body:
+        return None
+    per_day = price = weeks = None
+    for p in premises:
+        pl = p.lower()
+        mm = re.search(r"makes (\d+(?:\.\d+)?) \w+ a day", pl)
+        pm = re.search(r"for \$(\d+(?:\.\d+)?)", pl)
+        wm = re.search(r"in (\d+) weeks", pl)
+        if mm is not None and per_day is None:
+            per_day = float(mm.group(1))
+        elif pm is not None and price is None:
+            price = float(pm.group(1))
+        elif wm is not None and weeks is None:
+            weeks = float(wm.group(1))
+        elif any(ch.isdigit() for ch in p):
+            return None                                  # an unclassified valued premise
+    if per_day is None or price is None or weeks is None:
+        return None
+    result = _compute(f"{_num(per_day)} * 5 * {_num(weeks)} * {_num(price)}")
+    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
+        return None
+    return result
+
+
 def _named_day_chain_split_system(premises: list, question: str):
     """NAMED-DAY CHAIN + EVEN WEEKEND SPLIT — "On Monday 4 hours then twice this long on Tuesday;
     Wed/Thu/Fri 3 hours each day; total of 25 over the week; remaining split evenly between
@@ -8537,6 +8637,12 @@ _EARLY_SYSTEMS = [
     ("inverse_distribution", _inverse_distribution_system),
     # SPLIT-WITH (K+1): "two dozen eggs to split with his three siblings; each person?" → 6.
     ("split_with", _split_with_system),
+    # EVERY-DAY + HALF SUB-DAYS: "TV 4h/day; games half as long, 3 days/wk?" → 34.
+    ("everyday_plus_half_subdays", _everyday_plus_half_subdays_system),
+    # PAIRED DAILY RATES × TIMES/WEEK: "5×/wk 250 km/day; friend +40; both, week?" → 2700.
+    ("paired_daily_rate_week", _paired_daily_rate_week_system),
+    # WEEKDAY PRODUCTION REVENUE: "5 weekdays; 4 cakes/day; $8; 4 weeks?" → 640.
+    ("weekday_production_revenue", _weekday_production_revenue_system),
     # NAMED-DAY CHAIN + EVEN SPLIT: "Mon 4h, twice Tue; Wed–Fri 3h; total 25; Sat?" → 2.
     ("named_day_chain_split", _named_day_chain_split_system),
     # RATE × (SPAN + CLOCK): "3/hour; Mon–Thu 8h/day; Fri 8am–11am; week?" → 105.

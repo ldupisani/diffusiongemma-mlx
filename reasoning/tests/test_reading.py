@@ -6307,5 +6307,30 @@ class TestIncrement173DayListResidue(unittest.TestCase):
             "How many pairs of shoes can the cobbler mend in a week?"), 40)
 
 
+class TestIncrement174WholeTextChainsA(unittest.TestCase):
+    """#174 — three whole-text rate chains: `_everyday_plus_half_subdays_system` (R·7 + R/2·N,
+    the game-day count riding inside the question), `_paired_daily_rate_week_system`
+    ((base + base+Δ)·times-a-week, both premises materializing zero facts), and
+    `_weekday_production_revenue_system` (per-day·5·weeks·price)."""
+
+    def test_everyday_plus_half_subdays(self):
+        self.assertEqual(reading.solve(
+            "Rio watches TV for 2 hours every day. On the days he plays video games he plays "
+            "for half as long as he watches TV. If he plays video games 4 days a week how long "
+            "does he spend watching TV and playing video games?"), 18)
+
+    def test_paired_daily_rate_week(self):
+        self.assertEqual(reading.solve(
+            "Four times a week, Ana bikes 100 kilometers a day. Her friend Bea bikes 20 more "
+            "kilometers of Ana biking distance in a day. What's the total distance the two "
+            "friends bike in a week?"), 880)
+
+    def test_weekday_production_revenue(self):
+        self.assertEqual(reading.solve(
+            "Lia makes cakes during the five weekdays to sell on weekends. She makes 2 cakes a "
+            "day and sells her cakes for $10. In 3 weeks she managed to sell all the cakes. "
+            "How much money did she collect during that time?"), 300)
+
+
 if __name__ == "__main__":
     unittest.main()
