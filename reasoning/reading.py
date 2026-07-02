@@ -1686,6 +1686,12 @@ LEXICON.update({
     "strawberry": ["noun"], "contest": ["noun"], "baby": ["noun"],
     # second-wave count-nouns (same verified-gain sweep, re-run after the batch above unblocked co-occurring words)
     "seed": ["noun"], "sunflower": ["noun"], "softball": ["noun"], "shower": ["noun"],
+    # TYPED-VOCAB tier: the missing COLOR adjectives (red/blue/green/yellow were already in) — enables
+    # color-subtype counting ("how many pink marbles"). Typed as adjectives, matching the existing colors.
+    "pink": ["adjective"], "purple": ["adjective"], "black": ["adjective"], "white": ["adjective"],
+    "gray": ["adjective"], "grey": ["adjective"], "gold": ["adjective"], "silver": ["adjective"],
+    # EXCLUDED "brown": the diff caught it unlocking a held-out fraction-of-remaining chain to a
+    # confident-wrong (Mary gives away half her blue shirts → 49≠37) — same class as the excluded "peanut".
 })
 PLURALS.update({
     "bananas": "banana", "erasers": "eraser", "crayons": "crayon", "berries": "berry",
