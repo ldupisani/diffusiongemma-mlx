@@ -1946,6 +1946,16 @@ LEXICON.update({
     "hand": ["noun"], "space": ["noun"],
     "initially": ["adverb"], "exactly": ["adverb"],
     "online": ["adjective"], "current": ["adjective"],
+    # 18th wave — CEILING wave 2 (#199): the function-word tier of the measured-safe list, each
+    # typed individually (never forced to noun). Skipped as semantically load-bearing: least/
+    # maximum (superlatives change answers), leave (collides with remainder cues), contains
+    # (containment is a HAS-relation the fold would need), few (quantifier semantics).
+    "without": ["preposition"], "throughout": ["preposition"],
+    "trying": ["verb"], "realize": ["verb"], "realizes": ["verb"], "realized": ["verb"],
+    "born": ["verb"],
+    "way": ["noun"], "middle": ["noun"],
+    "particular": ["adjective"],
+    "everyone": ["pronoun"],
 })
 PLURALS.update({
     "samosas": "samosa", "pakoras": "pakora", "vases": "vase", "pins": "pin", "boots": "boot",
@@ -1969,6 +1979,7 @@ VERB_LEMMA.update({
     "scored": "score", "scores": "score", "scoring": "score",
     "replaces": "replace", "replaced": "replace",
     "scares": "scare", "scared": "scare",
+    "realizes": "realize", "realized": "realize", "trying": "try",
     "asks": "ask", "asked": "ask",
     "represents": "represent", "represented": "represent",
     "caught": "catch", "catches": "catch",
