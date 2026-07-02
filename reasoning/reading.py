@@ -7271,6 +7271,11 @@ def _fraction_remainder_system(premises: list, question: str):
     low = body.lower()
     if any(w in low for w in ("remaining", "the rest", "of what", "percent", "%", " each ", "twice", "times as")):
         return None
+    if len({q_ for _, q_ in re.findall(rf"\b(\d+)\s+([a-z]+)\s+{item}s?\b", low)}) >= 2:
+        return None    # ≥2 QUALIFIED subtype pools ("26 blue shirts and 36 brown shirts") — that's the
+        #                subtype twin's shape (_subtype_fraction_remainder_system); grabbing the FIRST pool
+        #                as the single base would commit half·pool₁ against the wrong total (deferral, so
+        #                the two family members never both claim — the collisions discipline)
     mb = re.search(rf"\b(?:there\s+(?:were|are|was)|had|has|made|baked|grew)\s+(\d+)\s+(?:\w+\s+)?{item}s?\b", low)
     if mb is None:
         return None
@@ -7297,6 +7302,58 @@ def _fraction_remainder_system(premises: list, question: str):
     if not saw_fraction or not reductions:
         return None                                          # require ≥1 fraction-of-base (the whole point)
     return _compute(f"{_num(n)} - ({' + '.join(_num(x) for x in reductions)})")
+
+
+def _subtype_fraction_remainder_system(premises: list, question: str):
+    """SUBTYPE FRACTION REMAINDER — the MULTI-pool twin of _fraction_remainder_system: ≥2 QUALIFIED subtype
+    pools of the questioned item ("26 blue shirts and 36 brown shirts"), each fraction loss binding to ITS
+    OWN subtype ("half of her blue shirts", "a third of her brown shirts") → Σpools − Σ(fᵢ·poolᵢ). Mary g37:
+    (26+36) − (13+12) = 37. WHY a system: the general fold computes "half" but silently DROPS any other
+    fraction-partitive, committing Σ − half·pool₁ (49 ≠ 37) — worse, the clause splitter strands the second
+    fraction INSIDE the question string, so this scans premises + question uniformly. Gates mirror the
+    single-pool twin (loss verb, no chained base / relative / percent / each / times-as), plus: every
+    fraction must name a distinct known subtype, and EVERY digit in the text must be a pool value or a
+    fraction component (stranded content → decline, never a partial sum)."""
+    ql = question.lower()
+    m_item = re.search(r"how many (\w+?)s?\s+(?:are|were|is|do|does|remain|left|will|has|have)", ql) \
+        or re.search(r"how many (\w+?)s?\b", ql)
+    if m_item is None or not re.search(r"\b(left|remain|remaining)\b", ql):
+        return None
+    if "how much" in ql or "more" in ql:
+        return None
+    item = re.escape(m_item.group(1))
+    low = (" ".join(premises) + " " + question).lower()
+    if any(w in low for w in ("remaining", "the rest", "of what", "percent", "%", " each ", "twice", "times as")):
+        return None
+    if re.search(r"\b(less|fewer|than)\b", low):
+        return None                                          # a RELATIVE reduction we don't model
+    pools = {}
+    for mv, qual in re.findall(rf"\b(\d+)\s+([a-z]+)\s+{item}s?\b", low):
+        if qual in pools:
+            return None                                      # duplicate subtype → ambiguous, decline
+        pools[qual] = float(mv)
+    if len(pools) < 2:
+        return None                                          # single pool → the single-pool twin's shape
+    if not any(re.search(rf"\b{v}\b", low) for v in _LOSS_VERBS):
+        return None
+    fracs = re.findall(rf"(half|a third|a quarter|a fourth|a fifth|a sixth|one-\w+|two-\w+|three-\w+|\d+/\d+)"
+                       rf"\s+of\s+(?:the\s+|her\s+|his\s+|their\s+|its\s+)?([a-z]+)\s+{item}s?\b", low)
+    if not fracs:
+        return None
+    reductions, used = [], set()
+    for fs, qual in fracs:
+        f = _fraction_value(fs)
+        if f is None or qual not in pools or qual in used:
+            return None                                      # a fraction of an unknown/repeated subtype
+        used.add(qual)
+        reductions.append(pools[qual] * f)
+    accounted = {_num(v) for v in pools.values()}
+    for fs, _ in fracs:
+        accounted.update(re.findall(r"\d+", fs))
+    if any(d not in accounted for d in re.findall(r"\d+", low)):
+        return None                                          # a stranded number we didn't consume
+    return _compute(f"({' + '.join(_num(v) for v in pools.values())})"
+                    f" - ({' + '.join(_num(x) for x in reductions)})")
 
 
 def _equal_share(question: str, context: list, premises: list):
