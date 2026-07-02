@@ -692,6 +692,7 @@ LEXICON: dict[str, list[str]] = {
     "drive": ["verb"], "drives": ["verb"], "drove": ["verb"], "driving": ["verb"],
     "count": ["verb"], "counts": ["verb"], "counted": ["verb"], "counting": ["verb"],
     "paint": ["verb"], "paints": ["verb"], "painted": ["verb"], "painting": ["verb"],
+    "bake": ["verb"], "bakes": ["verb"], "baked": ["verb"], "baking": ["verb"],
     "playing": ["verb"], "having": ["verb"], "shopping": ["verb"], "practicing": ["verb"],
     # nouns (units of measure + common GSM8K objects):
     "average": ["noun"], "trip": ["noun"], "water": ["noun"], "job": ["noun"], "home": ["noun"],
@@ -1561,6 +1562,7 @@ VERB_LEMMA = {"passed": "pass", "wilted": "wilt", "rose": "rise", "failed": "fai
     "ran": "run", "running": "run", "walks": "walk", "walked": "walk", "walking": "walk",
     "drives": "drive", "drove": "drive", "driving": "drive", "counts": "count", "counted": "count",
     "counting": "count", "paints": "paint", "painted": "paint", "painting": "paint",
+    "bakes": "bake", "baked": "bake", "baking": "bake",
     "playing": "play", "having": "have", "shopping": "shop", "practicing": "practice",
     "distributes": "distribute", "distributed": "distribute", "distributing": "distribute",
     "spreads": "spread", "spreading": "spread", "does": "do", "did": "do"}

@@ -5603,5 +5603,21 @@ class TestIncrement146ContainerContentsSum(unittest.TestCase):
             "minutes should she run on Friday?"), 50)
 
 
+class TestIncrement147BakeVerb(unittest.TestCase):
+    """#147 — 'bake' verb family (typed-vocab add): bake/bakes/baked/baking as verbs + lemma map. The
+    fraction-remainder system's pool frame already anticipated 'baked N <item>'; only GUARD 1 (unknown
+    word) blocked it (Neil g12 declined; the 'made' reword solved). A creation verb like make/build/paint
+    — no sign, no measure."""
+
+    def test_baked_pool_fraction_remainder(self):
+        self.assertEqual(reading.solve(
+            "Neil baked 20 cookies. He gave 2/5 of the cookies to his friend. How many cookies are "
+            "left for Neil?"), 12)
+
+    def test_bakes_simple_holding(self):
+        self.assertEqual(reading.solve(
+            "Ann baked 12 muffins. She ate 3 muffins. How many muffins does Ann have left?"), 9)
+
+
 if __name__ == "__main__":
     unittest.main()
