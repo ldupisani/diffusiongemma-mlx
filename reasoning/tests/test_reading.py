@@ -5806,5 +5806,25 @@ class TestIncrement152EighthWaveUnitsQuantifier(unittest.TestCase):
             "undetermined")
 
 
+class TestIncrement153CommonNounGenitive(unittest.TestCase):
+    """#153 — common-noun genitive split: the tokenizer's "X's" → X + 's split (previously
+    NAME-only) now also fires when the lowercase core is a known LEXICON noun ("farmer's" →
+    farmer + 's). An unknown core stays one unknown token (GUARD 1 declines). KINSHIP nouns are
+    excluded: relational age-algebra has no frame for "her sister's age" yet — splitting it turned
+    a safe decline into a confident-wrong (committed 5, gold 8)."""
+
+    def test_common_noun_genitive_splits(self):
+        self.assertEqual(reading.solve(
+            "Lena sold twice as many apples as Rosa at the farmer's market. Rosa sold 30 apples. "
+            "How many apples did they sell in total?"), 90)
+
+    def test_kinship_genitive_still_declines(self):
+        # "her sister's age" must keep declining until a relational age frame exists — committing
+        # here was the exact confident-wrong the kinship exclusion prevents
+        self.assertEqual(reading.solve(
+            "If Dana is 20 years old and her little sister is 4, in how many years would Dana be "
+            "twice her sister's age?"), "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()

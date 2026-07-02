@@ -124,7 +124,14 @@ def _split_contraction(tok: str) -> list:
             return two(core[:-2], "is")
         if core[:1].isupper():                            # a NAME's genitive — "Leo's" → Leo + 's (the
             return two(core[:-2], "'s")                   # possessive marker, so the name is recognised)
-    return [tok]
+        if "noun" in LEXICON.get(low[:-2], ()) \
+                and low[:-2] not in KINSHIP:              # a known COMMON NOUN's genitive — "farmer's"
+            return two(core[:-2], "'s")                   # → farmer + 's; an UNKNOWN core stays one
+    return [tok]                                          # unknown token (GUARD 1 declines, as before).
+                                                          # A KINSHIP genitive ("her sister's age") is
+                                                          # excluded: relational age-algebra has no frame
+                                                          # for it yet — splitting it turned a safe decline
+                                                          # into a confident-wrong (Beth, 5≠8)
 
 
 def _split_hyphen(tok: str) -> list:
