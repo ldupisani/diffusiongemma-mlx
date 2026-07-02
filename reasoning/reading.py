@@ -7601,6 +7601,76 @@ def _herd_rate_week_system(premises: list, question: str):
     return _compute(f"{_num(count.amount)} * {_num(rate.amount)} * 7")
 
 
+def _inverse_distribution_system(premises: list, question: str):
+    """INVERSE DISTRIBUTION — the recipient COUNT from a total and a per-recipient share: "Jason
+    bought 4 dozen cupcakes. He plans to give 3 cupcakes each to his cousins. How many cousins does
+    Jason have?" → 48/3 = 16. The share premise materializes no fact ("3 cupcakes each" with the
+    recipient count elided). TIGHTLY gated: a digit-free non-comparative "how many <group>"
+    question; ONE total Quantity of the item (a non-loss verb); ONE share premise carrying "give …
+    N <item> each" AND naming the asked group; no other valued premise; an exact positive integer
+    quotient. None otherwise."""
+    ql = question.lower()
+    m = re.search(r"how many (\w+)", ql)
+    if m is None or any(ch.isdigit() for ch in ql) \
+            or any(w in ql for w in ("more", "fewer", "less", "than", "each", " per ")):
+        return None
+    group = _singular_of(m.group(1)) or m.group(1)
+    total = share = item = None
+    disc, ctx = [], []
+    for p in premises:
+        fs = [f for f in (learn(p, disc, ctx) or []) if isinstance(f, Quantity) and f.amount is not None]
+        ctx += fs
+        pl = p.lower()
+        words = {_singular_of(_key(w)) or _key(w) for w in p.split()}
+        if group in words and re.search(r"\bg[ai]ve[sn]?\b", pl) and " each" in pl:
+            if share is not None or len(re.findall(r"\d+(?:\.\d+)?", pl)) != 1:
+                return None
+            share = float(re.findall(r"\d+(?:\.\d+)?", pl)[0])
+            continue
+        if len(fs) == 1 and fs[0].verb not in LOSS_VERBS and total is None:
+            total, item = fs[0].amount, fs[0].measure[0]
+        elif any(ch.isdigit() for ch in p):
+            return None                                  # an unclassified valued premise → not this shape
+    if total is None or share is None or share <= 0 or item == group:
+        return None
+    result = _compute(f"{_num(total)} / {_num(share)}")
+    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
+        return None
+    return result
+
+
+def _split_with_system(premises: list, question: str):
+    """SPLIT-WITH (K+1 SHARERS) — "Mark has two dozen eggs to split with his three siblings. How
+    many eggs does each person get?" → the owner shares TOO: 24 / (3+1) = 6. The "with" frame (vs
+    between/among) is what adds the distributor to the sharer set. TIGHTLY gated: a digit-free
+    "how many <item> … each" question; ONE premise carrying "split/share with" whose facts are
+    exactly the item total and an integer count of the co-sharers; an exact positive integer
+    share. None otherwise."""
+    ql = question.lower()
+    m = re.search(r"how many (\w+)", ql)
+    if m is None or "each" not in ql or any(ch.isdigit() for ch in ql) \
+            or any(w in ql for w in ("more", "fewer", "less", "than")):
+        return None
+    item = _singular_of(m.group(1)) or m.group(1)
+    src = [p for p in premises if re.search(r"\b(split|share|divide) (it |them )?with\b", p.lower())]
+    if len(src) != 1 or any(any(ch.isdigit() for ch in p) or "dozen" in p.lower()
+                            for p in premises if p is not src[0]):
+        return None
+    disc, ctx = [], []
+    fs = [f for f in (learn(src[0], disc, ctx) or []) if isinstance(f, Quantity) and f.amount is not None]
+    totals = [f for f in fs if f.measure[0] == item]
+    others = [f for f in fs if f.measure[0] != item]
+    if len(totals) != 1 or len(others) != 1:
+        return None
+    k = others[0].amount
+    if k != float(int(k)) or k <= 0:
+        return None
+    result = _compute(f"{_num(totals[0].amount)} / ({_num(k)} + 1)")
+    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
+        return None
+    return result
+
+
 def _years_until_ratio_system(premises: list, question: str):
     """YEARS-UNTIL-RATIO — "Beth is 18, her little sister is 5; in how many years would she be
     TWICE her sister's age?" → both advance together: A+t = k·(B+t) → t = (A − k·B)/(k−1) = 8.
@@ -7844,6 +7914,10 @@ _EARLY_SYSTEMS = [
     ("remainder_after_rate", _remainder_after_rate_system),
     # YEARS-UNTIL-RATIO: "Beth 18, sister 5; in how many years twice her sister's age?" → 8.
     ("years_until_ratio", _years_until_ratio_system),
+    # INVERSE DISTRIBUTION: "48 cupcakes; give 3 each to his cousins; how many cousins?" → 16.
+    ("inverse_distribution", _inverse_distribution_system),
+    # SPLIT-WITH (K+1): "two dozen eggs to split with his three siblings; each person?" → 6.
+    ("split_with", _split_with_system),
 ]
 
 # LATE systems run AFTER the read-synthesize fixpoint has built `context` (they consume derived

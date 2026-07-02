@@ -6049,5 +6049,28 @@ class TestIncrement162YearsUntilRatio(unittest.TestCase):
             "three times her sister's age?"), (int, float))
 
 
+class TestIncrement163DistributionInverses(unittest.TestCase):
+    """#163 — two distribution inverses (both EARLY, registered): `_inverse_distribution_system`
+    (recipient COUNT from a total and a per-recipient share — "give 3 each to his cousins") and
+    `_split_with_system` ("to split WITH his three siblings" — the WITH frame adds the owner to
+    the sharer set: N/(K+1))."""
+
+    def test_inverse_distribution_recipient_count(self):
+        self.assertEqual(reading.solve(
+            "Nora bought 3 dozen muffins. She plans to give 4 muffins each to her cousins. "
+            "How many cousins does Nora have?"), 9)
+
+    def test_split_with_owner_shares_too(self):
+        self.assertEqual(reading.solve(
+            "Rita has two dozen apples to split with her three siblings. How many apples does "
+            "each person get to eat if they all eat the same amount?"), 6)
+
+    def test_uneven_split_declines(self):
+        # 24 / (4+1) is not whole — must not commit
+        self.assertNotIsInstance(reading.solve(
+            "Rita has two dozen apples to split with her four siblings. How many apples does "
+            "each person get to eat if they all eat the same amount?"), (int, float))
+
+
 if __name__ == "__main__":
     unittest.main()
