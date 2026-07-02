@@ -7034,5 +7034,56 @@ class TestIncrement200BackwardFractionChain(unittest.TestCase):
             "left with $10. How much money did Rita have at the beginning?"), (int, float))
 
 
+class TestIncrement201MoneyTails(unittest.TestCase):
+    """#201 — bespoke money tails: split pool with a relational second price, monthly buys ×12
+    minus a sell-back, and a same-percentage bonus transferred to a new base."""
+
+    def test_split_price_relational(self):
+        # 4·1.50 + 5·(1.50+5.50) = 41 — the 9/day-for-14-days numbers are scene
+        self.assertEqual(reading.solve(
+            "Henry took 9 pills a day for 14 days. Of these 9 pills, 4 pills cost $1.50 "
+            "each, and the other pills each cost $5.50 more. How much did he spend in "
+            "total on the pills?"), 41)
+
+    def test_monthly_buy_sellback_loss(self):
+        # 3·20·12 − 500 = 220
+        self.assertEqual(reading.solve(
+            "Jack bought 3 books a month at $20 each. He sells them back at the end of the "
+            "year for $500. How much money did he lose?"), 220)
+
+    def test_same_pct_bonus_new_base(self):
+        # 200000 · (1 + 10000/100000) = 220000
+        self.assertEqual(reading.solve(
+            "John gets a bonus that's the same percentage every year. Last year he made "
+            "$100,000 and got a $10,000 bonus. This year he makes $200,000. How much will "
+            "John make this year when adding both his total pay and bonus together?"), 220000)
+
+
+class TestIncrement202AgeTails(unittest.TestCase):
+    """#202 — age tails: the age chain reads "N times the age of" and possessive diff asks
+    (Lavinia); a future half-of-N anchor + fraction-of-now relation (Christina); the verbal
+    take-add-you-get equation (Hiram, splitter-fragmented)."""
+
+    def test_cross_kin_ratio_and_possessive_diff_ask(self):
+        # son = 2·12 = 24; daughter = 12−10 = 2 → 22
+        self.assertEqual(reading.solve(
+            "Lavinia\u2019s daughter is 10 years younger than Katie\u2019s daughter. Lavinia\u2019s son "
+            "is 2 times the age of Katie\u2019s daughter. If Katie\u2019s daughter is 12 years old, "
+            "how many years older is Lavinia\u2019s son than Lavinia\u2019s daughter?"), 22)
+
+    def test_future_fraction_anchor(self):
+        # C = 80/2 − 5 = 35; O = (3/5)·35 − 15 = 6
+        self.assertEqual(reading.solve(
+            "Christina's age will be half of 80 years in five years to come. If Oscar will "
+            "be 3/5 times as old as Christina is now in 15 years, calculate Oscar's age "
+            "now."), 6)
+
+    def test_verbal_equation_take_add_get(self):
+        # 40 + 12 = 2A − 4 → A = 28
+        self.assertEqual(reading.solve(
+            "When you take Hiram's age and then add 12, you get 4 less than twice "
+            "Allyson's age. If Hiram is 40 years old, how old is Allyson?"), 28)
+
+
 if __name__ == "__main__":
     unittest.main()

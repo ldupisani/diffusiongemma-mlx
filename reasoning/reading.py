@@ -9617,6 +9617,164 @@ def _product_sum_split_system(premises: list, question: str):
     return _gated_pos_int(result)
 
 
+# --- system family: bespoke age tails (future-fraction anchor / verbal equation) ---------------
+def _future_fraction_anchor_system(premises: list, question: str):
+    """A FUTURE HALF-OF-N ANCHOR + A FUTURE FRACTION-OF-NOW RELATION — "Christina's age will be
+    half of 80 in five years; Oscar will be 3/5 times as old as Christina is NOW in 15 years;
+    Oscar's age now?" → C = 40−5 = 35; O = (3/5)·35 − 15 = 6. TIGHTLY gated: the exact two-frame
+    shape (a half-of-N future anchor, a fraction-of-now future relation), a digit-free now-ask
+    for the relation's subject; every digit accounted; positive integers at every point. None
+    otherwise."""
+    ql = question.lower()
+    qm = re.search(r"(?:calculate )?(\w+)[\'\u2019]s age now|how old is (\w+) now", ql)
+    if qm is None or _has_digit(ql):
+        return None
+    asked = (qm.group(1) or qm.group(2))
+    body = " ".join(p.lower() for p in premises)
+    am = re.search(r"(\w+)[\'\u2019]s age will be half of (\d+) years? in (\w+|\d+) years", body)
+    rm = re.search(r"(\w+) will be (\d+)/(\d+) times as old as (\w+) is now in (\d+) years", body)
+    if am is None or rm is None:
+        return None
+    anchor_person = am.group(1)
+    n = float(am.group(2))
+    k = float(NUMBERS.get(am.group(3), am.group(3) if am.group(3).isdigit() else 0) or 0)
+    subj, num, den, std, m_years = rm.group(1), float(rm.group(2)), float(rm.group(3)), \
+        rm.group(4), float(rm.group(5))
+    if not k or std != anchor_person or asked != subj or den == 0:
+        return None
+    used = {am.group(2), rm.group(2), rm.group(3), rm.group(5)} \
+        | ({am.group(3)} if am.group(3).isdigit() else set())
+    if any(d not in used for d in re.findall(r"\d+", body)):
+        return None
+    now_anchor = n / 2 - k
+    if now_anchor <= 0:
+        return None
+    result = _compute(f"({_num(n)} / 2 - {_num(k)}) * {_num(num)} / {_num(den)} - {_num(m_years)}")
+    if isinstance(result, float):
+        result = round(result, 9)
+    return _gated_pos_int(result)
+
+
+def _verbal_equation_age_system(premises: list, question: str):
+    """A VERBAL LINEAR EQUATION — "take Hiram's age and then add 12, you get 4 less than twice
+    Allyson's age; Hiram is 40; how old is Allyson?" → 40+12 = 2A−4 → A = 28. TIGHTLY gated:
+    the exact take-add-you-get frame; ONE anchor for the taken person; a digit-free ask for the
+    equated person; every digit accounted; a positive integer. None otherwise."""
+    ql = question.lower()
+    qm = re.search(r"how old is (\w+)", ql)
+    if qm is None or _has_digit(ql):
+        return None
+    body = " ".join(p.lower() for p in premises)
+    em = re.search(r"take (\w+)[\'\u2019]s age,? (?:and )?(?:you )?(?:then )?add (\d+),? "
+                   r"(?:and )?(?:you )?get (\d+) "
+                   r"(less|more) than (twice|thrice|three times|four times) (\w+)[\'\u2019]s age",
+                   body)
+    if em is None:
+        return None
+    taken, a, b, dir_, mult_tok, other = em.group(1), float(em.group(2)), float(em.group(3)), \
+        em.group(4), em.group(5), em.group(6)
+    k = {"twice": 2.0, "thrice": 3.0, "three times": 3.0, "four times": 4.0}[mult_tok]
+    am = re.search(rf"{re.escape(taken)} is (\d+) years? old", body)
+    if am is None or qm.group(1) != other:
+        return None
+    v = float(am.group(1))
+    used = {em.group(2), em.group(3), am.group(1)}
+    if any(d not in used for d in re.findall(r"\d+", body)):
+        return None
+    sign = "+" if dir_ == "less" else "-"                # V+A = kY − B → Y = (V+A+B)/k
+    result = _compute(f"({_num(v)} + {_num(a)} {sign} {_num(b)}) / {_num(k)}")
+    if isinstance(result, float):
+        result = round(result, 9)
+    return _gated_pos_int(result)
+
+
+# --- system family: bespoke money tails (split-price / sellback-loss / bonus-ratio) ------------
+def _split_price_relational_system(premises: list, question: str):
+    """A SPLIT POOL WITH A RELATIONAL SECOND PRICE — "of these 9 pills, 4 cost $1.50 each, the
+    other pills each cost $5.50 MORE; total on the pills?" → 4·1.50 + 5·(1.50+5.50) = 41. TIGHTLY
+    gated: a digit-free spend-total question; ONE "of these N …, n1 … $P each" split; ONE "other
+    … each cost $D more" premise; the only other numbers "for N days"/"N a day" scene phrases;
+    n1 < N; positive integer. None otherwise."""
+    ql = question.lower()
+    if "how much" not in ql or not re.search(r"\bspend|\bspent|\bcost|\bpay|\bpaid", ql) \
+            or _has_digit(ql):
+        return None
+    body = " ".join(p.lower() for p in premises)
+    sm = re.search(r"of these (\d+) \w+, (\d+) \w+ cost \$(\d+(?:\.\d+)?) each", body)
+    dm = re.search(r"other \w+ each cost \$(\d+(?:\.\d+)?) more", body)
+    if sm is None or dm is None:
+        return None
+    total_n, n1, p1 = float(sm.group(1)), float(sm.group(2)), float(sm.group(3))
+    d = float(dm.group(1))
+    if not 0 < n1 < total_n:
+        return None
+    used = {sm.group(1), sm.group(2), sm.group(3), dm.group(1)} \
+        | {m.group(1) for m in re.finditer(r"for (\d+) days", body)} \
+        | {m.group(1) for m in re.finditer(r"(\d+) \w+ a day", body)}
+    if any(x not in used for x in re.findall(r"\d+(?:\.\d+)?", body)):
+        return None
+    result = _compute(f"{_num(n1)} * {_num(p1)} + ({_num(total_n)} - {_num(n1)})"
+                      f" * ({_num(p1)} + {_num(d)})")
+    if isinstance(result, float):
+        result = round(result, 9)
+    return _gated_pos_int(result)
+
+
+def _monthly_buy_sellback_loss_system(premises: list, question: str):
+    """MONTHLY PURCHASES × 12 − A SELL-BACK — "bought 3 books a month at $20 each; sells them
+    back at the end of the year for $500; how much did he lose?" → 3·20·12 − 500 = 220. TIGHTLY
+    gated: a digit-free "how much … lose" question; ONE "N <item> a month at $P each" premise;
+    ONE end-of-year sell-back total; nothing else valued; a positive loss. None otherwise."""
+    ql = question.lower()
+    if not re.search(r"how much (?:money )?did \w+ lose", ql) or _has_digit(ql):
+        return None
+    body = " ".join(p.lower() for p in premises)
+    bm = re.search(r"(\d+) \w+ a month at \$(\d+(?:\.\d+)?) each", body)
+    sm = re.search(r"sells? them back [^.]*for \$(\d+(?:,\d{3})*(?:\.\d+)?)", body)
+    if bm is None or sm is None or "end of the year" not in body:
+        return None
+    n, p = float(bm.group(1)), float(bm.group(2))
+    back = float(sm.group(1).replace(",", ""))
+    used = {bm.group(1), bm.group(2), sm.group(1)}
+    if any(x not in used for x in re.findall(r"\d+(?:,\d{3})*(?:\.\d+)?", body)):
+        return None
+    result = _compute(f"{_num(n)} * {_num(p)} * 12 - {_num(back)}")
+    if isinstance(result, float):
+        result = round(result, 9)
+    return _gated_pos_int(result)
+
+
+def _same_pct_bonus_system(premises: list, question: str):
+    """A SAME-PERCENTAGE BONUS TRANSFERRED TO A NEW BASE — "the bonus is the same percentage
+    every year; last year he made $100,000 and got a $10,000 bonus; this year he makes $200,000;
+    total pay and bonus together?" → 200000·(1 + 10000/100000) = 220000. TIGHTLY gated: a
+    digit-free pay+bonus-together question; a "same percentage" premise; last-year base+bonus;
+    a this-year base; nothing else valued; the bonus < the base; positive integer. None
+    otherwise."""
+    ql = question.lower()
+    if "bonus" not in ql or "how much" not in ql or _has_digit(ql):
+        return None
+    body = " ".join(p.lower() for p in premises)
+    if "same percentage" not in body:
+        return None
+    lm = re.search(r"last year [^.]*?\$(\d+(?:,\d{3})*)[^.]*?\$(\d+(?:,\d{3})*) bonus", body)
+    tm = re.search(r"this year [^.]*?\$(\d+(?:,\d{3})*)", body)
+    if lm is None or tm is None:
+        return None
+    base0 = float(lm.group(1).replace(",", ""))
+    bonus0 = float(lm.group(2).replace(",", ""))
+    base1 = float(tm.group(1).replace(",", ""))
+    if not 0 < bonus0 < base0:
+        return None
+    used = {lm.group(1), lm.group(2), tm.group(1)}
+    if any(x not in used for x in re.findall(r"\d+(?:,\d{3})*(?:\.\d+)?", body)):
+        return None
+    result = _compute(f"{_num(base1)} * (1 + {_num(bonus0)} / {_num(base0)})")
+    if isinstance(result, float):
+        result = round(result, 9)
+    return _gated_pos_int(result)
+
+
 # --- system family: day chains & two-rate conversions ------------------------------------------
 def _today_tomorrow_chain_system(premises: list, question: str):
     """SIGNED DAY CHAIN — "has 65 pounds today; tomorrow he will use 18; the following day he
@@ -9900,7 +10058,8 @@ def _age_shift_system(premises: list, question: str):
 _AC_ENT = r"[A-Z][a-z]+(?:['’]s (?:mom|mother|dad|father|sister|brother|son|daughter|cousin))?"
 _AC_KIN = r"(?:mom|mother|dad|father|sister|brother|son|daughter|cousin)"
 _AC_RATIO = re.compile(rf"\b({_AC_ENT}|[Hh]is {_AC_KIN}|[Hh]er {_AC_KIN}|who) is "
-                       rf"(twice|thrice|half|double|(?:two|three|four|five|six|\d+) times) as old as "
+                       rf"(twice|thrice|half|double|(?:two|three|four|five|six|\d+) times) "
+                       rf"(?:as old as|the age of) "
                        rf"({_AC_ENT}|his {_AC_KIN}|her {_AC_KIN}|he|she)\b")
 _AC_OFFSET = re.compile(rf"\b({_AC_ENT}|[Hh]is {_AC_KIN}|[Hh]er {_AC_KIN}|who) is "
                         rf"(\d+) years? (older|younger) than ({_AC_ENT}|his {_AC_KIN}|her {_AC_KIN}|he|she)\b")
@@ -9928,7 +10087,8 @@ def _age_chain_system(premises: list, question: str):
     body = " ".join(premises)
     if re.search(r"times (?:older|younger|more)", body.lower()):
         return None                                      # the banned ambiguous idiom
-    diff_m = re.search(r"how many years (older|younger) is (\w+) than (\w+)", ql)
+    diff_m = re.search(r"how many years (older|younger) is ((?:[a-z]+[\'\u2019]s )?[a-z]+)"
+                       r" than ((?:[a-z]+[\'\u2019]s )?[a-z]+)", ql)
     avg_m = re.search(r"average age of the (\w+)", ql)
     tot_m = re.search(r"(?:combined|total) age", ql)
     single_m = re.search(r"how old is (\w+)", ql)
@@ -9937,7 +10097,8 @@ def _age_chain_system(premises: list, question: str):
     anchors = _AC_ANCHOR.findall(body)
     if len(anchors) != 1:
         return None
-    anchor_name, anchor_age = anchors[0][0], float(anchors[0][1])
+    anchor_name = anchors[0][0].replace("\u2019", "'")
+    anchor_age = float(anchors[0][1])
     rels = []                                            # (subj, kind, k_or_off, std)
 
     def norm(ent, subj_context):
@@ -9984,12 +10145,14 @@ def _age_chain_system(premises: list, question: str):
         return None
     digits = re.findall(r"\d+", body)                    # every body digit consumed
     used = {anchors[0][1]} | {str(int(abs(x))) for _, k, x, _ in rels if k == "offset"} \
-        | {m.group(1) for p in premises for m in re.finditer(r"(\d+) times as old", p)}
+        | {m.group(1) for p in premises for m in re.finditer(r"(\d+) times (?:as old|the age)", p)}
     if any(d not in used for d in digits):
         return None
     if diff_m is not None:
-        a = next((e for e in ents if e.lower() == diff_m.group(2)), None)
-        b = next((e for e in ents if e.lower() == diff_m.group(3)), None)
+        def _k(s):
+            return s.lower().replace("\u2019", "'")
+        a = next((e for e in ents if _k(e) == _k(diff_m.group(2))), None)
+        b = next((e for e in ents if _k(e) == _k(diff_m.group(3))), None)
         if a is None or b is None:
             return None
         result = _compute(f"{_num(vals[b])} - {_num(vals[a])}" if diff_m.group(1) == "younger"
@@ -10522,6 +10685,16 @@ _EARLY_SYSTEMS = [
     ("value_change_pct", _value_change_pct_system),
     # PAIR, SECOND P% MORE: "$22 + one 50% more expensive; both?" → 55.
     ("pair_second_pct_more", _pair_second_pct_more_system),
+    # FUTURE FRACTION ANCHOR: "half of 80 in 5 years; 3/5 of her now, in 15 years?" → 6.
+    ("future_fraction_anchor", _future_fraction_anchor_system),
+    # VERBAL EQUATION: "take X's age, add 12; 4 less than twice Y's; X is 40?" → 28.
+    ("verbal_equation_age", _verbal_equation_age_system),
+    # SPLIT POOL, RELATIONAL SECOND PRICE: "of 9 pills, 4 at $1.50, others $5.50 more?" → 41.
+    ("split_price_relational", _split_price_relational_system),
+    # MONTHLY BUY × 12 − SELLBACK: "3 books/month at $20; sells back for $500; lose?" → 220.
+    ("monthly_buy_sellback_loss", _monthly_buy_sellback_loss_system),
+    # SAME-PCT BONUS ON A NEW BASE: "$100k+$10k bonus last year; $200k this year?" → 220000.
+    ("same_pct_bonus", _same_pct_bonus_system),
     # SIGNED DAY CHAIN: "65 today; use 18 tomorrow; buy 50 next; in the end?" → 97.
     ("today_tomorrow_chain", _today_tomorrow_chain_system),
     # FIRST TWO DAYS + DOUBLE THEIR SUM: "5; another 7; twice the first two days?" → 36.
