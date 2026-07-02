@@ -6700,5 +6700,27 @@ class TestIncrement186DoublingPeriodsAndPriceWeek(unittest.TestCase):
             "adults visit per day, how much money will he earn per month?"), (int, float))
 
 
+class TestIncrement188MultiPairDiscount(unittest.TestCase):
+    """#188 — `_discounted_purchase_system` cross-premise pairing generalized from 1-1 to N-N:
+    counts zip with each-prices in document order, gated to counts-FIRST parallel discourse
+    (every count clause precedes every price clause — GSM8K states the pairs in the same order
+    twice). The 1-1 case stays unconditional (Johnny's price-first ping-pong shape)."""
+
+    def test_two_by_two_counts_first(self):
+        # (2·40 + 4·50) · 0.8 = 224
+        self.assertEqual(reading.solve(
+            "Bailey needs to buy 2 new sets of towels for the guest bathroom and 4 new sets "
+            "for her master bathroom. The set of towels for the guest bathroom are $40.00 "
+            "each and the master bathroom set is $50.00 each. The store is currently "
+            "offering 20% off so how much will Bailey spend on towel sets?"), 224)
+
+    def test_prices_before_counts_declines(self):
+        # counts AFTER prices — the parallel-discourse guarantee is gone; never zip blind
+        self.assertNotIsInstance(reading.solve(
+            "The guest set is $40 each and the master set is $50 each. Bailey buys 2 guest "
+            "sets and 4 master sets. There is a 20% discount. How much will Bailey "
+            "pay?"), (int, float))
+
+
 if __name__ == "__main__":
     unittest.main()

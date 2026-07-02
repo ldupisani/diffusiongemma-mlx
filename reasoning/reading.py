@@ -1925,6 +1925,8 @@ LEXICON.update({
     "beach": ["noun"], "nearby": ["adjective"],
     # #186-187 candidates: Jose's pool g588 (swim verb was in; "swimming pool" = adj+noun)
     "pool": ["noun"], "swimming": ["adjective"],
+    # #188: Bailey's 2×2 towel sets g224 (guest was already in)
+    "towel": ["noun"], "bathroom": ["noun"], "master": ["adjective"],
 })
 PLURALS.update({
     "samosas": "samosa", "pakoras": "pakora", "vases": "vase", "pins": "pin", "boots": "boot",
@@ -1934,6 +1936,7 @@ PLURALS.update({
     "mice": "mouse", "trackballs": "trackball", "accessories": "accessory",
     "seagulls": "seagull", "roofs": "roof", "stones": "stone",
     "debuts": "debut", "showings": "showing", "beaches": "beach",
+    "pools": "pool", "towels": "towel", "bathrooms": "bathroom",
 })
 VERB_LEMMA.update({
     "scored": "score", "scores": "score", "scoring": "score",
@@ -9303,9 +9306,7 @@ def _discounted_purchase_system(premises: list, question: str):
         else:
             unpaired.append((si, pos, price))
     if unpaired:
-        if len(unpaired) != 1:
-            return None
-        candidates = []                                  # the single leftover DIGIT count, corpus-wide
+        candidates = []                                  # the leftover DIGIT counts, corpus-wide
         for si, seg in enumerate(segs[:-1]):
             for m in re.finditer(r"\b\d+(?:,\d{3})*\b", seg):
                 if covered(si, m.start()):
@@ -9315,12 +9316,19 @@ def _discounted_purchase_system(premises: list, question: str):
                 if (_singular_of(noun) or noun) in GROUP_PERSON_NOUNS:
                     return None                          # a person count shadows the pairing
                 candidates.append((si, m.start(), m.end(), float(m.group(0).replace(",", ""))))
-        if len(candidates) != 1:
+        if len(candidates) != len(unpaired):
             return None
-        si_c, a, b, v = candidates[0]
-        spans[si_c].append((a, b))
-        used_counts.append(v)
-        products.append((v, unpaired[0][2]))
+        if len(candidates) > 1:
+            # MULTI-PAIR zip is only safe for counts-FIRST parallel discourse ("2 guest sets and
+            # 4 master sets; the guest set is $40 each and the master set $50 each" — GSM8K states
+            # the pairs in the same order twice). Every count must precede every each-price.
+            if max((si, a) for si, a, _, _ in candidates) \
+                    >= min((si, pos) for si, pos, _ in unpaired):
+                return None
+        for (si_c, a, b, v), (_, _, price) in zip(sorted(candidates), sorted(unpaired)):
+            spans[si_c].append((a, b))
+            used_counts.append(v)
+            products.append((v, price))
 
     for si, seg in enumerate(segs):                      # every digit accounted (echoes OK in the q)
         for m in re.finditer(r"\d+(?:,\d{3})*(?:\.\d+)?|\.\d+", seg):
