@@ -6286,5 +6286,26 @@ class TestIncrement172OrdinalDayChainResidual(unittest.TestCase):
             "number of marbles she collected each day for the rest of the week?"), "undetermined")
 
 
+class TestIncrement173DayListResidue(unittest.TestCase):
+    """#173 — the day-list family's last two cases: `_named_day_chain_split_system` (Mon N then
+    twice-Tue, Wed–Fri M each, weekly total T → (T − (3N+3M))/2 on Saturday) and
+    `_rate_hours_clock_week_system` (per-hour rate × (span-days·H + clock-span from Ham to Ham);
+    clock tokens "8am"/"11am" now read as adjectives via the general am/pm rule)."""
+
+    def test_named_day_chain_split(self):
+        self.assertEqual(reading.solve(
+            "Nia has several exams to prepare for. On Monday, she studies for 2 hours then "
+            "studies for twice this long on Tuesday. On Wednesday, Thursday, and Friday she "
+            "studies for 4 hours each day. She wants to study for a total of 22 hours over the "
+            "week and divides the remaining amount of study time evenly between Saturday and "
+            "Sunday. How many hours does Nia spend studying on Saturday?"), 2)
+
+    def test_rate_hours_clock_week(self):
+        self.assertEqual(reading.solve(
+            "A cobbler can mend 2 pairs of shoes in an hour. From Monday to Wednesday, the "
+            "cobbler works for 6 hours each day, and on Friday, he only works from 8am to 10am. "
+            "How many pairs of shoes can the cobbler mend in a week?"), 40)
+
+
 if __name__ == "__main__":
     unittest.main()

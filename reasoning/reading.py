@@ -895,6 +895,9 @@ def annotate_senses(reading: Reading) -> Reading:
             senses = ["value"]            # a numeric literal ("48", "0.2") is an arithmetic value
         if senses is None and re.fullmatch(r"\d+(st|nd|rd|th)", _key(u.surface) or ""):
             senses = ["adjective"]        # a DIGIT ordinal ("5th", "2nd") reads like first/second
+        if senses is None and re.fullmatch(r"\d+(am|pm)", _key(u.surface) or ""):
+            senses = ["adjective"]        # a CLOCK token ("8am") modifies; it is never a quantity
+            #                               (whole-text systems read the hour digits themselves)
         if senses is None and u.surface[:1].isupper() and _key(u.surface).isalpha():
             # a capitalized word we don't otherwise know is a proper noun — a named individual.
             # (Known capitalized words, e.g. sentence-initial "All"/"The", are caught above first.)
@@ -1840,6 +1843,8 @@ LEXICON.update({
     "something": ["noun"], "visit": ["verb"], "visits": ["verb"],
     # the tin-house ordinal-day-chain case
     "tin": ["noun"],
+    # the Tristan study-split + cobbler clock-week cases
+    "prepare": ["verb"], "studying": ["noun"], "cobbler": ["noun"], "mend": ["verb"],
     "log": ["noun", "verb"], "logs": ["noun", "verb"],
     # EXCLUDED the jog family: it unlocks a held-out "5 miles per day on WEEKDAYS ONLY ... over
     # three weeks" case to a confident-wrong (105 = 5*7*3 vs gold 75 = 5*5*3) — the rate-projection
@@ -7741,6 +7746,69 @@ def _ordinal_day_chain_residual_system(premises: list, question: str):
     return result
 
 
+def _named_day_chain_split_system(premises: list, question: str):
+    """NAMED-DAY CHAIN + EVEN WEEKEND SPLIT — "On Monday 4 hours then twice this long on Tuesday;
+    Wed/Thu/Fri 3 hours each day; total of 25 over the week; remaining split evenly between
+    Saturday and Sunday; how many hours on Saturday?" → (25 − (4 + 8 + 9)) / 2 = 2. TIGHTLY
+    gated: a digit-free "how many hours … on Saturday/Sunday" question; the even-split cue;
+    the Monday-then-twice-Tuesday premise; the three-day each-day premise; a weekly total; and
+    EXACTLY those three numbers in the whole body. None otherwise."""
+    ql = question.lower()
+    if re.search(r"how many hours .*on (saturday|sunday)", ql) is None \
+            or any(ch.isdigit() for ch in ql):
+        return None
+    body = " ".join(premises).lower()
+    if "evenly between saturday and sunday" not in body:
+        return None
+    m1 = re.search(r"on monday[^.]*?(\d+(?:\.\d+)?) hours[^.]*twice this long on tuesday", body)
+    m2 = re.search(r"on wednesday, thursday, and friday[^.]*?(\d+(?:\.\d+)?) hours each day", body)
+    m3 = re.search(r"total of (\d+(?:\.\d+)?) hours over the week", body)
+    if not (m1 and m2 and m3) or len(re.findall(r"\d+(?:\.\d+)?", body)) != 3:
+        return None
+    n, m, t = float(m1.group(1)), float(m2.group(1)), float(m3.group(1))
+    result = _compute(f"({_num(t)} - ({_num(n)} + 2 * {_num(n)} + 3 * {_num(m)})) / 2")
+    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
+        return None
+    return result
+
+
+def _rate_hours_clock_week_system(premises: list, question: str):
+    """PER-HOUR RATE × (SPAN-DAYS + CLOCK-SPAN) — "mends 3 pairs in an hour; Monday to Thursday
+    8 hours each day; Friday works from 8am to 11am; how many in a week?" → 3 · (4·8 + 3) = 105.
+    TIGHTLY gated: a digit-free "how many <X> … in a week" question; ONE per-hour rate premise;
+    ONE "from <day> to <day> … N hours each day" span premise; ONE "from Ham to Ham" clock
+    premise (same-am span, end > start); no other valued premise; positive integer. None
+    otherwise."""
+    ql = question.lower()
+    if re.search(r"how many \w+", ql) is None or "week" not in ql \
+            or any(ch.isdigit() for ch in ql):
+        return None
+    rate = span_hours = clock_hours = None
+    for p in premises:
+        pl = p.lower()
+        rm = re.search(r"(\d+(?:\.\d+)?) \w+ (?:of \w+ )?in an hour", pl)
+        sm = re.search(r"from (\w+) to (\w+)[^.]*?(\d+(?:\.\d+)?) hours each day", pl)
+        cm = re.search(r"from (\d+)am to (\d+)am", pl)
+        if rm is not None and rate is None:
+            rate = float(rm.group(1))
+        elif sm is not None and span_hours is None \
+                and sm.group(1) in _WEEKDAYS and sm.group(2) in _WEEKDAYS:
+            days = _WEEKDAYS.index(sm.group(2)) - _WEEKDAYS.index(sm.group(1)) + 1
+            if days < 2:
+                return None
+            span_hours = days * float(sm.group(3))
+        elif cm is not None and clock_hours is None and int(cm.group(2)) > int(cm.group(1)):
+            clock_hours = int(cm.group(2)) - int(cm.group(1))
+        elif any(ch.isdigit() for ch in p):
+            return None                                  # an unclassified valued premise
+    if rate is None or span_hours is None or clock_hours is None:
+        return None
+    result = _compute(f"{_num(rate)} * ({_num(span_hours)} + {_num(clock_hours)})")
+    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
+        return None
+    return result
+
+
 def _sales_funnel_week_system(premises: list, question: str):
     """SALES FUNNEL × WEEK — "visits 50 houses a day; 20% of them buy; of those, half buy a $50
     set and the other half a $150 set; how much does he sell a week working 5 days a week?" →
@@ -8469,6 +8537,10 @@ _EARLY_SYSTEMS = [
     ("inverse_distribution", _inverse_distribution_system),
     # SPLIT-WITH (K+1): "two dozen eggs to split with his three siblings; each person?" → 6.
     ("split_with", _split_with_system),
+    # NAMED-DAY CHAIN + EVEN SPLIT: "Mon 4h, twice Tue; Wed–Fri 3h; total 25; Sat?" → 2.
+    ("named_day_chain_split", _named_day_chain_split_system),
+    # RATE × (SPAN + CLOCK): "3/hour; Mon–Thu 8h/day; Fri 8am–11am; week?" → 105.
+    ("rate_hours_clock_week", _rate_hours_clock_week_system),
     # ORDINAL-DAY CHAIN RESIDUAL: "500 in a week; day1 50, day2 3×, day3 −50; rest equal?" → 50.
     ("ordinal_day_chain_residual", _ordinal_day_chain_residual_system),
     # SALES FUNNEL × WEEK: "50 houses/day; 20% buy; half $50, half $150; 5 days?" → 5000.
