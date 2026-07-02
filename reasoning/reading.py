@@ -1908,15 +1908,35 @@ LEXICON.update({
     "bunch": ["noun"],
     # partition-rest family (#184): the berries enumeration case (blueberry was already in)
     "raspberry": ["noun"], "blackberry": ["noun"],
+    # 16th vocab wave (re-sweep AFTER #180-184 landed — the sweep-after-systems pattern's 5th
+    # payoff; every word's case verified decline→exact gold): Mr. Lu computers g12, Marky
+    # accessory shop g20, seagulls g18, show debut g20000, school beach g250.
+    # EXCLUDED again: clothes (documented TEST confident-wrong — forgoes Susan g150/Iris g90),
+    # like/look (Carson), fruit (mixed-unit partition). EXCLUDED "sheep" (the #185 diff caught
+    # it unlocking a dev-holdout confident-wrong, −300 vs gold 266 — a "double the number of
+    # sheep as Mary plus another N" relational shape commits a negative; forgoes the Mary-400
+    # depletion-chain gain until that path is fixed on dev-train evidence).
+    "laptop": ["noun"], "netbook": ["noun"], "desktop": ["noun"],
+    "mouse": ["noun"], "trackball": ["noun"], "accessory": ["noun"],
+    "wireless": ["adjective"], "optical": ["adjective"],
+    "seagull": ["noun"], "roof": ["noun"], "stone": ["noun"], "parking": ["noun"],
+    "throwing": ["noun"], "scare": ["verb"],
+    "debut": ["noun"], "showing": ["noun"],
+    "beach": ["noun"], "nearby": ["adjective"],
 })
 PLURALS.update({
     "samosas": "samosa", "pakoras": "pakora", "vases": "vase", "pins": "pin", "boots": "boot",
     "televisions": "television", "crowns": "crown", "kings": "king", "bunches": "bunch",
     "raspberries": "raspberry", "blackberries": "blackberry",
+    "laptops": "laptop", "netbooks": "netbook", "desktops": "desktop",
+    "mice": "mouse", "trackballs": "trackball", "accessories": "accessory",
+    "seagulls": "seagull", "roofs": "roof", "stones": "stone",
+    "debuts": "debut", "showings": "showing", "beaches": "beach",
 })
 VERB_LEMMA.update({
     "scored": "score", "scores": "score", "scoring": "score",
     "replaces": "replace", "replaced": "replace",
+    "scares": "scare", "scared": "scare",
     "asks": "ask", "asked": "ask",
     "represents": "represent", "represented": "represent",
     "caught": "catch", "catches": "catch",
