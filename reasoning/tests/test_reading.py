@@ -6401,5 +6401,47 @@ class TestIncrement177BareDecimalLexing(unittest.TestCase):
         self.assertIsNone(reading._as_number("."))
 
 
+class TestIncrement178JogUnlockAndSingles(unittest.TestCase):
+    """#178 — the jog-family unlock + three singles. `_weekday_base_delta_system` (weekday base
+    ×5 ± signed day deltas, hours must divide by 60), `_weekday_rate_weeks_system` (R·5·weeks —
+    the "weekdays only" shape whose 7-day mis-projection kept jog excluded),
+    `_salary_hourly_rate_system` (S/(H·D·4)), `_weekly_need_per_person_daily_system`
+    (need·convert/share/7, gallon→pint added), `_per_second_minutes_week_system` (R·M·60·7)."""
+
+    def test_weekday_base_plus_deltas_hours(self):
+        self.assertEqual(reading.solve(
+            "Zoe jogs for 30 minutes every day during weekdays. This week on Tuesday, she "
+            "jogged 20 minutes more and also jogged 10 minutes more on Friday. How many hours, "
+            "in total, did Zoe jog this week?"), 3)
+
+    def test_weekday_base_with_cut_short_minutes(self):
+        self.assertEqual(reading.solve(
+            "Ben committed to run for an hour a day during weekdays. On Thursday, he cut short "
+            "his run by 30 minutes but was able to jog 20 minutes more on Friday. How many "
+            "minutes was he able to run for that week?"), 290)
+
+    def test_weekday_only_rate_weeks(self):
+        # the exact shape that made jog a held-out confident-wrong: 4·5·2, never 4·7·2
+        self.assertEqual(reading.solve(
+            "Rita jogs 4 miles per day on weekdays only. How many miles does she run over two "
+            "weeks in total?"), 40)
+
+    def test_salary_hourly_rate(self):
+        self.assertEqual(reading.solve(
+            "Vic's monthly salary is $640. If he works 8 hours a day for 5 days a week, "
+            "how much is his hourly rate?"), 4)
+
+    def test_weekly_need_per_person_daily(self):
+        self.assertEqual(reading.solve(
+            "A vampire needs to suck 7 gallons of blood per week to survive. If he sucks 4 "
+            "pints of blood per person, how many people does he need to suck each day to "
+            "survive?"), 2)
+
+    def test_per_second_minutes_week(self):
+        self.assertEqual(reading.solve(
+            "A fan can create an airflow of 5 liters per second. If the fan works for 10 "
+            "minutes each day, calculate the amount of airflow it will create in one week."), 21000)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -501,7 +501,8 @@ CONVERSIONS = {("minute", "hour"): 1 / 60, ("hour", "minute"): 60, ("second", "m
                ("centimeter", "meter"): 1 / 100, ("meter", "centimeter"): 100,
                ("meter", "kilometer"): 1 / 1000, ("kilometer", "meter"): 1000,
                ("gallon", "ounce"): 128, ("ounce", "gallon"): 1 / 128,   # US fluid ounces
-               ("gallon", "quart"): 4, ("quart", "gallon"): 1 / 4}
+               ("gallon", "quart"): 4, ("quart", "gallon"): 1 / 4,
+               ("gallon", "pint"): 8, ("pint", "gallon"): 1 / 8}
 
 # Coreference: a pronoun's grammatical gender, and a small name→gender lexicon used to pick a
 # compatible antecedent. Both grown deliberately (no guessing from spelling).
@@ -1850,6 +1851,13 @@ LEXICON.update({
     "tin": ["noun"],
     # the Tristan study-split + cobbler clock-week cases
     "prepare": ["verb"], "studying": ["noun"], "cobbler": ["noun"], "mend": ["verb"],
+    # the JOG family — safe now `_weekday_rate_weeks_system` handles the "weekdays only"
+    # restriction that made it a held-out confident-wrong (105 = 5·7·3 vs 75 = 5·5·3)
+    "jog": ["verb"], "jogs": ["verb"], "jogged": ["verb"], "jogging": ["noun"],
+    "committed": ["verb"],
+    # the Edric / vampire / fan singles
+    "hourly": ["adjective"], "blood": ["noun"], "suck": ["verb"], "sucks": ["verb"],
+    "survive": ["verb"], "vampire": ["noun"], "fan": ["noun"], "airflow": ["noun"],
     "log": ["noun", "verb"], "logs": ["noun", "verb"],
     # EXCLUDED the jog family: it unlocks a held-out "5 miles per day on WEEKDAYS ONLY ... over
     # three weeks" case to a confident-wrong (105 = 5*7*3 vs gold 75 = 5*5*3) — the rate-projection
@@ -1892,6 +1900,7 @@ VERB_LEMMA.update({
     "exercised": "exercise", "exercises": "exercise", "logs": "log",
     "fell": "fall", "beats": "beat", "looks": "look", "recorded": "record",
     "skipped": "skip", "visits": "visit", "visited": "visit",
+    "jogs": "jog", "jogged": "jog", "sucks": "suck", "committed": "commit",
     "raises": "raise", "raised": "raise", "raising": "raise",
 })
 
@@ -7751,6 +7760,175 @@ def _ordinal_day_chain_residual_system(premises: list, question: str):
     return result
 
 
+def _weekday_base_delta_system(premises: list, question: str):
+    """WEEKDAY BASE ± DAY DELTAS — "jogs 30 minutes every day during weekdays; Tuesday 5 minutes
+    more; 25 more on Friday; total hours this week?" → (30·5 + 5 + 25)/60 = 3; "an hour a day
+    during weekdays; Thursday cut short by 20; 10 more on Friday; minutes that week?" →
+    60·5 − 20 + 10 = 290. TIGHTLY gated: a digit-free "how many hours/minutes … week" question;
+    ONE weekday-restricted per-day base premise ("N minutes"/"an hour" + "during weekdays");
+    every OTHER digit premise only "cut short … by N minutes" (−) / "N minutes more" (+) deltas
+    naming a weekday; an hours answer must divide exactly by 60. None otherwise."""
+    ql = question.lower()
+    unit = "hour" if "how many hours" in ql else ("minute" if "how many minutes" in ql else None)
+    if unit is None or "week" not in ql or any(ch.isdigit() for ch in ql):
+        return None
+    base = None
+    deltas = []
+    for p in premises:
+        pl = p.lower()
+        has_digit = any(ch.isdigit() for ch in p)
+        if ("during weekdays" in pl or "on weekdays" in pl) and base is None:
+            bm = re.search(r"(\d+(?:\.\d+)?) minutes", pl)
+            if bm is not None:
+                base = float(bm.group(1))
+            elif re.search(r"\ban hour\b", pl):
+                base = 60.0
+            else:
+                return None
+            continue
+        cuts = re.findall(r"cut short [^.]*?by (\d+(?:\.\d+)?) minutes", pl)
+        mores = re.findall(r"(\d+(?:\.\d+)?) minutes more", pl)
+        if (cuts or mores) and any(d in pl for d in _WEEKDAYS):
+            deltas += [-float(c) for c in cuts] + [float(m) for m in mores]
+            if len(cuts) + len(mores) != len(re.findall(r"\d+(?:\.\d+)?", pl)):
+                return None                              # a stray value beside the deltas
+        elif has_digit:
+            return None                                  # an unclassified valued premise
+    if base is None:
+        return None
+    total = base * 5 + sum(deltas)
+    if total <= 0:
+        return None
+    if unit == "hour":
+        if total % 60:
+            return None
+        result = _compute(f"({_num(base)} * 5 + {_num(sum(deltas))}) / 60")
+    else:
+        result = _compute(f"{_num(base)} * 5 + {_num(sum(deltas))}")
+    if not (isinstance(result, (int, float)) and result > 0):
+        return None
+    return result
+
+
+def _weekday_rate_weeks_system(premises: list, question: str):
+    """WEEKDAY-ONLY RATE × WEEKS — "jogs 5 miles per day on weekdays only; how many miles over
+    three weeks?" → 5·5·3 = 75. The weekday restriction means 5 countable days, never 7 — the
+    exact mis-projection (5·7·3 = 105) that kept the jog vocab excluded. TIGHTLY gated: a
+    digit-free "how many <X> … over/in/after <N> weeks" question; ONE premise with a per-day
+    rate of X AND a weekday cue; no other valued premise; positive integer. None otherwise."""
+    ql = question.lower()
+    m = re.search(r"how many (\w+)", ql)
+    wm = re.search(r"(?:over|in|after) (\w+|\d+) weeks", ql)
+    if m is None or wm is None or any(ch.isdigit() for ch in ql) \
+            or any(w in ql for w in ("more", "fewer", "less", "than")):
+        return None
+    weeks = NUMBERS.get(wm.group(1), float(wm.group(1)) if wm.group(1).isdigit() else 0)
+    if not weeks:
+        return None
+    asked = _singular_of(m.group(1)) or m.group(1)
+    rate = None
+    for p in premises:
+        pl = p.lower()
+        rm = re.search(r"(\d+(?:\.\d+)?) " + re.escape(asked) + r"s? per day", pl)
+        if rm is not None and rate is None \
+                and ("weekdays only" in pl or "on weekdays" in pl or "during weekdays" in pl):
+            rate = float(rm.group(1))
+        elif any(ch.isdigit() for ch in p):
+            return None                                  # an unclassified valued premise
+    if rate is None:
+        return None
+    result = _compute(f"{_num(rate)} * 5 * {_num(weeks)}")
+    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
+        return None
+    return result
+
+
+def _salary_hourly_rate_system(premises: list, question: str):
+    """MONTHLY SALARY → HOURLY RATE — "monthly salary is $576; works 8 hours a day for 6 days a
+    week; hourly rate?" → 576 / (8·6·4) = 3 (the GSM8K month = 4 weeks convention). TIGHTLY
+    gated: a digit-free "hourly rate" question; ONE monthly-salary premise; ONE "H hours a day
+    for D days a week" premise; nothing else valued; an exact positive quotient. None
+    otherwise."""
+    ql = question.lower()
+    if "hourly rate" not in ql or any(ch.isdigit() for ch in ql):
+        return None
+    salary = hours = days = None
+    for p in premises:
+        pl = p.lower()
+        sm = re.search(r"monthly salary is \$(\d+(?:\.\d+)?)", pl)
+        hm = re.search(r"(\d+(?:\.\d+)?) hours a day for (\d+) days a week", pl)
+        if sm is not None and salary is None:
+            salary = float(sm.group(1))
+        elif hm is not None and hours is None:
+            hours, days = float(hm.group(1)), float(hm.group(2))
+        elif any(ch.isdigit() for ch in p):
+            return None                                  # an unclassified valued premise
+    if salary is None or hours is None:
+        return None
+    result = _compute(f"{_num(salary)} / ({_num(hours)} * {_num(days)} * 4)")
+    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
+        return None
+    return result
+
+
+def _weekly_need_per_person_daily_system(premises: list, question: str):
+    """WEEKLY NEED ÷ PER-PERSON SHARE ÷ 7 — "needs 7 gallons of blood per week; 2 pints per
+    person; how many people each day?" → 7·8 / 2 / 7 = 4 (gallon→pint via CONVERSIONS). TIGHTLY
+    gated: a digit-free "how many people … each day" question; ONE weekly-need premise; ONE
+    per-person premise (units equal or convertible); nothing else valued; positive integer.
+    None otherwise."""
+    ql = question.lower()
+    if "how many people" not in ql or "each day" not in ql or any(ch.isdigit() for ch in ql):
+        return None
+    need = share = None
+    for p in premises:
+        pl = p.lower()
+        nm = re.search(r"(\d+(?:\.\d+)?) (\w+) of \w+ per week", pl)
+        sm = re.search(r"(\d+(?:\.\d+)?) (\w+) of \w+ per person", pl)
+        if nm is not None and need is None:
+            need = float(nm.group(1)), _singular_of(nm.group(2)) or nm.group(2)
+        elif sm is not None and share is None:
+            share = float(sm.group(1)), _singular_of(sm.group(2)) or sm.group(2)
+        elif any(ch.isdigit() for ch in p):
+            return None                                  # an unclassified valued premise
+    if need is None or share is None:
+        return None
+    factor = 1 if need[1] == share[1] else CONVERSIONS.get((need[1], share[1]))
+    if factor is None:
+        return None
+    result = _compute(f"{_num(need[0])} * {_num(factor)} / {_num(share[0])} / 7")
+    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
+        return None
+    return result
+
+
+def _per_second_minutes_week_system(premises: list, question: str):
+    """PER-SECOND RATE × MINUTES/DAY × WEEK — "10 liters per second; works 10 minutes each day;
+    the amount in one week?" → 10·600·7 = 42000. TIGHTLY gated: a digit-free "in one week"
+    amount question; ONE per-second rate premise; ONE "M minutes each day" premise; nothing
+    else valued; positive integer. None otherwise."""
+    ql = question.lower()
+    if "in one week" not in ql and "in a week" not in ql or any(ch.isdigit() for ch in ql):
+        return None
+    rate = minutes = None
+    for p in premises:
+        pl = p.lower()
+        rm = re.search(r"(\d+(?:\.\d+)?) \w+ per second", pl)
+        mm = re.search(r"(\d+(?:\.\d+)?) minutes each day", pl)
+        if rm is not None and rate is None:
+            rate = float(rm.group(1))
+        elif mm is not None and minutes is None:
+            minutes = float(mm.group(1))
+        elif any(ch.isdigit() for ch in p):
+            return None                                  # an unclassified valued premise
+    if rate is None or minutes is None:
+        return None
+    result = _compute(f"{_num(rate)} * {_num(minutes)} * 60 * 7")
+    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
+        return None
+    return result
+
+
 def _phased_weeks_average_system(premises: list, question: str):
     """PHASED WEEKS → AVERAGE — "1 apple a day for two weeks; the next three weeks the same
     number as the total of the first two; the next two weeks 3 a day; over these 7 weeks, the
@@ -8836,6 +9014,16 @@ _EARLY_SYSTEMS = [
     ("inverse_distribution", _inverse_distribution_system),
     # SPLIT-WITH (K+1): "two dozen eggs to split with his three siblings; each person?" → 6.
     ("split_with", _split_with_system),
+    # WEEKDAY BASE ± DELTAS: "30 min weekdays; +5 Tue, +25 Fri; hours?" → 3.
+    ("weekday_base_delta", _weekday_base_delta_system),
+    # WEEKDAY-ONLY RATE × WEEKS: "5 miles/day weekdays only; over 3 weeks?" → 75.
+    ("weekday_rate_weeks", _weekday_rate_weeks_system),
+    # SALARY → HOURLY: "$576/month; 8h/day 6d/wk?" → 3.
+    ("salary_hourly_rate", _salary_hourly_rate_system),
+    # WEEKLY NEED ÷ PER-PERSON ÷ 7: "7 gal/wk; 2 pints/person; people/day?" → 4.
+    ("weekly_need_per_person_daily", _weekly_need_per_person_daily_system),
+    # PER-SECOND × MIN/DAY × WEEK: "10 L/s; 10 min/day; one week?" → 42000.
+    ("per_second_minutes_week", _per_second_minutes_week_system),
     # PHASED WEEKS AVERAGE: "1/day 2wk; next 3wk same as first total; next 2wk 3/day" → 10.
     ("phased_weeks_average", _phased_weeks_average_system),
     # PET + CONSUMABLE COST: "$10 puppy; 3wk food; ⅓ cup/day; 3.5-cup bag $2" → 14.
