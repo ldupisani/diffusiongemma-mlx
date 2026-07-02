@@ -1693,9 +1693,9 @@ LEXICON.update({
     # EXCLUDED "brown": the diff caught it unlocking a held-out fraction-of-remaining chain to a
     # confident-wrong (Mary gives away half her blue shirts → 49≠37) — same class as the excluded "peanut".
     # third-wave count-nouns + typed modifiers (sweep re-run after colors; container/stationery clusters)
-    # EXCLUDED "pen": it unlocks a ratio-chain to a pen COUNT but the trailing "× $1.50 each" price step
-    # isn't composed → confident-wrong (Dorothy: 22 pens ≠ $33) — same unhandled-composition class as peanut/brown.
-    "desk": ["noun"], "drawer": ["noun"], "highlighter": ["noun"], "alley": ["noun"],
+    # "pen" is now safe: the chain-count×price composition (`_chain_count_price`) handles the Dorothy case
+    # (22 pens × $1.50 = $33) that previously made it a confident-wrong.
+    "pen": ["noun"], "desk": ["noun"], "drawer": ["noun"], "highlighter": ["noun"], "alley": ["noun"],
     "local": ["adjective"], "bowling": ["adjective", "noun"],
     # fourth-wave: a mass noun measured by a known unit (garbage → pounds) + a place entity (city)
     "city": ["noun"], "garbage": ["noun"],
@@ -1709,7 +1709,7 @@ PLURALS.update({
     "turtles": "turtle", "siblings": "sibling", "athletes": "athlete", "lemons": "lemon",
     "blueberries": "blueberry", "peaches": "peach", "strawberries": "strawberry", "contests": "contest",
     "babies": "baby", "seeds": "seed", "sunflowers": "sunflower", "softballs": "softball",
-    "showers": "shower", "highlighters": "highlighter", "drawers": "drawer",
+    "showers": "shower", "highlighters": "highlighter", "drawers": "drawer", "pens": "pen",
     "desks": "desk", "alleys": "alley", "cities": "city",
 })
 # NOTE: groundwork nouns/adjectives/pronouns (fruit/paper/side/…/herself) were re-tested with decline-safety
@@ -5980,6 +5980,12 @@ def _anchored_sum_system(premises: list, question: str):
     do)."""
     if not any(w in question.lower() for w in ("altogether", "in all", " total", "combined", "in total")):
         return None                                                  # not a SUM question — not this shape
+    # DEFER to `_chain_count_price` (dispatched before us): a money-spend total WITH a per-item price is a
+    # count×price problem — folding only the counts would drop the price (Dorothy 22≠33). It re-invokes us
+    # with a plain count question ("how many in total?") to get the count, so this gate never blocks that call.
+    ql = question.lower()
+    if any(w in ql for w in ("spend", "spent", "pay", "paid", "cost")) and _unit_price(question) is not None:
+        return None
     asked_measure = _queried_measure(question)
     if asked_measure is not None and "dozen" in asked_measure[1]:
         return None
@@ -7023,6 +7029,44 @@ def _revenue_product_sum(premises: list, question: str):
     return _compute(" + ".join(f"({p})" for p in products))
 
 
+def _unit_price(text: str):
+    """A single per-ITEM money price stated in `text`, or None. Requires an explicit per-item cue (one/each/
+    every/a/per <item> cost(s) $P, or "$P each/apiece", or "$P per <item>") so a bare total ("bought it for
+    $80") is never mistaken for a unit price. Returns the float price."""
+    for pat in (r"\b(?:one|each|every|a|per)\s+[a-z]+\s+(?:costs?|cost|sells?\s+for)\s+\$(\d+(?:\.\d+)?)",
+                r"\$(\d+(?:\.\d+)?)\s+(?:each|apiece)\b",
+                r"\$(\d+(?:\.\d+)?)\s+per\s+[a-z]+"):
+        m = re.search(pat, text, re.I)
+        if m:
+            return float(m.group(1))
+    return None
+
+
+def _chain_count_price(premises: list, question: str):
+    """CHAIN-COUNT × UNIT-PRICE — a ratio/offset chain of an item's counts + a single per-item price + a
+    money-SPEND total question → (Σ count) × price. "Dorothy buys ½ as many pens as Julia; Julia 3× Robert;
+    Robert 4 pens; one pen costs $1.50; how much did they spend in total on pens?" → 22 × 1.50 = 33. The
+    total COUNT is already computed by `_anchored_sum_system` (measure-blind — it sums the anchored chain and
+    ignores the price value); this wraps it: extract the price, get the count, multiply. Registered BEFORE
+    `anchored_sum` so it intercepts the money framing (anchored_sum alone would commit the bare count 22).
+    Tightly gated: a "how much … spend/pay/cost … total" question, a clear per-item price, and a chain the
+    count-system actually solves. None otherwise (→ falls through to the plain count systems)."""
+    ql = question.lower()
+    if not (("how much" in ql) and any(w in ql for w in ("spend", "spent", "pay", "paid", "cost"))
+            and any(w in ql for w in ("total", "altogether", "in all"))):
+        return None
+    if any(w in ql for w in ("more", "less", "fewer", "change", "left", "discount", "percent", "each of")):
+        return None
+    price = _unit_price(question) or _unit_price(" ".join(premises))
+    if price is None:
+        return None
+    count = _anchored_sum_system(premises, "how many in total?")   # synthetic COUNT question: sums the anchored
+    #                       chain and sidesteps anchored_sum's own money-price decline gate (which defers to us)
+    if not isinstance(count, (int, float)) or isinstance(count, bool):
+        return None
+    return _compute(f"{_num(count)} * {price}")
+
+
 def _equal_share(question: str, context: list, premises: list):
     """POOL-AND-REDISTRIBUTE — "Mark has 30 candies, Peter 25, John 35. They combine their candies and share
     them equally. How many will EACH have?" → (30+25+35)/3 = 30. Same Σ/N math as the `average` branch (#3l)
@@ -7101,6 +7145,8 @@ _EARLY_SYSTEMS = [
     ("noun_anchored_sum", _noun_anchored_sum_system),
     # SUBTYPE-PARTITION (adjective subtypes of one head noun, total in same noun, 'the rest' ask): "Ryan 40 balls … green balls?" → 7.
     ("noun_residual_sum", _noun_residual_sum_system),
+    # CHAIN-COUNT × UNIT-PRICE (money-spend total + per-item price over an anchored count chain): "Robert 4 pens, Julia 3×, Dorothy ½×; one pen $1.50; total spent?" → 22×1.50 = 33. BEFORE anchored_sum (which would commit the bare count 22).
+    ("chain_count_price", _chain_count_price),
     # ANCHORED-SUM (no total, one bare anchor, sum ask): "Cecil $600 … how much altogether?" → 2800.
     ("anchored_sum", _anchored_sum_system),
     # ANCHORED-SINGLE (bare anchor, single named ask): "Ed weighs 146 … Find Carl's weight." → 220.

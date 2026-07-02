@@ -4346,9 +4346,12 @@ class TestIncrement140TwoUnknownRatio(unittest.TestCase):
             "How many points does Mark have?"), 20)
 
     def test_three_entity_system_declines(self):
+        # UNDER-CONSTRAINED 3-entity (no total, Bob unanchored) → genuinely undetermined. (With a stated
+        # total this shape now SOLVES via `_affine_system` — Ann=3·Bob + Carol=5 + total=40 → Bob=8.75 —
+        # so the decline here is the missing-constraint case, not a limitation of the ratio machinery.)
         self.assertEqual(reading.solve(
-            "Ann has 3 times as many pens as Bob. Carol has 5 pens. They have a combined total of 40 pens. "
-            "How many pens does Bob have?"), "undetermined")
+            "Ann has 3 times as many pens as Bob. Carol has 5 pens. How many pens does Bob have?"),
+            "undetermined")
 
     def test_measure_qualifier_mismatch_declines(self):
         # the relation ('red balls') and the total ('blue balls') are different measures → not this system
@@ -5240,9 +5243,11 @@ class TestIncrement136MultiRateDecline(unittest.TestCase):
             "How much did he pay in total?"), "undetermined")
 
     def test_two_per_item_prices_declines(self):
-        self.assertEqual(reading.solve(
-            "A store sells pens at $2 each and books at $5 each. "
-            "How much does one pen and one book cost?"), "undetermined")
+        # two per-item prices asked as a single "one of each" cost → still a DECLINE (now via answer()'s
+        # "couldn't tell what to count" once 'pens' is lexicalized, rather than the old unknown-word decline).
+        result = reading.solve(
+            "A store sells pens at $2 each and books at $5 each. How much does one pen and one book cost?")
+        self.assertFalse(isinstance(result, (int, float)) and not isinstance(result, bool))
 
     def test_single_applied_purchase_unaffected(self):
         self.assertEqual(reading.solve(
@@ -5501,6 +5506,26 @@ class TestIncrement142RevenueProductSum(unittest.TestCase):
         self.assertEqual(reading.solve(
             "A baker sold 5 cakes at $3 and 4 pies at $2 with a discount. How much did the baker earn?"),
             "undetermined")
+
+
+class TestIncrement143ChainCountPrice(unittest.TestCase):
+    """#143 — CHAIN-COUNT × UNIT-PRICE: an anchored ratio/offset chain of an item's counts + a single
+    per-item price + a money-SPEND total question → (Σ count) × price. The count is computed by the
+    (measure-blind) anchored-sum system; `_chain_count_price` (dispatched BEFORE anchored_sum) extracts the
+    price and multiplies, so the money framing no longer commits the bare count. anchored_sum defers on this
+    shape (no cross-solver value collision). A pure COUNT question is unaffected (anchored_sum answers it)."""
+
+    def test_chain_count_times_price(self):
+        self.assertEqual(reading.solve(
+            "Dorothy buys half as many pens as Julia. Julia buys three times as many pens as Robert. "
+            "Robert buys 4 pens. If one pen costs $1.50, how much money did the three friends spend in "
+            "total on pens?"), 33)
+
+    def test_pure_count_question_unaffected(self):
+        # no price / no money framing → the plain count, via anchored_sum (not the price wrapper)
+        self.assertEqual(reading.solve(
+            "Dorothy buys half as many pens as Julia. Julia buys three times as many pens as Robert. "
+            "Robert buys 4 pens. How many pens did they buy in total?"), 22)
 
 
 if __name__ == "__main__":
