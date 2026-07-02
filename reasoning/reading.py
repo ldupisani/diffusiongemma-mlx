@@ -7595,6 +7595,56 @@ def _herd_rate_week_system(premises: list, question: str):
     return _compute(f"{_num(count.amount)} * {_num(rate.amount)} * 7")
 
 
+def _remainder_after_rate_system(premises: list, question: str):
+    """REMAINDER AFTER A RATED STRETCH — "381 pages in the book; already read 149; reads 20 pages a
+    day for a week; how many pages are still left?" → 381 − 149 − 20·7 = 92. TIGHTLY gated: a
+    digit-free "how many <X> … left" question; a "there are/is N <X>" TOTAL premise; every other
+    digit-bearing premise is either an ALREADY-consumed amount of X ("has already read 149 pages")
+    or the RATE premise (a per-day Rate fact of X whose text states a "for a week / for N days"
+    duration); the remainder is non-negative. None otherwise."""
+    ql = question.lower()
+    m = re.search(r"how many (\w+)", ql)
+    if m is None or " left" not in ql or any(ch.isdigit() for ch in ql) \
+            or any(w in ql for w in ("more", "fewer", "less", "than")):
+        return None
+    asked = _singular_of(m.group(1)) or m.group(1)
+    if "noun" not in LEXICON.get(asked, ()):
+        return None
+    item_re = re.compile(r"(\d+(?:\.\d+)?)\s+(?:%s|%ss)\b" % (re.escape(asked), re.escape(asked)))
+    total = consumed = rated = None
+    disc, ctx = [], []
+    for p in premises:
+        fs = learn(p, disc, ctx) or []
+        ctx += fs
+        pl = p.lower()
+        if not any(ch.isdigit() for ch in p):
+            continue
+        nums = item_re.findall(pl)
+        rate = next((f for f in fs if isinstance(f, Rate) and f.per_unit == "day"
+                     and f.measure[0] == asked), None)
+        if rate is not None:
+            dm = re.search(r"\bfor (a|one|two|three|four|five|six|seven|\d+) (week|day)s?\b", pl)
+            if dm is None or rated is not None:
+                return None
+            n = 1.0 if dm.group(1) in ("a", "one") else \
+                float(NUMBERS.get(dm.group(1), dm.group(1) if dm.group(1).isdigit() else 0) or 0)
+            if n <= 0:
+                return None
+            rated = rate.amount * n * (7 if dm.group(2) == "week" else 1)
+        elif re.match(r"\s*there (are|is)\b", pl) and len(nums) == 1 and total is None:
+            total = float(nums[0])
+        elif "already" in pl and len(nums) == 1 and consumed is None:
+            consumed = float(nums[0])
+        else:
+            return None                                  # an unclassified valued premise → not this shape
+    if total is None or rated is None:
+        return None
+    result = _compute(f"{_num(total)} - {_num(consumed or 0)} - {_num(rated)}")
+    if not (isinstance(result, (int, float)) and result >= 0):
+        return None
+    return result
+
+
 def _weekday_weekend_system(premises: list, question: str):
     """WEEKDAY/WEEKEND SPLIT — a per-day rate on WEEKDAYS (5) plus a RELATIONAL per-day rate on
     WEEKEND days (2), asked per week: "8 episodes each day during weekdays; on each weekend day
@@ -7742,6 +7792,8 @@ _EARLY_SYSTEMS = [
     ("herd_rate_week", _herd_rate_week_system),
     # WEEKDAY/WEEKEND SPLIT: "8 episodes a day on weekdays, 3× on weekend days; per week?" → 88.
     ("weekday_weekend", _weekday_weekend_system),
+    # REMAINDER AFTER A RATED STRETCH: "381 pages; already read 149; 20/day for a week; left?" → 92.
+    ("remainder_after_rate", _remainder_after_rate_system),
 ]
 
 # LATE systems run AFTER the read-synthesize fixpoint has built `context` (they consume derived

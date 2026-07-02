@@ -5991,5 +5991,27 @@ class TestIncrement159WeekdayWeekendSplit(unittest.TestCase):
             "How many pages does she read in a week?"), "undetermined")
 
 
+class TestIncrement160RemainderAfterRate(unittest.TestCase):
+    """#160 — `_remainder_after_rate_system` (EARLY, registered): a "there are N <X>" total, an
+    optional ALREADY-consumed amount, and a per-day Rate premise carrying a "for a week / for N
+    days" duration; a digit-free "how many <X> left" question → total − consumed − rate·days."""
+
+    def test_total_consumed_rate_week(self):
+        self.assertEqual(reading.solve(
+            "There are 300 pages in Lea's book. She has already read 120 pages. If she reads 15 "
+            "pages a day for a week, how many pages are still left to be read?"), 75)
+
+    def test_no_consumed_two_weeks(self):
+        self.assertEqual(reading.solve(
+            "There are 200 pages in the book. If Ana reads 10 pages a day for two weeks, "
+            "how many pages are left?"), 60)
+
+    def test_overrun_declines(self):
+        # rate x days exceeds the total — a negative remainder means this isn't the shape
+        self.assertEqual(reading.solve(
+            "There are 100 pages in the book. If Ana reads 20 pages a day for two weeks, "
+            "how many pages are left?"), "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()
