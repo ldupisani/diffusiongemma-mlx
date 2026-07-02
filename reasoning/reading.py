@@ -7746,6 +7746,115 @@ def _ordinal_day_chain_residual_system(premises: list, question: str):
     return result
 
 
+def _pet_food_remainder_system(premises: list, question: str):
+    """PET-FOOD REMAINDER — "three dogs; each eats 1/2 of a pound twice a day; bought 30 pounds;
+    how many pounds left after a week?" → 30 − 3·0.5·2·7 = 9. TIGHTLY gated: a digit-free "how
+    many pounds … left after a week" question; a count-of-animals premise; ONE "each <animal>
+    eats N/D of a pound … twice/K-times a day" premise; ONE "bought T pounds" premise; no other
+    valued premise; non-negative result. None otherwise."""
+    ql = question.lower()
+    if re.search(r"how many pounds .*left after a week", ql) is None \
+            or any(ch.isdigit() for ch in ql):
+        return None
+    count = frac = per_day = total = None
+    for p in premises:
+        pl = p.lower()
+        cm = re.search(r"has (\w+) \w+s\b", pl)
+        em = re.search(r"each \w+ eats (\d+)/(\d+) of a pound", pl)
+        bm = re.search(r"bought (\d+(?:\.\d+)?) pounds", pl)
+        if em is not None and frac is None:
+            frac = float(em.group(1)) / float(em.group(2))
+            per_day = 2 if "twice a day" in pl else None
+            km = re.search(r"(\w+) times a day", pl)
+            if per_day is None and km is not None:
+                per_day = NUMBERS.get(km.group(1))
+            if per_day is None:
+                return None
+        elif bm is not None and total is None:
+            total = float(bm.group(1))
+        elif cm is not None and count is None and not any(ch.isdigit() for ch in p):
+            count = NUMBERS.get(cm.group(1))
+            if count is None:
+                return None
+        elif any(ch.isdigit() for ch in p):
+            return None                                  # an unclassified valued premise
+    if None in (count, frac, per_day, total):
+        return None
+    result = _compute(f"{_num(total)} - {_num(count)} * {_num(frac)} * {_num(per_day)} * 7")
+    if not (isinstance(result, (int, float)) and result >= 0):
+        return None
+    return result
+
+
+def _orchard_pack_revenue_system(premises: list, question: str):
+    """ORCHARD → PACKS → REVENUE — "10 trees, picks 12 oranges each day; sells 6-packs for $2;
+    how much earned after 3 weeks selling all?" → 10·12·21/6·2 = 840. TIGHTLY gated: a "how much
+    money … after W weeks" question whose ONLY digit is W; ONE trees×per-day premise; ONE
+    "K-packs … for $P" premise; no other valued premise; the pack division exact; positive
+    integer. None otherwise."""
+    ql = question.lower()
+    wm = re.search(r"after (\d+) weeks", ql)
+    if "how much money" not in ql or wm is None \
+            or any(ch.isdigit() for ch in ql.replace(wm.group(0), "")):
+        return None
+    weeks = float(wm.group(1))
+    trees = per_day = pack = price = None
+    for p in premises:
+        pl = p.lower()
+        tm = re.search(r"(\d+) \w+ trees[^.]*?pick (\d+) \w+ each day", pl)
+        km = re.search(r"(\d+)-packs? of \w+ for \$(\d+(?:\.\d+)?)", pl)
+        if tm is not None and trees is None:
+            trees, per_day = float(tm.group(1)), float(tm.group(2))
+        elif km is not None and pack is None:
+            pack, price = float(km.group(1)), float(km.group(2))
+        elif any(ch.isdigit() for ch in p):
+            return None                                  # an unclassified valued premise
+    if None in (trees, per_day, pack, price):
+        return None
+    total = trees * per_day * 7 * weeks
+    if total % pack:
+        return None                                      # the pack division must be exact
+    result = _compute(f"{_num(total)} / {_num(pack)} * {_num(price)}")
+    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
+        return None
+    return result
+
+
+def _shared_item_cost_system(premises: list, question: str):
+    """SHARED DAILY ITEM → COST — "shares half of a small apple with her dog every day; an apple
+    weighs 1/4 of a pound; $2.00 a pound; enough to last 2 weeks?" → she and the dog eat ONE
+    whole apple a day between them: 14·0.25·2 = 7. TIGHTLY gated: a digit-free "how much will
+    she spend" question; a digit-free "shares half of a … every day" premise; ONE "N/D of a
+    pound" weight; ONE "$P a pound" price; ONE "last for W weeks" duration; no other valued
+    premise; positive result. None otherwise."""
+    ql = question.lower()
+    if "how much" not in ql or "spend" not in ql or any(ch.isdigit() for ch in ql):
+        return None
+    body = " ".join(premises).lower()
+    if not re.search(r"shares half of a [^.]*every day", body):
+        return None
+    weight = price = weeks = None
+    for p in premises:
+        pl = p.lower()
+        wm = re.search(r"(\d+)/(\d+) of a pound", pl)
+        pm = re.search(r"\$(\d+(?:\.\d+)?) a pound", pl)
+        lm = re.search(r"last for (\d+) weeks", pl)
+        if wm is not None and weight is None:
+            weight = float(wm.group(1)) / float(wm.group(2))
+        elif pm is not None and price is None:
+            price = float(pm.group(1))
+        elif lm is not None and weeks is None:
+            weeks = float(lm.group(1))
+        elif any(ch.isdigit() for ch in p):
+            return None                                  # an unclassified valued premise
+    if None in (weight, price, weeks):
+        return None
+    result = _compute(f"{_num(weeks)} * 7 * {_num(weight)} * {_num(price)}")
+    if not (isinstance(result, (int, float)) and result > 0):
+        return None
+    return result
+
+
 def _everyday_plus_half_subdays_system(premises: list, question: str):
     """EVERY-DAY RATE + HALF-RATE SUB-ACTIVITY — "watches TV 4 hours every day; on game days he
     plays for half as long as he watches TV; plays 3 days a week; how long watching TV and
@@ -8637,6 +8746,12 @@ _EARLY_SYSTEMS = [
     ("inverse_distribution", _inverse_distribution_system),
     # SPLIT-WITH (K+1): "two dozen eggs to split with his three siblings; each person?" → 6.
     ("split_with", _split_with_system),
+    # PET-FOOD REMAINDER: "3 dogs × ½lb × 2/day; 30 lb bought; left after a week?" → 9.
+    ("pet_food_remainder", _pet_food_remainder_system),
+    # ORCHARD PACK REVENUE: "10 trees × 12/day; 6-packs $2; after 3 weeks?" → 840.
+    ("orchard_pack_revenue", _orchard_pack_revenue_system),
+    # SHARED ITEM COST: "half an apple each with dog daily; ¼lb; $2/lb; 2 weeks?" → 7.
+    ("shared_item_cost", _shared_item_cost_system),
     # EVERY-DAY + HALF SUB-DAYS: "TV 4h/day; games half as long, 3 days/wk?" → 34.
     ("everyday_plus_half_subdays", _everyday_plus_half_subdays_system),
     # PAIRED DAILY RATES × TIMES/WEEK: "5×/wk 250 km/day; friend +40; both, week?" → 2700.

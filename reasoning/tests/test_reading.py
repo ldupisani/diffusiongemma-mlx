@@ -6332,5 +6332,29 @@ class TestIncrement174WholeTextChainsA(unittest.TestCase):
             "How much money did she collect during that time?"), 300)
 
 
+class TestIncrement175WholeTextChainsB(unittest.TestCase):
+    """#175 — three more whole-text chains: `_pet_food_remainder_system` (T − count·frac·K·7),
+    `_orchard_pack_revenue_system` (trees·per-day·7·weeks/pack·price, exact pack division), and
+    `_shared_item_cost_system` (a shared daily item = one whole item/day between the sharers →
+    weeks·7·weight·price)."""
+
+    def test_pet_food_remainder(self):
+        self.assertEqual(reading.solve(
+            "Vera has four dogs. Each dog eats 1/2 of a pound of dog food twice a day. If Vera "
+            "bought 40 pounds of dog food, how many pounds of dog food are left after a week?"), 12)
+
+    def test_orchard_pack_revenue(self):
+        self.assertEqual(reading.solve(
+            "Lena has 5 orange trees from which she can pick 12 oranges each day. Lena sells "
+            "6-packs of oranges for $3. How much money will Lena have earned after 2 weeks if "
+            "she sells all her oranges?"), 420)
+
+    def test_shared_item_cost(self):
+        self.assertEqual(reading.solve(
+            "Isla shares half of a small apple with her dog every day. A small apple weighs "
+            "about 1/4 of a pound. She can currently buy apples for $4.00 a pound. How much "
+            "will she spend so that she and her dog have enough apples to last for 3 weeks?"), 21)
+
+
 if __name__ == "__main__":
     unittest.main()
