@@ -9433,6 +9433,307 @@ def _discounted_purchase_system(premises: list, question: str):
     return _gated_pos_int(result)
 
 
+# --- system family: product-sum variants (change / savings-gap / split) -----------------------
+_PS_PAIR = re.compile(r"(\d+) (?:\w+ )?(?:\w+ )?(?:of \w+ )?(?:that cost |at )?\$(\d+(?:\.\d+)?)"
+                      r"(?: each)?")
+
+
+def _product_sum_change_system(premises: list, question: str):
+    """PRODUCT-SUM + CHANGE — Σ(count × each-price) paid with a stated total, asked the change:
+    "5 boxes at $6 each and 10 boxes at $14 each; she paid $200 for all; how much change?" →
+    200 − 170 = 30. `_shopping_total` blocks change asks — this claims them. TIGHTLY gated: a
+    digit-free "how much change" question; every money value an each-price except ONE "paid $T"
+    total; strict count/price pairing; T ≥ Σ; every digit accounted. None otherwise."""
+    ql = question.lower()
+    if "how much change" not in ql or _has_digit(ql):
+        return None
+    body = " ".join(p.lower() for p in premises)
+    tm = re.search(r"paid \$(\d+(?:\.\d+)?)", body)
+    if tm is None:
+        return None
+    total_paid = float(tm.group(1))
+    pairs = []
+    for m in re.finditer(r"(\d+) (\w+)(?: of \w+)? at \$(\d+(?:\.\d+)?)(?: each)?", body):
+        pairs.append((float(m.group(1)), float(m.group(3)), m))
+    if len(pairs) < 1:
+        return None
+    used = {tm.group(1)} | {m.group(1) for _, _, m in pairs} | {m.group(3) for _, _, m in pairs}
+    if any(d not in used for d in re.findall(r"\d+(?:\.\d+)?", body)):
+        return None
+    sigma = sum(c * p for c, p, _ in pairs)
+    if total_paid < sigma:
+        return None
+    result = _compute(f"{_num(total_paid)} - ({' + '.join(f'{_num(c)} * {_num(p)}' for c, p, _ in pairs)})")
+    if isinstance(result, float):
+        result = round(result, 9)
+    return _gated_nonneg(result)
+
+
+def _target_purchase_gap_system(premises: list, question: str):
+    """TARGET PURCHASE − SAVINGS — "wants to buy 8 books; each book costs $5; already has $13;
+    how much does he need to save?" → 8·5 − 13 = 27. TIGHTLY gated: a digit-free "how much …
+    need (to save|to earn|more)" question; ONE want-count; ONE each-price; ONE has-amount;
+    nothing else valued; a positive gap. None otherwise."""
+    ql = question.lower()
+    if not re.search(r"how much (?:money )?(?:does|do|will) \w+ (?:still )?need", ql) \
+            or _has_digit(ql):
+        return None
+    count = price = have = None
+    for p in premises:
+        pl = p.lower()
+        cm = re.search(r"buy (\d+)(?: new)? \w+", pl)
+        pm = re.search(r"each \w+ costs? \$(\d+(?:\.\d+)?)", pl)
+        hm = re.search(r"(?:has|saved) \$(\d+(?:\.\d+)?)", pl)
+        if cm is not None and count is None and not re.search(r"\$", pl):
+            count = float(cm.group(1))
+        elif pm is not None and price is None:
+            price = float(pm.group(1))
+        elif hm is not None and have is None:
+            have = float(hm.group(1))
+        elif _has_digit(p):
+            return None                                  # an unclassified valued premise
+    if None in (count, price, have):
+        return None
+    result = _compute(f"{_num(count)} * {_num(price)} - {_num(have)}")
+    if isinstance(result, float):
+        result = round(result, 9)
+    return _gated_pos_int(result)
+
+
+def _product_sum_split_system(premises: list, question: str):
+    """PRODUCT-SUM SPLIT BETWEEN TWO — "Sab and Dane sold 6 pairs at $3 each and 18 shirts that
+    cost $2; how much will EACH earn if they divided their total earning?" → (18+36)/2 = 27.
+    TIGHTLY gated: a "how much will each … earn/get … divide" question; a TWO-name cast stated
+    with 'and'; alternating count/price pairs ('N X that cost $P (each)' / 'N X at $P'); every
+    digit accounted; an exact halving. None otherwise."""
+    ql = question.lower()
+    if "each" not in ql or not re.search(r"\bearn|\bget|\breceive", ql) \
+            or not re.search(r"divid", ql + " " + " ".join(premises).lower()) or _has_digit(ql):
+        return None
+    body = " ".join(premises)
+    if not re.search(r"\b[A-Z][a-z]+ and [A-Z][a-z]+\b", body):
+        return None                                      # exactly a stated two-name cast
+    bl = body.lower()
+    pairs = list(re.finditer(r"(\d+) (?:\w+ )?(?:of )?\w+ (?:that cost|at) \$(\d+(?:\.\d+)?)(?: each)?", bl))
+    if len(pairs) < 1:
+        return None
+    used = {m.group(1) for m in pairs} | {m.group(2) for m in pairs}
+    if any(d not in used for d in re.findall(r"\d+(?:\.\d+)?", bl)):
+        return None
+    result = _compute(f"({' + '.join(f'{m.group(1)} * {m.group(2)}' for m in pairs)}) / 2")
+    if isinstance(result, float):
+        result = round(result, 9)
+    return _gated_pos_int(result)
+
+
+# --- system family: day chains & two-rate conversions ------------------------------------------
+def _today_tomorrow_chain_system(premises: list, question: str):
+    """SIGNED DAY CHAIN — "has 65 pounds today; tomorrow he will use 18; the following day he
+    will buy 50 more; how many in the end?" → 65 − 18 + 50 = 97. TIGHTLY gated: a digit-free
+    "how many … (in the end|finally|have)" question; ONE "has N … today" start; every other
+    valued premise a use/lose (−) or buy/get/add (+) day step; every digit accounted; a
+    non-negative result. None otherwise."""
+    ql = question.lower()
+    if not re.search(r"how (?:many|much)", ql) or _has_digit(ql) or _has_comparative(ql) \
+            or not re.search(r"in the end|finally|will \w+ have|does \w+ have", ql):
+        return None
+    start = None
+    steps = []
+    for p in premises:
+        pl = p.lower()
+        sm = re.search(r"has (\d+(?:,\d{3})*) ", pl)
+        um = re.search(r"(?:use|uses|lose|loses|eat|eats|spend|spends) (\d+(?:,\d{3})*) ", pl)
+        bm = re.search(r"(?:buy|buys|get|gets|add|adds|find|finds) (\d+(?:,\d{3})*) ", pl)
+        if sm is not None and start is None and "today" in pl:
+            start = float(sm.group(1).replace(",", ""))
+            if len(re.findall(r"\d", pl)) != len(sm.group(1)):
+                return None
+        elif um is not None and (bm is None or um.start() < bm.start()):
+            steps.append(-float(um.group(1).replace(",", "")))
+            if bm is not None:
+                steps.append(float(bm.group(1).replace(",", "")))
+            if len(re.findall(r"\d+(?:,\d{3})*", pl)) != (1 if bm is None else 2):
+                return None
+        elif bm is not None:
+            steps.append(float(bm.group(1).replace(",", "")))
+            if len(re.findall(r"\d+(?:,\d{3})*", pl)) != 1:
+                return None
+        elif _has_digit(p):
+            return None                                  # an unclassified valued premise
+    if start is None or not steps:
+        return None
+    result = _compute(f"{_num(start)} {' '.join(('+ ' if s > 0 else '- ') + _num(abs(s)) for s in steps)}")
+    if isinstance(result, float):
+        result = round(result, 9)
+    return _gated_nonneg(result)
+
+
+def _first_days_double_total_system(premises: list, question: str):
+    """FIRST TWO DAYS + A DOUBLE OF THEIR SUM — "found 5; the next day another 7; the following
+    day twice the number she got from the first two days; how many does she have?" → 5 + 7 +
+    2·12 = 36. TIGHTLY gated: a digit-free "how many … have" question; exactly TWO literal day
+    finds; ONE digit-free "twice the number … first two days" premise; nothing else valued;
+    positive integer. None otherwise."""
+    ql = question.lower()
+    if not re.search(r"how many \w+ (?:does|do|did|will) \w+ (?:now )?have", ql) or _has_digit(ql):
+        return None
+    body = " ".join(p.lower() for p in premises)
+    if not re.search(r"twice the number [^.]*first two days", body):
+        return None
+    lits = []
+    for p in premises:
+        pl = p.lower()
+        if "twice the number" in pl:
+            if _has_digit(p):
+                return None
+            continue
+        for m in re.finditer(r"(?:found|got|collected) (?:another )?(\d+)\b", pl):
+            lits.append(float(m.group(1)))
+        if _has_digit(p) and not re.search(r"(?:found|got|collected) (?:another )?\d+", pl):
+            return None
+    if len(lits) != 2:
+        return None
+    a, b = lits
+    result = _compute(f"{_num(a)} + {_num(b)} + 2 * ({_num(a)} + {_num(b)})")
+    return _gated_pos_int(result)
+
+
+def _equal_earnings_hours_system(premises: list, question: str):
+    """HOURS TO EQUAL ANOTHER'S EARNINGS — "Greta worked 40 hours at $12 per hour; Lisa earns
+    $15 per hour; how many hours must Lisa work to equal Greta's earnings?" → 40·12/15 = 32.
+    TIGHTLY gated: an "how many hours … to equal … earnings" question; ONE hours×rate side; ONE
+    bare-rate side; every digit accounted (the question may repeat the hours); an exact positive
+    integer. None otherwise."""
+    ql = question.lower()
+    if not re.search(r"how many hours .*equal", ql):
+        return None
+    body = " ".join(p.lower() for p in premises)
+    wm = re.search(r"worked (\d+) hours", body)
+    rates = re.findall(r"\$(\d+(?:\.\d+)?) per hour", body)
+    if wm is None or len(rates) != 2:
+        return None
+    hours, r1, r2 = float(wm.group(1)), float(rates[0]), float(rates[1])
+    used = {wm.group(1)} | set(rates)
+    if any(d not in used for d in re.findall(r"\d+(?:\.\d+)?", body)):
+        return None
+    for d in re.findall(r"\d+(?:\.\d+)?", ql):
+        if d != wm.group(1):
+            return None                                  # a question digit may only echo the hours
+    result = _compute(f"{_num(hours)} * {_num(r1)} / {_num(r2)}")
+    return _gated_pos_int(result)
+
+
+def _speed_time_inverse_system(premises: list, question: str):
+    """SAME DISTANCE AT A NEW SPEED — "takes 4 hours at 50 miles per hour; how long at 100 miles
+    per hour instead?" → 4·50/100 = 2. TIGHTLY gated: a "how long … instead" question carrying
+    the NEW speed; ONE hours+speed premise; nothing else valued; an exact positive result. None
+    otherwise."""
+    ql = question.lower()
+    if "how long" not in ql:
+        return None
+    text = " ".join(p.lower() for p in premises) + " " + ql   # the "…instead?" clause may split
+    nm = re.search(r"(\d+(?:\.\d+)?) miles (?:an|per) hour instead", text)
+    if nm is None:
+        return None
+    body = " ".join(p.lower() for p in premises)
+    tm = re.search(r"takes (\d+(?:\.\d+)?) hours", body)
+    sm = re.search(r"speed of (\d+(?:\.\d+)?) miles (?:an|per) hour", body)
+    if tm is None or sm is None:
+        return None
+    used = {tm.group(1), sm.group(1), nm.group(1)}
+    if any(d not in used for d in re.findall(r"\d+(?:\.\d+)?", text)):
+        return None
+    result = _compute(f"{_num(float(tm.group(1)))} * {_num(float(sm.group(1)))} / {_num(float(nm.group(1)))}")
+    return _gated_pos_int(result)
+
+
+# --- system family: percent-of-money (raise-difference / value-change / second-item-more) -----
+def _raise_difference_system(premises: list, question: str):
+    """RAISE DIFFERENCE ON A SHARED BASE — "Hansel makes $30,000 and received a 10% raise;
+    Gretel makes the same amount but received a 15% raise; how much MORE will Gretel make?" →
+    30000·(0.15−0.10) = 1500. TIGHTLY gated: a 'how much more' money question naming a person;
+    ONE base salary; a 'same amount' premise; exactly TWO raise percents; every digit accounted;
+    positive integer. None otherwise."""
+    ql = question.lower()
+    if "how much more" not in ql or _has_digit(ql):
+        return None
+    body = " ".join(p.lower() for p in premises)
+    if "same amount" not in body and "same salary" not in body:
+        return None
+    bm = re.search(r"\$(\d+(?:,\d{3})*(?:\.\d+)?)", body)
+    pcts = re.findall(r"(\d+(?:\.\d+)?)\s*%\s*raise", body)
+    if bm is None or len(pcts) != 2:
+        return None
+    base = float(bm.group(1).replace(",", ""))
+    p1, p2 = float(pcts[0]), float(pcts[1])
+    used = {bm.group(1)} | set(pcts)
+    if any(d not in used for d in re.findall(r"\d+(?:,\d{3})*(?:\.\d+)?", body)):
+        return None
+    hi, lo = max(p1, p2), min(p1, p2)
+    result = _compute(f"{_num(base)} * ({_num(hi)} - {_num(lo)}) / 100")
+    if isinstance(result, float):
+        result = round(result, 9)
+    return _gated_pos_int(result)
+
+
+def _value_change_pct_system(premises: list, question: str):
+    """ASSET VALUE ± A PERCENT — "bought a car 3 years ago at $4000; its value has reduced by
+    30%; calculate the current value" → 4000·0.70 = 2800. `_percent_change` requires exactly one
+    number — the scene's "3 years ago" third number blocks it; this shape allows exactly that
+    years-ago extra. TIGHTLY gated: a digit-free current/new-value question; ONE price; ONE
+    "value … (reduced|decreased|increased|risen) by P%" premise; the only other number a
+    "N (years|months) ago" scene marker; positive integer. None otherwise."""
+    ql = question.lower()
+    if not re.search(r"(?:current|new) (?:value|price|worth)", ql) or _has_digit(ql):
+        return None
+    body = " ".join(p.lower() for p in premises)
+    vm = re.search(r"(?:at|for) \$(\d+(?:,\d{3})*(?:\.\d+)?)", body)
+    pm = re.search(r"value (?:has |had )?(reduced|decreased|increased|risen|appreciated|depreciated)"
+                   r" by (\d+(?:\.\d+)?)\s*%", body)
+    if vm is None or pm is None:
+        return None
+    base = float(vm.group(1).replace(",", ""))
+    p = float(pm.group(2))
+    sign = "+" if pm.group(1) in ("increased", "risen", "appreciated") else "-"
+    if not 0 < p < 100:
+        return None
+    used = {vm.group(1), pm.group(2)} \
+        | {m.group(1) for m in re.finditer(r"(\d+) (?:years?|months?) ago", body)}
+    if any(d not in used for d in re.findall(r"\d+(?:,\d{3})*(?:\.\d+)?", body)):
+        return None
+    result = _compute(f"{_num(base)} * (1 {sign} {_num(p)} / 100)")
+    if isinstance(result, float):
+        result = round(result, 9)
+    return _gated_pos_int(result)
+
+
+def _pair_second_pct_more_system(premises: list, question: str):
+    """A PAIR WHERE THE SECOND COSTS P% MORE — "bought one for $22, the second was 50% more
+    expensive; how much did she pay for BOTH?" → 22 + 22·1.5 = 55. TIGHTLY gated: a digit-free
+    "for both" pay/cost question; ONE base price; ONE "P% more expensive" premise; nothing else
+    valued; positive integer. None otherwise."""
+    ql = question.lower()
+    if "both" not in ql or not re.search(r"\bpay|\bpaid|\bcost|\bspend|\bspent", ql) \
+            or _has_digit(ql):
+        return None
+    body = " ".join(p.lower() for p in premises)
+    bm = re.search(r"for \$(\d+(?:\.\d+)?)", body)
+    pm = re.search(r"(\d+(?:\.\d+)?)\s*% more expensive", body)
+    if bm is None or pm is None:
+        return None
+    base, p = float(bm.group(1)), float(pm.group(1))
+    if not 0 < p <= 200:
+        return None
+    used = {bm.group(1), pm.group(1)}
+    numword = re.findall(r"\d+(?:\.\d+)?", body)
+    if any(d not in used for d in numword):
+        return None
+    result = _compute(f"{_num(base)} + {_num(base)} * (1 + {_num(p)} / 100)")
+    if isinstance(result, float):
+        result = round(result, 9)
+    return _gated_pos_int(result)
+
+
 # --- system family: age shift (time-shifted anchors, projected asks) --------------------------
 _AGE_REL = re.compile(r"\b([A-Z][a-z]+) is (?:(\d+) years? (older|younger) than ([A-Z][a-z]+)"
                       r"|(younger|older) than ([A-Z][a-z]+) by (\d+) years?)")
@@ -10116,6 +10417,26 @@ _EARLY_SYSTEMS = [
     ("fraction_partition_rest", _fraction_partition_rest_system),
     # POOL − LITERAL − K×LITERAL, half-of-remaining ask: "120 pages; 12 + twice that; half the rest?" → 42.
     ("pool_literal_relational_remaining", _pool_literal_relational_remaining_system),
+    # PRODUCT-SUM + CHANGE: "5 at $6, 10 at $14; paid $200; change?" → 30.
+    ("product_sum_change", _product_sum_change_system),
+    # TARGET PURCHASE GAP: "buy 8 books, $5 each, has $13; need to save?" → 27.
+    ("target_purchase_gap", _target_purchase_gap_system),
+    # PRODUCT-SUM SPLIT (two-name cast): "6 pairs $3 each + 18 shirts $2; each earns?" → 27.
+    ("product_sum_split", _product_sum_split_system),
+    # RAISE DIFFERENCE (shared base, two raises): "$30k; 10% vs 15%; how much more?" → 1500.
+    ("raise_difference", _raise_difference_system),
+    # ASSET VALUE ± P%: "car at $4000 3 years ago; value reduced 30%; current?" → 2800.
+    ("value_change_pct", _value_change_pct_system),
+    # PAIR, SECOND P% MORE: "$22 + one 50% more expensive; both?" → 55.
+    ("pair_second_pct_more", _pair_second_pct_more_system),
+    # SIGNED DAY CHAIN: "65 today; use 18 tomorrow; buy 50 next; in the end?" → 97.
+    ("today_tomorrow_chain", _today_tomorrow_chain_system),
+    # FIRST TWO DAYS + DOUBLE THEIR SUM: "5; another 7; twice the first two days?" → 36.
+    ("first_days_double_total", _first_days_double_total_system),
+    # HOURS TO EQUAL EARNINGS: "40h at $12; $15/h; hours to equal?" → 32.
+    ("equal_earnings_hours", _equal_earnings_hours_system),
+    # SAME DISTANCE, NEW SPEED: "4h at 50 mph; at 100 mph instead?" → 2.
+    ("speed_time_inverse", _speed_time_inverse_system),
     # ANCHORED-SUM (no total, one bare anchor, sum ask): "Cecil $600 … how much altogether?" → 2800.
     ("anchored_sum", _anchored_sum_system),
     # ANCHORED-SINGLE (bare anchor, single named ask): "Ed weighs 146 … Find Carl's weight." → 220.

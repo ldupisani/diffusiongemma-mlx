@@ -2504,11 +2504,14 @@ class TestActionAmountAcrossTimes(unittest.TestCase):
             "Donny saves $15 on Monday, $28 on Tuesday and $13 on Wednesday. On Thursday he spends half of "
             "his total savings so far. How much did he spend?"), 28)
 
-    def test_holding_question_across_times_still_declines(self):
-        # a HOLDING question with an unresolved future event must stay declined (timeline ambiguity).
-        self.assertNotIsInstance(reading.solve(
+    def test_holding_question_across_times_now_solves(self):
+        # was pinned "decline" while the fold committed a PARTIAL (47≠97 — GUARD 5(b)'s reason);
+        # #198's `_today_tomorrow_chain_system` reads the FULL signed chain (65−18+50, every digit
+        # accounted) so this exact shape now solves correctly. GUARD 5(b) still declines holding
+        # questions the chain's tight gates don't claim.
+        self.assertEqual(reading.solve(
             "Jack has 65 pounds of sugar today. Tomorrow he will use 18 pounds of sugar. The following day "
-            "he will buy 50 more pounds of sugar. How many pounds will he have in the end?"), (int, float))
+            "he will buy 50 more pounds of sugar. How many pounds will he have in the end?"), 97)
 
 
 class TestNounAfterQuantifierAndInAll(unittest.TestCase):
@@ -6916,6 +6919,86 @@ class TestIncrement195FractionLiteralChains(unittest.TestCase):
             "Julie is reading a 120-page book with 8 chapters. Yesterday she read 12 pages "
             "and today she read twice as many pages as yesterday. If she wants to read half "
             "of the remaining pages tomorrow, how many pages should she read?"), (int, float))
+
+
+class TestIncrement196ProductSumVariants(unittest.TestCase):
+    """#196 — product-sum variants: change after paying a stated total (T − Σ), the target
+    purchase gap (N·P − savings), and the two-name equal split (Σ/2)."""
+
+    def test_product_sum_change(self):
+        # 200 − (5·6 + 10·14) = 30
+        self.assertEqual(reading.solve(
+            "Mary bought 5 boxes of drinks at $6 each box and 10 boxes of pizzas at $14 "
+            "each box for her pizza party. She paid $200 for all the items. How much change "
+            "did she get back?"), 30)
+
+    def test_target_purchase_gap(self):
+        # 8·5 − 13 = 27
+        self.assertEqual(reading.solve(
+            "Tommy wants to earn enough money to buy 8 new books. Each book costs $5. "
+            "If Tommy already has $13, how much does he need to save up?"), 27)
+
+    def test_product_sum_split_two_names(self):
+        # (6·3 + 18·2) / 2 = 27
+        self.assertEqual(reading.solve(
+            "Sab and Dane sold 6 pairs of shoes that cost $3 each and 18 shirts that cost "
+            "$2. How much will each of them earn if they divided their total earning?"), 27)
+
+
+class TestIncrement197PercentMoney(unittest.TestCase):
+    """#197 — percent-of-money: raise DIFFERENCE on a shared base, asset value ± P% (the
+    years-ago scene number allowed), and a pair whose second item costs P% more."""
+
+    def test_raise_difference_shared_base(self):
+        # 30000 · (15% − 10%) = 1500
+        self.assertEqual(reading.solve(
+            "Hansel makes $30,000 a year and just received a 10% raise. Gretel makes the "
+            "same amount as Hansel but received a 15% raise. How much more money will "
+            "Gretel make compared to Hansel?"), 1500)
+
+    def test_value_reduced_pct_with_scene_years(self):
+        # 4000 · 0.70 = 2800 — "3 years ago" is scene, not data
+        self.assertEqual(reading.solve(
+            "Jocelyn bought a car 3 years ago at $4000. If the car's value has reduced by "
+            "30%, calculate the current value of the car."), 2800)
+
+    def test_pair_second_pct_more(self):
+        # 22 + 22·1.5 = 55
+        self.assertEqual(reading.solve(
+            "Nina has two pairs of shoes. She bought one of them for $22, and the second "
+            "one was 50% more expensive. How much did Nina pay for both pairs of shoes?"), 55)
+
+
+class TestIncrement198DayChainsAndRates(unittest.TestCase):
+    """#198 — signed today/tomorrow chains, the first-two-days double-sum, hours to equal
+    another's earnings, and the same-distance-new-speed inverse."""
+
+    def test_signed_day_chain(self):
+        # 65 − 18 + 50 = 97
+        self.assertEqual(reading.solve(
+            "Jack has 65 pounds of sugar today. Tomorrow he will use 18 pounds of sugar "
+            "and the following day he will buy 50 more pounds of sugar. How many pounds "
+            "will he have in the end?"), 97)
+
+    def test_first_two_days_double_sum(self):
+        # 5 + 7 + 2·(5+7) = 36
+        self.assertEqual(reading.solve(
+            "Nala found 5 seashells at the beach. The next day, she found another 7, and "
+            "the following day, she found twice the number she got from the first two "
+            "days. How many seashells does Nala have?"), 36)
+
+    def test_equal_earnings_hours(self):
+        # 40·12/15 = 32 — the question repeats the 40 (an echo, allowed)
+        self.assertEqual(reading.solve(
+            "Greta worked 40 hours and was paid $12 per hour. Her friend Lisa earned $15 "
+            "per hour at her job. How many hours would Lisa have to work to equal Greta's "
+            "earnings for 40 hours?"), 32)
+
+    def test_speed_time_inverse(self):
+        # 4·50/100 = 2 — the "instead" clause splits into a premise
+        self.assertEqual(reading.solve(
+            "A train takes 4 hours to reach a destination at a speed of 50 miles per hour. "
+            "How long would it take if it traveled at 100 miles per hour instead?"), 2)
 
 
 if __name__ == "__main__":
