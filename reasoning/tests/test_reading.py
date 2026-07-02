@@ -6722,5 +6722,47 @@ class TestIncrement188MultiPairDiscount(unittest.TestCase):
             "pay?"), (int, float))
 
 
+class TestIncrement189CombinedStandard(unittest.TestCase):
+    """#189 — the combined-standard coordination: `_split_clauses` keeps "as X and Y combined"
+    whole (the _std rule severed it, stranding a bogus "Clementine combined." premise), and
+    `_combined_standard_sum_system` reads the raw named chain — one relation's standard is the
+    SUM of two resolved names — for a count total or a sell-all money ask."""
+
+    def test_combined_standard_money_chain(self):
+        # 72 + 144 + (72+144)/2 = 324 cookies · $2 = 648
+        self.assertEqual(reading.solve(
+            "Clementine, Jake, and Tory make cookies for the school bake sale. Clementine "
+            "baked 72 cookies. Jake baked twice as many cookies as Clementine. Tory baked "
+            "half as many cookies as Jake and Clementine combined. They sell their cookies "
+            "for $2 each. If they sell all their cookies, how much money do they make?"), 648)
+
+    def test_combined_standard_count_total(self):
+        # 10 + 20 + 15 = 45
+        self.assertEqual(reading.solve(
+            "Amy baked 10 cakes. Ben baked twice as many cakes as Amy. Carl baked half as "
+            "many cakes as Amy and Ben combined. How many cakes did they bake in total?"), 45)
+
+    def test_unresolved_combined_members_decline(self):
+        # the combined pair's members never resolve — no value to sum, decline
+        self.assertNotIsInstance(reading.solve(
+            "Carl baked half as many cakes as Amy and Ben combined. How many cakes did "
+            "they bake in total?"), (int, float))
+
+    def test_real_second_clause_still_splits(self):
+        # "…than Mark, and Mark has…" — the right conjunct has a verb and a value: a REAL
+        # second clause; the combined-standard guard must not glue it (anchored chain solves)
+        self.assertEqual(reading.solve(
+            "Ann has 8 more marbles than Mark, and Mark has 10 marbles. How many marbles "
+            "do they have in total?"), 28)
+
+    def test_inverse_combined_pair_lump(self):
+        # the SUBJECT is known — the pair resolves only as a LUMP (60/4), enough for the
+        # total ask: 60 + 15 = 75. (This case solved through the old SPLIT path; the guard
+        # rerouted it here — the firewall caught the break and forced the inverse support.)
+        self.assertEqual(reading.solve(
+            "Alexis has four times as many mangoes as Dilan and Ashley combined. If Alexis "
+            "has 60 mangoes, how many mangoes does all of them have combined?"), 75)
+
+
 if __name__ == "__main__":
     unittest.main()

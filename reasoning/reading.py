@@ -4847,6 +4847,17 @@ def _split_clauses(sentence: str) -> list:
             # than Mark, and Mark has …" / "as many as Dilan and Ashley" — "Mark"/"Dilan" follow than/as and
             # begin a REAL second clause / a combined standard, which must still split).
             _std = len(_lt) >= 2 and _lt[-2].lower().strip(_PUNCT) in ("than", "as")
+            # COMBINED STANDARD: "… as Jake and Clementine combined" — the right conjunct is just
+            # "<Name> combined." (a name + a combined-marker, no verb, no value): the two names form
+            # ONE summed standard, not a second clause. Keep the coordination intact for the
+            # combined-standard reader (the _std rule below would otherwise sever it, stranding a
+            # bogus "Clementine combined." premise).
+            if sep in (", ", ", and ", " and ") and _std and _lt and _rtoks \
+                    and _is_name_word(_lt[-1]) and _is_name_word(_rtoks[0]) \
+                    and len(_rtoks) >= 2 \
+                    and _rtoks[1].lower().strip(_PUNCT) in ("combined", "together", "altogether"):
+                i = sentence.find(sep, i + 1)
+                continue
             if sep in (", ", ", and ", " and ") and _lt and _rtoks and not _std \
                     and _is_name_word(_lt[-1]) and _is_name_word(_rtoks[0]) \
                     and not any(s in u.features.get("senses", []) for u in analyze(right).units
@@ -9349,6 +9360,88 @@ def _discounted_purchase_system(premises: list, question: str):
     return _gated_pos_int(result)
 
 
+# --- system family: combined-standard count chain ---------------------------------------------
+_CSS_ASSIGN = re.compile(r"\b([A-Z][a-z]+) [a-z]+ (\d+(?:,\d{3})*) ")
+_CSS_REL = re.compile(r"\b([A-Z][a-z]+) [a-z]+ (twice|half|double|(?:two|three|four|five|\d+)"
+                      r" times) as many [a-z]+ as ([A-Z][a-z]+)(?: and ([A-Z][a-z]+)"
+                      r" (?:combined|together|altogether))?")
+
+
+def _combined_standard_sum_system(premises: list, question: str):
+    """COMBINED-STANDARD COUNT CHAIN — a named count chain where one relation's standard is a
+    COMBINED pair: "Clementine baked 72; Jake baked twice as many as Clementine; Tory baked half
+    as many as Jake and Clementine COMBINED; sell for $2 each; sell all — how much do they make?"
+    → (72 + 144 + 108)·2 = 648. The clause splitter now keeps "as X and Y combined" whole (see
+    _split_clauses); the anchored family's 2-name relation gate can't read a 3-name relation, so
+    this system reads it RAW. TIGHTLY gated: a digit-free total ask (count total, or money with a
+    unit price); ≥1 relation with a COMBINED standard (else not this shape); every chain name
+    resolves through literal assignments + relations to a fixpoint; every valued premise is an
+    assignment or the ONE unit price; no percent/discount; positive integer. None otherwise."""
+    ql = question.lower()
+    money_ask = "how much" in ql and re.search(r"\b(?:make|makes|earn|earns|money)\b", ql)
+    count_ask = "how many" in ql and any(w in ql for w in ("total", "altogether", "in all",
+                                                           "combined", "all of them"))
+    if not (money_ask or count_ask) or _has_digit(ql) or _has_comparative(ql):
+        return None
+    body = " ".join(premises)
+    if "%" in body or "percent" in body.lower() or "discount" in body.lower():
+        return None
+    rels = []
+    for p in premises:
+        for m in _CSS_REL.finditer(p):
+            k = {"twice": 2.0, "half": 0.5, "double": 2.0}.get(m.group(2))
+            if k is None:
+                tok = m.group(2).split()[0].lower()
+                k = float(NUMBERS.get(tok, tok if tok.isdigit() else 0) or 0)
+            if not k:
+                return None
+            rels.append((m.group(1), k, m.group(3), m.group(4)))
+    if not any(std2 for _, _, _, std2 in rels):
+        return None                                      # no combined standard → not this shape
+    chain_names = {r[0] for r in rels} | {n for r in rels for n in (r[2], r[3]) if n}
+    price = None
+    vals: dict = {}
+    for p in premises:
+        pm = re.search(r"\$\s*(\d+(?:\.\d+)?)\s*each\b", p.lower())
+        am = _CSS_ASSIGN.search(p)
+        if pm is not None:
+            if price is not None:
+                return None
+            price = float(pm.group(1))
+        elif am is not None and am.group(1) in chain_names:
+            if am.group(1) in vals or _CSS_REL.search(p) is not None:
+                return None                              # a value inside a relation premise → decline
+            vals[am.group(1)] = float(am.group(2).replace(",", ""))
+        elif _has_digit(p):
+            return None                                  # an unclassified valued premise
+    if (money_ask and price is None) or (count_ask and price is not None):
+        return None
+    for _ in range(6):                                   # resolve the chain to a fixpoint
+        for subj, k, s1, s2 in rels:
+            if subj in vals:
+                continue
+            if s2 is not None:
+                if s1 in vals and s2 in vals:
+                    vals[subj] = k * (vals[s1] + vals[s2])
+            elif s1 in vals:
+                vals[subj] = k * vals[s1]
+    lumps, lumped = [], set()                            # INVERSE combined pair: the SUBJECT is
+    for subj, k, s1, s2 in rels:                         # known ("Alexis 60 = 4 × (Dilan+Ashley)")
+        if s2 is not None and subj in vals and s1 not in vals and s2 not in vals:
+            lumps.append(vals[subj] / k)                 # the pair resolves only as a LUMP — enough
+            lumped |= {s1, s2}                           # for a TOTAL ask, never for a per-name one
+    if not vals or any(n not in vals and n not in lumped for n in chain_names) \
+            or any(v <= 0 for v in list(vals.values()) + lumps):
+        return None
+    expr = f"({' + '.join(_num(v) for v in sorted(list(vals.values()) + lumps))})"
+    if money_ask:
+        expr = f"{expr} * {_num(price)}"
+    result = _compute(expr)
+    if isinstance(result, float):
+        result = round(result, 9)
+    return _gated_pos_int(result)
+
+
 # --- system family: doubling periods, nth term ------------------------------------------------
 _MONTHS = ("january", "february", "march", "april", "may", "june", "july", "august",
            "september", "october", "november", "december")
@@ -9678,6 +9771,8 @@ _EARLY_SYSTEMS = [
     ("doubling_periods_nth", _doubling_periods_nth_system),
     # RELATIONAL PRICE PAIR × WEEK: "$3 kids, twice for adults; 8+10 per day; per week?" → 588.
     ("relational_price_week", _relational_price_week_system),
+    # COMBINED-STANDARD COUNT CHAIN: "72; twice as many; half as many as BOTH combined; $2 each?" → 648.
+    ("combined_standard_sum", _combined_standard_sum_system),
 ]
 
 # LATE systems run AFTER the read-synthesize fixpoint has built `context` (they consume derived
