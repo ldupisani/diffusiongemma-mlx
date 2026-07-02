@@ -9071,16 +9071,20 @@ def _years_until_ratio_system(premises: list, question: str):
     ql = question.lower()
     if "in how many years" not in ql or ("age" not in ql and "as old as" not in ql):
         return None
-    mult = None
-    if "twice" in ql:
-        mult = 2.0
+    mult, mpos = None, 0
+    mm = re.search(r"\btwice\b|\bdouble\b", ql)
+    if mm is not None:
+        mult, mpos = 2.0, mm.end()
     else:
         tm = re.search(r"\b(\w+) times\b", ql)
         if tm is not None and NUMBERS.get(tm.group(1)):
-            mult = float(NUMBERS[tm.group(1)])
+            mult, mpos = float(NUMBERS[tm.group(1)]), tm.end()
     if mult is None or mult <= 1:
         return None
-    sm = re.search(r"(\w+)[’']s age", ql) or re.search(r"as old as (?:her |his |their )?(\w+)", ql)
+    # the STANDARD is the genitive AFTER the multiplier ("double AHMED'S current age") — the
+    # subject's own genitive may precede it ("will Fouad's age be double …")
+    sm = re.search(r"(\w+)[’']s (?:current |present )?age", ql[mpos:]) \
+        or re.search(r"as old as (?:her |his |their )?(\w+)", ql)
     if sm is None:
         return None
     standard = sm.group(1)
@@ -9570,6 +9574,55 @@ def _age_chain_system(premises: list, question: str):
         result = _compute(_num(vals[a]))
     if isinstance(result, float):
         result = round(result, 9)
+    return _gated_pos_int(result)
+
+
+_AFN_REL2 = re.compile(r"[Ii]n (\d+) years,? ([A-Z][a-z]+) will be "
+                       r"(twice|thrice|double|(?:two|three|four) times) as old as ([A-Z][a-z]+) is "
+                       r"(?:now|today)\b")
+
+
+def _age_future_vs_now_system(premises: list, question: str):
+    """FUTURE AGE VS A NOW AGE — an offset relation plus "in M years, X will be k times as old
+    as Y is NOW": "Audrey is 7 years older than Heracles. In 3 years, Audrey will be twice as
+    old as Heracles is now. How old is Heracles now?" → H+7+3 = 2H → H = 10. The "is now" tail
+    is the discriminator — an ordinary future ratio (both sides aging) is the years-until
+    family's. TIGHTLY gated: exactly ONE offset relation and ONE future-vs-now relation whose
+    subject/standard match the offset's; a digit-free "how old is <either> now" question; every
+    digit accounted; k > 1; a positive integer. None otherwise."""
+    ql = question.lower()
+    qm = re.search(r"how old is (\w+)", ql)
+    if qm is None or _has_digit(ql):
+        return None
+    body = " ".join(premises)
+    rels = _AGE_REL.findall(body)
+    futs = _AFN_REL2.findall(body)
+    if len(rels) != 1 or len(futs) != 1:
+        return None
+    r = rels[0]
+    if r[1]:
+        subj, off, dir_, std = r[0], float(r[1]), r[2], r[3]
+    else:
+        subj, off, dir_, std = r[0], float(r[6]), r[4], r[5]
+    d = off if dir_ == "older" else -off                 # subj = std + d
+    m_years, fx, mult_tok, fy = futs[0]
+    k = {"twice": 2.0, "double": 2.0, "thrice": 3.0}.get(mult_tok)
+    if k is None:
+        k = float(NUMBERS.get(mult_tok.split()[0], 0) or 0)
+    if not k or k <= 1 or fx != subj or fy != std:
+        return None                                      # the future subject must be the offset subject
+    used = {str(int(off)), m_years}
+    if any(dg not in used for dg in re.findall(r"\d+", body)):
+        return None
+    std_now = (d + float(m_years)) / (k - 1)             # std + d + M = k·std
+    now = {std: std_now, subj: std_now + d}
+    asked = next((n for n in (subj, std) if n.lower() == qm.group(1)), None)
+    if asked is None or any(v <= 0 for v in now.values()):
+        return None
+    expr = f"({_num(d)} + {_num(float(m_years))}) / ({_num(k)} - 1)"
+    if asked == subj:
+        expr = f"{expr} + {_num(d)}"
+    result = _compute(expr)
     return _gated_pos_int(result)
 
 
@@ -10117,6 +10170,8 @@ _EARLY_SYSTEMS = [
     ("age_chain", _age_chain_system),
     # AGE PAST ANCHOR: "5 years ago mother 2× daughter; mother 41 now; daughter in 3 years?" → 26.
     ("age_past_anchor", _age_past_anchor_system),
+    # AGE FUTURE VS NOW: "7 older; in 3 years twice as old as he is NOW?" → (7+3)/(2−1) = 10.
+    ("age_future_vs_now", _age_future_vs_now_system),
     # SIMULTANEOUS AGE: "7 years older than David and twice his age?" → 7/(2−1) = 7.
     ("age_simultaneous", _age_simultaneous_system),
 ]

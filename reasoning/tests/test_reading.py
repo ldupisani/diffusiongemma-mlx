@@ -6866,5 +6866,30 @@ class TestIncrement193AgePastAnchor(unittest.TestCase):
             "old now. How old is Bo?"), (int, float))
 
 
+class TestIncrement194AgeFutureVsNow(unittest.TestCase):
+    """#194 — `_age_future_vs_now_system` ("in M years X will be k times as old as Y is NOW" —
+    the 'is now' tail discriminates from the both-aging years-until shape → Y = (d+M)/(k−1))
+    and `_years_until_ratio_system` extended: "double" as a multiplier and the standard genitive
+    taken AFTER the multiplier ("will Fouad's age be double AHMED'S current age")."""
+
+    def test_future_vs_now_offset_relation(self):
+        # H + 7 + 3 = 2H → 10
+        self.assertEqual(reading.solve(
+            "Audrey is 7 years older than Heracles. In 3 years, Audrey will be twice as old "
+            "as Heracles is now. How old is Heracles now?"), 10)
+
+    def test_years_until_double_with_subject_genitive(self):
+        # 26 + t = 2·(11 + t) → 4 — the subject's own genitive precedes the multiplier
+        self.assertEqual(reading.solve(
+            "Ahmed is 11 years old and Fouad is 26 years old. In how many years will "
+            "Fouad's age be double Ahmed's current age?"), 4)
+
+    def test_years_until_twice_regression(self):
+        # the original Beth shape is untouched by the extension
+        self.assertEqual(reading.solve(
+            "Beth is 18 years old and her little sister is 5. In how many years would she "
+            "be twice her sister's age?"), 8)
+
+
 if __name__ == "__main__":
     unittest.main()
