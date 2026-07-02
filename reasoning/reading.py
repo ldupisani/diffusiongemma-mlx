@@ -471,7 +471,9 @@ CONVERSIONS = {("minute", "hour"): 1 / 60, ("hour", "minute"): 60, ("second", "m
                ("kilogram", "gram"): 1000, ("ounce", "pound"): 1 / 16, ("pound", "ounce"): 16,
                ("inch", "foot"): 1 / 12, ("foot", "inch"): 12, ("foot", "yard"): 1 / 3, ("yard", "foot"): 3,
                ("centimeter", "meter"): 1 / 100, ("meter", "centimeter"): 100,
-               ("meter", "kilometer"): 1 / 1000, ("kilometer", "meter"): 1000}
+               ("meter", "kilometer"): 1 / 1000, ("kilometer", "meter"): 1000,
+               ("gallon", "ounce"): 128, ("ounce", "gallon"): 1 / 128,   # US fluid ounces
+               ("gallon", "quart"): 4, ("quart", "gallon"): 1 / 4}
 
 # Coreference: a pronoun's grammatical gender, and a small name→gender lexicon used to pick a
 # compatible antecedent. Both grown deliberately (no guessing from spelling).
@@ -2025,7 +2027,7 @@ def _resolve_references(reading: Reading, discourse: list) -> None:
 
 # A quantity verb's arithmetic polarity: a LOSS verb subtracts, everything else (gains + the "have"
 # baseline) adds. Keyed by lemma; grown deliberately like the other dictionaries.
-LOSS_VERBS = {"lose", "sell", "give", "spend", "eat", "use", "drop"}
+LOSS_VERBS = {"lose", "sell", "give", "spend", "eat", "use", "drop", "drink"}
 
 # A comparative's arithmetic direction: −1 lowers the referent ("10 years YOUNGER" → −10), +1 raises it.
 COMPARATIVE_SIGN = {"less": -1, "fewer": -1, "younger": -1, "shorter": -1, "lighter": -1,
@@ -3983,6 +3985,15 @@ def answer(question: str, context: list, discourse: list = None):
                                    f"{_num(CONVERSIONS[(f.measure[0], query[0])])}"), f.verb)
                           for f in context if isinstance(f, Quantity) and f.entity == ent
                           and f.amount is not None and (f.measure[0], query[0]) in CONVERSIONS]
+                elif q_verb in ("have", "own"):          # MIXED units in a holdings fold: extend the
+                    qs = qs + [Quantity(ent, query,      # exact-unit matches with CONVERTIBLE holdings
+                                        _compute(f"{_num(f.amount)} * "     # in other units ("has 3
+                                                 f"{_num(CONVERSIONS[(f.measure[0], query[0])])}"),
+                                        f.verb)          # GALLONS, drank 13 OUNCES, how many ounces
+                               for f in context if isinstance(f, Quantity)  # left" → 3·128 − 13).
+                               and f.entity == ent and f.amount is not None # Gated to the have/own
+                               and f.measure[0] != query[0]                 # remainder fold only.
+                               and (f.measure[0], query[0]) in CONVERSIONS]
                 # POLARITY IS RELATIVE TO THE QUESTION: "how many do you HAVE" folds holdings
                 # (baseline + gains - losses); "how many did you SELL" COUNTS the sell events (+).
                 if q_verb in ("have", "own"):
@@ -7581,6 +7592,31 @@ _LATE_SYSTEMS = [
 
 # --- THE SOLVER: parse a problem, then dispatch through the system registries ---------------
 
+# A STATED CONVERSION FACTOR ("There are 16 ounces in a pound.", "If there are 128 ounces in a
+# gallon, …") is META-information about units, not a datum: it must neither materialize as a
+# Quantity (16 degenerate facts) nor sit unused in the fold (tripping GUARD 3). `_parse_problem`
+# recognizes the clause, records the factor here (cleared per parse), and DROPS the clause;
+# solve() applies the recorded pairs as a temporary CONVERSIONS override (the text is
+# authoritative for its own problem). Both units must resolve to known nouns.
+_CONV_STMT = re.compile(
+    r"\bthere (?:are|is) (\d+(?:\.\d+)?) (\w+) (?:in|to) (?:a|an|one|each|every) (\w+)", re.I)
+_STATED_CONV: dict = {}
+
+
+def _stated_conversion(clause: str):
+    """The ((big, small): factor) pair a conversion-statement clause asserts, or None. 'There are
+    N smalls in a big' reads as CONVERSIONS[(big, small)] = N (and the reciprocal)."""
+    m = _CONV_STMT.search(clause)
+    if m is None:
+        return None
+    n, small, big = float(m.group(1)), m.group(2).lower(), m.group(3).lower().strip(".,?!;:")
+    small = _singular_of(small) or small
+    big = _singular_of(big) or big
+    if n <= 0 or "noun" not in LEXICON.get(small, ()) or "noun" not in LEXICON.get(big, ()):
+        return None
+    return {(big, small): n, (small, big): 1 / n}
+
+
 def _parse_problem(text: str):
     """Split a word-problem paragraph into (premises, question). Returns None when there is no
     question clause. Factored out of solve() so the collision harness (reading_diff --collisions)
@@ -7605,10 +7641,31 @@ def _parse_problem(text: str):
         return None
     question = clauses[qpos]                              # the question clause; the rest are premises
     premises = clauses[:qpos] + clauses[qpos + 1:]        # (a leading "If P," clause is now a premise)
-    return premises, question
+    _STATED_CONV.clear()                                  # conversion-statement premises are META, not
+    kept = []                                             # data: record the factor, drop the clause
+    for p in premises:
+        pair = _stated_conversion(p)
+        if pair is None:
+            kept.append(p)
+        else:
+            _STATED_CONV.update(pair)
+    return kept, question
 
 
 def solve(text: str):
+    """Read a whole word-problem paragraph (premises + a trailing question) and answer the question.
+    A thin wrapper over `_solve_inner` that RESTORES `CONVERSIONS` afterward — a stated per-problem
+    factor ("there are 128 ounces in a gallon") overrides the table for its own problem only, never
+    leaking into the next solve."""
+    saved = dict(CONVERSIONS)
+    try:
+        return _solve_inner(text)
+    finally:
+        CONVERSIONS.clear()
+        CONVERSIONS.update(saved)
+
+
+def _solve_inner(text: str):
     """Read a whole word-problem paragraph (premises + a trailing question) and answer the question —
     threading coreference (`discourse`) and the growing `context` across the premises (split into
     independent CLAUSES first, so the fixpoint sees each fact separately). Returns the raw `answer()`
@@ -7619,6 +7676,7 @@ def solve(text: str):
     if parsed is None:
         return None
     premises, question = parsed
+    CONVERSIONS.update(_STATED_CONV)   # the text's own stated factors win for this problem (restored by solve())
     readings = [analyze(c) for c in premises + [question]]
     # PRECISION GUARD 1 — unrecognized word: a partial parse may have dropped the fact that mattered,
     # so we DECLINE rather than commit off a fragment ("definitive-or-decline": never answer what we

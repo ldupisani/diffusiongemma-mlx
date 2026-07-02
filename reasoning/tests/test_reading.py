@@ -5862,5 +5862,42 @@ class TestIncrement155TenthWaveRoomPainting(unittest.TestCase):
             "Leo need to cover the exact width of each wall?"), 20)
 
 
+class TestIncrement156UnitConversion(unittest.TestCase):
+    """#156 — unit-conversion frontier, first increment: (a) a STATED conversion factor ("there are
+    128 ounces in a gallon") is META-information — `_parse_problem` records it and drops the clause
+    (no degenerate facts, no unused-given trip), and solve() applies it as a per-problem CONVERSIONS
+    override, restored afterward; (b) the holdings fold now EXTENDS exact-unit matches with
+    CONVERTIBLE holdings in other units ("has 3 gallons, drank 13 ounces, how many ounces left" →
+    3·128 − 13), gated to the have/own remainder fold; (c) gallon↔ounce (128, US fluid) and
+    gallon↔quart join CONVERSIONS; (d) "drink" joins LOSS_VERBS (it consumes, like eat)."""
+
+    def test_stated_factor_mixed_unit_remainder(self):
+        self.assertEqual(reading.solve(
+            "Rita has 2 gallons of juice. She drank 20 ounces of the juice. If there are 128 ounces "
+            "in a gallon, how many ounces of juice does Rita have left?"), 236)
+
+    def test_table_factor_mixed_unit_remainder(self):
+        self.assertEqual(reading.solve(
+            "Sam has 2 pounds of flour. He used 8 ounces of the flour. "
+            "How many ounces of flour does Sam have left?"), 24)
+
+    def test_stated_factor_enables_uncurated_pair(self):
+        # packs/cards are NOT in the curated table — the text's own factor carries the problem
+        self.assertEqual(reading.solve(
+            "Nora has 3 packs of cards. She used 10 cards. If there are 50 cards in a pack, "
+            "how many cards does Nora have left?"), 140)
+
+    def test_stated_factor_never_leaks(self):
+        reading.solve(
+            "Nora has 3 packs of cards. She used 10 cards. If there are 50 cards in a pack, "
+            "how many cards does Nora have left?")
+        self.assertNotIn(("pack", "card"), reading.CONVERSIONS)
+        self.assertIn(("gallon", "ounce"), reading.CONVERSIONS)
+
+    def test_drink_is_a_loss_verb(self):
+        self.assertEqual(reading.solve(
+            "Tom has 10 sodas. He drank 3 sodas. How many sodas does Tom have left?"), 7)
+
+
 if __name__ == "__main__":
     unittest.main()
