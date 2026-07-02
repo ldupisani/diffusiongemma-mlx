@@ -6466,5 +6466,74 @@ class TestIncrement179DayListTwoDayAverage(unittest.TestCase):
             "on Friday and Saturday to meet his goal?"), "undetermined")
 
 
+class TestIncrement180DiscountedPurchase(unittest.TestCase):
+    """#180 — `_discounted_purchase_system`: a purchase total (Σ count×each-price + bare prices,
+    or ONE stated total) transformed by sequential percent modifiers ("75% off" ×(1−p),
+    "8% sales tax"/"20% tip" ×(1+p)) in text order. Every percent must classify DOWN xor UP by
+    its window cue; every digit (premises AND question) must sit inside a classified match;
+    person-noun counts never pair; the 1-price+1-DISCOUNT shape stays the percent family's."""
+
+    def test_count_price_cross_premise_discount(self):
+        # 2 · 6 · (1 − 75/100) = 3 — the count and the each-price live in different premises
+        self.assertEqual(reading.solve(
+            "Carla bought 2 bags of peanut butter cups. Each bag was $6.00 but was 75% off. "
+            "How much did she spend on the bags?"), 3)
+
+    def test_each_price_with_pronoun_count(self):
+        # 10 · 20 · 0.85 = 170 — "They are normally $20 each" pairs with the bought-10 count
+        self.assertEqual(reading.solve(
+            "John decided to buy 10 pens. They are normally $20 each but they were on sale "
+            "for 15% off. How much did he spend on pens?"), 170)
+
+    def test_discount_then_tax_sequential(self):
+        # 200 · 0.75 · 1.10 = 165 — transforms apply multiplicatively in text order
+        self.assertEqual(reading.solve(
+            "A toy cost $200 but went on sale for 25% off. Donna bought the toy and "
+            "paid 10% sales tax. How much did she pay in total?"), 165)
+
+    def test_stated_total_plus_tax(self):
+        # 150 · 1.08 = 162 — a lone TAX percent is ours (the percent family has no tax cue)
+        self.assertEqual(reading.solve(
+            "Pauline is buying school items. The total amount of all the items she wants to "
+            "buy add up to $150 before sales tax. Sales tax is 8% of the total amount. "
+            "How much will Pauline spend on all the items?"), 162)
+
+    def test_mixed_bare_and_product_with_tip(self):
+        # (10 + 4·20) · 1.2 = 108 — a bare price and a count×each product sum before the tip
+        self.assertEqual(reading.solve(
+            "Stefan and his family order a cake that costs $10 and 4 pizzas that are $20 each. "
+            "They tip 20% of the total amount. How much money do they pay in total?"), 108)
+
+    def test_word_number_count_and_question_percent(self):
+        # two · 650 · 0.75 = 975 — a word-number count; the percent rides inside the question
+        self.assertEqual(reading.solve(
+            "Mrs. Taylor bought two shirts that cost $650 each. If the total sales price had "
+            "a 25% discount, how much did Mrs. Taylor pay for the two shirts?"), 975)
+
+    def test_single_price_single_discount_stays_percent_change(self):
+        # the 1-value+1-DISCOUNT shape is `_percent_change`'s — this system must defer
+        self.assertEqual(reading.solve(
+            "A ticket costs $2000. He got a 30% discount on the ticket. "
+            "How much does he pay?"), 1400)
+
+    def test_person_count_never_pairs(self):
+        # "four friends" must not become a ×4 multiplier on the each-price → decline
+        self.assertNotIsInstance(reading.solve(
+            "Four friends decided to buy a shirt. A shirt costs $20 each. There is a 50% "
+            "discount. How much did they spend?"), (int, float))
+
+    def test_unclassifiable_percent_declines(self):
+        # "80% of its value" is neither a discount nor a tax — the WHOLE system declines
+        self.assertNotIsInstance(reading.solve(
+            "He bought a toy for 80% of its $500 value plus a $30 bag. "
+            "How much did he pay?"), (int, float))
+
+    def test_ambiguous_bare_price_with_count_declines(self):
+        # "4 pizzas for $80" — total or each? never guess
+        self.assertNotIsInstance(reading.solve(
+            "Luigi bought 4 pizzas for $80. There was a 10% discount. "
+            "How much did he pay in total?"), (int, float))
+
+
 if __name__ == "__main__":
     unittest.main()

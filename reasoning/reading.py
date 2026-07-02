@@ -8954,6 +8954,156 @@ def _piece_count_system(premises: list, question: str):
     return _gated_pos_int(result)
 
 
+# --- system family: discounted purchase (percent-on-money compositions) ----------------------
+_DP_DOWN = re.compile(r"\b(?:off|discount(?:s|ed)?|markdown|marked down|clearance)\b")
+_DP_UP = re.compile(r"\b(?:tax(?:es)?|tip(?:s|ped)?|gratuity|surcharge|fee)\b")
+_DP_GUARDS = re.compile(r"\bhalf.price\b|\bfree\b|\bcoupon\b|\bworth\b|\bprofit\b|\bresell\b"
+                        r"|\bcommission\b|\btrade\b|\bsold\b|of (?:its|the) value|\bsave[ds]?\b"
+                        r"|\binsurance\b|\brefund\b")
+_DP_NUM = r"(?:\d+(?:,\d{3})*(?:\.\d+)?|\.\d+)"
+_DP_QBLOCK = re.compile(r"\b(?:save[ds]?|profit|change|left|remains?|remaining|earn(?:ed|s)?"
+                        r"|makes?|made|more|fewer|less|than|each|apiece|percent)\b")
+
+
+def _discounted_purchase_system(premises: list, question: str):
+    """DISCOUNTED PURCHASE — a purchase total (Σ count×each-price + bare prices, or ONE stated
+    total) transformed by SEQUENTIAL percent modifiers in text order: "2 bags; each bag $6.00 but
+    75% off" → 2·6·(1−.75) = 3; "vase priced at $200, 25% off, paid 10% sales tax" →
+    200·0.75·1.10 = 165; "items add up to $150; sales tax is 8%" → 162. The fold drops these
+    (partitive percents attach to nothing), so RAW text is read. TIGHTLY gated: a "how much …
+    pay/spend/cost/bring" question (no save/profit/change/left/comparative/each); EVERY percent
+    must classify DOWN (off/discount/markdown/clearance) XOR UP (tax/tip/fee) by a word-boundary
+    cue within its ±30-char window — an unclassifiable or ambiguous percent declines the WHOLE
+    system; every money value is an each-price (paired to a count) or a bare price (no preceding
+    count — a "4 pizzas for $80" total is ambiguous → decline); person-noun counts never pair;
+    cross-premise pairing only for the single each-price + single leftover DIGIT count; every
+    digit in premises AND question sits inside a classified match (a question digit may also echo
+    a used count); the 1-bare-price+1-percent shape defers to the percent family; positive
+    integer. None otherwise."""
+    ql = question.lower()
+    if "how much" not in ql \
+            or not re.search(r"\b(?:pay|pays|paid|spend|spends|spent|costs?|bring)\b", ql):
+        return None
+    if _DP_QBLOCK.search(ql):
+        return None
+    segs = [p.lower() for p in premises] + [ql]
+    qi = len(segs) - 1
+    body = " ".join(segs)
+    if _DP_GUARDS.search(body):
+        return None
+    spans = [[] for _ in segs]                           # classified character spans, per segment
+
+    def covered(si, a, b=None):
+        return any(x <= a and (b or a) <= y for x, y in spans[si])
+
+    transforms = []                                      # (seg, pos, sign, percent) in text order
+    for si, seg in enumerate(segs):
+        for m in re.finditer(_DP_NUM + r"\s*(?:%|percent)", seg):
+            p = float(re.match(_DP_NUM, m.group(0)).group(0).replace(",", ""))
+            win = seg[max(0, m.start() - 30): m.end() + 30]
+            down, up = bool(_DP_DOWN.search(win)), bool(_DP_UP.search(win))
+            if down == up or not 0 < p < 100:
+                return None                              # unclassifiable/ambiguous percent
+            transforms.append((si, m.start(), "-" if down else "+", p))
+            spans[si].append((m.start(), m.end()))
+    if not transforms:
+        return None
+
+    numword = "|".join(re.escape(w) for w in NUMBERS)
+
+    def preceding_count(seg, pos, si):
+        """The nearest count (digit or word number) within 5 words before `pos`, unless it counts
+        a person-group noun. Returns (span_start, span_end, value) or None."""
+        head = seg[:pos]
+        last = None
+        for m in re.finditer(r"\b(\d+(?:,\d{3})*|" + numword + r")\s+([a-z-]+)", head):
+            if not covered(si, m.start(1), m.end(1)):
+                last = m
+        if last is None or len(head[last.end():].split()) > 5:
+            return None
+        noun = last.group(2)
+        if (_singular_of(noun) or noun) in GROUP_PERSON_NOUNS:
+            return None
+        tok = last.group(1)
+        v = NUMBERS.get(tok, float(tok.replace(",", "")) if tok[0].isdigit() else None)
+        return (last.start(1), last.end(1), float(v)) if v else None
+
+    eaches, bares = [], []                               # each-prices to pair; bare single prices
+    for si, seg in enumerate(segs):
+        for m in re.finditer(r"\$\s*(" + _DP_NUM + r")|(" + _DP_NUM + r") dollars\b", seg):
+            if covered(si, m.start()):
+                continue
+            if si == qi:
+                return None                              # a money value in the question → stranded
+            price = float((m.group(1) or m.group(2)).replace(",", ""))
+            spans[si].append((m.start(), m.end()))
+            after = seg[m.end():].lstrip()
+            each_after = after.startswith("each") or after.startswith("apiece")
+            each_before = re.search(r"\beach\s+[a-z-]+\s+(?:was|is|were|are|costs?)\s*$",
+                                    seg[:m.start()]) is not None
+            cnt = preceding_count(seg, m.start(), si)
+            if each_after or each_before:
+                eaches.append((si, m.start(), price, cnt))
+            elif cnt is not None:
+                return None                              # "4 pizzas for $80" — total or each? decline
+            else:
+                bares.append(price)
+    if not eaches and not bares:
+        return None
+    if "add up to" in body and (eaches or len(bares) > 1):
+        return None                                      # a stated total plus items → double-count
+    if not eaches and len(bares) == 1 and len(transforms) == 1 and transforms[0][2] == "-":
+        return None                                      # the percent family's 1-step DISCOUNT shape
+        #                                                  (a lone TAX/TIP is ours — _PCT_UP has no tax cue)
+
+    used_counts, products = [], []
+    unpaired = []
+    for si, pos, price, cnt in eaches:
+        if cnt is not None:
+            spans[si].append((cnt[0], cnt[1]))
+            used_counts.append(cnt[2])
+            products.append((cnt[2], price))
+        else:
+            unpaired.append((si, pos, price))
+    if unpaired:
+        if len(unpaired) != 1:
+            return None
+        candidates = []                                  # the single leftover DIGIT count, corpus-wide
+        for si, seg in enumerate(segs[:-1]):
+            for m in re.finditer(r"\b\d+(?:,\d{3})*\b", seg):
+                if covered(si, m.start()):
+                    continue
+                nxt = re.match(r"\s+([a-z-]+)", seg[m.end():])
+                noun = nxt.group(1) if nxt else ""
+                if (_singular_of(noun) or noun) in GROUP_PERSON_NOUNS:
+                    return None                          # a person count shadows the pairing
+                candidates.append((si, m.start(), m.end(), float(m.group(0).replace(",", ""))))
+        if len(candidates) != 1:
+            return None
+        si_c, a, b, v = candidates[0]
+        spans[si_c].append((a, b))
+        used_counts.append(v)
+        products.append((v, unpaired[0][2]))
+
+    for si, seg in enumerate(segs):                      # every digit accounted (echoes OK in the q)
+        for m in re.finditer(r"\d+(?:,\d{3})*(?:\.\d+)?|\.\d+", seg):
+            if covered(si, m.start(), m.end()):
+                continue
+            v = float(m.group(0).replace(",", ""))
+            if si == qi and any(abs(v - c) < 1e-9 for c in used_counts):
+                continue
+            return None
+
+    parts = [f"({_num(c)} * {_num(p)})" for c, p in products] + [_num(p) for p in bares]
+    expr = " + ".join(parts)
+    for _, _, sign, p in sorted(transforms):
+        expr = f"({expr}) * (1 {sign} {_num(p)} / 100)"
+    result = _compute(expr)
+    if isinstance(result, float):
+        result = round(result, 9)
+    return _gated_pos_int(result)
+
+
 # --- ARITHMETIC SYSTEM-SOLVER REGISTRY -------------------------------------------------------
 # The word-problem system solvers are REGISTERED here, not hand-inlined in solve() — honoring the
 # engine's founding rule ("new reasoning is REGISTERED, never special-cased"). Each is a
@@ -9071,6 +9221,8 @@ _EARLY_SYSTEMS = [
     ("weekly_time_plus_delta", _weekly_time_plus_delta_system),
     # DAILY RATE DIFFERENCE (mixed sides): "2100 pages in a week vs 200/day; more per day?" → 100.
     ("daily_rate_difference", _daily_rate_difference_system),
+    # DISCOUNTED PURCHASE: "2 bags, $6.00 each, 75% off?" → 3; "$200, 25% off, 10% tax?" → 165.
+    ("discounted_purchase", _discounted_purchase_system),
 ]
 
 # LATE systems run AFTER the read-synthesize fixpoint has built `context` (they consume derived
