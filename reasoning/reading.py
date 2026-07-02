@@ -7438,16 +7438,25 @@ def _chain_count_price(premises: list, question: str):
     Tightly gated: a "how much … spend/pay/cost … total" question, a clear per-item price, and a chain the
     count-system actually solves. None otherwise (→ falls through to the plain count systems)."""
     ql = question.lower()
-    if not (("how much" in ql) and any(w in ql for w in ("spend", "spent", "pay", "paid", "cost"))
-            and any(w in ql for w in ("total", "altogether", "in all"))):
-        return None
+    if not (("how much" in ql)
+            and any(w in ql for w in ("spend", "spent", "pay", "paid", "cost", "make", "earn"))
+            and (any(w in ql for w in ("total", "altogether", "in all"))
+                 or re.search(r"\bsells? all\b|\bsold all\b",
+                              ql + " " + " ".join(premises).lower()))):
+        return None                                      # revenue asks ride a "sell all" totality cue
+        #                                                  (the If-clause may split into a premise)
     if any(w in ql for w in ("more", "less", "fewer", "change", "left", "discount", "percent", "each of")):
         return None
     price = _unit_price(question) or _unit_price(" ".join(premises))
     if price is None:
         return None
-    count = _anchored_sum_system(premises, "how many in total?")   # synthetic COUNT question: sums the anchored
-    #                       chain and sidesteps anchored_sum's own money-price decline gate (which defers to us)
+    count_premises = [p for p in premises                # the wrapper owns the money framing: the count
+                      if _unit_price(p) is None          # system sees only the count chain (a "They sell
+                      and not (re.search(r"\bsell|\bsold", p.lower())     # X for $P each" or a digit-free
+                               and not _has_digit(p))]                    # "if they sell all" clause would
+    count = _anchored_sum_system(count_premises, "how many in total?")    # trip its premise firewall)
+    #     synthetic COUNT question: sums the anchored chain, sidestepping anchored_sum's own
+    #     money-price decline gate (which defers to us)
     if not isinstance(count, (int, float)) or isinstance(count, bool):
         return None
     return _compute(f"{_num(count)} * {price}")
@@ -9227,14 +9236,15 @@ def _relational_product_sum_system(premises: list, question: str):
     if not re.search(r"\b(?:cost|costs|pay|pays|paid|spend|spends|spent|make|made|earn|earned"
                      r"|amount)\b", ql):
         return None
-    if _has_digit(ql) or _has_comparative(ql):
+    if _has_comparative(ql):
         return None
-    segs = [p.lower() for p in premises]
+    segs = [p.lower() for p in premises] + [ql]          # a price may ride INSIDE the question
+    qi = len(segs) - 1                                   # ("If each ticket cost $25, how much…")
     body = " ".join(segs)
     if "%" in body or "percent" in body or "discount" in body or " off " in body \
             or "change" in body or " per day" in body or " a day" in body:
         return None
-    rels = list(_RPS_REL.finditer(body))
+    rels = list(_RPS_REL.finditer(" ".join(segs[:-1])))
     if len(rels) != 1:
         return None
     tok = rels[0].group(1)
@@ -9253,7 +9263,7 @@ def _relational_product_sum_system(premises: list, question: str):
     if not 1 <= len(prices) <= 2:
         return None
     counts = []
-    for si, seg in enumerate(segs):
+    for si, seg in enumerate(segs[:-1]):                 # the base count never sits in the question
         for m in re.finditer(r"\b\d+(?:,\d{3})*\b", seg):
             if not any(a <= m.start() and m.end() <= b for a, b in spans[si]):
                 counts.append((si, m.span(), float(m.group(0).replace(",", ""))))
@@ -9394,6 +9404,8 @@ _EARLY_SYSTEMS = [
     ("daily_rate_difference", _daily_rate_difference_system),
     # DISCOUNTED PURCHASE: "2 bags, $6.00 each, 75% off?" → 3; "$200, 25% off, 10% tax?" → 165.
     ("discounted_purchase", _discounted_purchase_system),
+    # RELATIONAL PRODUCT-SUM: "1000 lbs beef at $8; twice that much chicken at $3?" → 14000.
+    ("relational_product_sum", _relational_product_sum_system),
 ]
 
 # LATE systems run AFTER the read-synthesize fixpoint has built `context` (they consume derived

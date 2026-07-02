@@ -6581,5 +6581,45 @@ class TestIncrement181FractionDepletionChain(unittest.TestCase):
             "pears to Sam. How many pears are left?"), (int, float))
 
 
+class TestIncrement182RelationalProductSum(unittest.TestCase):
+    """#182 — `_relational_product_sum_system` (a two-item purchase whose second count is K times
+    the first: N·P₁ + K·N·P₂, one shared or two per-unit prices, the price may ride inside the
+    question) + `_chain_count_price` extended to REVENUE asks ("how much do they make" with a
+    "sell all" totality cue; price/sell clauses filtered from the synthetic count call)."""
+
+    def test_two_prices_relational_count(self):
+        # 1000·8 + 2·1000·3 = 14000
+        self.assertEqual(reading.solve(
+            "John orders food for a big party. He orders 1000 pounds of beef for $8 per "
+            "pound. He also orders twice that much chicken at $3 per pound. How much did "
+            "everything cost?"), 14000)
+
+    def test_shared_price_in_question(self):
+        # (200 + 3·200) · 25 = 20000 — the per-unit price rides inside the question clause
+        self.assertEqual(reading.solve(
+            "A play starts and 200 people buy tickets. For the second night three times as "
+            "many people buy tickets. If each ticket cost $25, how much did the play "
+            "make?"), 20000)
+
+    def test_bare_relational_without_price_declines(self):
+        self.assertNotIsInstance(reading.solve(
+            "Amy has 3 dogs. Each dog eats twice as much as a cat. "
+            "How much did everything cost?"), (int, float))
+
+    def test_chain_count_price_revenue_ask(self):
+        # (4 + 12 + 6) · 2 = 44 — revenue verb + "sell all" totality cue
+        self.assertEqual(reading.solve(
+            "Robert has 4 pens. Julia has three times as many pens as Robert. Dorothy has "
+            "half as many pens as Julia. They sell their pens for $2 each. If they sell all "
+            "their pens, how much money do they make?"), 44)
+
+    def test_chain_count_price_spend_regression(self):
+        # the original spend shape is untouched by the revenue extension
+        self.assertEqual(reading.solve(
+            "Robert has 4 pens. Julia has three times as many pens as Robert. Dorothy has "
+            "half as many pens as Julia. One pen costs $1.50. How much did they spend in "
+            "total on pens?"), 33)
+
+
 if __name__ == "__main__":
     unittest.main()
