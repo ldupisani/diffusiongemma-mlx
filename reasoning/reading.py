@@ -273,9 +273,12 @@ def _merge_labels(reading: Reading) -> Reading:
         # cookies, 3 times a day, 20 days/month" commits a partial 13). Net −precision; the label-merge's
         # value-hiding is doing useful decline work here. Revisit only with frequency×per-occurrence compose.
         # a GERUND ("finish reading 30 pages") is a verb, not a label-bearing noun → keep N free
+        # a COMMA between them is a list boundary ("2 dogs, 3 cats" / "season, four players") — the value
+        # opens the NEXT list item and quantifies ITS noun; it is never a label of the noun before the comma
         if "noun" in noun.features.get("senses", []) and "operator" not in noun.features.get("senses", []) \
                 and "value" in val.features.get("senses", []) \
                 and "measure" not in val.features \
+                and not noun.surface.rstrip().endswith(",") \
                 and not (_key(noun.surface).endswith("ing") and "verb" in noun.features.get("senses", [])):
             v = val.features["value"]
             label = str(int(v)) if v == int(v) else str(v)
@@ -693,6 +696,7 @@ LEXICON: dict[str, list[str]] = {
     "count": ["verb"], "counts": ["verb"], "counted": ["verb"], "counting": ["verb"],
     "paint": ["verb"], "paints": ["verb"], "painted": ["verb"], "painting": ["verb"],
     "bake": ["verb"], "bakes": ["verb"], "baked": ["verb"], "baking": ["verb"],
+    "produce": ["verb"], "produces": ["verb"], "produced": ["verb"], "producing": ["verb"],
     "playing": ["verb"], "having": ["verb"], "shopping": ["verb"], "practicing": ["verb"],
     # nouns (units of measure + common GSM8K objects):
     "average": ["noun"], "trip": ["noun"], "water": ["noun"], "job": ["noun"], "home": ["noun"],
@@ -1563,6 +1567,7 @@ VERB_LEMMA = {"passed": "pass", "wilted": "wilt", "rose": "rise", "failed": "fai
     "drives": "drive", "drove": "drive", "driving": "drive", "counts": "count", "counted": "count",
     "counting": "count", "paints": "paint", "painted": "paint", "painting": "paint",
     "bakes": "bake", "baked": "bake", "baking": "bake",
+    "produces": "produce", "produced": "produce", "producing": "produce",
     "playing": "play", "having": "have", "shopping": "shop", "practicing": "practice",
     "distributes": "distribute", "distributed": "distribute", "distributing": "distribute",
     "spreads": "spread", "spreading": "spread", "does": "do", "did": "do"}
@@ -1705,6 +1710,10 @@ LEXICON.update({
     # "nut" is safe now the anchored_sum SUBSET fix lands (Bill/Harry/Sue "how many do Bill AND Harry have
     # combined?" → 672, not the all-three 720 it committed while "Bill" mis-tagged as a common noun).
     "peanut": ["noun"], "nut": ["noun"],
+    # fifth-wave: the garden comma-quantity-list case ("237 potatoes, 60 fewer cucumbers and twice as many
+    # peppers than the cucumbers … how many vegetables") — verified-gain via the comma-list parse + the
+    # elided-standard conjunct split; "vegetable" is the category (hypernym) noun the question asks
+    "potato": ["noun"], "cucumber": ["noun"], "pepper": ["noun"], "vegetable": ["noun"],
 })
 PLURALS.update({
     "bananas": "banana", "erasers": "eraser", "crayons": "crayon", "berries": "berry",
@@ -1717,6 +1726,7 @@ PLURALS.update({
     "babies": "baby", "seeds": "seed", "sunflowers": "sunflower", "softballs": "softball",
     "showers": "shower", "highlighters": "highlighter", "drawers": "drawer", "pens": "pen",
     "desks": "desk", "alleys": "alley", "cities": "city", "peanuts": "peanut", "nuts": "nut",
+    "potatoes": "potato", "cucumbers": "cucumber", "peppers": "pepper", "vegetables": "vegetable",
 })
 # NOTE: groundwork nouns/adjectives/pronouns (fruit/paper/side/…/herself) were re-tested with decline-safety
 # GUARDS 11–14 in place and STILL drop TEST 40.0→36.4% (a noun unlocks a held-out wrong in an as-yet-unguarded
@@ -1820,6 +1830,57 @@ def _name_count(rp: "Reading") -> int:
     would be picked up by the wrong family and mis-solve. A real confident-wrong (700 vs gold 100000)
     surfaced this: `_anchored_sum_system` had no idea its relation actually came from the noun fallback."""
     return sum(1 for u in rp.units if "name" in u.features.get("senses", []))
+
+
+# Person-GROUP nouns a set-size cardinal can count ("four PLAYERS scored points") — curated, kinship included.
+GROUP_PERSON_NOUNS = KINSHIP | {"player", "person", "people", "friend", "student", "child", "kid", "boy",
+                                "girl", "man", "woman", "teammate", "member", "worker", "sibling"}
+_ORDINAL_WORDS = {"first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth",
+                  "tenth"}
+
+
+def _cast_size(rps: list) -> int:
+    """How many distinct entities a problem's premises reference — its CAST. Named entities count by WORD
+    (a merged "Carl and Cal" unit spans multiple words — split, skipping "and", as `_residual_sum_system`
+    does); when the cast is UNNAMED, distinct ORDINAL references count instead ("the FIRST player eats 78
+    seeds. The SECOND eats 53. The THIRD eats 30 more…" — three entities, no name anywhere)."""
+    names = {_key(w.surface) for rp in rps for u in rp.units if "name" in u.features.get("senses", [])
+             for w in u.words if _key(w.surface) != "and"}
+    if names:
+        return len(names)
+    ords = set()
+    for rp in rps:
+        for u in rp.units:
+            if "adjective" in u.features.get("senses", []) and _key(u.surface) in _ORDINAL_WORDS:
+                ords.add(_key(u.surface))
+            for a in u.features.get("attributes", []):
+                if _key(a) in _ORDINAL_WORDS:
+                    ords.add(_key(a))
+    return len(ords)
+
+
+def _set_size_cardinal(rp: "Reading", cast_n: int) -> bool:
+    """True iff a premise's ONLY number is a SET-SIZE cardinal: a 0-name clause whose single integer value
+    quantifies a person-GROUP noun AND equals the count of distinct named entities in the whole problem
+    ("In the final game of the basketball season, four PLAYERS scored points." in a Chandra/Akiko/Michiko/
+    Bailey problem — the 4 counts the CAST, it is not an arithmetic datum). Such a premise is safely
+    skippable by the anchored-affine family's unused-given firewall: its systems already sum/propagate over
+    exactly those named entities, so the cardinal is redundant scene-setting, not a dropped quantity."""
+    if cast_n < 2 or _name_count(rp) != 0:
+        return False
+    if any(s in u.features.get("senses", []) for u in rp.units
+           for s in ("multiplier", "comparative", "interrogative", "aggregator")) \
+            or any(_fraction_parts(u.surface) is not None for u in rp.units):
+        return False
+    vals = [u for u in rp.units if "value" in u.features.get("senses", [])
+            and u.features.get("value") is not None]
+    if len(vals) != 1 or vals[0].features["value"] != cast_n:
+        return False
+    qn = _follow(vals[0], "quantifies")
+    if qn is None:
+        return False
+    desc = _descriptor(qn)
+    return desc is not None and desc[0] in GROUP_PERSON_NOUNS
 
 
 def _disc_pair(e):
@@ -4510,6 +4571,8 @@ def _is_value_first_relation(text: str) -> bool:
         if i < len(units) and _key(units[i].surface) in ("the", "a", "an") and i + 2 < len(units) \
                 and _key(units[i + 1].surface) in COUNT_NOUNS and _key(units[i + 2].surface) == "of":
             i += 3                                      # skip the elided "the NUMBER/AMOUNT of" wrapper
+        elif i < len(units) and _key(units[i].surface) in ("the", "a", "an"):
+            i += 1                                      # skip a bare article ("than THE potatoes")
         if i < len(units) and any(s in units[i].features.get("senses", []) for s in ("name", "noun", "adjective")):
             return True
     return False
@@ -4615,6 +4678,29 @@ def _split_clauses(sentence: str) -> list:
                     lsubj, lverb = _clause_subject(left), _main_verb(left)
                     if lsubj is not None and lverb is not None:
                         return _split_clauses(left) + _split_clauses(f"{lsubj} {lverb} {right}")
+                if sep in (", ", ", and ", " and "):
+                    # COMPARATIVE LIST CONJUNCT, ELIDED STANDARD: "produced 237 potatoes, 60 fewer cucumbers"
+                    # — a value-first COMPARATIVE conjunct with NO "than"/"as" AT ALL (so the branch above
+                    # can't fire) compares to the PREVIOUS list item: the left's own trailing quantified
+                    # noun. Supply subject + verb + "than the <noun>". Gated hard: the right opens with the
+                    # value, carries a more/less/fewer comparative, no verb, no marker; the left must END in
+                    # a noun a value quantifies (a genuine quantity-list item, not an arbitrary clause tail).
+                    runits = analyze(right).units
+                    if runits and "value" in runits[0].features.get("senses", []) \
+                            and any(_key(u.surface) in ("more", "less", "fewer")
+                                    and "comparative" in u.features.get("senses", []) for u in runits) \
+                            and not any(_key(u.surface) in ("than", "as") for u in runits) \
+                            and not any("verb" in u.features.get("senses", []) for u in runits):
+                        lunits = analyze(left).units
+                        lsubj, lverb = _clause_subject(left), _main_verb(left)
+                        last = lunits[-1] if lunits else None
+                        if lsubj is not None and lverb is not None and last is not None \
+                                and "noun" in last.features.get("senses", []) \
+                                and any("value" in u.features.get("senses", [])
+                                        and _follow(u, "quantifies") is last for u in lunits):
+                            std = last.surface.strip(_PUNCT)
+                            return _split_clauses(left) + \
+                                _split_clauses(f"{lsubj} {lverb} {right} than the {std}")
             i = sentence.find(sep, i + 1)
     return [sentence]
 
@@ -4948,6 +5034,12 @@ def _noun_std_entity(rp: Reading, after_idx: int):
     if _key(tail[i].surface) in ("the", "a", "an") and i + 2 < len(tail) \
             and _key(tail[i + 1].surface) in COUNT_NOUNS and _key(tail[i + 2].surface) == "of":
         i += 3                                              # skip the elided "the NUMBER/AMOUNT of" wrapper
+    elif _key(tail[i].surface) in ("the", "a", "an"):
+        i += 1                                              # skip a bare ARTICLE ("than THE potatoes") — an
+        #                                                     article can never BE the standard, and the token
+        #                                                     right after it is the same immediate head the
+        #                                                     no-scan-ahead rule intends (unlike a pronoun,
+        #                                                     which stays a hard stop)
     if i >= len(tail):
         return None
     nxt = tail[i]
@@ -5879,8 +5971,9 @@ def _anchored_affine_coeffs(premises: list, question: str):
         if re.search(r"\btimes (more|less|fewer)\b", p.lower()):
             return None                                             # ambiguous ×N idiom → decline (GATE C)
     rels, anchors, measures = {}, {}, set()
-    for p in premises:
-        rp = analyze(p)
+    rps = [analyze(p) for p in premises]
+    cast_n = _cast_size(rps)               # for the SET-SIZE-cardinal skip below
+    for p, rp in zip(premises, rps):
         two_names = _name_count(rp) == 2
         if not any(s in u.features.get("senses", []) for u in rp.units
                    for s in ("value", "multiplier", "comparative", "interrogative", "aggregator")) \
@@ -5903,6 +5996,10 @@ def _anchored_affine_coeffs(premises: list, question: str):
             #                                 relation; skipping it silently dropped Jorge=Matias, 34 vs gold
             #                                 48) — unlike a truly unclassified premise that DOES carry a
             #                                 number this solver failed to fold, which stays a decline below
+        if _set_size_cardinal(rp, cast_n) and not p.rstrip().endswith("?"):
+            continue                       # the premise's only number COUNTS THE CAST ("four players
+            #                                 scored points" in a 4-name problem) — scene-setting, not a
+            #                                 dropped quantity; see `_set_size_cardinal`
         nc = _name_count(rp)
         rel = _affine_relation(rp) if nc == 2 else None      # exactly 2 names — else this may be the
         anc = _anchor_fact(rp) if (rel is None and nc == 1) else None   # coordinate-noun fallback firing,
@@ -7494,6 +7591,9 @@ def solve(text: str):
     # A premise with a comparative/multiplier is exempt — its stated value is an offset/factor consumed
     # into a DERIVED amount ("30 less … than Martha" → 38), so it won't appear verbatim.
     given = set()
+    # the problem's CAST size, for the SET-SIZE-cardinal exemption ("four players scored points" in a
+    # 4-name problem — the cardinal counts the entities, it is not a datum; see `_set_size_cardinal`)
+    cast_n = _cast_size(readings[:len(premises)])
     for i, rp in enumerate(readings[:len(premises)]):
         facts_i = facts_of[i] or []
         # the comparative/multiplier exemption holds ONLY if the premise actually produced a Quantity/Rate
@@ -7513,6 +7613,7 @@ def solve(text: str):
                 or any(isinstance(f, Distribution) for f in facts_i) \
                 or _relational_age_factor(rp) is not None \
                 or _future_age(rp) is not None \
+                or _set_size_cardinal(rp, cast_n) \
                 or _container_quantity(rp):   # "20 packets of 100 grams" / "N times as old" /
                 # "in 2 years … 20 years old" (20−2 — offset+age consumed into the now-age) —
             continue                                      # the factor is consumed into the derived product
@@ -7536,7 +7637,8 @@ def solve(text: str):
     for i, rp in enumerate(readings[:len(premises)]):
         if any(s in u.features.get("senses", []) for u in rp.units
                for s in ("value", "percent", "multiplier")) \
-                and not any(isinstance(f, (Quantity, Rate, Frequency, RateRel)) for f in (facts_of[i] or [])):
+                and not any(isinstance(f, (Quantity, Rate, Frequency, RateRel)) for f in (facts_of[i] or [])) \
+                and not _set_size_cardinal(rp, cast_n):
             return "undetermined"
     # GUARD 5 — temporal safety (now that we FOLD along the timeline, not blanket-decline). (a) A TIMED
     # premise that states a value/multiplier/percent but produced no Quantity dropped a time-tagged event
