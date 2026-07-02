@@ -5850,5 +5850,17 @@ class TestIncrement154NinthWaveTypedClusters(unittest.TestCase):
             "How many marbles do they have in total?"), 92)
 
 
+class TestIncrement155TenthWaveRoomPainting(unittest.TestCase):
+    """#155 — tenth-wave typed cluster (room-painting): tape/wall nouns, "cover" verb, and the
+    modifier adjectives exact/living/masking/wide + the comparative surface "neater" as a plain
+    adjective (no comparative machinery claims it)."""
+
+    def test_masking_tape_wall_widths(self):
+        self.assertEqual(reading.solve(
+            "Leo is painting his living room and buys masking tape. 2 of his walls are 4 meters "
+            "wide and the other 2 walls are 6 meters wide. How many meters of masking tape does "
+            "Leo need to cover the exact width of each wall?"), 20)
+
+
 if __name__ == "__main__":
     unittest.main()

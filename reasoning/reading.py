@@ -1765,6 +1765,13 @@ LEXICON.update({
     "burr": ["noun"], "tick": ["noun"], "fur": ["noun"], "object": ["noun"],
     "foreign": ["adjective"], "catch": ["verb"], "catches": ["verb"], "caught": ["verb"],
     "lot": ["noun"],
+    # tenth-wave typed cluster (the room-painting case): tape/wall nouns, "cover" verb
+    # (+inflections), and the modifier adjectives exact/living/masking/wide plus the comparative
+    # surface "neater" (a plain adjective entry — no comparative machinery claims it).
+    "tape": ["noun"], "wall": ["noun"],
+    "exact": ["adjective"], "living": ["adjective"], "masking": ["adjective"],
+    "neater": ["adjective"], "wide": ["adjective"],
+    "cover": ["verb"], "covers": ["verb"], "covered": ["verb"],
 })
 PLURALS.update({
     "bananas": "banana", "erasers": "eraser", "crayons": "crayon", "berries": "berry",
@@ -1783,6 +1790,7 @@ PLURALS.update({
     "jackets": "jacket", "pints": "pint",
     "seconds": "second", "cm": "centimeter",
     "kg": "kilogram", "burrs": "burr", "ticks": "tick", "objects": "object",
+    "walls": "wall", "tapes": "tape",
 })
 # NOTE: groundwork nouns/adjectives/pronouns (fruit/paper/side/…/herself) were re-tested with decline-safety
 # GUARDS 11–14 in place and STILL drop TEST 40.0→36.4% (a noun unlocks a held-out wrong in an as-yet-unguarded
@@ -1792,6 +1800,7 @@ VERB_LEMMA.update({
     "asks": "ask", "asked": "ask",
     "represents": "represent", "represented": "represent",
     "caught": "catch", "catches": "catch",
+    "covers": "cover", "covered": "cover",
     "raises": "raise", "raised": "raise", "raising": "raise",
 })
 
