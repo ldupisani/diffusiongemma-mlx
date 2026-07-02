@@ -5740,5 +5740,36 @@ class TestIncrement150SixthWaveVocab(unittest.TestCase):
             "How many apples are there?"), "undetermined")
 
 
+class TestIncrement151SeventhWaveTypedVocab(unittest.TestCase):
+    """#151 — seventh-wave TYPED vocab (per-category typing, not forced to noun): adjectives
+    constant/reduced/decorated, the vehicle noun "train" (travel/travels verbs were already in),
+    "&" as a conjunction alias of "and", and the verb "ask" (+asks/asked, lemma-mapped)."""
+
+    def test_ampersand_conjunction(self):
+        self.assertEqual(reading.solve(
+            "Tom & Mary combined have 100 marbles. If Tom owns 20 marbles more than Mary, "
+            "how many marbles does Tom own?"), 60)
+
+    def test_decorated_adjective(self):
+        self.assertEqual(reading.solve(
+            "Kendra made 4 more than five times as many decorated buttons as Mari. Mari made 8 "
+            "buttons. How many buttons did Kendra make?"), 44)
+
+    def test_train_noun_rate(self):
+        self.assertEqual(reading.solve(
+            "A train travels 100 miles in 2 hours. At the same rate, how many additional hours "
+            "would it take to travel another 150 miles?"), 3)
+
+    def test_reduced_adjective_percent_of_original(self):
+        self.assertEqual(reading.solve(
+            "Shirts have been reduced to $8. This price is at 25% of the original price. "
+            "What was the original price?"), 32)
+
+    def test_constant_adjective_rate(self):
+        self.assertEqual(reading.solve(
+            "Grace can read a 100-page book in 10 hours. How long would it take her to finish "
+            "reading a 150-page book at a constant rate?"), 15)
+
+
 if __name__ == "__main__":
     unittest.main()

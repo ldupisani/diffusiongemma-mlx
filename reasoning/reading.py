@@ -1734,6 +1734,13 @@ LEXICON.update({
     "jacket": ["noun"], "pint": ["noun"],
     "rain": ["noun"], "rainfall": ["noun"], "state": ["noun"],
     "pants": ["noun"], "shorts": ["noun"],
+    # seventh-wave TYPED tier (same sweep, per-category typing — not forced to noun): verified-gain
+    # adjectives ("constant" rate, "reduced" price, "decorated" buttons), "train" (vehicle noun — the
+    # verb senses travel/travels were already in), "&" (a conjunction, alias of "and"), and the verb
+    # "ask" (+ inflections, lemma-mapped like travel/travels).
+    "constant": ["adjective"], "reduced": ["adjective"], "decorated": ["adjective"],
+    "train": ["noun"], "&": ["conjunction"],
+    "ask": ["verb"], "asks": ["verb"], "asked": ["verb"],
 })
 PLURALS.update({
     "bananas": "banana", "erasers": "eraser", "crayons": "crayon", "berries": "berry",
@@ -1756,6 +1763,7 @@ PLURALS.update({
 # class) with ZERO dev gain → they stay OUT. The loop continues: build the next decline guard, then re-test.
 VERB_LEMMA.update({
     "scored": "score", "scores": "score", "scoring": "score",
+    "asks": "ask", "asked": "ask",
     "raises": "raise", "raised": "raise", "raising": "raise",
 })
 
