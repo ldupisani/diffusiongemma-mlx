@@ -5771,5 +5771,40 @@ class TestIncrement151SeventhWaveTypedVocab(unittest.TestCase):
             "reading a 150-page book at a constant rate?"), 15)
 
 
+class TestIncrement152EighthWaveUnitsQuantifier(unittest.TestCase):
+    """#152 — eighth-wave typed vocab: quantifier "several", plural-only noun "earnings" + verb
+    "represent", the time-unit "seconds" (noun sense on the PLURAL SURFACE only — a singular noun
+    sense broke the bare-ordinal reading "the second eats 25 seeds"), and "cm" as a PLURALS
+    abbreviation alias of centimeter (descriptor unifies for conversions)."""
+
+    def test_several_quantifier_no_claim(self):
+        self.assertEqual(reading.solve(
+            "A farmer bought several cows. Tom owns 3 more cows than Ben. Ben owns 4 cows. "
+            "How many cows does Tom own?"), 7)
+
+    def test_cm_alias_of_centimeter(self):
+        self.assertEqual(reading.solve(
+            "Ken is 5 cm taller than Mia. Mia is 100 cm tall. How many centimeters tall is Ken?"), 105)
+
+    def test_seconds_time_unit_rate_conversion(self):
+        self.assertEqual(reading.solve(
+            "Ben can eat 10 nuts in 30 seconds. At this same rate, how many nuts could he eat "
+            "in 2 minutes?"), 40)
+
+    def test_earnings_and_represent(self):
+        self.assertEqual(reading.solve(
+            "Ann earned 4 times as much money as Bea. Together they earned $100. How many dollars "
+            "did Ann earn? Use A to represent the earnings."), 80)
+
+    def test_bare_ordinal_second_not_a_time_unit(self):
+        # singular "second" stays a pure adjective: the bare-ordinal subject must never be read as
+        # a time-unit noun (that misreading turned a solved case into a decline pre-fix); this
+        # simpler shape declines — the pin is that it never commits a number
+        self.assertEqual(reading.solve(
+            "At a game, three players are having a contest. The first player eats 25 seeds. "
+            "The second eats 3 more than the first. How many seeds does the second player eat?"),
+            "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()

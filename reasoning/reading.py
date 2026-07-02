@@ -1741,6 +1741,15 @@ LEXICON.update({
     "constant": ["adjective"], "reduced": ["adjective"], "decorated": ["adjective"],
     "train": ["noun"], "&": ["conjunction"],
     "ask": ["verb"], "asks": ["verb"], "asked": ["verb"],
+    # eighth-wave typed tier: the quantifier "several" (like "some" — no number claim), the plural-only
+    # money noun "earnings" (bare noun, no PLURALS entry, like pants/shorts), and the verb "represent"
+    # (+inflections). "seconds" carries the TIME-UNIT noun sense on the PLURAL SURFACE only (like
+    # "dice") — giving singular "second" a noun sense broke the bare-ordinal reading ("the second eats
+    # 25 seeds"); its PLURALS entry still points at "second" so the descriptor unifies for the
+    # second↔minute CONVERSIONS. "cm" lands via PLURALS (cm→centimeter, an ABBREVIATION alias so the
+    # descriptor unifies with the spelled-out unit).
+    "several": ["quantifier"], "earnings": ["noun"], "seconds": ["noun"],
+    "represent": ["verb"], "represents": ["verb"], "represented": ["verb"],
 })
 PLURALS.update({
     "bananas": "banana", "erasers": "eraser", "crayons": "crayon", "berries": "berry",
@@ -1757,6 +1766,7 @@ PLURALS.update({
     "malls": "mall", "holidays": "holiday", "cardinals": "cardinal", "jays": "jay",
     "robins": "robin", "sparrows": "sparrow", "events": "event", "centers": "center",
     "jackets": "jacket", "pints": "pint",
+    "seconds": "second", "cm": "centimeter",
 })
 # NOTE: groundwork nouns/adjectives/pronouns (fruit/paper/side/…/herself) were re-tested with decline-safety
 # GUARDS 11–14 in place and STILL drop TEST 40.0→36.4% (a noun unlocks a held-out wrong in an as-yet-unguarded
@@ -1764,6 +1774,7 @@ PLURALS.update({
 VERB_LEMMA.update({
     "scored": "score", "scores": "score", "scoring": "score",
     "asks": "ask", "asked": "ask",
+    "represents": "represent", "represented": "represent",
     "raises": "raise", "raised": "raise", "raising": "raise",
 })
 
