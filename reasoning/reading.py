@@ -1838,6 +1838,8 @@ LEXICON.update({
     # the sales-funnel case
     "door-to-door": ["adjective"], "knife": ["noun"], "salesman": ["noun"],
     "something": ["noun"], "visit": ["verb"], "visits": ["verb"],
+    # the tin-house ordinal-day-chain case
+    "tin": ["noun"],
     "log": ["noun", "verb"], "logs": ["noun", "verb"],
     # EXCLUDED the jog family: it unlocks a held-out "5 miles per day on WEEKDAYS ONLY ... over
     # three weeks" case to a confident-wrong (105 = 5*7*3 vs gold 75 = 5*5*3) — the rate-projection
@@ -1866,7 +1868,7 @@ PLURALS.update({
     "kg": "kilogram", "burrs": "burr", "ticks": "tick", "objects": "object",
     "walls": "wall", "tapes": "tape", "steaks": "steak", "trouts": "trout", "trout": "trout",
     "camels": "camel", "travelers": "traveler", "jacks": "jack", "records": "record",
-    "lawnmowers": "lawnmower", "yards": "yard", "knives": "knife",
+    "lawnmowers": "lawnmower", "yards": "yard", "knives": "knife", "tins": "tin",
 })
 # NOTE: groundwork nouns/adjectives/pronouns (fruit/paper/side/…/herself) were re-tested with decline-safety
 # GUARDS 11–14 in place and STILL drop TEST 40.0→36.4% (a noun unlocks a held-out wrong in an as-yet-unguarded
@@ -7676,6 +7678,69 @@ _WEEKDAYS = ("sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "
 _ZERO_CUES = ("nothing", "skipped", "did not", "didn't", "none")
 
 
+_ORDINAL_DAYS = {"first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5, "sixth": 6}
+
+
+def _ordinal_day_chain_residual_system(premises: list, question: str):
+    """ORDINAL-DAY CHAIN + EQUAL-SPLIT RESIDUAL — "collecting 500 tins in a week; first day 50;
+    second day 3 times that number; third day 50 fewer than the second day; equal number on the
+    remaining days; how many each day for the rest of the week?" → (500 − (50+150+100)) / (7−3)
+    = 50. TIGHTLY gated: a digit-free "each day … rest of the week" question; an equal-split cue
+    ("equal number … remaining days") in a premise or the question; ONE weekly target premise
+    ("N <item> in a week"); consecutive ordinal-day premises from the FIRST day, each resolving
+    to a value — a literal, "k times that number" (× previous), or "N fewer than … the <ordinal>
+    day" (that day's value − N); every digit premise classified; a positive-integer share. None
+    otherwise."""
+    ql = question.lower()
+    if any(ch.isdigit() for ch in ql) or "day" not in ql \
+            or not ("rest of the week" in ql or "remaining days" in ql):
+        return None
+    body = " ".join(premises).lower()
+    if not ("equal" in body or "equal" in ql) or "remaining days" not in body + " " + ql:
+        return None
+    target = None
+    day_vals: dict = {}
+    for p in premises:
+        pl = p.lower()
+        om = re.search(r"on the (\w+) day", pl)
+        tm = re.search(r"(\d+(?:\.\d+)?) \w+ in a week", pl)
+        if om is not None and om.group(1) in _ORDINAL_DAYS:
+            n = _ORDINAL_DAYS[om.group(1)]
+            if n in day_vals:
+                return None
+            rest = pl[om.end():]
+            km = re.search(r"(\d+(?:\.\d+)?) times that number", rest)
+            fm = re.search(r"(\d+(?:\.\d+)?) \w+ fewer than[^.]*on the (\w+) day", rest)
+            lm = re.search(r"(\d+(?:\.\d+)?)", rest)
+            if km is not None:
+                if n - 1 not in day_vals:
+                    return None
+                day_vals[n] = float(km.group(1)) * day_vals[n - 1]
+            elif fm is not None:
+                ref = _ORDINAL_DAYS.get(fm.group(2))
+                if ref is None or ref not in day_vals:
+                    return None
+                day_vals[n] = day_vals[ref] - float(fm.group(1))
+            elif lm is not None:
+                day_vals[n] = float(lm.group(1))
+            else:
+                return None                              # an ordinal day with no resolvable value
+        elif tm is not None and target is None:
+            target = float(tm.group(1))
+        elif any(ch.isdigit() for ch in p):
+            return None                                  # an unclassified valued premise
+    if target is None or not day_vals or sorted(day_vals) != list(range(1, len(day_vals) + 1)):
+        return None                                      # days must be consecutive from the first
+    remaining = 7 - len(day_vals)
+    if remaining < 1 or any(v < 0 for v in day_vals.values()):
+        return None
+    result = _compute(f"({_num(target)} - ({' + '.join(_num(day_vals[k]) for k in sorted(day_vals))}))"
+                      f" / {remaining}")
+    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
+        return None
+    return result
+
+
 def _sales_funnel_week_system(premises: list, question: str):
     """SALES FUNNEL × WEEK — "visits 50 houses a day; 20% of them buy; of those, half buy a $50
     set and the other half a $150 set; how much does he sell a week working 5 days a week?" →
@@ -8404,6 +8469,8 @@ _EARLY_SYSTEMS = [
     ("inverse_distribution", _inverse_distribution_system),
     # SPLIT-WITH (K+1): "two dozen eggs to split with his three siblings; each person?" → 6.
     ("split_with", _split_with_system),
+    # ORDINAL-DAY CHAIN RESIDUAL: "500 in a week; day1 50, day2 3×, day3 −50; rest equal?" → 50.
+    ("ordinal_day_chain_residual", _ordinal_day_chain_residual_system),
     # SALES FUNNEL × WEEK: "50 houses/day; 20% buy; half $50, half $150; 5 days?" → 5000.
     ("sales_funnel_week", _sales_funnel_week_system),
     # WORKWEEK WITH ONE BOOSTED DAY: "avg 40/day, Friday 40% higher, open Mon–Fri" → 216.

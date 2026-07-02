@@ -6261,5 +6261,30 @@ class TestIncrement171SalesFunnelWeek(unittest.TestCase):
             "How much does she sell a week when she works 4 days a week?"), "undetermined")
 
 
+class TestIncrement172OrdinalDayChainResidual(unittest.TestCase):
+    """#172 — `_ordinal_day_chain_residual_system` (EARLY, registered): a weekly target, a chain
+    of ordinal-day values (literal / "k times that number" × previous / "N fewer than … the
+    <ordinal> day"), and an equal split of the residual over the remaining days →
+    (target − Σ days) / (7 − listed)."""
+
+    def test_chain_with_times_and_fewer(self):
+        # 200 − (20 + 60 + 20) = 100 over 4 remaining days → 25
+        self.assertEqual(reading.solve(
+            "Nora decides to fill a jar by collecting 200 marbles in a week. On the first day, "
+            "she collects 20 marbles. On the second day, she manages to collect 3 times that "
+            "number. On the third day, she collects 40 marbles fewer than the number she "
+            "collected on the second day. If she collects an equal number of marbles on the "
+            "remaining days of the week, what's the number of marbles she collected each day "
+            "for the rest of the week?"), 25)
+
+    def test_gap_in_day_sequence_declines(self):
+        # first and third days listed with no second — the chain is broken; never commit
+        self.assertEqual(reading.solve(
+            "Nora decides to fill a jar by collecting 200 marbles in a week. On the first day, "
+            "she collects 20 marbles. On the third day, she collects 30 marbles. If she "
+            "collects an equal number of marbles on the remaining days of the week, what's the "
+            "number of marbles she collected each day for the rest of the week?"), "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()
