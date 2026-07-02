@@ -1775,6 +1775,8 @@ LEXICON.update({
     # (+inflections), and the modifier adjectives exact/living/masking/wide plus the comparative
     # surface "neater" (a plain adjective entry — no comparative machinery claims it).
     "tape": ["noun"], "wall": ["noun"],
+    # eleventh wave (the piece-count system's cases): butcher-counter nouns
+    "steak": ["noun"], "beef": ["noun"],
     "exact": ["adjective"], "living": ["adjective"], "masking": ["adjective"],
     "neater": ["adjective"], "wide": ["adjective"],
     "cover": ["verb"], "covers": ["verb"], "covered": ["verb"],
@@ -1796,7 +1798,7 @@ PLURALS.update({
     "jackets": "jacket", "pints": "pint",
     "seconds": "second", "cm": "centimeter",
     "kg": "kilogram", "burrs": "burr", "ticks": "tick", "objects": "object",
-    "walls": "wall", "tapes": "tape",
+    "walls": "wall", "tapes": "tape", "steaks": "steak",
 })
 # NOTE: groundwork nouns/adjectives/pronouns (fruit/paper/side/…/herself) were re-tested with decline-safety
 # GUARDS 11–14 in place and STILL drop TEST 40.0→36.4% (a noun unlocks a held-out wrong in an as-yet-unguarded
@@ -7499,6 +7501,47 @@ def _equal_share(question: str, context: list, premises: list):
     return result
 
 
+def _piece_count_system(premises: list, question: str):
+    """PIECE COUNT ACROSS UNITS — "Matt orders 15 POUNDS of beef. He cuts that into 12-OUNCE steaks.
+    How many steaks does he get?" → 15·16 / 12 = 20. A TOTAL measure in one unit is divided into
+    PIECES whose size is stated in a CONVERTIBLE unit; the asked noun is the piece. TIGHTLY gated:
+    the question is a bare "how many <piece>" (no value of its own); exactly TWO value-bearing
+    premises; the piece-size premise MENTIONS the asked noun, the total premise does NOT; the two
+    measure heads form a CONVERSIONS pair (or match exactly); the division is a POSITIVE INTEGER
+    (a piece count is whole — a fraction means this isn't the shape). None otherwise."""
+    ql = question.lower()
+    m = re.search(r"how many (\w+)", ql)
+    if m is None or "how much" in ql or any(ch.isdigit() for ch in ql):
+        return None
+    piece = _singular_of(m.group(1)) or m.group(1)
+    if piece in UNIT_NOUNS or "noun" not in LEXICON.get(piece, ()):
+        return None
+    valued = []                                          # (premise, its single Quantity) per valued premise
+    for p in premises:
+        fs = [f for f in (learn(p, [], []) or []) if isinstance(f, Quantity) and f.amount is not None]
+        if len(fs) > 1:
+            return None                                  # a multi-value premise is another shape
+        if fs:
+            valued.append((p, fs[0]))
+    if len(valued) != 2:
+        return None
+    def mentions(p):                                     # does the premise name the asked piece?
+        return any((_singular_of(_key(w)) or _key(w)) == piece for w in p.split())
+    piece_pair = next((v for v in valued if mentions(v[0])), None)
+    total_pair = next((v for v in valued if not mentions(v[0])), None)
+    if piece_pair is None or total_pair is None:
+        return None
+    size, total = piece_pair[1], total_pair[1]
+    su, tu = size.measure[0], total.measure[0]
+    if su != tu and (tu, su) not in CONVERSIONS:
+        return None
+    factor = 1 if su == tu else CONVERSIONS[(tu, su)]
+    result = _compute(f"{_num(total.amount)} * {_num(factor)} / {_num(size.amount)}")
+    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
+        return None
+    return result
+
+
 # --- ARITHMETIC SYSTEM-SOLVER REGISTRY -------------------------------------------------------
 # The word-problem system solvers are REGISTERED here, not hand-inlined in solve() — honoring the
 # engine's founding rule ("new reasoning is REGISTERED, never special-cased"). Each is a
@@ -7550,6 +7593,8 @@ _EARLY_SYSTEMS = [
     ("target_contributions", _target_contributions_system),
     # TOTAL-BETWEEN RESIDUAL: "12 in total between A, B, C; 3 B and 2 A; how many C?" → 12−5 = 7.
     ("total_between_residual", _total_between_residual_system),
+    # PIECE COUNT ACROSS UNITS: "15 pounds of beef cut into 12-ounce steaks; how many steaks?" → 20.
+    ("piece_count", _piece_count_system),
 ]
 
 # LATE systems run AFTER the read-synthesize fixpoint has built `context` (they consume derived

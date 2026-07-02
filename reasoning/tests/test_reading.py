@@ -5899,5 +5899,29 @@ class TestIncrement156UnitConversion(unittest.TestCase):
             "Tom has 10 sodas. He drank 3 sodas. How many sodas does Tom have left?"), 7)
 
 
+class TestIncrement157PieceCountAcrossUnits(unittest.TestCase):
+    """#157 — `_piece_count_system` (EARLY, registered): a TOTAL measure in one unit divided into
+    PIECES whose size is stated in a CONVERTIBLE unit ("15 pounds of beef cut into 12-ounce steaks"
+    → 15·16/12 = 20). Gated: bare digit-free "how many <piece>" question; exactly two value-bearing
+    premises; the piece premise mentions the asked noun, the total premise does not; the unit heads
+    form a CONVERSIONS pair (or match); the division is a positive INTEGER."""
+
+    def test_pounds_into_ounce_pieces(self):
+        self.assertEqual(reading.solve(
+            "Mia has 4 pounds of beef. She cuts it into 8-ounce pieces. "
+            "How many pieces does she get?"), 8)
+
+    def test_same_family_time_units(self):
+        self.assertEqual(reading.solve(
+            "Ann has 2 hours of free time. She watches 30-minute shows. "
+            "How many shows can she watch?"), 4)
+
+    def test_non_integer_division_declines(self):
+        # 64 / 9 is not whole — a fractional piece count means this isn't the shape
+        self.assertEqual(reading.solve(
+            "Mia has 4 pounds of beef. She cuts it into 9-ounce pieces. "
+            "How many pieces does she get?"), "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()
