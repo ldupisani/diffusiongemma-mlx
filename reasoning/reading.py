@@ -1963,6 +1963,17 @@ LEXICON.update({
     # PERSISTS unchanged; fix that relational path before re-admitting.
     "clothes": ["noun"],
     "donation": ["noun"], "donating": ["noun"], "throws": ["verb"],
+    # 19th wave — CEILING wave 3 (#203): the last meaningful measured-safe tier. Skipped as
+    # semantically loaded: fit/right/done/stop/doubled/break/interest/clean/carry/either/best/
+    # well/most/such (state/superlative/multiplier semantics), "leaves" (verb-vs-noun collision
+    # with the excluded "leave"), mph (needs rate-unit machinery).
+    "duck": ["noun"], "laundry": ["noun"], "bed": ["noun"], "dance": ["noun"],
+    "music": ["noun"], "club": ["noun"], "writing": ["noun"],
+    "ready": ["adjective"], "except": ["preposition"],
+    "traveling": ["verb"],
+    # EXCLUDED "require(s/d)": the diff caught it unlocking a holdout batch-scaling
+    # confident-wrong (6≠44 — "one batch requires 4 cups … how many for N batches" commits
+    # a partial); needs a batch-scaling system first.
 })
 PLURALS.update({
     "samosas": "samosa", "pakoras": "pakora", "vases": "vase", "pins": "pin", "boots": "boot",
@@ -1975,6 +1986,7 @@ PLURALS.update({
     "pools": "pool", "towels": "towel", "bathrooms": "bathroom",
     "lunches": "lunch", "roads": "road", "buses": "bus", "calories": "calorie",
     "seats": "seat", "buckets": "bucket", "wives": "wife", "donations": "donation",
+    "ducks": "duck", "beds": "bed", "dances": "dance", "clubs": "club",
     "blocks": "block", "rows": "row", "words": "word",
     "notebooks": "notebook", "zoos": "zoo", "kitchens": "kitchen", "factories": "factory",
     "deliveries": "delivery", "destinations": "destination", "payments": "payment",
@@ -1987,6 +1999,7 @@ VERB_LEMMA.update({
     "replaces": "replace", "replaced": "replace",
     "scares": "scare", "scared": "scare",
     "realizes": "realize", "realized": "realize", "trying": "try",
+    "traveling": "travel",
     "throws": "throw",
     "asks": "ask", "asked": "ask",
     "represents": "represent", "represented": "represent",
