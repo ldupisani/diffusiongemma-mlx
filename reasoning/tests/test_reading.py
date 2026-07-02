@@ -6072,5 +6072,34 @@ class TestIncrement163DistributionInverses(unittest.TestCase):
             "each person get to eat if they all eat the same amount?"), (int, float))
 
 
+class TestIncrement164BespokeRateChains(unittest.TestCase):
+    """#164 — two one-case rate chains (both EARLY, registered): `_weekly_time_plus_delta_system`
+    (per-day hours Rate ×7 + an "increase … weekly by N hours" delta) and
+    `_daily_rate_difference_system` (mixed sides: one party's stated TOTAL ÷ the shared "in a
+    week" duration vs the other's per-day value, asked "how many more per day … compared to")."""
+
+    def test_weekly_time_plus_delta(self):
+        self.assertEqual(reading.solve(
+            "Lia reads for 3 hours each day. She decided to increase her time spent on reading "
+            "weekly, by 5 hours. How much time does Lia want to spend during one week on "
+            "reading?"), 26)
+
+    def test_daily_rate_difference_mixed_sides(self):
+        self.assertEqual(reading.solve(
+            "Yesterday Amy got four books from the library. They were a total of 1400 pages. "
+            "Her brother got one book a day that was 100 pages each. They both finished them in "
+            "a week. On average, how many more pages per day did Amy read compared to her "
+            "brother?"), 100)
+
+    def test_negative_difference_declines(self):
+        # the brother out-reads Amy (300 > 200) — "how many more did Amy read" must not commit
+        # a negative number
+        self.assertNotIsInstance(reading.solve(
+            "Yesterday Amy got four books from the library. They were a total of 1400 pages. "
+            "Her brother got one book a day that was 300 pages each. They both finished them in "
+            "a week. On average, how many more pages per day did Amy read compared to her "
+            "brother?"), (int, float))
+
+
 if __name__ == "__main__":
     unittest.main()

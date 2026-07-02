@@ -7601,6 +7601,88 @@ def _herd_rate_week_system(premises: list, question: str):
     return _compute(f"{_num(count.amount)} * {_num(rate.amount)} * 7")
 
 
+def _weekly_time_plus_delta_system(premises: list, question: str):
+    """WEEKLY TIME + DELTA — "reads 2 hours each day; decided to increase his weekly time by 4
+    hours; how much time during one week?" → 2·7 + 4 = 18. TIGHTLY gated: a digit-free "how much
+    time … week" question; exactly TWO digit premises — a per-day hours Rate and an "increase …
+    weekly … by N hours" delta; positive integer result. None otherwise."""
+    ql = question.lower()
+    if "how much time" not in ql or "week" not in ql or any(ch.isdigit() for ch in ql) \
+            or any(w in ql for w in ("more", "fewer", "less", "than")):
+        return None
+    rate = delta = None
+    disc, ctx = [], []
+    for p in premises:
+        fs = learn(p, disc, ctx) or []
+        ctx += fs
+        pl = p.lower()
+        if not any(ch.isdigit() for ch in p):
+            continue
+        r = next((f for f in fs if isinstance(f, Rate) and f.per_unit == "day"
+                  and f.measure[0] == "hour"), None)
+        dm = re.search(r"increase .*weekly.*by (\d+(?:\.\d+)?) hours?", pl)
+        if r is not None and rate is None:
+            rate = r.amount
+        elif dm is not None and delta is None:
+            delta = float(dm.group(1))
+        else:
+            return None                                  # an unclassified valued premise → not this shape
+    if rate is None or delta is None:
+        return None
+    result = _compute(f"{_num(rate)} * 7 + {_num(delta)}")
+    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
+        return None
+    return result
+
+
+def _daily_rate_difference_system(premises: list, question: str):
+    """DAILY RATE DIFFERENCE, MIXED SIDES — "Ryan's five books were a total of 2100 pages; his
+    brother got 200 pages a day; both finished in a week; how many MORE pages per day did Ryan
+    read compared to his brother?" → 2100/7 − 200 = 100. Each side's daily rate is either a
+    per-day premise value or a stated TOTAL ÷ the shared duration ("in a week"). TIGHTLY gated:
+    a digit-free "how many more <X> per day … than/compared to" question naming both parties;
+    exactly one candidate value per side; a positive-integer difference. None otherwise."""
+    ql = question.lower()
+    m = re.search(r"how many more (\w+) (?:per|a|each) day", ql)
+    std_m = re.search(r"(?:than|compared to) (?:his |her |their )?(\w+)", ql)
+    if m is None or std_m is None or any(ch.isdigit() for ch in ql):
+        return None
+    asked = _singular_of(m.group(1)) or m.group(1)
+    standard = _singular_of(std_m.group(1)) or std_m.group(1)
+    days = 7 if re.search(r"\bin (a|one) week\b", " ".join(premises).lower()) else None
+    dm = re.search(r"\bin (\w+) (week|day)s?\b", " ".join(premises).lower())
+    if days is None and dm is not None:
+        n = NUMBERS.get(dm.group(1), float(dm.group(1)) if dm.group(1).isdigit() else 0)
+        if n:
+            days = n * (7 if dm.group(2) == "week" else 1)
+    sides: dict = {}                                     # entity → (value, is_daily)
+    disc, ctx = [], []
+    for p in premises:
+        all_fs = learn(p, disc, ctx) or []
+        ctx += all_fs
+        fs = [f for f in all_fs if isinstance(f, Quantity)
+              and f.amount is not None and f.measure[0] == asked]
+        for f in fs:
+            if f.entity in sides:
+                return None                              # two values on one side → not this shape
+            sides[f.entity] = (f.amount, any(c in p.lower() for c in _PER_DAY_CUES))
+    if len(sides) != 2 or standard not in sides:
+        return None
+    subj = next(e for e in sides if e != standard)
+    def daily(entry):
+        val, is_daily = entry
+        if is_daily:
+            return val
+        return None if days is None else val / days
+    a, b = daily(sides[subj]), daily(sides[standard])
+    if a is None or b is None:
+        return None
+    result = _compute(f"{_num(a)} - {_num(b)}")
+    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
+        return None
+    return result
+
+
 def _inverse_distribution_system(premises: list, question: str):
     """INVERSE DISTRIBUTION — the recipient COUNT from a total and a per-recipient share: "Jason
     bought 4 dozen cupcakes. He plans to give 3 cupcakes each to his cousins. How many cousins does
@@ -7918,6 +8000,10 @@ _EARLY_SYSTEMS = [
     ("inverse_distribution", _inverse_distribution_system),
     # SPLIT-WITH (K+1): "two dozen eggs to split with his three siblings; each person?" → 6.
     ("split_with", _split_with_system),
+    # WEEKLY TIME + DELTA: "2 hours each day; increase weekly by 4 hours; per week?" → 18.
+    ("weekly_time_plus_delta", _weekly_time_plus_delta_system),
+    # DAILY RATE DIFFERENCE (mixed sides): "2100 pages in a week vs 200/day; more per day?" → 100.
+    ("daily_rate_difference", _daily_rate_difference_system),
 ]
 
 # LATE systems run AFTER the read-synthesize fixpoint has built `context` (they consume derived
