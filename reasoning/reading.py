@@ -1973,7 +1973,9 @@ LEXICON.update({
     "traveling": ["verb"],
     # EXCLUDED "require(s/d)": the diff caught it unlocking a holdout batch-scaling
     # confident-wrong (6≠44 — "one batch requires 4 cups … how many for N batches" commits
-    # a partial); needs a batch-scaling system first.
+    # a partial); needs a batch-scaling system first (no dev-train twin of that shape yet).
+    # #204: containment verbs — typed AND wired into POSSESSION_VERBS (semantics first).
+    "contain": ["verb"], "contains": ["verb"], "contained": ["verb"], "containing": ["verb"],
 })
 PLURALS.update({
     "samosas": "samosa", "pakoras": "pakora", "vases": "vase", "pins": "pin", "boots": "boot",
@@ -2000,6 +2002,7 @@ VERB_LEMMA.update({
     "scares": "scare", "scared": "scare",
     "realizes": "realize", "realized": "realize", "trying": "try",
     "traveling": "travel",
+    "contains": "contain", "contained": "contain", "containing": "contain",
     "throws": "throw",
     "asks": "ask", "asked": "ask",
     "represents": "represent", "represented": "represent",
@@ -2243,7 +2246,12 @@ COMPARATIVE_SIGN = {"less": -1, "fewer": -1, "younger": -1, "shorter": -1, "ligh
 # DARWIN HAS" = "...as Darwin has") — deliberately narrow (NOT any verb) so a mistagged common noun ("CDs")
 # followed by an unrelated passive modifier ("the CDs SOLD at $10 each") doesn't get misread as a name-ratio.
 POSSESSION_VERBS = {"has", "had", "have", "owns", "owned", "gets", "got", "receives", "received",
-                    "holds", "held"}
+                    "holds", "held",
+                    # CONTAINMENT is possession (#204): "each box contains 6 eggs" carries the
+                    # eggs exactly as "holds" does — the fold materializes the quantity. This was
+                    # the #1 unknown word corpus-wide (59 blocked problems); typing it alone
+                    # (without the relation) was the wrong-on-inject class the sweep flagged.
+                    "contains", "contain", "contained"}
 
 
 def _verb_sign(lemma: str) -> int:
