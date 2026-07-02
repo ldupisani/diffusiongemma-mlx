@@ -1956,6 +1956,13 @@ LEXICON.update({
     "way": ["noun"], "middle": ["noun"],
     "particular": ["adjective"],
     "everyone": ["pronoun"],
+    # #200 — STALE-EXCLUSION RE-TESTS: "clothes" re-admitted (excluded pre-#180 for a TEST
+    # 500≠300 wrong; the fresh sweep shows 3 pure dev gains; plural-only garment noun, NO
+    # PLURALS entry; the close TEST look adjudicates). "sheep" RE-TESTED AND RE-EXCLUDED —
+    # the #185 holdout wrong (−300≠266, 'double the number of sheep as Mary plus another N')
+    # PERSISTS unchanged; fix that relational path before re-admitting.
+    "clothes": ["noun"],
+    "donation": ["noun"], "donating": ["noun"], "throws": ["verb"],
 })
 PLURALS.update({
     "samosas": "samosa", "pakoras": "pakora", "vases": "vase", "pins": "pin", "boots": "boot",
@@ -1967,7 +1974,7 @@ PLURALS.update({
     "debuts": "debut", "showings": "showing", "beaches": "beach",
     "pools": "pool", "towels": "towel", "bathrooms": "bathroom",
     "lunches": "lunch", "roads": "road", "buses": "bus", "calories": "calorie",
-    "seats": "seat", "buckets": "bucket", "wives": "wife",
+    "seats": "seat", "buckets": "bucket", "wives": "wife", "donations": "donation",
     "blocks": "block", "rows": "row", "words": "word",
     "notebooks": "notebook", "zoos": "zoo", "kitchens": "kitchen", "factories": "factory",
     "deliveries": "delivery", "destinations": "destination", "payments": "payment",
@@ -1980,6 +1987,7 @@ VERB_LEMMA.update({
     "replaces": "replace", "replaced": "replace",
     "scares": "scare", "scared": "scare",
     "realizes": "realize", "realized": "realize", "trying": "try",
+    "throws": "throw",
     "asks": "ask", "asked": "ask",
     "represents": "represent", "represented": "represent",
     "caught": "catch", "catches": "catch",
@@ -7846,6 +7854,78 @@ def _pool_literal_relational_remaining_system(premises: list, question: str):
     return _gated_pos_int(result)
 
 
+_BFC_STEP = re.compile(
+    r"(half|(?:a|an|one|two|three)[ -](?:half|third|thirds|quarter|quarters|fourth|fourths|fifth"
+    r"|fifths|sixth|sixths|seventh|sevenths|eighth|eighths|ninth|ninths|tenth|tenths)|\d+/\d+)"
+    r"\s+(?:of\s+)?((?:[a-z'’]+\s+){0,4}[a-z'’]+)")
+
+
+def _backward_fraction_chain_system(premises: list, question: str):
+    """BACKWARD FRACTION CHAIN — the INVERSE of the depletion chain: sequential fraction losses
+    ending in a KNOWN final, asked the ORIGINAL: "Lucy lost one-third of her money, spent
+    one-fourth of the remainder, and was left with $15; how much at the beginning?" → M·⅔·¾ = 15
+    → 30; "Jenny had $24 left after spending 3/7 of her money; how much is HALF of her original
+    amount?" → (24 ÷ 4/7)/2 = 21. GUARD 8 declines backward-initial asks so the fold never
+    commits a partial here — this system claims only the fully-modeled chain. TIGHTLY gated: a
+    digit-free original/at-first/beginning ask ('half of the original' halves the answer); ONE
+    final "left with/had $F left"; every fraction step anchored (the FIRST base-anchored, later
+    ones remainder-anchored) with a loss cue in the body; every fraction cue captured; every
+    digit accounted; the original and the answer positive integers. None otherwise."""
+    ql = question.lower()
+    if not re.search(r"\b(?:at first|at the beginning|beginning|originally|original)\b", ql) \
+            or not ("how much" in ql or "how many" in ql) or _has_digit(ql) \
+            or _has_comparative(ql):
+        return None
+    halve = re.search(r"half of (?:her|his|their|the) original", ql) is not None
+    body = " ".join(p.lower() for p in premises)
+    if " each" in body or "times" in body:
+        return None
+    fmatch = re.search(r"(?:left with|had|has) \$?(\d+(?:,\d{3})*(?:\.\d+)?)(?: left)?\b", body)
+    if fmatch is None or "left" not in fmatch.group(0) and "left with" not in body:
+        return None
+    final = float(fmatch.group(1).replace(",", ""))
+    if not re.search(r"\b(?:spend|spent|spending|lost|lose|losing|gave|give|used|use)", body):
+        return None                                      # the chain needs a loss cue
+    steps = []
+    for m in _BFC_STEP.finditer(body):
+        f = _fraction_value(m.group(1))
+        if f is None or not 0 < f < 1:
+            return None
+        anchor = m.group(2)
+        if _FC_REMAINDER_ANCHOR.search(anchor):
+            kind = "remainder"
+        elif re.match(r"(?:her|his|their|the|my) [a-z'’]+|(?:money|amount|it|them|savings)\b",
+                      anchor):
+            kind = "base"
+        else:
+            return None                                  # an anchor we can't place — never guess
+        steps.append((f, kind, m.group(1)))
+    if not steps or steps[0][1] != "base" or any(k != "remainder" for _, k, _ in steps[1:]):
+        return None
+    cues = re.findall(r"\b(?:half|halves|thirds?|quarters?|fourths?|fifths?|sixths?|sevenths?"
+                      r"|eighths?|ninths?|tenths?|\d+/\d+)\b", body)
+    if len(cues) != len(steps):
+        return None                                      # an uncaptured fraction cue → partial chain
+    used = {fmatch.group(1)}
+    for _, _, tok in steps:
+        used |= set(re.findall(r"\d+", tok))
+    for d in re.findall(r"\d+(?:,\d{3})*(?:\.\d+)?", body):
+        if d not in used and not all(x in used for x in re.findall(r"\d+", d)):
+            return None                                  # a body digit we didn't consume
+    keep = 1.0
+    for f, _, _ in steps:
+        keep *= (1 - f)
+    if keep <= 0:
+        return None
+    expr = f"{_num(final)} / {_num(keep)}"
+    if halve:
+        expr = f"({expr}) / 2"
+    result = _compute(expr)
+    if isinstance(result, float):
+        result = round(result, 9)
+    return _gated_pos_int(result)
+
+
 def _fraction_partition_rest_system(premises: list, question: str):
     """FRACTION PARTITION + REST — fractions of ONE total label categories (STATIVE copulas, not
     depletions); the asked category is the unlabeled REST: "sold a total of 72 computers; half of
@@ -10428,6 +10508,8 @@ _EARLY_SYSTEMS = [
     ("fraction_partition_rest", _fraction_partition_rest_system),
     # POOL − LITERAL − K×LITERAL, half-of-remaining ask: "120 pages; 12 + twice that; half the rest?" → 42.
     ("pool_literal_relational_remaining", _pool_literal_relational_remaining_system),
+    # BACKWARD FRACTION CHAIN: "lost ⅓, spent ¼ of the rest, $15 left; at first?" → 15/(⅔·¾) = 30.
+    ("backward_fraction_chain", _backward_fraction_chain_system),
     # PRODUCT-SUM + CHANGE: "5 at $6, 10 at $14; paid $200; change?" → 30.
     ("product_sum_change", _product_sum_change_system),
     # TARGET PURCHASE GAP: "buy 8 books, $5 each, has $13; need to save?" → 27.

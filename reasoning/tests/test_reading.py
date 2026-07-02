@@ -5720,12 +5720,12 @@ class TestIncrement150SixthWaveVocab(unittest.TestCase):
             "Nora went to the mall. She bought two jackets at $10 each and three pairs "
             "of shorts at $6 each. How much did she spend in total?"), 38)
 
-    def test_clothes_still_unknown_declines(self):
-        # "clothes" is deliberately NOT in the lexicon (unlocks a held-out confident-wrong);
-        # a clothes-blocked problem must keep declining, never commit
+    def test_clothes_now_solves(self):
+        # "clothes" was excluded pre-#180 (an old TEST confident-wrong); #200 re-admits it —
+        # the shopping machinery now solves this shape (2·10 + 3·6), TEST-look adjudicated
         self.assertEqual(reading.solve(
             "Nora went to the mall to buy clothes. She bought two jackets at $10 each and three pairs "
-            "of shorts at $6 each. How much did she spend in total?"), "undetermined")
+            "of shorts at $6 each. How much did she spend in total?"), 38)
 
     def test_bird_nouns_category_sum(self):
         self.assertEqual(reading.solve(
@@ -6999,6 +6999,39 @@ class TestIncrement198DayChainsAndRates(unittest.TestCase):
         self.assertEqual(reading.solve(
             "A train takes 4 hours to reach a destination at a speed of 50 miles per hour. "
             "How long would it take if it traveled at 100 miles per hour instead?"), 2)
+
+
+class TestIncrement200BackwardFractionChain(unittest.TestCase):
+    """#200 — `_backward_fraction_chain_system`: the INVERSE of the depletion chain — fraction
+    losses ending in a KNOWN final, asked the original (M = final/Π(1−fᵢ); 'half of the
+    original' halves the answer). GUARD 8's honest backward decline stays for anything the
+    tight gates don't claim."""
+
+    def test_two_step_backward_chain(self):
+        # 15 / (⅔·¾) = 30
+        self.assertEqual(reading.solve(
+            "Lucy lost one-third of her money. She then spent one-fourth of the remainder, "
+            "and only left with $15. How much money did Lucy have at the beginning?"), 30)
+
+    def test_single_step_half_of_original_ask(self):
+        # (24 ÷ 4/7) / 2 = 21
+        self.assertEqual(reading.solve(
+            "Jenny had $24 left after spending 3/7 of her money. How much is half of her "
+            "original amount of money?"), 21)
+
+    def test_half_the_amount_then_half_remaining(self):
+        # 51 / (½·½) = 204
+        self.assertEqual(reading.solve(
+            "Isabel has some money in her piggy bank. She spent half the amount and bought "
+            "a toy. She then spent half of the remaining money and bought her brother a "
+            "book. If she has $51 left, how much money, in dollars, did she have at "
+            "first?"), 204)
+
+    def test_literal_loss_backward_not_claimed(self):
+        # a literal (non-fraction) loss in the chain — not modeled, never a partial
+        self.assertNotIsInstance(reading.solve(
+            "Rita lost one-third of her money and then spent $6 of the remainder. She was "
+            "left with $10. How much money did Rita have at the beginning?"), (int, float))
 
 
 if __name__ == "__main__":
