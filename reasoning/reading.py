@@ -1777,6 +1777,11 @@ LEXICON.update({
     "tape": ["noun"], "wall": ["noun"],
     # eleventh wave (the piece-count system's cases): butcher-counter nouns
     "steak": ["noun"], "beef": ["noun"],
+    # twelfth wave (verified-gain sweep re-run after the rate-expansion systems landed — they
+    # unblocked these): "fishing" (activity noun, like bowling/picking) carries THREE problems;
+    # trout ("trouts" is the corpus plural); a desert-journey cluster.
+    "fishing": ["noun"], "trout": ["noun"],
+    "camel": ["noun"], "oasis": ["noun"], "traveler": ["noun"], "thirsty": ["adjective"],
     "exact": ["adjective"], "living": ["adjective"], "masking": ["adjective"],
     "neater": ["adjective"], "wide": ["adjective"],
     "cover": ["verb"], "covers": ["verb"], "covered": ["verb"],
@@ -1798,7 +1803,8 @@ PLURALS.update({
     "jackets": "jacket", "pints": "pint",
     "seconds": "second", "cm": "centimeter",
     "kg": "kilogram", "burrs": "burr", "ticks": "tick", "objects": "object",
-    "walls": "wall", "tapes": "tape", "steaks": "steak",
+    "walls": "wall", "tapes": "tape", "steaks": "steak", "trouts": "trout", "trout": "trout",
+    "camels": "camel", "travelers": "traveler",
 })
 # NOTE: groundwork nouns/adjectives/pronouns (fruit/paper/side/…/herself) were re-tested with decline-safety
 # GUARDS 11–14 in place and STILL drop TEST 40.0→36.4% (a noun unlocks a held-out wrong in an as-yet-unguarded

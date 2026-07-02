@@ -6013,5 +6013,16 @@ class TestIncrement160RemainderAfterRate(unittest.TestCase):
             "how many pages are left?"), "undetermined")
 
 
+class TestIncrement161TwelfthWaveVocab(unittest.TestCase):
+    """#161 — twelfth-wave verified-gain vocab (sweep re-run after the rate-expansion systems
+    landed): "fishing" (activity noun, carries three problems), trout (+the corpus plural
+    "trouts"), and a desert-journey cluster (camel/oasis/traveler nouns, "thirsty" adjective)."""
+
+    def test_fishing_trout_ratio_sum(self):
+        self.assertEqual(reading.solve(
+            "Ken and Bo went fishing. Bo caught 4 trouts and Ken caught three times as many trouts "
+            "as Bo. How many trouts did they catch in total?"), 16)
+
+
 if __name__ == "__main__":
     unittest.main()
