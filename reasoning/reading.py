@@ -407,8 +407,13 @@ def _key(surface: str) -> str:
 
 
 def _as_number(surface: str):
-    """The numeric value of a digit/decimal/currency token ("48", "0.2", "1,000", "$12.50"), else
-    None. A leading "$"/"£" is stripped (the currency is recorded separately as a money measure)."""
+    """The numeric value of a digit/decimal/currency token ("48", "0.2", "1,000", "$12.50", the
+    bare-decimal ".5"), else None. A leading "$"/"£" is stripped (the currency is recorded
+    separately as a money measure). A LEADING decimal point survives: `_key` strips '.' as
+    punctuation, which read ".5" as 5 — a silent 10× lexing error."""
+    raw = surface.lower().strip(",?!;:'\"()").lstrip("$£").rstrip(".")
+    if re.fullmatch(r"\.\d+", raw):                       # ".5" / ".75" — a bare decimal; keep the dot
+        return float(raw)
     s = _key(surface).replace(",", "").lstrip("$£")
     try:
         return float(s)

@@ -6384,5 +6384,22 @@ class TestIncrement176WholeTextChainsC(unittest.TestCase):
             "undetermined")
 
 
+class TestIncrement177BareDecimalLexing(unittest.TestCase):
+    """#177 — the bare-decimal lexing fix: `_key` strips '.' as punctuation, so ".5" read as 5 —
+    a silent 10× error waiting in every ".5 ounces"/".5 hours" case. `_as_number` now checks the
+    raw surface for a leading-dot decimal before the punctuation-stripped path."""
+
+    def test_bare_decimal_reads_as_fraction(self):
+        self.assertEqual(reading._as_number(".5"), 0.5)
+        self.assertEqual(reading._as_number(".75"), 0.75)
+        self.assertEqual(reading._as_number(".5."), 0.5)   # sentence-final
+
+    def test_plain_tokens_unchanged(self):
+        self.assertEqual(reading._as_number("5"), 5.0)
+        self.assertEqual(reading._as_number("0.5"), 0.5)
+        self.assertIsNone(reading._as_number("apples."))
+        self.assertIsNone(reading._as_number("."))
+
+
 if __name__ == "__main__":
     unittest.main()
