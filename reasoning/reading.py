@@ -863,6 +863,8 @@ def annotate_senses(reading: Reading) -> Reading:
             senses = ["percent"]          # "20%" — a fraction (0.20) applied to a base via "of"
         if senses is None and _as_number(u.surface) is not None:
             senses = ["value"]            # a numeric literal ("48", "0.2") is an arithmetic value
+        if senses is None and re.fullmatch(r"\d+(st|nd|rd|th)", _key(u.surface) or ""):
+            senses = ["adjective"]        # a DIGIT ordinal ("5th", "2nd") reads like first/second
         if senses is None and u.surface[:1].isupper() and _key(u.surface).isalpha():
             # a capitalized word we don't otherwise know is a proper noun — a named individual.
             # (Known capitalized words, e.g. sentence-initial "All"/"The", are caught above first.)
@@ -1793,6 +1795,8 @@ LEXICON.update({
     "jack": ["noun"], "jumping": ["adjective"],
     # the alternating-bake-days case: "cherry" the pie subtype (an adjective, like the colors)
     "cherry": ["adjective"], "become": ["verb"],
+    # the doubling-days case ("5th" reads via the digit-ordinal rule in annotate_senses)
+    "boyfriend": ["noun"], "phone": ["noun"], "talking": ["noun"], "too": ["adverb"],
     "log": ["noun", "verb"], "logs": ["noun", "verb"],
     # EXCLUDED the jog family: it unlocks a held-out "5 miles per day on WEEKDAYS ONLY ... over
     # three weeks" case to a confident-wrong (105 = 5*7*3 vs gold 75 = 5*5*3) — the rate-projection
@@ -7630,6 +7634,42 @@ _WEEKDAYS = ("sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "
 _ZERO_CUES = ("nothing", "skipped", "did not", "didn't", "none")
 
 
+def _doubling_days_sum_system(premises: list, question: str):
+    """DOUBLING-DAYS GEOMETRIC SUM — "the first day she spends 5 minutes; each following day twice
+    as much as the day before; after the 5th day …; how much time that week?" → 5·(2⁵−1) = 155.
+    TIGHTLY gated: a digit-free "how much/many … week" total question; a FIRST-DAY value premise;
+    a digit-free DOUBLING premise ("twice as much … as the day before/previous day"); an "after
+    the Nth day" limit; no other valued premise; positive integer sum. None otherwise."""
+    ql = question.lower()
+    if "week" not in ql or not ("how much" in ql or "how many" in ql) \
+            or any(ch.isdigit() for ch in ql) \
+            or any(w in ql for w in ("more", "fewer", "less", "than")):
+        return None
+    first = n_days = None
+    doubling = False
+    for p in premises:
+        pl = p.lower()
+        fm = re.search(r"first day[^.]*?(\d+(?:\.\d+)?)", pl)
+        nm = re.search(r"after the (\d+)(?:st|nd|rd|th) day", pl)
+        if "twice as much" in pl and ("day before" in pl or "previous day" in pl):
+            if any(ch.isdigit() for ch in p):
+                return None
+            doubling = True
+        elif fm is not None and first is None:
+            first = float(fm.group(1))
+        elif nm is not None and n_days is None:
+            n_days = int(nm.group(1))
+        elif any(ch.isdigit() for ch in p):
+            return None                                  # an unclassified valued premise
+    if first is None or n_days is None or not doubling or not 1 < n_days <= 10:
+        return None
+    result = _compute(f"{_num(first)} * {_num(2 ** n_days - 1)}")   # Σ a·2^k = a·(2^n − 1); the
+    if not (isinstance(result, (int, float)) and result > 0        # power folds to a literal (n ≤ 10)
+            and float(result).is_integer()):
+        return None
+    return result
+
+
 def _alternating_days_diff_system(premises: list, question: str):
     """ALTERNATING-DAYS CATEGORY DIFFERENCE — "On Mondays, Wednesdays and Fridays he bakes APPLE
     pies. On Tuesdays and Thursdays he bakes CHERRY pies. He bakes 12 pies per day; how many MORE
@@ -8187,6 +8227,8 @@ _EARLY_SYSTEMS = [
     ("inverse_distribution", _inverse_distribution_system),
     # SPLIT-WITH (K+1): "two dozen eggs to split with his three siblings; each person?" → 6.
     ("split_with", _split_with_system),
+    # DOUBLING-DAYS SUM: "first day 5 minutes, twice the day before, after the 5th day" → 155.
+    ("doubling_days_sum", _doubling_days_sum_system),
     # ALTERNATING-DAYS DIFFERENCE: "apple Mon/Wed/Fri, cherry Tue/Thu, 12/day; more apple?" → 12.
     ("alternating_days_diff", _alternating_days_diff_system),
     # DAY-LIST TARGET RESIDUAL: "avg 50/day; 43 Sun … 56 Fri; how many Saturday?" → 350−262 = 88.

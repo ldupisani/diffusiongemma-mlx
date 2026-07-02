@@ -6177,5 +6177,26 @@ class TestIncrement167AlternatingDaysDiff(unittest.TestCase):
             "bake than cherry pies in one week?"), (int, float))
 
 
+class TestIncrement168DoublingDaysSum(unittest.TestCase):
+    """#168 — `_doubling_days_sum_system` (EARLY, registered): first-day value + "twice as much …
+    as the day before" + an "after the Nth day" limit → a·(2^N − 1). Also the general
+    DIGIT-ORDINAL rule in annotate_senses: "5th"/"2nd" read as adjectives (like first/second)."""
+
+    def test_doubling_chain_sum(self):
+        self.assertEqual(reading.solve(
+            "Mia spends time every day talking to her boyfriend on the phone. The first day of "
+            "the week she spends 3 minutes on the phone with her boyfriend. Each of the following "
+            "days she spends twice as much time talking on the phone as the day before. After "
+            "the 4th day her parents take the phone away from her. How much time did Mia spend "
+            "talking to her boyfriend that week?"), 45)
+
+    def test_no_doubling_premise_declines(self):
+        self.assertEqual(reading.solve(
+            "Mia spends time every day talking to her boyfriend on the phone. The first day of "
+            "the week she spends 3 minutes on the phone with her boyfriend. After the 4th day "
+            "her parents take the phone away from her. How much time did Mia spend talking to "
+            "her boyfriend that week?"), "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()
