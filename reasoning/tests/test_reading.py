@@ -6623,5 +6623,43 @@ class TestIncrement182RelationalProductSum(unittest.TestCase):
             "total on pens?"), 33)
 
 
+class TestIncrement184FractionPartitionRest(unittest.TestCase):
+    """#184 — `_fraction_partition_rest_system`: copula-labeled fractions of ONE total partition
+    it; the asked category is the unlabeled REST → total·(1−Σfᵢ). Stative (are/were) — the
+    depletion-chain twin handles the loss-verb shape; that twin declines a second base-anchored
+    fraction, so exactly one of them can claim a problem."""
+
+    def test_rest_category_after_two_fractions(self):
+        # 40 · (1 − ½ − ¼) = 10
+        self.assertEqual(reading.solve(
+            "A basket holds a total of 40 balls. Half of the balls are red and one-fourth "
+            "are blue. The rest are green. How many green balls are there?"), 10)
+
+    def test_enumerated_rest_without_rest_word(self):
+        # 42 · (1 − ½ − ⅓) = 7 — the asked category named only in the total's enumeration
+        self.assertEqual(reading.solve(
+            "42 raspberries, blackberries, and blueberries were picked in total. Half of "
+            "all the berries were raspberries, and a third of the berries were "
+            "blackberries. How many of them were blueberries?"), 7)
+
+    def test_overlap_ask_declines(self):
+        # "both" is inclusion-exclusion talk, not a partition rest
+        self.assertNotIsInstance(reading.solve(
+            "There are 20 students in total. Half of them are boys and two-fifths are "
+            "girls. How many students are both?"), (int, float))
+
+    def test_total_noun_ask_declines(self):
+        # asking the TOTAL noun back is not asking the rest
+        self.assertNotIsInstance(reading.solve(
+            "There are 20 students in total. Half of them are boys and two-fifths are "
+            "girls. How many students are there?"), (int, float))
+
+    def test_labeled_category_ask_declines(self):
+        # the asked category carries its own fraction — answer() territory, not the rest
+        self.assertNotIsInstance(reading.solve(
+            "There are 20 students in total. Half of them are boys and two-fifths are "
+            "girls. How many students are girls?"), (int, float))
+
+
 if __name__ == "__main__":
     unittest.main()

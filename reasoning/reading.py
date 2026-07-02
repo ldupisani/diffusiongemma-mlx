@@ -1906,10 +1906,13 @@ LEXICON.update({
     "smart": ["adjective"], "television": ["noun"],
     "crown": ["noun"], "king": ["noun"],
     "bunch": ["noun"],
+    # partition-rest family (#184): the berries enumeration case (blueberry was already in)
+    "raspberry": ["noun"], "blackberry": ["noun"],
 })
 PLURALS.update({
     "samosas": "samosa", "pakoras": "pakora", "vases": "vase", "pins": "pin", "boots": "boot",
     "televisions": "television", "crowns": "crown", "kings": "king", "bunches": "bunch",
+    "raspberries": "raspberry", "blackberries": "blackberry",
 })
 VERB_LEMMA.update({
     "scored": "score", "scores": "score", "scoring": "score",
@@ -7720,6 +7723,90 @@ def _fraction_depletion_chain_system(premises: list, question: str):
     return _gated_pos_int(result)
 
 
+_FPR_STEP = re.compile(
+    r"(half|(?:a|an|one|two|three)[ -](?:half|third|thirds|quarter|quarters|fourth|fourths|fifth"
+    r"|fifths|sixth|sixths|seventh|sevenths|eighth|eighths|ninth|ninths|tenth|tenths)|\d+/\d+)"
+    r"(?:\s+of\s+(?:all\s+)?(?:the\s+|their\s+|his\s+|her\s+)?[a-z]+)?"
+    r"\s+(?:are|were|is|was|had been)\s+([a-z]+)")
+
+
+def _fraction_partition_rest_system(premises: list, question: str):
+    """FRACTION PARTITION + REST — fractions of ONE total label categories (STATIVE copulas, not
+    depletions); the asked category is the unlabeled REST: "sold a total of 72 computers; half of
+    their sales are laptops, one-third are netbooks, and the rest are desktops; how many
+    desktops?" → 72·(1−½−⅓) = 12; "42 raspberries, blackberries, and blueberries were picked in
+    total; half of all the berries had been raspberries, a third were blackberries; how many were
+    blueberries?" → 7. The depletion-chain twin declines a second BASE-anchored fraction — this
+    claims exactly that shape when it is a copula partition. TIGHTLY gated: a digit-free "how
+    many <cat>" question with NO left/remain (that's depletion) and no comparative; the asked
+    category named in the body (as the rest or in the enumeration); ONE total (on a "total"-cued
+    premise); ≥2 copula-labeled fractions naming DISTINCT categories ≠ the asked one; no
+    both/either overlap talk; Σf < 1; every fraction cue captured; every digit accounted; a
+    positive integer rest. None otherwise."""
+    ql = question.lower()
+    qm = re.search(r"how many (?:of the\w* )?(?:\w+ )??(?:were |are )?([a-z]+)", ql)
+    if qm is None or re.search(r"\b(?:left|remain|remains|remaining)\b", ql) \
+            or _has_digit(ql) or _has_comparative(ql):
+        return None
+    asked = _singular_of(qm.group(1)) or qm.group(1)
+    if asked in ("there", "total", "them", "all", "they"):
+        return None                                      # a total/pronoun ask, not a rest category
+    segs = [p.lower() for p in premises]
+    body = " ".join(segs)
+    if "%" in body or "percent" in body or "times" in body or " each" in body \
+            or "both" in body + " " + ql or "either" in ql or "neither" in ql:
+        return None
+    if not re.search(rf"\b(?:{re.escape(asked)}s?|{re.escape(qm.group(1))})\b", body):
+        return None                                      # the rest category must be NAMED, never assumed
+        #                                                  (match the question's surface too — "peaches")
+    total = total_noun = None
+    spans = [[] for _ in segs]
+    for si, seg in enumerate(segs):
+        if "total" not in seg:
+            continue
+        tm = re.search(r"\b(\d+(?:,\d{3})*)\b\s*([a-z]*)", seg)
+        if tm is not None:
+            if total is not None:
+                return None
+            total = float(tm.group(1).replace(",", ""))
+            total_noun = _singular_of(tm.group(2)) or tm.group(2)
+            spans[si].append((tm.start(1), tm.end(1)))
+    if total is None or total <= 0:
+        return None
+    if asked == total_noun:
+        return None                                      # "how many students…" asks the TOTAL noun —
+        #                                                  the whole pool, not the unlabeled rest
+    fracs, cats = [], set()
+    for si, seg in enumerate(segs + [ql]):
+        for m in _FPR_STEP.finditer(seg):
+            f = _fraction_value(m.group(1))
+            if f is None or not 0 < f < 1:
+                return None
+            cat = _singular_of(m.group(2)) or m.group(2)
+            if cat in cats:
+                return None                              # a duplicate category → ambiguous
+            cats.add(cat)
+            fracs.append(f)
+            if si < len(segs):
+                spans[si].append(m.span())
+    if len(fracs) < 2 or asked in cats:
+        return None
+    cues = re.findall(r"\b(?:half|halves|thirds?|quarters?|fourths?|fifths?|sixths?|sevenths?"
+                      r"|eighths?|ninths?|tenths?|\d+/\d+)\b", body + " " + ql)
+    if len(cues) != len(fracs):
+        return None                                      # an uncaptured fraction cue → partial partition
+    for si, seg in enumerate(segs):
+        for m in re.finditer(r"\d+(?:,\d{3})*(?:\.\d+)?|\.\d+", seg):
+            if not any(a <= m.start() and m.end() <= b for a, b in spans[si]):
+                return None
+    if sum(fracs) >= 1:
+        return None
+    result = _compute(f"{_num(total)} * (1 - {' - '.join(_num(f) for f in fracs)})")
+    if isinstance(result, float):
+        result = round(result, 9)
+    return _gated_pos_int(result)
+
+
 def _equal_share(question: str, context: list, premises: list):
     """POOL-AND-REDISTRIBUTE — "Mark has 30 candies, Peter 25, John 35. They combine their candies and share
     them equally. How many will EACH have?" → (30+25+35)/3 = 30. Same Σ/N math as the `average` branch (#3l)
@@ -9340,6 +9427,8 @@ _EARLY_SYSTEMS = [
     ("subtype_fraction_remainder", _subtype_fraction_remainder_system),
     # FRACTION DEPLETION CHAIN (sequential remainder-anchored steps — the single-pool twin EXCLUDES remaining/rest): "$40; spends half; a quarter of what's left; left?" → 40·½·¾ = 15.
     ("fraction_depletion_chain", _fraction_depletion_chain_system),
+    # FRACTION PARTITION + REST (copula-labeled fractions of one total, ask the unlabeled rest): "72 total; half laptops, one-third netbooks; desktops?" → 12.
+    ("fraction_partition_rest", _fraction_partition_rest_system),
     # ANCHORED-SUM (no total, one bare anchor, sum ask): "Cecil $600 … how much altogether?" → 2800.
     ("anchored_sum", _anchored_sum_system),
     # ANCHORED-SINGLE (bare anchor, single named ask): "Ed weighs 146 … Find Carl's weight." → 220.
