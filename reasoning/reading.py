@@ -7501,6 +7501,100 @@ def _equal_share(question: str, context: list, premises: list):
     return result
 
 
+_PER_DAY_CUES = ("a day", "each day", "per day", "every day", "daily")
+
+
+def _daily_share_system(premises: list, question: str):
+    """DAILY SHARE — a stated TOTAL consumed over a stated DURATION, asked per day: "James buys 60
+    sodas, had 10 already, finishes all in 1 week. How many sodas does he drink a day?" → 70/7 = 10;
+    "two books of 180 and 100 pages, finish both in two weeks, how many pages every day?" → 280/14.
+    TIGHTLY gated: the question asks "how many <item> … <per-day cue>" with NO comparative ("how many
+    MORE pages per day than…" is another shape) and no value of its own; ONE duration (a week/day
+    Quantity, or an "in N week(s)/day(s)" phrase in a premise); every OTHER valued fact is either an
+    item quantity with a NON-LOSS verb or a SET-SIZE (a cardinal whose measure head is the entity the
+    item quantities hang on — "TWO BOOKS of 180 and 100 pages"); the share is a POSITIVE INTEGER."""
+    ql = question.lower()
+    m = re.search(r"how many (\w+)", ql)
+    if m is None or not any(c in ql for c in _PER_DAY_CUES):
+        return None
+    if any(w in ql for w in ("more", "fewer", "less", "than")) or any(ch.isdigit() for ch in ql):
+        return None
+    item = _singular_of(m.group(1)) or m.group(1)
+    if item in UNIT_NOUNS or "noun" not in LEXICON.get(item, ()):
+        return None
+    disc, ctx = [], []
+    for p in premises:
+        fs = learn(p, disc, ctx)
+        if fs:
+            ctx += fs
+    qs = [f for f in ctx if isinstance(f, Quantity) and f.amount is not None]
+    items = [f for f in qs if f.measure[0] == item]
+    if not items or any(f.verb in LOSS_VERBS for f in items):
+        return None
+    carriers = {f.entity for f in items}                 # a cardinal counting the item-CARRIER noun is
+    #                                                      scene-setting ("two books" for page items)
+    days = None
+    dur_q = [f for f in qs if f.measure[0] in ("week", "day") and f not in items]
+    if len(dur_q) == 1:
+        days = dur_q[0].amount * (7 if dur_q[0].measure[0] == "week" else 1)
+    elif not dur_q:
+        stated = []
+        for p in premises:
+            for n, u in re.findall(r"\bin (\w+) (week|day)s?\b", p.lower()):
+                v = NUMBERS.get(n, float(n) if n.isdigit() else 0)
+                if v:
+                    stated.append((v, u))
+        if len(stated) == 1:
+            days = stated[0][0] * (7 if stated[0][1] == "week" else 1)
+    if days is None or days <= 0:
+        return None
+    for f in qs:                                         # every remaining value must be accounted for
+        if f in items or (dur_q and f is dur_q[0]):
+            continue
+        if f.measure[0] in carriers and f.amount == float(int(f.amount)):
+            continue                                     # the set-size cardinal ("two books", "one book")
+        return None
+    result = _compute(f"({' + '.join(_num(f.amount) for f in items)}) / {_num(days)}")
+    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
+        return None
+    return result
+
+
+def _herd_rate_week_system(premises: list, question: str):
+    """COUNT × PER-HEAD DAILY RATE × 7 — "A farmer has 52 cows. Each cow gives 5 liters of milk a
+    day. How many liters does the farmer get in a week?" → 52·5·7 = 1820. TIGHTLY gated: the
+    question asks the RATE's measure over "a week" (no comparative, no value); exactly TWO valued
+    premises — a COUNT of some noun C, and a rate premise whose Quantity hangs on ENTITY C (each
+    C…), measures the ASKED head, and carries a per-day cue in its text. None otherwise."""
+    ql = question.lower()
+    m = re.search(r"how many (\w+)", ql)
+    if m is None or not re.search(r"\bin (a|one) week\b", ql):
+        return None
+    if any(w in ql for w in ("more", "fewer", "less", "than")) or any(ch.isdigit() for ch in ql):
+        return None
+    asked = _singular_of(m.group(1)) or m.group(1)
+    valued = []
+    disc, ctx = [], []
+    for p in premises:
+        fs = [f for f in (learn(p, disc, ctx) or []) if isinstance(f, Quantity) and f.amount is not None]
+        if len(fs) > 1:
+            return None
+        if fs:
+            valued.append((p, fs[0]))
+            ctx += fs
+    if len(valued) != 2:
+        return None
+    rate_pair = next((v for v in valued if v[1].measure[0] == asked
+                      and any(c in v[0].lower() for c in _PER_DAY_CUES)), None)
+    count_pair = next((v for v in valued if v is not rate_pair), None)
+    if rate_pair is None or count_pair is None:
+        return None
+    rate, count = rate_pair[1], count_pair[1]
+    if rate.entity != count.measure[0] or count.amount != float(int(count.amount)):
+        return None                                      # the rate must hang on EACH counted head
+    return _compute(f"{_num(count.amount)} * {_num(rate.amount)} * 7")
+
+
 def _piece_count_system(premises: list, question: str):
     """PIECE COUNT ACROSS UNITS — "Matt orders 15 POUNDS of beef. He cuts that into 12-OUNCE steaks.
     How many steaks does he get?" → 15·16 / 12 = 20. A TOTAL measure in one unit is divided into
@@ -7595,6 +7689,10 @@ _EARLY_SYSTEMS = [
     ("total_between_residual", _total_between_residual_system),
     # PIECE COUNT ACROSS UNITS: "15 pounds of beef cut into 12-ounce steaks; how many steaks?" → 20.
     ("piece_count", _piece_count_system),
+    # DAILY SHARE: "60+10 sodas, finishes all in 1 week; how many a day?" → 10.
+    ("daily_share", _daily_share_system),
+    # HERD RATE × WEEK: "52 cows, each gives 5 liters a day; how many liters in a week?" → 1820.
+    ("herd_rate_week", _herd_rate_week_system),
 ]
 
 # LATE systems run AFTER the read-synthesize fixpoint has built `context` (they consume derived

@@ -5923,5 +5923,49 @@ class TestIncrement157PieceCountAcrossUnits(unittest.TestCase):
             "How many pieces does she get?"), "undetermined")
 
 
+class TestIncrement158RateWeekExpansion(unittest.TestCase):
+    """#158 — the per-day-rate × week family, first two shapes (both EARLY, registered):
+    `_daily_share_system` (a stated TOTAL over a stated DURATION, asked per day → total/days;
+    set-size cardinals on the item-CARRIER noun are scene-setting; positive-integer share only) and
+    `_herd_rate_week_system` (COUNT × per-head daily rate × 7 for an "in a week" question)."""
+
+    def test_daily_share_week_quantity(self):
+        self.assertEqual(reading.solve(
+            "Ben buys 4 packs of pens that are 15 pens each. He had 10 pens already. He finishes "
+            "all the pens in 1 week. How many pens does he use a day?"), 10)
+
+    def test_daily_share_worded_duration_and_carrier_cardinals(self):
+        # "two books"/"One book" are set-size cardinals on the page-carrier noun — scene-setting
+        self.assertEqual(reading.solve(
+            "Nina has two books. One book is 120 pages long, and the other book is 90 pages long. "
+            "If Nina wants to finish both of the books in three weeks, how many pages will Nina "
+            "need to read every day, if she reads an equal number of pages each day?"), 10)
+
+    def test_herd_rate_week(self):
+        self.assertEqual(reading.solve(
+            "A farmer has 20 goats. Each goat gives 3 liters of milk a day. "
+            "How many liters of milk does the farmer get in a week?"), 420)
+
+    def test_non_integer_share_declines(self):
+        # 75/14 is not whole — a fractional daily share means this isn't the shape
+        self.assertEqual(reading.solve(
+            "Ann has two books. One book is 40 pages long, and the other book is 35 pages long. "
+            "If Ann wants to finish both of the books in two weeks, how many pages will Ann need "
+            "to read every day?"), "undetermined")
+
+    def test_comparative_daily_question_not_stolen(self):
+        # "how many MORE chips a day … than her brother" is under-constrained — the daily-share
+        # system must not commit 70/7; whatever the general machinery answers, it is not a number
+        self.assertNotIsInstance(reading.solve(
+            "Zoe buys 70 chips. She finishes all the chips in 1 week. How many more chips a day "
+            "does she eat than her brother?"), (int, float))
+
+    def test_rate_difference_still_works(self):
+        # the constrained comparative resolves through pre-existing rate machinery (20 − 10)
+        self.assertEqual(reading.solve(
+            "Ray reads 140 pages in 1 week. Tom reads 70 pages in 1 week. "
+            "How many more pages a day does Ray read than Tom?"), 10)
+
+
 if __name__ == "__main__":
     unittest.main()
