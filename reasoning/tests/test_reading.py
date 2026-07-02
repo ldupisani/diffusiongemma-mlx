@@ -6795,5 +6795,44 @@ class TestIncrement191AgeShift(unittest.TestCase):
             "will be 20. How old is Ben?"), (int, float))
 
 
+class TestIncrement192AgeChain(unittest.TestCase):
+    """#192 — `_age_chain_system`: ratio/offset AGE chains forward-resolved from one literal
+    anchor, asked a single age / the AVERAGE / the TOTAL / a year-DIFFERENCE. The age-phrasing
+    twin of the anchored count family ("as old as" vs "as many as"). Appositions normalize
+    locally ("His cousin, Rommel, is…" → "Rommel is…"); "who" chains to the previous standard;
+    "his/her <kin>" binds to "<subject>'s <kin>"; a bare pronoun standard means the anchor."""
+
+    def test_chain_average_with_cast_check(self):
+        # (48 + 24 + 12) / 3 = 28 — "the three" must equal the resolved cast size
+        self.assertEqual(reading.solve(
+            "Eden's mom is twice as old as Eden, who is twice as old as Devin. If Devin is "
+            "12 years old, what's the average age of the three?"), 28)
+
+    def test_chain_total_with_kin_entities(self):
+        # 15 + 45 + 180 = 240 — apposition anchor + "his sister" possessive standard
+        self.assertEqual(reading.solve(
+            "Aaron, Henry's brother, is 15 years old. Henry's sister is three times as old "
+            "as Aaron. Henry is four times as old as his sister. What's the combined age of "
+            "the siblings?"), 240)
+
+    def test_chain_year_difference_ask(self):
+        # Jenny 17 − Tim 5 = 12 — "thrice as old as he is" resolves the pronoun to the anchor
+        self.assertEqual(reading.solve(
+            "Tim is 5 years old. His cousin, Rommel, is thrice as old as he is. His other "
+            "cousin, Jenny, is 2 years older than Rommel. How many years younger is Tim "
+            "than Jenny?"), 12)
+
+    def test_chain_single_ask(self):
+        # Carl 6 → Ben 10 → Amy 20
+        self.assertEqual(reading.solve(
+            "Amy is twice as old as Ben. Ben is 4 years older than Carl. If Carl is 6 years "
+            "old, how old is Amy?"), 20)
+
+    def test_banned_times_older_idiom_declines(self):
+        self.assertNotIsInstance(reading.solve(
+            "Kiarra is twice as old as Bea. Job is 3 times older than Bea. If Kiarra is 30, "
+            "how old is Job?"), (int, float))
+
+
 if __name__ == "__main__":
     unittest.main()

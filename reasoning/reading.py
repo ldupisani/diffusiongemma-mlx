@@ -9458,6 +9458,121 @@ def _age_shift_system(premises: list, question: str):
     return _gated_pos_int(result)
 
 
+# an age-chain ENTITY: a name, optionally a possessive-kin compound ("Eden's mom", "Henry's sister")
+_AC_ENT = r"[A-Z][a-z]+(?:['’]s (?:mom|mother|dad|father|sister|brother|son|daughter|cousin))?"
+_AC_KIN = r"(?:mom|mother|dad|father|sister|brother|son|daughter|cousin)"
+_AC_RATIO = re.compile(rf"\b({_AC_ENT}|[Hh]is {_AC_KIN}|[Hh]er {_AC_KIN}|who) is "
+                       rf"(twice|thrice|half|double|(?:two|three|four|five|six|\d+) times) as old as "
+                       rf"({_AC_ENT}|his {_AC_KIN}|her {_AC_KIN}|he|she)\b")
+_AC_OFFSET = re.compile(rf"\b({_AC_ENT}|[Hh]is {_AC_KIN}|[Hh]er {_AC_KIN}|who) is "
+                        rf"(\d+) years? (older|younger) than ({_AC_ENT}|his {_AC_KIN}|her {_AC_KIN}|he|she)\b")
+_AC_ANCHOR = re.compile(rf"\b({_AC_ENT}) is (\d+) years? old\b")
+
+
+def _age_chain_system(premises: list, question: str):
+    """NAMED AGE CHAIN — ratio/offset age relations resolved forward from ONE literal anchor,
+    asked a single age, the AVERAGE, the TOTAL, or a year-DIFFERENCE: "Eden's mom is twice as old
+    as Eden, who is twice as old as Devin. Devin is 12. Average of the three?" → (48+24+12)/3 =
+    28; "Aaron is 15; Henry's sister is three times as old as Aaron; Henry is four times as old
+    as his sister. Combined age?" → 240; "Tim is 5; Rommel is thrice as old as he is; Jenny is 2
+    years older than Rommel. How many years younger is Tim than Jenny?" → 12. The anchored family
+    reads count relations ("as many X as"), not age phrasing — this is its age twin. TIGHTLY
+    gated: ≥2 relations; ONE literal anchor; "who" binds to the preceding relation's standard-side
+    subject sentence-locally, "his/her <kin>" to "<subject>'s <kin>", a bare pronoun standard to
+    the anchor (only one exists); the BANNED "times older/younger" idiom declines; every entity
+    resolves; every digit accounted; a set-size in an average ask must equal the resolved count;
+    positive integer. None otherwise."""
+    ql = question.lower()
+    premises = [re.sub(rf"\b[Hh](?:is|er) (?:other )?{_AC_KIN}, ([A-Z][a-z]+), ", r"\1 ", p)
+                for p in premises]                       # "His cousin, Rommel, is…" → "Rommel is…"
+    premises = [re.sub(rf"\b({_AC_ENT}), {_AC_ENT}, is", r"\1 is", p)
+                for p in premises]                       # "Aaron, Henry's brother, is…" → "Aaron is…"
+    body = " ".join(premises)
+    if re.search(r"times (?:older|younger|more)", body.lower()):
+        return None                                      # the banned ambiguous idiom
+    diff_m = re.search(r"how many years (older|younger) is (\w+) than (\w+)", ql)
+    avg_m = re.search(r"average age of the (\w+)", ql)
+    tot_m = re.search(r"(?:combined|total) age", ql)
+    single_m = re.search(r"how old is (\w+)", ql)
+    if not (diff_m or avg_m or tot_m or single_m) or _has_digit(ql):
+        return None
+    anchors = _AC_ANCHOR.findall(body)
+    if len(anchors) != 1:
+        return None
+    anchor_name, anchor_age = anchors[0][0], float(anchors[0][1])
+    rels = []                                            # (subj, kind, k_or_off, std)
+
+    def norm(ent, subj_context):
+        e = ent.strip()
+        low = e.lower()
+        if low in ("he", "she"):
+            return anchor_name                           # the single anchored person
+        if low.startswith(("his ", "her ")):
+            head = subj_context.split("'")[0].split("’")[0]
+            return f"{head}'s {e.split(' ', 1)[1].lower()}"
+        return e.replace("’", "'")
+
+    last_subj = None
+    for p in premises:
+        for m in _AC_RATIO.finditer(p):
+            subj_raw = m.group(1)
+            subj = (last_subj if subj_raw == "who" else norm(subj_raw, subj_raw))
+            if subj is None:
+                return None
+            k = {"twice": 2.0, "thrice": 3.0, "double": 2.0, "half": 0.5}.get(m.group(2))
+            if k is None:
+                tok = m.group(2).split()[0].lower()
+                k = float(NUMBERS.get(tok, tok if tok.isdigit() else 0) or 0)
+            if not k:
+                return None
+            rels.append((subj, "ratio", k, norm(m.group(3), subj)))
+            last_subj = norm(m.group(3), subj)           # "…as old as Eden, WHO is…" → who = Eden
+        for m in _AC_OFFSET.finditer(p):
+            subj = (last_subj if m.group(1) == "who" else norm(m.group(1), m.group(1)))
+            if subj is None:
+                return None
+            off = float(m.group(2)) * (1 if m.group(3) == "older" else -1)
+            rels.append((subj, "offset", off, norm(m.group(4), subj)))
+            last_subj = norm(m.group(4), subj)
+    if len(rels) < 2:
+        return None                                      # a 1-relation problem is another family's
+    vals = {anchor_name: anchor_age}
+    for _ in range(len(rels) + 1):                       # forward-substitute to a fixpoint
+        for subj, kind, x, std in rels:
+            if subj not in vals and std in vals:
+                vals[subj] = vals[std] * x if kind == "ratio" else vals[std] + x
+    ents = {anchor_name} | {r[0] for r in rels} | {r[3] for r in rels}
+    if any(e not in vals for e in ents) or any(v <= 0 for v in vals.values()):
+        return None
+    digits = re.findall(r"\d+", body)                    # every body digit consumed
+    used = {anchors[0][1]} | {str(int(abs(x))) for _, k, x, _ in rels if k == "offset"} \
+        | {m.group(1) for p in premises for m in re.finditer(r"(\d+) times as old", p)}
+    if any(d not in used for d in digits):
+        return None
+    if diff_m is not None:
+        a = next((e for e in ents if e.lower() == diff_m.group(2)), None)
+        b = next((e for e in ents if e.lower() == diff_m.group(3)), None)
+        if a is None or b is None:
+            return None
+        result = _compute(f"{_num(vals[b])} - {_num(vals[a])}" if diff_m.group(1) == "younger"
+                          else f"{_num(vals[a])} - {_num(vals[b])}")
+    elif avg_m is not None:
+        n = NUMBERS.get(avg_m.group(1))
+        if n is None or int(n) != len(ents):
+            return None                                  # the stated set size must match the cast
+        result = _compute(f"({' + '.join(_num(vals[e]) for e in sorted(ents))}) / {int(n)}")
+    elif tot_m is not None:
+        result = _compute(f"{' + '.join(_num(vals[e]) for e in sorted(ents))}")
+    else:
+        a = next((e for e in ents if e.lower() == single_m.group(1)), None)
+        if a is None:
+            return None
+        result = _compute(_num(vals[a]))
+    if isinstance(result, float):
+        result = round(result, 9)
+    return _gated_pos_int(result)
+
+
 _AGE_SIMUL = re.compile(r"\b([A-Z][a-z]+) is (\d+) years? older than (?:his |her )?(?:\w+ )?"
                         r"([A-Z][a-z]+) and (twice|three times|four times) (?:his|her|their) age\b")
 
@@ -9902,6 +10017,8 @@ _EARLY_SYSTEMS = [
     ("combined_standard_sum", _combined_standard_sum_system),
     # AGE SHIFT: "4 years older; in 5 years she'll be 40; he now?" → 31; projected asks too.
     ("age_shift", _age_shift_system),
+    # NAMED AGE CHAIN: "mom 2× Eden, Eden 2× Devin, Devin 12; average of the three?" → 28.
+    ("age_chain", _age_chain_system),
     # SIMULTANEOUS AGE: "7 years older than David and twice his age?" → 7/(2−1) = 7.
     ("age_simultaneous", _age_simultaneous_system),
 ]
