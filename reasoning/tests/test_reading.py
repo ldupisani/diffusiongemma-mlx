@@ -5697,5 +5697,48 @@ class TestIncrement149SubtypeFractionRemainder(unittest.TestCase):
             "peanuts. How many peanuts remain in the jar?"), 82)
 
 
+class TestIncrement150SixthWaveVocab(unittest.TestCase):
+    """#150 — sixth-wave verified-gain vocab (sweep re-run after the subtype-fraction / comma-list /
+    container×contents compositions unblocked co-blocked cases): place/activity/object nouns (mall,
+    tennis, spelling, holiday, beginning, picking, throw, birds, event/center/rescue, jacket, pint,
+    rain/rainfall/state) + plural-only garments (pants/shorts — bare nouns, no PLURALS entry).
+    'fruit' stays EXCLUDED (unlocks a held-out pounds/ounces conversion to a confident-wrong);
+    'clothes' stays EXCLUDED (the TEST checkpoint caught it unlocking a held-out confident-wrong)."""
+
+    def test_place_noun_mall_ratio(self):
+        self.assertEqual(reading.solve(
+            "Anna bought three times as many pretzels at the mall as Ben did. Ben bought 4 pretzels. "
+            "How many pretzels did Anna buy?"), 12)
+
+    def test_plural_only_garments_purchase(self):
+        self.assertEqual(reading.solve(
+            "Nora went to the mall. She bought two jackets at $10 each and three pairs "
+            "of shorts at $6 each. How much did she spend in total?"), 38)
+
+    def test_clothes_still_unknown_declines(self):
+        # "clothes" is deliberately NOT in the lexicon (unlocks a held-out confident-wrong);
+        # a clothes-blocked problem must keep declining, never commit
+        self.assertEqual(reading.solve(
+            "Nora went to the mall to buy clothes. She bought two jackets at $10 each and three pairs "
+            "of shorts at $6 each. How much did she spend in total?"), "undetermined")
+
+    def test_bird_nouns_category_sum(self):
+        self.assertEqual(reading.solve(
+            "Cara saw 3 cardinals and four times as many robins as cardinals. She also saw twice as "
+            "many sparrows as cardinals. How many birds did she see in total?"), 21)
+
+    def test_pint_offset_sum(self):
+        self.assertEqual(reading.solve(
+            "Amy picked eight pints of blueberries. Kate picked two pints more than Amy. "
+            "How many pints did they pick in total?"), 18)
+
+    def test_fruit_still_unknown_declines(self):
+        # "fruit" is deliberately NOT in the lexicon (unlocks an unmodeled pounds/ounces conversion);
+        # a fruit-blocked problem must keep declining, never commit
+        self.assertEqual(reading.solve(
+            "There are six oranges in a fruit basket. There are two fewer apples than oranges. "
+            "How many apples are there?"), "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()
