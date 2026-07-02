@@ -5041,9 +5041,11 @@ class TestIncrement107InversionCounterfactualDeclines(unittest.TestCase):
                                        "She has 10 dollars left. How much money did Mary have at first?"),
                          "undetermined")
 
-    def test_originally_phrasing_declines(self):
+    def test_originally_phrasing_solves_backward(self):
+        # was pinned "undetermined" while "originally" was an UNKNOWN word (GUARD 1 masked it);
+        # with the word typed (15th vocab wave) the backward-depletion machinery solves it: 4+6.
         self.assertEqual(reading.solve("Tom had some apples. He ate 4 apples. He has 6 apples left. "
-                                       "How many apples did Tom have originally?"), "undetermined")
+                                       "How many apples did Tom have originally?"), 10)
 
     def test_counterfactual_would_have_declines(self):
         self.assertEqual(reading.solve("If Mary had 5 dollars more, she would have 20 dollars. "

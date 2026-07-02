@@ -1892,8 +1892,28 @@ PLURALS.update({
 # NOTE: groundwork nouns/adjectives/pronouns (fruit/paper/side/…/herself) were re-tested with decline-safety
 # GUARDS 11–14 in place and STILL drop TEST 40.0→36.4% (a noun unlocks a held-out wrong in an as-yet-unguarded
 # class) with ZERO dev gain → they stay OUT. The loop continues: build the next decline guard, then re-test.
+LEXICON.update({
+    # 15th vocab wave (verified-gain sweep AFTER the discounted-purchase/relational systems landed —
+    # each word's case now solves to exact gold; typed per category, never forced to noun):
+    # Carla 75%-off bags g3; Hilary samosas g25; Donna vase g165; John pins g170; John boots g297;
+    # Pauline sales-tax g162; Mrs. Taylor televisions g975; king's crown g22000; James bananas g6.
+    "clearance": ["noun"], "mini": ["adjective"],
+    "samosa": ["noun"], "pakora": ["noun"], "lassi": ["noun"],
+    "originally": ["adverb"], "priced": ["verb"], "porcelain": ["adjective"], "vase": ["noun"],
+    "pin": ["noun"], "himself": ["pronoun"], "herself": ["pronoun"],
+    "boot": ["noun"], "replace": ["verb"],
+    "including": ["preposition"],
+    "smart": ["adjective"], "television": ["noun"],
+    "crown": ["noun"], "king": ["noun"],
+    "bunch": ["noun"],
+})
+PLURALS.update({
+    "samosas": "samosa", "pakoras": "pakora", "vases": "vase", "pins": "pin", "boots": "boot",
+    "televisions": "television", "crowns": "crown", "kings": "king", "bunches": "bunch",
+})
 VERB_LEMMA.update({
     "scored": "score", "scores": "score", "scoring": "score",
+    "replaces": "replace", "replaced": "replace",
     "asks": "ask", "asked": "ask",
     "represents": "represent", "represented": "represent",
     "caught": "catch", "catches": "catch",
