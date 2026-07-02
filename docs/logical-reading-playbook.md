@@ -69,6 +69,43 @@ reach the early dispatch, 1 has ≥2 claimers and they *agree* (`sum_ratio=affin
 TEST — 144 reach, **0** with ≥2 claimers, 0 disagreements. The named/common-noun family isolation
 holds on the held-out slice too.
 
+Within the registry, the **WHOLE-TEXT solver class** (raw-regex systems, `_daily_share_system`
+onward — see the section banner in `reading.py`) shares three mechanical gates, extracted as
+helpers (2026-07-02 consolidation): `_has_digit` (the "is this premise/question VALUED" probe),
+`_has_comparative` ("how many MORE X than Y" is always another shape), and the
+`_gated_pos_int`/`_gated_pos`/`_gated_nonneg` commit gates on the audited result. A new whole-text
+system should compose these, not re-inline them — the inlined copies were the same drift signal the
+registry refactor fixed.
+
+### Process lessons — mining campaigns (2026-07-02)
+
+1. **CHECK FOUNDATIONAL TABLES FIRST.** Before any per-case mining, audit the foundational
+   lexer/number tables — a gap there is a *corpus-wide* blocker masquerading as many per-case ones.
+   Two real instances hid behind weeks of per-case work: the word-number table **NUMBERS was capped
+   at twelve** (teens/tens like "fifteen", "Fifty" silently blocked cases everywhere; extending it
+   paid +5 dev and +1 TEST in one increment), and **bare-decimal lexing read ".5" as 5** (a silent
+   10× error waiting in every ".5 ounces" case). Same class: a system's own raw regexes reading
+   "9,400" as 9 — comma-aware number patterns belong in every whole-text read. Audit
+   SCALES/FRACTIONS/CONVERSIONS/PLURALS for peers before opening a new campaign.
+
+2. **SWEEP AFTER SYSTEMS.** After shipping a batch of structural systems, RE-RUN the verified-gain
+   vocab sweep (temp-inject unknown words, credit only exact-gold). New structure unblocks
+   co-blocked vocabulary cases that the previous sweep scored as zero-gain — this pattern paid 4×
+   in one session (the rate systems alone re-enabled "fishing" = 3 dev problems). A sweep result is
+   relative to the machinery at the time it ran; it goes stale the moment structure lands.
+
+3. **TEST BISECT BY WORD-MEMBERSHIP.** The dev firewall alone is NOT enough for vocab batches — run
+   a TEST checkpoint after each batch. When it shows a new wrong, bisect **without reading TEST
+   questions**: re-solve only the TEST rows that *touch batch words*, with and without the batch,
+   printing word-membership and committed values only (never question text). This locates the one
+   offending word ("clothes": a 500≠300 confident-wrong with zero TEST gain) while keeping the
+   aggregate-only firewall intact.
+
+4. **PREFER GENERAL FEATURES over dev singles.** Coverage moved to dev-train 6.6% vs TEST 2.0% —
+   the one-case whole-text solvers don't move TEST *by design*; TEST moved only on general features
+   (vocab waves, number words, the word-percent merge, compositions). Judge candidate work by
+   generality first.
+
 ## Goal & stance
 
 - Deterministic reasoning, **not an LLM**. A valid statement gets a definitive, auditable reading;

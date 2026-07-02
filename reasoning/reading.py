@@ -5397,6 +5397,47 @@ def _offset_ratio_relation(rp: Reading):
     return _entity(subj), k, _entity(std), sign * off.features["value"]
 
 
+# --- system-solver shared gates --------------------------------------------------------------
+# Every arithmetic system-solver (registered in `_EARLY_SYSTEMS`/`_LATE_SYSTEMS`) recognizes ONE
+# tightly-gated problem shape and declines everything else. Three mechanical gates recur across
+# all of them — extracted here (the same drift signal, near-identical inlined boilerplate, that
+# the 27-inline-solver registry refactor fixed):
+#   * `_has_digit` — the "is this premise/question VALUED" probe: a system must classify every
+#     valued premise it sees; an unclassified one means "not this shape" → decline;
+#   * `_has_comparative` — "how many MORE X than Y" is always another shape;
+#   * `_gated_pos_int` / `_gated_pos` / `_gated_nonneg` — the commit gate on the audited result.
+
+
+def _has_digit(text: str) -> bool:
+    """Any digit character — the systems' probe for a VALUED premise or question."""
+    return any(ch.isdigit() for ch in text)
+
+
+def _has_comparative(ql: str) -> bool:
+    """A comparative cue in the lowered question — comparatives are always another shape."""
+    return any(w in ql for w in ("more", "fewer", "less", "than"))
+
+
+def _gated_pos_int(result):
+    """The standard commit gate: the audited result ships only as a POSITIVE INTEGER (these
+    shapes count things); an error string from _compute, zero, a negative or a fraction
+    declines instead of committing."""
+    ok = isinstance(result, (int, float)) and result > 0 and float(result).is_integer()
+    return result if ok else None
+
+
+def _gated_pos(result):
+    """The commit gate for shapes whose result may be fractional (money, hours) — positive only."""
+    ok = isinstance(result, (int, float)) and result > 0
+    return result if ok else None
+
+
+def _gated_nonneg(result):
+    """The commit gate for remainder shapes — zero is a legitimate answer ("none left")."""
+    ok = isinstance(result, (int, float)) and result >= 0
+    return result if ok else None
+
+
 def _sum_ratio_system(premises: list, question: str):
     """An N-UNKNOWN SUM+RATIO-CHAIN system: several entities, each a multiple of another (relations may
     CHAIN), and a COMBINED TOTAL → solve for the asked one by PIVOT REDUCTION. "Amy, Jeremy, Chris combined
@@ -7600,6 +7641,17 @@ def _equal_share(question: str, context: list, premises: list):
     return result
 
 
+# ═══ WHOLE-TEXT SYSTEM-SOLVERS ════════════════════════════════════════════════════════════════
+# Everything from here to the registries is the WHOLE-TEXT solver class: each system recognizes
+# ONE tightly-gated problem shape and reads RAW premise text (regexes over clauses), because the
+# shape's clauses materialize no usable facts in the general fold (double frequencies, relational
+# day chains, stated conversion factors…). They differ from the obligation-parsing systems above
+# (_sum_ratio…_total_between_residual), which work over LEARNED facts. Shared discipline:
+#   * a digit-free (or single-excised-digit) question gate — `_has_digit` / `_has_comparative`;
+#   * classify EVERY valued premise; an unclassified one → decline ("not this shape");
+#   * commit through `_gated_pos_int` / `_gated_pos` / `_gated_nonneg` on the audited result.
+# Register new ones in `_EARLY_SYSTEMS`/`_LATE_SYSTEMS` and run `reading_diff collisions` after.
+
 _PER_DAY_CUES = ("a day", "each day", "per day", "every day", "daily")
 
 
@@ -7616,7 +7668,7 @@ def _daily_share_system(premises: list, question: str):
     m = re.search(r"how many (\w+)", ql)
     if m is None or not any(c in ql for c in _PER_DAY_CUES):
         return None
-    if any(w in ql for w in ("more", "fewer", "less", "than")) or any(ch.isdigit() for ch in ql):
+    if _has_comparative(ql) or _has_digit(ql):
         return None
     item = _singular_of(m.group(1)) or m.group(1)
     if item in UNIT_NOUNS or "noun" not in LEXICON.get(item, ()):
@@ -7654,9 +7706,7 @@ def _daily_share_system(premises: list, question: str):
             continue                                     # the set-size cardinal ("two books", "one book")
         return None
     result = _compute(f"({' + '.join(_num(f.amount) for f in items)}) / {_num(days)}")
-    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
-        return None
-    return result
+    return _gated_pos_int(result)
 
 
 def _herd_rate_week_system(premises: list, question: str):
@@ -7669,7 +7719,7 @@ def _herd_rate_week_system(premises: list, question: str):
     m = re.search(r"how many (\w+)", ql)
     if m is None or not re.search(r"\bin (a|one) week\b", ql):
         return None
-    if any(w in ql for w in ("more", "fewer", "less", "than")) or any(ch.isdigit() for ch in ql):
+    if _has_comparative(ql) or _has_digit(ql):
         return None
     asked = _singular_of(m.group(1)) or m.group(1)
     valued = []
@@ -7712,7 +7762,7 @@ def _ordinal_day_chain_residual_system(premises: list, question: str):
     day" (that day's value − N); every digit premise classified; a positive-integer share. None
     otherwise."""
     ql = question.lower()
-    if any(ch.isdigit() for ch in ql) or "day" not in ql \
+    if _has_digit(ql) or "day" not in ql \
             or not ("rest of the week" in ql or "remaining days" in ql):
         return None
     body = " ".join(premises).lower()
@@ -7747,7 +7797,7 @@ def _ordinal_day_chain_residual_system(premises: list, question: str):
                 return None                              # an ordinal day with no resolvable value
         elif tm is not None and target is None:
             target = float(tm.group(1))
-        elif any(ch.isdigit() for ch in p):
+        elif _has_digit(p):
             return None                                  # an unclassified valued premise
     if target is None or not day_vals or sorted(day_vals) != list(range(1, len(day_vals) + 1)):
         return None                                      # days must be consecutive from the first
@@ -7756,9 +7806,7 @@ def _ordinal_day_chain_residual_system(premises: list, question: str):
         return None
     result = _compute(f"({_num(target)} - ({' + '.join(_num(day_vals[k]) for k in sorted(day_vals))}))"
                       f" / {remaining}")
-    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
-        return None
-    return result
+    return _gated_pos_int(result)
 
 
 def _weekday_base_delta_system(premises: list, question: str):
@@ -7771,13 +7819,13 @@ def _weekday_base_delta_system(premises: list, question: str):
     naming a weekday; an hours answer must divide exactly by 60. None otherwise."""
     ql = question.lower()
     unit = "hour" if "how many hours" in ql else ("minute" if "how many minutes" in ql else None)
-    if unit is None or "week" not in ql or any(ch.isdigit() for ch in ql):
+    if unit is None or "week" not in ql or _has_digit(ql):
         return None
     base = None
     deltas = []
     for p in premises:
         pl = p.lower()
-        has_digit = any(ch.isdigit() for ch in p)
+        has_digit = _has_digit(p)
         if ("during weekdays" in pl or "on weekdays" in pl) and base is None:
             bm = re.search(r"(\d+(?:\.\d+)?) minutes", pl)
             if bm is not None:
@@ -7806,9 +7854,7 @@ def _weekday_base_delta_system(premises: list, question: str):
         result = _compute(f"({_num(base)} * 5 + {_num(sum(deltas))}) / 60")
     else:
         result = _compute(f"{_num(base)} * 5 + {_num(sum(deltas))}")
-    if not (isinstance(result, (int, float)) and result > 0):
-        return None
-    return result
+    return _gated_pos(result)
 
 
 def _weekday_rate_weeks_system(premises: list, question: str):
@@ -7820,8 +7866,8 @@ def _weekday_rate_weeks_system(premises: list, question: str):
     ql = question.lower()
     m = re.search(r"how many (\w+)", ql)
     wm = re.search(r"(?:over|in|after) (\w+|\d+) weeks", ql)
-    if m is None or wm is None or any(ch.isdigit() for ch in ql) \
-            or any(w in ql for w in ("more", "fewer", "less", "than")):
+    if m is None or wm is None or _has_digit(ql) \
+            or _has_comparative(ql):
         return None
     weeks = NUMBERS.get(wm.group(1), float(wm.group(1)) if wm.group(1).isdigit() else 0)
     if not weeks:
@@ -7834,14 +7880,12 @@ def _weekday_rate_weeks_system(premises: list, question: str):
         if rm is not None and rate is None \
                 and ("weekdays only" in pl or "on weekdays" in pl or "during weekdays" in pl):
             rate = float(rm.group(1))
-        elif any(ch.isdigit() for ch in p):
+        elif _has_digit(p):
             return None                                  # an unclassified valued premise
     if rate is None:
         return None
     result = _compute(f"{_num(rate)} * 5 * {_num(weeks)}")
-    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
-        return None
-    return result
+    return _gated_pos_int(result)
 
 
 def _salary_hourly_rate_system(premises: list, question: str):
@@ -7851,7 +7895,7 @@ def _salary_hourly_rate_system(premises: list, question: str):
     for D days a week" premise; nothing else valued; an exact positive quotient. None
     otherwise."""
     ql = question.lower()
-    if "hourly rate" not in ql or any(ch.isdigit() for ch in ql):
+    if "hourly rate" not in ql or _has_digit(ql):
         return None
     salary = hours = days = None
     for p in premises:
@@ -7862,14 +7906,12 @@ def _salary_hourly_rate_system(premises: list, question: str):
             salary = float(sm.group(1))
         elif hm is not None and hours is None:
             hours, days = float(hm.group(1)), float(hm.group(2))
-        elif any(ch.isdigit() for ch in p):
+        elif _has_digit(p):
             return None                                  # an unclassified valued premise
     if salary is None or hours is None:
         return None
     result = _compute(f"{_num(salary)} / ({_num(hours)} * {_num(days)} * 4)")
-    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
-        return None
-    return result
+    return _gated_pos_int(result)
 
 
 def _weekly_need_per_person_daily_system(premises: list, question: str):
@@ -7879,7 +7921,7 @@ def _weekly_need_per_person_daily_system(premises: list, question: str):
     per-person premise (units equal or convertible); nothing else valued; positive integer.
     None otherwise."""
     ql = question.lower()
-    if "how many people" not in ql or "each day" not in ql or any(ch.isdigit() for ch in ql):
+    if "how many people" not in ql or "each day" not in ql or _has_digit(ql):
         return None
     need = share = None
     for p in premises:
@@ -7890,7 +7932,7 @@ def _weekly_need_per_person_daily_system(premises: list, question: str):
             need = float(nm.group(1)), _singular_of(nm.group(2)) or nm.group(2)
         elif sm is not None and share is None:
             share = float(sm.group(1)), _singular_of(sm.group(2)) or sm.group(2)
-        elif any(ch.isdigit() for ch in p):
+        elif _has_digit(p):
             return None                                  # an unclassified valued premise
     if need is None or share is None:
         return None
@@ -7898,9 +7940,7 @@ def _weekly_need_per_person_daily_system(premises: list, question: str):
     if factor is None:
         return None
     result = _compute(f"{_num(need[0])} * {_num(factor)} / {_num(share[0])} / 7")
-    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
-        return None
-    return result
+    return _gated_pos_int(result)
 
 
 def _per_second_minutes_week_system(premises: list, question: str):
@@ -7909,7 +7949,7 @@ def _per_second_minutes_week_system(premises: list, question: str):
     amount question; ONE per-second rate premise; ONE "M minutes each day" premise; nothing
     else valued; positive integer. None otherwise."""
     ql = question.lower()
-    if "in one week" not in ql and "in a week" not in ql or any(ch.isdigit() for ch in ql):
+    if "in one week" not in ql and "in a week" not in ql or _has_digit(ql):
         return None
     rate = minutes = None
     for p in premises:
@@ -7920,14 +7960,12 @@ def _per_second_minutes_week_system(premises: list, question: str):
             rate = float(rm.group(1))
         elif mm is not None and minutes is None:
             minutes = float(mm.group(1))
-        elif any(ch.isdigit() for ch in p):
+        elif _has_digit(p):
             return None                                  # an unclassified valued premise
     if rate is None or minutes is None:
         return None
     result = _compute(f"{_num(rate)} * {_num(minutes)} * 60 * 7")
-    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
-        return None
-    return result
+    return _gated_pos_int(result)
 
 
 def _phased_weeks_average_system(premises: list, question: str):
@@ -7940,7 +7978,7 @@ def _phased_weeks_average_system(premises: list, question: str):
     ql = question.lower()
     qm = re.search(r"over these (\d+) weeks", ql)
     if qm is None or "average" not in ql \
-            or any(ch.isdigit() for ch in ql.replace(qm.group(0), "")):
+            or _has_digit(ql.replace(qm.group(0), "")):
         return None
     q_weeks = float(qm.group(1))
     p1 = p2w = p3 = None
@@ -7956,7 +7994,7 @@ def _phased_weeks_average_system(premises: list, question: str):
             if w is None:
                 return None
             p3 = float(m3.group(2)) * 7 * w, w
-        elif m2 is not None and p2w is None and not any(ch.isdigit() for ch in p):
+        elif m2 is not None and p2w is None and not _has_digit(p):
             w = wk(m2.group(1))
             if w is None:
                 return None
@@ -7966,15 +8004,13 @@ def _phased_weeks_average_system(premises: list, question: str):
             if w is None:
                 return None
             p1 = float(m1.group(1)) * 7 * w, w
-        elif any(ch.isdigit() for ch in p):
+        elif _has_digit(p):
             return None                                  # an unclassified valued premise
     if p1 is None or p2w is None or p3 is None or p1[1] + p2w + p3[1] != q_weeks:
         return None
     total = p1[0] + p1[0] + p3[0]                        # the echo phase repeats phase 1's total
     result = _compute(f"{_num(total)} / {_num(q_weeks)}")
-    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
-        return None
-    return result
+    return _gated_pos_int(result)
 
 
 def _pet_plus_food_cost_system(premises: list, question: str):
@@ -7984,7 +8020,7 @@ def _pet_plus_food_cost_system(premises: list, question: str):
     base; ONE "for W weeks" duration; ONE "N/D cup a day" rate; ONE "bag … C cups costs $B"
     premise; the bag division exact; positive integer. None otherwise."""
     ql = question.lower()
-    if "how much did all of this cost" not in ql or any(ch.isdigit() for ch in ql):
+    if "how much did all of this cost" not in ql or _has_digit(ql):
         return None
     base = weeks = frac = bag_cups = bag_price = None
     for p in premises:
@@ -8001,7 +8037,7 @@ def _pet_plus_food_cost_system(premises: list, question: str):
             base = float(bm.group(1))
         elif wm is not None and weeks is None:
             weeks = float(wm.group(1))
-        elif any(ch.isdigit() for ch in p):
+        elif _has_digit(p):
             return None                                  # an unclassified valued premise
     if None in (base, weeks, frac, bag_cups, bag_price):
         return None
@@ -8010,9 +8046,7 @@ def _pet_plus_food_cost_system(premises: list, question: str):
     if abs(bags - round(bags)) > 1e-9:
         return None                                      # the bag division must be exact
     result = _compute(f"{_num(base)} + {_num(round(bags))} * {_num(bag_price)}")
-    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
-        return None
-    return result
+    return _gated_pos_int(result)
 
 
 def _pet_food_remainder_system(premises: list, question: str):
@@ -8023,7 +8057,7 @@ def _pet_food_remainder_system(premises: list, question: str):
     valued premise; non-negative result. None otherwise."""
     ql = question.lower()
     if re.search(r"how many pounds .*left after a week", ql) is None \
-            or any(ch.isdigit() for ch in ql):
+            or _has_digit(ql):
         return None
     count = frac = per_day = total = None
     for p in premises:
@@ -8041,18 +8075,16 @@ def _pet_food_remainder_system(premises: list, question: str):
                 return None
         elif bm is not None and total is None:
             total = float(bm.group(1))
-        elif cm is not None and count is None and not any(ch.isdigit() for ch in p):
+        elif cm is not None and count is None and not _has_digit(p):
             count = NUMBERS.get(cm.group(1))
             if count is None:
                 return None
-        elif any(ch.isdigit() for ch in p):
+        elif _has_digit(p):
             return None                                  # an unclassified valued premise
     if None in (count, frac, per_day, total):
         return None
     result = _compute(f"{_num(total)} - {_num(count)} * {_num(frac)} * {_num(per_day)} * 7")
-    if not (isinstance(result, (int, float)) and result >= 0):
-        return None
-    return result
+    return _gated_nonneg(result)
 
 
 def _orchard_pack_revenue_system(premises: list, question: str):
@@ -8064,7 +8096,7 @@ def _orchard_pack_revenue_system(premises: list, question: str):
     ql = question.lower()
     wm = re.search(r"after (\d+) weeks", ql)
     if "how much money" not in ql or wm is None \
-            or any(ch.isdigit() for ch in ql.replace(wm.group(0), "")):
+            or _has_digit(ql.replace(wm.group(0), "")):
         return None
     weeks = float(wm.group(1))
     trees = per_day = pack = price = None
@@ -8076,7 +8108,7 @@ def _orchard_pack_revenue_system(premises: list, question: str):
             trees, per_day = float(tm.group(1)), float(tm.group(2))
         elif km is not None and pack is None:
             pack, price = float(km.group(1)), float(km.group(2))
-        elif any(ch.isdigit() for ch in p):
+        elif _has_digit(p):
             return None                                  # an unclassified valued premise
     if None in (trees, per_day, pack, price):
         return None
@@ -8084,9 +8116,7 @@ def _orchard_pack_revenue_system(premises: list, question: str):
     if total % pack:
         return None                                      # the pack division must be exact
     result = _compute(f"{_num(total)} / {_num(pack)} * {_num(price)}")
-    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
-        return None
-    return result
+    return _gated_pos_int(result)
 
 
 def _shared_item_cost_system(premises: list, question: str):
@@ -8097,7 +8127,7 @@ def _shared_item_cost_system(premises: list, question: str):
     pound" weight; ONE "$P a pound" price; ONE "last for W weeks" duration; no other valued
     premise; positive result. None otherwise."""
     ql = question.lower()
-    if "how much" not in ql or "spend" not in ql or any(ch.isdigit() for ch in ql):
+    if "how much" not in ql or "spend" not in ql or _has_digit(ql):
         return None
     body = " ".join(premises).lower()
     if not re.search(r"shares half of a [^.]*every day", body):
@@ -8114,14 +8144,12 @@ def _shared_item_cost_system(premises: list, question: str):
             price = float(pm.group(1))
         elif lm is not None and weeks is None:
             weeks = float(lm.group(1))
-        elif any(ch.isdigit() for ch in p):
+        elif _has_digit(p):
             return None                                  # an unclassified valued premise
     if None in (weight, price, weeks):
         return None
     result = _compute(f"{_num(weeks)} * 7 * {_num(weight)} * {_num(price)}")
-    if not (isinstance(result, (int, float)) and result > 0):
-        return None
-    return result
+    return _gated_pos(result)
 
 
 def _everyday_plus_half_subdays_system(premises: list, question: str):
@@ -8134,7 +8162,7 @@ def _everyday_plus_half_subdays_system(premises: list, question: str):
     ql = question.lower()
     dm = re.search(r"(\d+) days? a week", ql)
     if "how long" not in ql or dm is None \
-            or any(ch.isdigit() for ch in ql.replace(dm.group(0), "")):
+            or _has_digit(ql.replace(dm.group(0), "")):
         return None
     sub_days = float(dm.group(1))
     rate = None
@@ -8144,16 +8172,14 @@ def _everyday_plus_half_subdays_system(premises: list, question: str):
         rm = re.search(r"for (\d+(?:\.\d+)?) hours every day", pl)
         if rm is not None and rate is None:
             rate = float(rm.group(1))
-        elif "half as long as" in pl and not any(ch.isdigit() for ch in p):
+        elif "half as long as" in pl and not _has_digit(p):
             half_seen = True
-        elif any(ch.isdigit() for ch in p):
+        elif _has_digit(p):
             return None                                  # an unclassified valued premise
     if rate is None or not half_seen or not 0 < sub_days <= 7:
         return None
     result = _compute(f"{_num(rate)} * 7 + {_num(rate)} / 2 * {_num(sub_days)}")
-    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
-        return None
-    return result
+    return _gated_pos_int(result)
 
 
 def _paired_daily_rate_week_system(premises: list, question: str):
@@ -8165,7 +8191,7 @@ def _paired_daily_rate_week_system(premises: list, question: str):
     other valued premise; positive integer. None otherwise."""
     ql = question.lower()
     if "total distance" not in ql or "two friends" not in ql or "week" not in ql \
-            or any(ch.isdigit() for ch in ql):
+            or _has_digit(ql):
         return None
     base = delta = times = None
     for p in premises:
@@ -8179,14 +8205,12 @@ def _paired_daily_rate_week_system(premises: list, question: str):
                 return None
         elif dm is not None and delta is None:
             delta = float(dm.group(1))
-        elif any(ch.isdigit() for ch in p):
+        elif _has_digit(p):
             return None                                  # an unclassified valued premise
     if base is None or delta is None or times is None:
         return None
     result = _compute(f"({_num(base)} + {_num(base)} + {_num(delta)}) * {_num(times)}")
-    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
-        return None
-    return result
+    return _gated_pos_int(result)
 
 
 def _weekday_production_revenue_system(premises: list, question: str):
@@ -8196,7 +8220,7 @@ def _weekday_production_revenue_system(premises: list, question: str):
     five weekdays" premise; ONE "makes N <item> a day" premise; ONE "$P" price premise; ONE
     "in W weeks" premise; no other valued premise; positive integer. None otherwise."""
     ql = question.lower()
-    if "how much money" not in ql or any(ch.isdigit() for ch in ql) \
+    if "how much money" not in ql or _has_digit(ql) \
             or not any(v in ql for v in ("collect", "earn", "make")):
         return None
     body = " ".join(premises).lower()
@@ -8214,14 +8238,12 @@ def _weekday_production_revenue_system(premises: list, question: str):
             price = float(pm.group(1))
         elif wm is not None and weeks is None:
             weeks = float(wm.group(1))
-        elif any(ch.isdigit() for ch in p):
+        elif _has_digit(p):
             return None                                  # an unclassified valued premise
     if per_day is None or price is None or weeks is None:
         return None
     result = _compute(f"{_num(per_day)} * 5 * {_num(weeks)} * {_num(price)}")
-    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
-        return None
-    return result
+    return _gated_pos_int(result)
 
 
 def _named_day_chain_split_system(premises: list, question: str):
@@ -8233,7 +8255,7 @@ def _named_day_chain_split_system(premises: list, question: str):
     EXACTLY those three numbers in the whole body. None otherwise."""
     ql = question.lower()
     if re.search(r"how many hours .*on (saturday|sunday)", ql) is None \
-            or any(ch.isdigit() for ch in ql):
+            or _has_digit(ql):
         return None
     body = " ".join(premises).lower()
     if "evenly between saturday and sunday" not in body:
@@ -8245,9 +8267,7 @@ def _named_day_chain_split_system(premises: list, question: str):
         return None
     n, m, t = float(m1.group(1)), float(m2.group(1)), float(m3.group(1))
     result = _compute(f"({_num(t)} - ({_num(n)} + 2 * {_num(n)} + 3 * {_num(m)})) / 2")
-    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
-        return None
-    return result
+    return _gated_pos_int(result)
 
 
 def _rate_hours_clock_week_system(premises: list, question: str):
@@ -8259,7 +8279,7 @@ def _rate_hours_clock_week_system(premises: list, question: str):
     otherwise."""
     ql = question.lower()
     if re.search(r"how many \w+", ql) is None or "week" not in ql \
-            or any(ch.isdigit() for ch in ql):
+            or _has_digit(ql):
         return None
     rate = span_hours = clock_hours = None
     for p in premises:
@@ -8277,14 +8297,12 @@ def _rate_hours_clock_week_system(premises: list, question: str):
             span_hours = days * float(sm.group(3))
         elif cm is not None and clock_hours is None and int(cm.group(2)) > int(cm.group(1)):
             clock_hours = int(cm.group(2)) - int(cm.group(1))
-        elif any(ch.isdigit() for ch in p):
+        elif _has_digit(p):
             return None                                  # an unclassified valued premise
     if rate is None or span_hours is None or clock_hours is None:
         return None
     result = _compute(f"{_num(rate)} * ({_num(span_hours)} + {_num(clock_hours)})")
-    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
-        return None
-    return result
+    return _gated_pos_int(result)
 
 
 def _sales_funnel_week_system(premises: list, question: str):
@@ -8300,7 +8318,7 @@ def _sales_funnel_week_system(premises: list, question: str):
             or not any(v in ql for v in ("sell", "earn", "make")):
         return None
     dm = re.search(r"(\d+) days? a week", ql)
-    if dm is None or any(ch.isdigit() for ch in ql.replace(dm.group(0), "")):
+    if dm is None or _has_digit(ql.replace(dm.group(0), "")):
         return None
     days = float(dm.group(1))
     visits = pct = None
@@ -8318,15 +8336,13 @@ def _sales_funnel_week_system(premises: list, question: str):
             pct = float(cm.group(1))
         elif vm is not None and visits is None:
             visits = float(vm.group(1))
-        elif any(ch.isdigit() for ch in p):
+        elif _has_digit(p):
             return None                                  # an unclassified valued premise
     if visits is None or pct is None or len(halves) != 2 or not 0 < pct <= 100:
         return None
     result = _compute(f"{_num(visits)} * {_num(pct)} / 100 * "
                       f"({_num(halves[0])} + {_num(halves[1])}) / 2 * {_num(days)}")
-    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
-        return None
-    return result
+    return _gated_pos_int(result)
 
 
 def _workweek_boost_system(premises: list, question: str):
@@ -8339,9 +8355,9 @@ def _workweek_boost_system(premises: list, question: str):
     ql = question.lower()
     m = re.search(r"how many (\w+)", ql)
     sm = re.search(r"from (\w+) to (\w+)", ql) \
-        or next((mm for p in premises if not any(ch.isdigit() for ch in p)
+        or next((mm for p in premises if not _has_digit(p)
                  for mm in [re.search(r"open from (\w+) to (\w+)", p.lower())] if mm), None)
-    if m is None or sm is None or "week" not in ql or any(ch.isdigit() for ch in ql):
+    if m is None or sm is None or "week" not in ql or _has_digit(ql):
         return None                                      # the open-span may sit in a split-off premise
     lo, hi = sm.group(1), sm.group(2)
     if lo not in _WEEKDAYS or hi not in _WEEKDAYS:
@@ -8360,16 +8376,14 @@ def _workweek_boost_system(premises: list, question: str):
             base = float(bm.group(1))
         elif hm is not None and pct is None and len(days_here) == 1:
             pct, boost_day = float(hm.group(1)), days_here[0]
-        elif any(ch.isdigit() for ch in p):
+        elif _has_digit(p):
             return None                                  # an unclassified valued premise
     if base is None or pct is None or not 0 < pct <= 100 \
             or _WEEKDAYS.index(lo) > _WEEKDAYS.index(boost_day) \
             or _WEEKDAYS.index(boost_day) > _WEEKDAYS.index(hi):
         return None
     result = _compute(f"{_num(base)} * {span - 1} + {_num(base)} * (1 + {_num(pct)} / 100)")
-    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
-        return None
-    return result
+    return _gated_pos_int(result)
 
 
 def _boosted_rate_duration_system(premises: list, question: str):
@@ -8382,7 +8396,7 @@ def _boosted_rate_duration_system(premises: list, question: str):
     The banned "N times more" idiom is NOT read (percent only). None otherwise."""
     ql = question.lower()
     m = re.search(r"how many (\w+)", ql)
-    if m is None or any(w in ql for w in ("more", "fewer", "less", "than")) \
+    if m is None or _has_comparative(ql) \
             or any(d in ql for d in _WEEKDAYS):
         return None
     asked = m.group(1)
@@ -8391,9 +8405,9 @@ def _boosted_rate_duration_system(premises: list, question: str):
     if days is None and wm is not None:
         n = NUMBERS.get(wm.group(1), float(wm.group(1)) if wm.group(1).isdigit() else 0)
         days = n * 7 if n else None
-        if any(ch.isdigit() for ch in ql.replace(wm.group(0), "")):
+        if _has_digit(ql.replace(wm.group(0), "")):
             return None                                  # a question digit beyond the week count
-    elif any(ch.isdigit() for ch in ql):
+    elif _has_digit(ql):
         return None
     if days is None:
         return None
@@ -8412,14 +8426,12 @@ def _boosted_rate_duration_system(premises: list, question: str):
             if not pct:
                 return None
             continue
-        if any(ch.isdigit() for ch in p):
+        if _has_digit(p):
             return None                                  # an unclassified valued premise
     if base is None or pct is None or not 0 < pct <= 100:
         return None
     result = _compute(f"{_num(base)} * (1 + {_num(pct)} / 100) * {_num(days)}")
-    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
-        return None
-    return result
+    return _gated_pos_int(result)
 
 
 def _doubling_days_sum_system(premises: list, question: str):
@@ -8430,8 +8442,8 @@ def _doubling_days_sum_system(premises: list, question: str):
     the Nth day" limit; no other valued premise; positive integer sum. None otherwise."""
     ql = question.lower()
     if "week" not in ql or not ("how much" in ql or "how many" in ql) \
-            or any(ch.isdigit() for ch in ql) \
-            or any(w in ql for w in ("more", "fewer", "less", "than")):
+            or _has_digit(ql) \
+            or _has_comparative(ql):
         return None
     first = n_days = None
     doubling = False
@@ -8440,22 +8452,19 @@ def _doubling_days_sum_system(premises: list, question: str):
         fm = re.search(r"first day[^.]*?(\d+(?:\.\d+)?)", pl)
         nm = re.search(r"after the (\d+)(?:st|nd|rd|th) day", pl)
         if "twice as much" in pl and ("day before" in pl or "previous day" in pl):
-            if any(ch.isdigit() for ch in p):
+            if _has_digit(p):
                 return None
             doubling = True
         elif fm is not None and first is None:
             first = float(fm.group(1))
         elif nm is not None and n_days is None:
             n_days = int(nm.group(1))
-        elif any(ch.isdigit() for ch in p):
+        elif _has_digit(p):
             return None                                  # an unclassified valued premise
     if first is None or n_days is None or not doubling or not 1 < n_days <= 10:
         return None
     result = _compute(f"{_num(first)} * {_num(2 ** n_days - 1)}")   # Σ a·2^k = a·(2^n − 1); the
-    if not (isinstance(result, (int, float)) and result > 0        # power folds to a literal (n ≤ 10)
-            and float(result).is_integer()):
-        return None
-    return result
+    return _gated_pos_int(result)                                   # power folds to a literal (n ≤ 10)
 
 
 def _alternating_days_diff_system(premises: list, question: str):
@@ -8467,7 +8476,7 @@ def _alternating_days_diff_system(premises: list, question: str):
     "more" category has strictly more days; positive integer. None otherwise."""
     ql = question.lower()
     m = re.search(r"how many more (\w+) \w+ .*than (\w+)", ql)
-    if m is None or "week" not in ql or any(ch.isdigit() for ch in ql):
+    if m is None or "week" not in ql or _has_digit(ql):
         return None
     cat_a, cat_b = m.group(1), m.group(2)
     day_lists: dict = {}
@@ -8476,23 +8485,21 @@ def _alternating_days_diff_system(premises: list, question: str):
         pl = p.lower()
         days = [d for d in _WEEKDAYS if d in pl]
         rm = re.search(r"(\d+(?:\.\d+)?) \w+ (?:per|a|each) day", pl)
-        if days and not any(ch.isdigit() for ch in p):
+        if days and not _has_digit(p):
             cat = cat_a if cat_a in pl else (cat_b if cat_b in pl else None)
             if cat is None or cat in day_lists:
                 return None
             day_lists[cat] = set(days)
         elif rm is not None and rate is None and not days:
             rate = float(rm.group(1))
-        elif any(ch.isdigit() for ch in p):
+        elif _has_digit(p):
             return None                                  # an unclassified valued premise
     if rate is None or set(day_lists) != {cat_a, cat_b} \
             or day_lists[cat_a] & day_lists[cat_b] \
             or len(day_lists[cat_a]) <= len(day_lists[cat_b]):
         return None
     result = _compute(f"{_num(rate)} * ({len(day_lists[cat_a])} - {len(day_lists[cat_b])})")
-    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
-        return None
-    return result
+    return _gated_pos_int(result)
 
 
 def _day_list_target_system(premises: list, question: str):
@@ -8506,7 +8513,7 @@ def _day_list_target_system(premises: list, question: str):
     integer residual. None otherwise."""
     ql = question.lower()
     q_days = [d for d in _WEEKDAYS if d in ql]
-    if not 1 <= len(q_days) <= 2 or any(ch.isdigit() for ch in ql) \
+    if not 1 <= len(q_days) <= 2 or _has_digit(ql) \
             or not any(c in ql for c in ("reach", "beat", "goal", "average", "meet")):
         return None
     num = r"(\d+(?:,\d{3})*(?:\.\d+)?)"                 # comma-aware ("9,400")
@@ -8516,7 +8523,7 @@ def _day_list_target_system(premises: list, question: str):
     for p in premises:                                   # a digit-free stray fragment naming a day
         pl = p.lower()                                   # + a goal cue is the question's SEVERED
         frag_days = [d for d in _WEEKDAYS if d in pl]    # tail ("… on Friday" | "Saturday to meet
-        if frag_days and not any(ch.isdigit() for ch in p) \
+        if frag_days and not _has_digit(p) \
                 and any(c in pl for c in ("meet", "reach", "goal")) \
                 and all(d not in q_days for d in frag_days):
             q_days += frag_days                          # his goal?") — absorb it as an asked day
@@ -8539,7 +8546,7 @@ def _day_list_target_system(premises: list, question: str):
             last_total = val(lm.group(1))
             continue
         if not days_here:
-            if any(ch.isdigit() for ch in p):
+            if _has_digit(p):
                 return None                              # a valued premise outside the day list
             continue
         # pair each listed day with the value (or zero-cue) in ITS comma/and segment
@@ -8574,9 +8581,7 @@ def _day_list_target_system(premises: list, question: str):
         return None                                     # listed + asked must cover the week exactly
     result = _compute(f"({_num(target)} - ({' + '.join(_num(v) for v in day_vals.values())}))"
                       f" / {len(q_days)}")
-    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
-        return None
-    return result
+    return _gated_pos_int(result)
 
 
 def _rate_days_weeks_system(premises: list, question: str):
@@ -8589,14 +8594,14 @@ def _rate_days_weeks_system(premises: list, question: str):
     question); days/week explicit or 7 via an every-day cue; every digit premise classified;
     positive integer total. None otherwise."""
     ql = question.lower()
-    if "hour" not in ql or any(ch.isdigit() for ch in ql) \
-            or any(w in ql for w in ("more", "fewer", "less", "than")):
+    if "hour" not in ql or _has_digit(ql) \
+            or _has_comparative(ql):
         return None
     body = " ".join(premises).lower()
     rate = days = weeks = None
     for p in premises:
         pl = p.lower()
-        has_digit = any(ch.isdigit() for ch in p)
+        has_digit = _has_digit(p)
         rm = re.search(r"(\d+(?:\.\d+)?) hours?(?: (?:and )?(\d+) minutes?)?", pl)
         if rm is not None and any(c in pl for c in _PER_DAY_CUES):
             if rate is not None:
@@ -8630,9 +8635,7 @@ def _rate_days_weeks_system(premises: list, question: str):
     if days <= 0:
         return None
     result = _compute(f"{_num(rate)} * {_num(days)} * {_num(weeks)}")
-    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
-        return None
-    return result
+    return _gated_pos_int(result)
 
 
 def _weekly_time_plus_delta_system(premises: list, question: str):
@@ -8641,8 +8644,8 @@ def _weekly_time_plus_delta_system(premises: list, question: str):
     time … week" question; exactly TWO digit premises — a per-day hours Rate and an "increase …
     weekly … by N hours" delta; positive integer result. None otherwise."""
     ql = question.lower()
-    if "how much time" not in ql or "week" not in ql or any(ch.isdigit() for ch in ql) \
-            or any(w in ql for w in ("more", "fewer", "less", "than")):
+    if "how much time" not in ql or "week" not in ql or _has_digit(ql) \
+            or _has_comparative(ql):
         return None
     rate = delta = None
     disc, ctx = [], []
@@ -8650,7 +8653,7 @@ def _weekly_time_plus_delta_system(premises: list, question: str):
         fs = learn(p, disc, ctx) or []
         ctx += fs
         pl = p.lower()
-        if not any(ch.isdigit() for ch in p):
+        if not _has_digit(p):
             continue
         r = next((f for f in fs if isinstance(f, Rate) and f.per_unit == "day"
                   and f.measure[0] == "hour"), None)
@@ -8664,9 +8667,7 @@ def _weekly_time_plus_delta_system(premises: list, question: str):
     if rate is None or delta is None:
         return None
     result = _compute(f"{_num(rate)} * 7 + {_num(delta)}")
-    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
-        return None
-    return result
+    return _gated_pos_int(result)
 
 
 def _daily_rate_difference_system(premises: list, question: str):
@@ -8679,7 +8680,7 @@ def _daily_rate_difference_system(premises: list, question: str):
     ql = question.lower()
     m = re.search(r"how many more (\w+) (?:per|a|each) day", ql)
     std_m = re.search(r"(?:than|compared to) (?:his |her |their )?(\w+)", ql)
-    if m is None or std_m is None or any(ch.isdigit() for ch in ql):
+    if m is None or std_m is None or _has_digit(ql):
         return None
     asked = _singular_of(m.group(1)) or m.group(1)
     standard = _singular_of(std_m.group(1)) or std_m.group(1)
@@ -8712,9 +8713,7 @@ def _daily_rate_difference_system(premises: list, question: str):
     if a is None or b is None:
         return None
     result = _compute(f"{_num(a)} - {_num(b)}")
-    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
-        return None
-    return result
+    return _gated_pos_int(result)
 
 
 def _inverse_distribution_system(premises: list, question: str):
@@ -8727,7 +8726,7 @@ def _inverse_distribution_system(premises: list, question: str):
     quotient. None otherwise."""
     ql = question.lower()
     m = re.search(r"how many (\w+)", ql)
-    if m is None or any(ch.isdigit() for ch in ql) \
+    if m is None or _has_digit(ql) \
             or any(w in ql for w in ("more", "fewer", "less", "than", "each", " per ")):
         return None
     group = _singular_of(m.group(1)) or m.group(1)
@@ -8745,14 +8744,12 @@ def _inverse_distribution_system(premises: list, question: str):
             continue
         if len(fs) == 1 and fs[0].verb not in LOSS_VERBS and total is None:
             total, item = fs[0].amount, fs[0].measure[0]
-        elif any(ch.isdigit() for ch in p):
+        elif _has_digit(p):
             return None                                  # an unclassified valued premise → not this shape
     if total is None or share is None or share <= 0 or item == group:
         return None
     result = _compute(f"{_num(total)} / {_num(share)}")
-    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
-        return None
-    return result
+    return _gated_pos_int(result)
 
 
 def _split_with_system(premises: list, question: str):
@@ -8764,12 +8761,12 @@ def _split_with_system(premises: list, question: str):
     share. None otherwise."""
     ql = question.lower()
     m = re.search(r"how many (\w+)", ql)
-    if m is None or "each" not in ql or any(ch.isdigit() for ch in ql) \
-            or any(w in ql for w in ("more", "fewer", "less", "than")):
+    if m is None or "each" not in ql or _has_digit(ql) \
+            or _has_comparative(ql):
         return None
     item = _singular_of(m.group(1)) or m.group(1)
     src = [p for p in premises if re.search(r"\b(split|share|divide) (it |them )?with\b", p.lower())]
-    if len(src) != 1 or any(any(ch.isdigit() for ch in p) or "dozen" in p.lower()
+    if len(src) != 1 or any(_has_digit(p) or "dozen" in p.lower()
                             for p in premises if p is not src[0]):
         return None
     disc, ctx = [], []
@@ -8782,9 +8779,7 @@ def _split_with_system(premises: list, question: str):
     if k != float(int(k)) or k <= 0:
         return None
     result = _compute(f"{_num(totals[0].amount)} / ({_num(k)} + 1)")
-    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
-        return None
-    return result
+    return _gated_pos_int(result)
 
 
 def _years_until_ratio_system(premises: list, question: str):
@@ -8824,9 +8819,7 @@ def _years_until_ratio_system(premises: list, question: str):
     if std is None or subj is None or std[1] <= 0 or subj[1] <= 0:
         return None
     result = _compute(f"({_num(subj[1])} - {_num(mult)} * {_num(std[1])}) / ({_num(mult)} - 1)")
-    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
-        return None
-    return result
+    return _gated_pos_int(result)
 
 
 def _remainder_after_rate_system(premises: list, question: str):
@@ -8838,8 +8831,8 @@ def _remainder_after_rate_system(premises: list, question: str):
     duration); the remainder is non-negative. None otherwise."""
     ql = question.lower()
     m = re.search(r"how many (\w+)", ql)
-    if m is None or " left" not in ql or any(ch.isdigit() for ch in ql) \
-            or any(w in ql for w in ("more", "fewer", "less", "than")):
+    if m is None or " left" not in ql or _has_digit(ql) \
+            or _has_comparative(ql):
         return None
     asked = _singular_of(m.group(1)) or m.group(1)
     if "noun" not in LEXICON.get(asked, ()):
@@ -8851,7 +8844,7 @@ def _remainder_after_rate_system(premises: list, question: str):
         fs = learn(p, disc, ctx) or []
         ctx += fs
         pl = p.lower()
-        if not any(ch.isdigit() for ch in p):
+        if not _has_digit(p):
             continue
         nums = item_re.findall(pl)
         rate = next((f for f in fs if isinstance(f, Rate) and f.per_unit == "day"
@@ -8874,9 +8867,7 @@ def _remainder_after_rate_system(premises: list, question: str):
     if total is None or rated is None:
         return None
     result = _compute(f"{_num(total)} - {_num(consumed or 0)} - {_num(rated)}")
-    if not (isinstance(result, (int, float)) and result >= 0):
-        return None
-    return result
+    return _gated_nonneg(result)
 
 
 def _weekday_weekend_system(premises: list, question: str):
@@ -8889,12 +8880,12 @@ def _weekday_weekend_system(premises: list, question: str):
     a WORD (twice / three times / half); the result is a positive integer. None otherwise."""
     ql = question.lower()
     m = re.search(r"how many (\w+)", ql)
-    if m is None or "week" not in ql or any(ch.isdigit() for ch in ql) \
+    if m is None or "week" not in ql or _has_digit(ql) \
             or any(w in ql for w in ("more", "fewer", "less", "than", "weekend", "weekday")):
         return None
     asked = _singular_of(m.group(1)) or m.group(1)
     weekday_cues = ("weekday", "weekdays", "school week")
-    digit_premises = [p for p in premises if any(ch.isdigit() for ch in p)]
+    digit_premises = [p for p in premises if _has_digit(p)]
     if len(digit_premises) != 1:
         return None
     wd = digit_premises[0]
@@ -8907,7 +8898,7 @@ def _weekday_weekend_system(premises: list, question: str):
         return None
     rate = float(nums[0])
     we = next((p for p in premises if p is not wd and "weekend" in p.lower()), None)
-    if we is None or any(ch.isdigit() for ch in we):
+    if we is None or _has_digit(we):
         return None
     wel = we.lower()
     mult = None
@@ -8921,9 +8912,7 @@ def _weekday_weekend_system(premises: list, question: str):
     if mult is None:
         return None
     result = _compute(f"{_num(rate)} * 5 + {_num(mult)} * {_num(rate)} * 2")
-    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
-        return None
-    return result
+    return _gated_pos_int(result)
 
 
 def _piece_count_system(premises: list, question: str):
@@ -8936,7 +8925,7 @@ def _piece_count_system(premises: list, question: str):
     (a piece count is whole — a fraction means this isn't the shape). None otherwise."""
     ql = question.lower()
     m = re.search(r"how many (\w+)", ql)
-    if m is None or "how much" in ql or any(ch.isdigit() for ch in ql):
+    if m is None or "how much" in ql or _has_digit(ql):
         return None
     piece = _singular_of(m.group(1)) or m.group(1)
     if piece in UNIT_NOUNS or "noun" not in LEXICON.get(piece, ()):
@@ -8962,9 +8951,7 @@ def _piece_count_system(premises: list, question: str):
         return None
     factor = 1 if su == tu else CONVERSIONS[(tu, su)]
     result = _compute(f"{_num(total.amount)} * {_num(factor)} / {_num(size.amount)}")
-    if not (isinstance(result, (int, float)) and result > 0 and float(result).is_integer()):
-        return None
-    return result
+    return _gated_pos_int(result)
 
 
 # --- ARITHMETIC SYSTEM-SOLVER REGISTRY -------------------------------------------------------
