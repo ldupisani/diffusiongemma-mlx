@@ -115,10 +115,10 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   `bench.py`'s firewall: DEV=train inspectable, TEST=test aggregate-only; never imported by the unit
   tests). Scores against the gold `#### N`, reports coverage / precision / a decline-blocker taxonomy
   (currency / percentage / unknown-word / structure) and the **most-frequent unknown words** (the
-  data-driven vocabulary worklist). State (2026-07-02, HEAD after the mining campaigns): dev-train
-  **245 correct / 0 wrong**, dev-holdout 110/2, TEST **26 correct / 5 wrong (83.9% precision)** — up
-  from a 0% baseline via ~180 firewalled increments (vocab waves, number-word/lexer table fixes,
-  composition systems, whole-text solvers). 0 model calls. DEV has a stable-hash **train/holdout split** (`--slice dev-train|dev-holdout`, the anti-overfit
+  data-driven vocabulary worklist). State (2026-07-02, after the three-family campaign #180–185):
+  dev-train **264 correct / 0 wrong**, dev-holdout 112/2, TEST **28 correct / 5 wrong (84.8%
+  precision)** — up from a 0% baseline via ~185 firewalled increments (vocab waves,
+  number-word/lexer table fixes, composition systems, whole-text solvers). 0 model calls. DEV has a stable-hash **train/holdout split** (`--slice dev-train|dev-holdout`, the anti-overfit
   refinement: tune on dev-train, validate on dev-holdout BEFORE the single TEST look — `dev-holdout` is a
   cheap TEST proxy). The full selection+validation process is in **`docs/reading-coverage-methodology.md`**.
   CLI: `python -m reasoning.reading_bench --slice dev|dev-train|dev-holdout|test [--limit N]`.
