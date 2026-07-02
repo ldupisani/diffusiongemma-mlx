@@ -1692,6 +1692,11 @@ LEXICON.update({
     "gray": ["adjective"], "grey": ["adjective"], "gold": ["adjective"], "silver": ["adjective"],
     # EXCLUDED "brown": the diff caught it unlocking a held-out fraction-of-remaining chain to a
     # confident-wrong (Mary gives away half her blue shirts → 49≠37) — same class as the excluded "peanut".
+    # third-wave count-nouns + typed modifiers (sweep re-run after colors; container/stationery clusters)
+    # EXCLUDED "pen": it unlocks a ratio-chain to a pen COUNT but the trailing "× $1.50 each" price step
+    # isn't composed → confident-wrong (Dorothy: 22 pens ≠ $33) — same unhandled-composition class as peanut/brown.
+    "desk": ["noun"], "drawer": ["noun"], "highlighter": ["noun"], "alley": ["noun"],
+    "local": ["adjective"], "bowling": ["adjective", "noun"],
 })
 PLURALS.update({
     "bananas": "banana", "erasers": "eraser", "crayons": "crayon", "berries": "berry",
@@ -1702,7 +1707,8 @@ PLURALS.update({
     "turtles": "turtle", "siblings": "sibling", "athletes": "athlete", "lemons": "lemon",
     "blueberries": "blueberry", "peaches": "peach", "strawberries": "strawberry", "contests": "contest",
     "babies": "baby", "seeds": "seed", "sunflowers": "sunflower", "softballs": "softball",
-    "showers": "shower",
+    "showers": "shower", "highlighters": "highlighter", "drawers": "drawer",
+    "desks": "desk", "alleys": "alley",
 })
 # NOTE: groundwork nouns/adjectives/pronouns (fruit/paper/side/…/herself) were re-tested with decline-safety
 # GUARDS 11–14 in place and STILL drop TEST 40.0→36.4% (a noun unlocks a held-out wrong in an as-yet-unguarded
