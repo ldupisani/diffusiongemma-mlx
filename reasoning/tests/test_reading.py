@@ -7237,5 +7237,25 @@ class TestIncrement207AnchoredElidedRatio(unittest.TestCase):
             "altogether?"), 36)
 
 
+class TestIncrement208NeedsInverse(unittest.TestCase):
+    """#208 — the deficit-to-target premise read: "X needs N more to have (k× as many | the same
+    number) as S" states X + N = k·S → X = k·S − N. The premise-side twin of the needs-idiom
+    the single twin's QUESTION guard declines (that guard is unchanged)."""
+
+    def test_needs_more_to_have_twice(self):
+        # amanda = 2·17 − 12 = 22; mabel = 85 → 85 − 22 = 63
+        self.assertEqual(reading.solve(
+            "Amanda needs 12 more marbles to have twice as many marbles as Katrina, and "
+            "Mabel has 5 times as many marbles as Katrina. If Mabel has 85 marbles, how "
+            "many more marbles does Mabel have than Amanda?"), 63)
+
+    def test_needs_more_to_have_same_number(self):
+        # loris = 40 − 3 = 37; lamont = 2·20 = 40 → 20 + 40 + 37 = 97
+        self.assertEqual(reading.solve(
+            "Loris needs three more books to have the same number as Lamont, who has "
+            "twice the number of books Darryl has. If Darryl has 20 books, calculate "
+            "the total number of books the three have."), 97)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -6282,6 +6282,37 @@ def _noun_anchor_fact(rp: "Reading"):
     return _noun_entity_key(qn), vals[0].features["value"]
 
 
+_NEEDS_INVERSE = re.compile(
+    r"\b([A-Z][a-z]+) needs (\d+|[a-z]+) more \w+ to have "
+    r"(?:the same number|(twice|thrice|double|half|(?:\d+|[a-z]+) times) as (?:many|much) \w+) "
+    r"as ([A-Z][a-z]+)")
+
+
+def _needs_inverse_relation(premise: str):
+    """The DEFICIT-TO-TARGET premise read (#208) — "Amanda needs 12 more marbles to have twice as
+    many marbles as Katrina" states Amanda + 12 = 2·Katrina, i.e. subject = k·standard − n; "Loris
+    needs three more books to have the same number as Lamont" is the k=1 case. → (subj, k, std,
+    −n). This is the PREMISE-side twin of the needs-idiom the single twin's question guard
+    declines — the frame is exact, so the inversion is safe. None otherwise."""
+    m = _NEEDS_INVERSE.search(premise)
+    if m is None:
+        return None
+    n = float(m.group(2)) if m.group(2).isdigit() else NUMBERS.get(m.group(2))
+    if not n:
+        return None
+    mult = m.group(3)
+    if mult is None:
+        k = 1.0                                          # "the same number as"
+    else:
+        k = {"twice": 2.0, "thrice": 3.0, "double": 2.0, "half": 0.5}.get(mult)
+        if k is None:
+            tok = mult.split()[0]
+            k = float(NUMBERS.get(tok, tok if tok.isdigit() else 0) or 0)
+    if not k:
+        return None
+    return m.group(1).lower(), k, m.group(4).lower(), -n
+
+
 def _elided_ratio(rp, premise: str):
     """A single-name ratio clause whose standard is ELIDED — "Flora has twice as many books",
     "Stephanie's bike is worth twice as much" — → (subject_entity, k). The standard is anaphoric;
@@ -6400,6 +6431,8 @@ def _anchored_affine_coeffs(premises: list, question: str):
         nc = _name_count(rp)
         rel = _affine_relation(rp) if nc == 2 else None      # exactly 2 names — else this may be the
         anc = _anchor_fact(rp) if (rel is None and nc == 1) else None   # coordinate-noun fallback firing,
+        if rel is None and anc is None and nc == 2:
+            rel = _needs_inverse_relation(p)             # "needs 12 more to have twice as many as K"
         elided = False
         if rel is None and anc is None and nc == 1 and last_entity is not None:
             el = _elided_ratio(rp, p)                        # "Flora has twice as many books" — the
