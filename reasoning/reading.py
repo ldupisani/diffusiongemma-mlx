@@ -7695,6 +7695,56 @@ def _rate_difference(premises: list, question: str, context: list):
     return _compute(f"({_num(A.amount)}/{_num(A.per_amount)} - {_num(B.amount)}/{_num(B.per_amount)}) * ({d})")
 
 
+def _ps_each_after(rp, k):
+    """Money unit k is immediately followed by "each"/"apiece" — a genuine per-ITEM price."""
+    nxt = rp.units[k + 1] if k + 1 < len(rp.units) else None
+    return nxt is not None and _key(nxt.surface) in ("each", "apiece")
+
+
+def _ps_at_or_each(rp, k):
+    """Per-item price cue for the sell/revenue shape: preceded by "at" OR followed by each/apiece
+    (a bare "for $P" is a TOTAL → not a unit price)."""
+    prev = rp.units[k - 1] if k > 0 else None
+    return (prev is not None and _key(prev.surface) == "at") or _ps_each_after(rp, k)
+
+
+def _product_sum_core(premises: list, verbs: tuple, price_cue, require_all_prices: bool):
+    """The shared Σ(count × price) core behind `_shopping_total` / `_revenue_product_sum` (they
+    were near-clones): learn the premises, require EVERY money value to be a genuine per-item
+    price (`price_cue` decides the surface cue), then STRICTLY alternate (item-count,
+    money-price) over the `verbs` quantities — a leftover unpaired quantity declines. With
+    `require_all_prices`, a premise whose price didn't LEARN (a locative prefix "At a coffee
+    shop, 7 customers…" drops the first clause's facts) also declines rather than silently
+    omitting its product (coffee 67≠32). Returns the audited sum, or None."""
+    disc, ctx, readings = [], [], [analyze(p) for p in premises]
+    for p in premises:
+        f = learn(p, disc, ctx)
+        if f:
+            ctx += f
+    money_units = [(rp, k) for rp in readings for k, u in enumerate(rp.units)
+                   if "value" in u.features.get("senses", [])
+                   and "money" in str(u.features.get("measure"))]
+    if not money_units:
+        return None
+    for rp, k in money_units:
+        if not price_cue(rp, k):
+            return None
+    qs = [f for f in ctx if isinstance(f, Quantity) and f.verb in verbs and f.amount is not None]
+    products, i = [], 0
+    while i < len(qs) - 1:                                # STRICT alternation: (item-count, money-price)+
+        a, b = qs[i], qs[i + 1]
+        if a.measure != MONEY and b.measure == MONEY:
+            products.append(f"{_num(a.amount)} * {_num(b.amount)}")
+            i += 2
+        else:
+            return None
+    if i != len(qs) or not products:                     # leftover unpaired quantity → not a clean shape
+        return None
+    if require_all_prices and len(products) != len(money_units):
+        return None
+    return _compute(" + ".join(f"({p})" for p in products))
+
+
 def _shopping_total(premises: list, question: str):
     """A SHOPPING TOTAL — "buys 3 toys at $10 each, 2 packs at $5 each, 5 shirts at $6 each. How much did she
     spend in all?" → Σ(count × price) = 3·10 + 2·5 + 5·6 = 70. The counts and per-item prices already parse as
@@ -7702,7 +7752,7 @@ def _shopping_total(premises: list, question: str):
     with "for $80" totals, discounts, and per-piece questions, which all carry "each"): the question asks a
     spend TOTAL; EVERY money price must be immediately followed by "each"/"apiece" (a genuine per-item price,
     NOT "four pizzas for $80"); NO discount/sale/off; and the buy-quantities STRICTLY alternate item-count then
-    price so each price pairs with its count. None otherwise."""
+    price so each price pairs with its count (`_product_sum_core`). None otherwise."""
     ql = question.lower()
     # require an explicit TOTAL cue (not a bare "how much does he spend?", whose 2nd "X for $Y each" pair may
     # have been split INTO the question clause → an incomplete premise pairing, Alexander 5≠9).
@@ -7714,47 +7764,21 @@ def _shopping_total(premises: list, question: str):
     pl = " ".join(premises).lower()
     if any(w in pl for w in ("discount", "sale", " off", "% ", "coupon", "free")):
         return None
-    disc, ctx, readings = [], [], [analyze(p) for p in premises]
-    for p in premises:
-        f = learn(p, disc, ctx)
-        if f:
-            ctx += f
-    # every money value in the premises must be immediately followed by "each"/"apiece" (a per-ITEM price)
-    money_units = [(rp, k) for rp in readings for k, u in enumerate(rp.units)
-                   if "value" in u.features.get("senses", []) and "measure" in u.features
-                   and "money" in str(u.features.get("measure"))]
-    if not money_units:
-        return None
-    for rp, k in money_units:
-        nxt = rp.units[k + 1] if k + 1 < len(rp.units) else None
-        if nxt is None or _key(nxt.surface) not in ("each", "apiece"):
-            return None
-    qs = [f for f in ctx if isinstance(f, Quantity) and f.verb in ("buy", "purchase") and f.amount is not None]
-    products, i = [], 0
-    while i < len(qs) - 1:                                # STRICT alternation: (item-count, money-price)+
-        a, b = qs[i], qs[i + 1]
-        if a.measure != MONEY and b.measure == MONEY:
-            products.append(f"{_num(a.amount)} * {_num(b.amount)}")
-            i += 2
-        else:
-            return None
-    if i != len(qs) or not products:                     # leftover unpaired quantity → not a clean shape
-        return None
-    return _compute(" + ".join(f"({p})" for p in products))
+    return _product_sum_core(premises, ("buy", "purchase"), _ps_each_after,
+                             require_all_prices=False)
 
 
 def _revenue_product_sum(premises: list, question: str):
     """The REVENUE / SELL twin of `_shopping_total` — "the baker sold 453 cakes at $12 and 126 pies at $7.
-    How much did the baker earn?" → Σ(count × price) = 453·12 + 126·7 = 6318. Same product-sum math, but the
-    price attaches via "at $P" (a per-item price with NO "each") rather than requiring "each", and the
-    question asks a revenue total (earn/make) as well as spend/pay. TIGHTLY gated to keep it off "for $80"
-    TOTAL prices (Luigi's four pizzas) and discounts/tiers: (1) the question asks "how much" + earn/make/
-    spend/pay, NO profit/more/less/change/left/each/discount cue; (2) every money value is a genuine PER-ITEM
-    price — immediately PRECEDED by "at" OR immediately FOLLOWED by "each"/"apiece" (a bare "for $P" is a
-    total → reject); (3) NO discount/sale/off/%/commission/free/per in the premises; (4) the buy/sell/order
-    quantities STRICTLY alternate item-count then price, every one consumed. Σ(count×price). None otherwise.
-    Registered AFTER `_shopping_total`, which claims its own each-marked buy shape first (they never disagree —
-    both compute the same product-sum)."""
+    How much did the baker earn?" → Σ(count × price) = 453·12 + 126·7 = 6318. Same product-sum math
+    (`_product_sum_core`), but the price attaches via "at $P" (a per-item price with NO "each") rather than
+    requiring "each", and the question asks a revenue total (earn/make) as well as spend/pay. TIGHTLY gated
+    to keep it off "for $80" TOTAL prices (Luigi's four pizzas) and discounts/tiers: (1) the question asks
+    "how much" + earn/make/spend/pay, NO profit/more/less/change/left/each/discount cue; (2) every money
+    value is a genuine PER-ITEM price; (3) NO discount/sale/off/%/commission/free/per in the premises;
+    (4) the buy/sell/order quantities STRICTLY alternate, every one consumed, every price learned.
+    Σ(count×price). None otherwise. Registered AFTER `_shopping_total`, which claims its own each-marked
+    buy shape first (they never disagree — both compute the same product-sum)."""
     ql = question.lower()
     if not (("how much" in ql) and any(w in ql for w in ("earn", "earned", "make", "made",
                                                           "spend", "spent", "pay", "paid"))):
@@ -7768,40 +7792,8 @@ def _revenue_product_sum(premises: list, question: str):
     if any(w in pl for w in ("discount", "sale", " off", "% ", "percent", "coupon", "free",
                              "commission", "profit", " per ", "tax", "tip")):
         return None
-    disc, ctx, readings = [], [], [analyze(p) for p in premises]
-    for p in premises:
-        f = learn(p, disc, ctx)
-        if f:
-            ctx += f
-    # every money value in the premises must be a PER-ITEM price: preceded by "at" or followed by each/apiece.
-    money_units = [(rp, k) for rp in readings for k, u in enumerate(rp.units)
-                   if "value" in u.features.get("senses", []) and "money" in str(u.features.get("measure"))]
-    if not money_units:
-        return None
-    for rp, k in money_units:
-        prev = rp.units[k - 1] if k > 0 else None
-        nxt = rp.units[k + 1] if k + 1 < len(rp.units) else None
-        at_before = prev is not None and _key(prev.surface) == "at"
-        each_after = nxt is not None and _key(nxt.surface) in ("each", "apiece")
-        if not (at_before or each_after):
-            return None                                      # a bare "for $P" total → reject
-    qs = [f for f in ctx if isinstance(f, Quantity) and f.verb in ("buy", "purchase", "sell", "order")
-          and f.amount is not None]
-    products, i = [], 0
-    while i < len(qs) - 1:                                    # STRICT alternation: (item-count, money-price)+
-        a, b = qs[i], qs[i + 1]
-        if a.measure != MONEY and b.measure == MONEY:
-            products.append(f"{_num(a.amount)} * {_num(b.amount)}")
-            i += 2
-        else:
-            return None
-    if i != len(qs) or not products:                         # leftover unpaired quantity → not a clean shape
-        return None
-    if len(products) != len(money_units):                    # a premise whose price didn't LEARN (a locative
-        return None                                          # prefix "At a coffee shop, 7 customers…" drops the
-        #                                                      first clause's facts) → committing the surviving
-        #                                                      products silently omits it → DECLINE (coffee 67≠32).
-    return _compute(" + ".join(f"({p})" for p in products))
+    return _product_sum_core(premises, ("buy", "purchase", "sell", "order"), _ps_at_or_each,
+                             require_all_prices=True)
 
 
 _CC_LOSS = {"sell", "sold", "give", "gave", "given", "gives", "use", "used", "eat", "ate", "eaten",
@@ -9880,10 +9872,6 @@ def _discounted_purchase_system(premises: list, question: str):
 
 
 # --- system family: product-sum variants (change / savings-gap / split) -----------------------
-_PS_PAIR = re.compile(r"(\d+) (?:\w+ )?(?:\w+ )?(?:of \w+ )?(?:that cost |at )?\$(\d+(?:\.\d+)?)"
-                      r"(?: each)?")
-
-
 def _product_sum_change_system(premises: list, question: str):
     """PRODUCT-SUM + CHANGE — Σ(count × each-price) paid with a stated total, asked the change:
     "5 boxes at $6 each and 10 boxes at $14 each; she paid $200 for all; how much change?" →
