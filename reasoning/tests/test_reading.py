@@ -7401,5 +7401,34 @@ class TestIncrement212WeekResiduals(unittest.TestCase):
             "week?"), 4)
 
 
+class TestIncrement213BatchScaling(unittest.TestCase):
+    """#213 — `_batch_scaling_system`: a per-batch ingredient list × a batch multiplier →
+    mult × Σ ingredients. The semantic-tier item that RE-ENABLES "require": its #203
+    exclusion wrong WAS this shape's unscaled partial read. Decimal amounts are valid
+    ("1.5 cups" — an integer-only read declined and let the fold commit the old partial).
+    "tomatoes" is plural-surface only (the grapes pattern); "tomato seeds" stays unknown."""
+
+    def test_quadruple_batch_with_relational_ingredient(self):
+        # 4 · (1 + 2 + 2·1.5) = 24
+        self.assertEqual(reading.solve(
+            "Carla adds a can of chilis, two cans of beans, and 50% more tomatoes than "
+            "beans to a normal batch of chili. If she makes a quadruple batch, how many "
+            "cans of food does she need?"), 24)
+
+    def test_requires_n_batches_with_decimal(self):
+        # 8 · (4 + 1.5) = 44 — the former 'require' exclusion wrong, now correct
+        self.assertEqual(reading.solve(
+            "One batch of cookies requires 4 cups of flour and 1.5 cups of sugar. How "
+            "many cups of flour and sugar would Grandma need to make 8 batches?"), 44)
+
+    def test_singular_tomato_still_declines(self):
+        # "tomato seeds" (singular modifier) stays unknown — typed, this commits 300≠250
+        self.assertEqual(reading.solve(
+            "Mike and Ted planted tomatoes. In the morning, Mike planted 50 tomato seeds "
+            "while Ted planted twice as much as Mike. In the afternoon, Mike planted 60 "
+            "tomato seeds while Ted planted 20 fewer tomato seeds than Mike. How many "
+            "tomato seeds did they plant altogether?"), "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()

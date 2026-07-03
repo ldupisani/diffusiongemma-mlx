@@ -444,7 +444,8 @@ OPERATORS = {"plus": "+", "minus": "-", "times": "*", "divided": "/"}
 
 # Lexicalized multipliers: a value fused with "× N" — scales a verb's frequency ("jumps twice") or a
 # referent quantity ("twice as many"). `half` is the ×0.5 case ("half as many").
-MULTIPLIERS = {"once": 1, "twice": 2, "thrice": 3, "half": 0.5, "double": 2, "triple": 3}
+MULTIPLIERS = {"once": 1, "twice": 2, "thrice": 3, "half": 0.5, "double": 2, "triple": 3,
+               "quadruple": 4}
 
 # Fraction words as relational multipliers (num, denom) for "<frac> as many/far" — computed EXACTLY
 # (divide last) to dodge float drift. The partitive "<frac> OF X" is a DIFFERENT op (_partitive_quantity),
@@ -1707,6 +1708,7 @@ PLURALS.update({
 VERB_LEMMA.update({
     "borrows": "borrow", "borrowed": "borrow", "borrowing": "borrow",
     "triples": "triple", "tripled": "triple",
+    "requires": "require", "required": "require",
     "drops": "drop", "dropped": "drop", "dropping": "drop",
     "attends": "attend", "attended": "attend",
     "downloads": "download", "downloaded": "download",
@@ -1982,6 +1984,13 @@ LEXICON.update({
     # Tommy mixed-fruit 16≠3) — both verified still-declining with only "grapes" typed.
     "magazine": ["noun"], "hockey": ["noun"], "rainbow": ["noun"],
     "nerds": ["noun"], "grapes": ["noun"],
+    # #213 batch-scaling: "quadruple" the multiplier tier above triple; chili ingredients.
+    # "tomatoes" is PLURAL-SURFACE ONLY (the grapes pattern): the singular "tomato" is a
+    # wrong-on-inject exclusion ("Mike planted 50 tomato seeds…" 300≠250 — the modifier stays
+    # unknown so that case keeps declining). "require" RE-ADMITTED with the batch-scaling
+    # system in place (its #203 exclusion wrong WAS the unscaled-batch partial read).
+    "quadruple": ["multiplier"], "chili": ["noun"], "tomatoes": ["noun"],
+    "require": ["verb"], "requires": ["verb"], "required": ["verb"],
 })
 PLURALS.update({
     "samosas": "samosa", "pakoras": "pakora", "vases": "vase", "pins": "pin", "boots": "boot",
@@ -1996,6 +2005,7 @@ PLURALS.update({
     "seats": "seat", "buckets": "bucket", "wives": "wife", "donations": "donation",
     "ducks": "duck", "beds": "bed", "dances": "dance", "clubs": "club",
     "blocks": "block", "rows": "row", "words": "word", "magazines": "magazine",
+    "chilis": "chili",
     "notebooks": "notebook", "zoos": "zoo", "kitchens": "kitchen", "factories": "factory",
     "deliveries": "delivery", "destinations": "destination", "payments": "payment",
     "expenses": "expense", "batches": "batch", "types": "type", "questions": "question",
@@ -10217,6 +10227,64 @@ def _day_relational_chain_system(premises: list, question: str):
     return None
 
 
+def _batch_scaling_system(premises: list, question: str):
+    """BATCH SCALING (#213, the semantic-tier item that re-enables "require") — a per-batch
+    ingredient list ("a can of chilis, two cans of beans, and 50% more tomatoes than beans to a
+    normal batch") × a batch multiplier ("a quadruple batch" / "makes 5 batches") → mult × Σ
+    ingredients (Carla 4·(1+2+3) = 24). This is the shape whose PARTIAL read produced the
+    'require' exclusion's holdout confident-wrong (#203, 6≠44 — the fold read one ingredient and
+    committed it unscaled). TIGHTLY gated: a "how many <unit>" ask; a batch mention; every
+    ingredient enumerated in the SAME unit; a relational ingredient only via "P% more X than Y"
+    on an already-listed standard; every digit accounted; positive. None otherwise."""
+    ql = question.lower()
+    full = " . ".join(p.lower() for p in premises) + " . " + ql
+    am = re.search(r"how many (cans|cups|tablespoons|teaspoons|ounces|grams|pieces)\b", ql)
+    if am is None or "batch" not in full:
+        return None                       # (no digit-free-question gate: the batch count may ride
+    unit_s = am.group(1).rstrip("s")      # in the question — the digit-accounting check covers strays)
+    mm = re.search(r"\ba (double|triple|quadruple) batch", full)
+    mult = {"double": 2.0, "triple": 3.0, "quadruple": 4.0}.get(mm.group(1)) if mm else None
+    used = set()
+    if mult is None:
+        bm = re.search(r"\b(\d+|two|three|four|five|six|seven|eight|nine|ten) batches", full)
+        if bm is not None:
+            tok = bm.group(1)
+            mult = float(tok) if tok.isdigit() else float(NUMBERS.get(tok, 0) or 0)
+            if tok.isdigit():
+                used.add(tok)
+    if not mult:
+        return None
+    ing = {}
+    for m in re.finditer(rf"\b(a|an|\d+(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|"
+                         rf"ten) {unit_s}s? of (\w+)", full):
+        tok, noun = m.group(1), m.group(2)
+        digit = tok.replace(".", "").isdigit()           # decimals are valid amounts — an
+        n = 1.0 if tok in ("a", "an") else (float(tok) if digit         # integer-only read missed
+                                            else float(NUMBERS.get(tok, 0) or 0))   # "1.5 cups"
+        if not n:                                        # and the fold committed the old partial
+            return None                                  # (the #203 exclusion wrong, 6≠44)
+        if noun == "food":
+            continue                                     # the ask's own "cans of food"
+        if noun in ing:
+            return None                                  # a re-listed ingredient — ambiguous
+        ing[noun] = n
+        if digit:
+            used.add(tok)
+    rm = re.search(r"(\d+(?:\.\d+)?)% more (\w+) than (\w+)", full)
+    if rm is not None:
+        pct, sub, std = float(rm.group(1)), rm.group(2), rm.group(3)
+        if std not in ing or sub in ing:
+            return None
+        ing[sub] = ing[std] * (1 + pct / 100)
+        used.add(rm.group(1))
+    if not ing:
+        return None
+    if any(d not in used for d in re.findall(r"\d+(?:\.\d+)?",
+                                             " ".join(premises) + " " + question)):
+        return None
+    return _gated_pos(_compute(f"{_num(mult)} * ({' + '.join(_num(v) for v in ing.values())})"))
+
+
 def _weekday_block_relational_system(premises: list, question: str):
     """WEEKDAY BLOCK + PER-WEEKEND-DAY MULTIPLIERS (#212) — a per-weekday rate ("3 boxes during
     weekdays", "From Monday to Friday … 30 minutes") with SEPARATE relational Saturday/Sunday
@@ -11195,6 +11263,8 @@ _EARLY_SYSTEMS = [
     ("day_relational_chain", _day_relational_chain_system),
     # WEEKDAY BLOCK + per-weekend-day multipliers: R·5 + k_sat·R + k_sun·R (Lolita 30, Elle 4h).
     ("weekday_block_relational", _weekday_block_relational_system),
+    # BATCH SCALING: per-batch ingredient list × batch multiplier (Carla 24; re-enables require).
+    ("batch_scaling", _batch_scaling_system),
     # FIRST TWO DAYS + DOUBLE THEIR SUM: "5; another 7; twice the first two days?" → 36.
     ("first_days_double_total", _first_days_double_total_system),
     # HOURS TO EQUAL EARNINGS: "40h at $12; $15/h; hours to equal?" → 32.
