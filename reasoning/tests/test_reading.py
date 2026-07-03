@@ -4681,10 +4681,12 @@ class TestResidualSumSystem(unittest.TestCase):
         # "Jorge has an EQUAL NUMBER of cards AS Matias" isn't a recognized ratio frame ("equal" carries no
         # multiplier), but the "as" + 2 names still signals a REAL relation — skipping it as a harmless
         # declarative silently dropped Jorge=Matias (34 vs gold 48); must decline instead.
+        # RE-PINNED (#230): the equal-as chain branch now claims this CORRECTLY (14+14+20 = 48);
+        # the skip-guard behavior this class pins is unchanged (the fold still declines).
         self.assertEqual(reading.solve(
             "Jorge has an equal number of baseball cards as Matias, who has 6 fewer cards than Carlos. If "
             "Carlos has 20 baseball cards, what is the total number of baseball cards the three have?"),
-            "undetermined")
+            48)
 
 
 class TestTwoRelationSystem(unittest.TestCase):
@@ -6137,10 +6139,12 @@ class TestIncrement165RateDaysWeeks(unittest.TestCase):
     def test_duration_facts_never_convert_to_hours(self):
         # two-person mixed minutes/durations — the fold must not convert "nine days" to hours;
         # this must stay a decline, never a committed number
-        self.assertNotIsInstance(reading.solve(
+        # RE-PINNED (#230): the exercise-hours branch now claims this CORRECTLY —
+        # (30·7 + 10·9)/60 = 5; the fold's convert path this pin defends is unchanged.
+        self.assertEqual(reading.solve(
             "Natasha exercised for 30 minutes every day for one week. Esteban exercised for 10 "
             "minutes on each of nine days. How many hours did Natasha and Esteban exercise in "
-            "total?"), (int, float))
+            "total?"), 5)
 
 
 class TestIncrement166DayListTarget(unittest.TestCase):

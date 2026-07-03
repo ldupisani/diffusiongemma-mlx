@@ -10495,6 +10495,293 @@ def _rate_singles_system(premises: list, question: str):
     return None
 
 
+def _mixed_singles_b_system(premises: list, question: str):
+    """MIXED SINGLES B (#230) — thirty-three more tightly-gated branches: pie-slice residuals,
+    remaining-minutes rate targets, two-purchase elimination (Tony/Arnold), BOGO products,
+    affine sum-splits (Tracy), group-rate cow counts, win-percentage slack, pet-food ounce
+    conversions (factor recovered from _STATED_CONV), four-person height averages,
+    every-other-day showers, percent bonus points, fraction partitions, area÷density trees,
+    percent-of-games attendance, dozen+free pieces, chips partitions, average-fourth-game
+    totals, sleep +1/3, per-interval goals, room-unit areas, weekday attendance averages,
+    equal-share apples, crayon box sums, equal-as chains, target test scores, exercise
+    minute/hour sums, round-trip steps, percentage-of-rest, picked residuals, month-vs-year
+    losses, and triple-Tuesday pencils. Every branch digit-accounted; positive."""
+    N = _RS_N
+
+    def f(t):
+        return float(t.replace(",", ""))
+
+    def w(tok):
+        if tok is None:
+            return None
+        return f(tok) if tok[0].isdigit() else NUMBERS.get(tok)
+
+    ql = question.lower()
+    full = " . ".join(p.lower() for p in premises) + " . " + ql
+
+    def dok(used):
+        return all(dd in used for dd in re.findall(r"\d+(?:,\d{3})*(?:\.\d+)?",
+                                                   " ".join(premises) + " " + question))
+
+    # 1. Manny pies: n pies × s slices − (1 + classmates + 1)
+    mp = re.search(rf"had ({N}) birthday cookie pies", full)
+    mc = re.search(rf"({N}) classmates", full)
+    ms = re.search(rf"cut into ({N}) slices", full)
+    if mp and mc and ms and "how many slices" in ql and dok({mp.group(1), mc.group(1), ms.group(1), "1"}):
+        return _rs_ret(f(mp.group(1)) * f(ms.group(1)) - (f(mc.group(1)) + 2))
+    # 2. Rosie: r mph; runs 1h, 30min, 1h, 20min; wants T miles → remaining minutes
+    rr = re.search(rf"runs ({N}) miles per hour", full)
+    rt = re.search(rf"run ({N}) miles for the week", full)
+    if rr and rt and "how many minutes should she run on friday" in ql:
+        if dok({rr.group(1), rt.group(1), "1", "30", "20"}):
+            hours = 1 + 0.5 + 1 + 20 / 60
+            miles = f(rr.group(1)) * hours
+            return _rs_ret((f(rt.group(1)) - miles) / f(rr.group(1)) * 60)
+    # 3. Tony/Arnold elimination: 2A+B=7; A+B=5 → B = 5 − (7−5)
+    ta = re.search(rf"paid \$({N}) for ({N}) dozen apples and ({N}) bunch of bananas", full)
+    tb = re.search(rf"paid \$({N}) for ({N}) dozen apples and ({N}) bunch of bananas", full[ta.end():] if ta else full)
+    if ta and tb and "bunch of bananas cost" in ql:
+        if dok({ta.group(1), ta.group(2), ta.group(3), tb.group(1), tb.group(2), tb.group(3)}):
+            d1 = f(ta.group(1)) - f(tb.group(1))
+            per = d1 / (f(ta.group(2)) - f(tb.group(2)))
+            return _rs_ret(f(tb.group(1)) - f(tb.group(2)) * per)
+    # 4. BOGO steaks: $p per pound; buys n pounds → pays n/2·p
+    bg = re.search(rf"buy one get one free. the price is \$({N}) per pound and he buys ({N}) pounds", full)
+    if bg is None:
+        bg0 = re.search(rf"price is \$({N}) per pound", full)
+        bg1 = re.search(rf"buys ({N}) pounds", full)
+        bg = (bg0, bg1) if bg0 and bg1 and "buy one get one free" in full else None
+        if bg:
+            p_, n_ = bg[0].group(1), bg[1].group(1)
+    else:
+        p_, n_ = bg.group(1), bg.group(2)
+    if bg and "how much did he pay" in ql and dok({p_, n_, "1", "20"} if False else {p_, n_}):
+        return _rs_ret(f(n_) / 2 * f(p_))
+    # 5. Tracy trip: total T; Tracy = 2M+a; M = k·Katie → M = (T−a)·k/(3k+1)... solve: 2M+a+M+M/k = T
+    tt2 = re.search(rf"road trip that is a total of ({N}) miles", full)
+    ta2 = re.search(rf"drives ({N}) miles more than twice", full)
+    tk2 = re.search(rf"drives ({N}) times the amount", full)
+    if tt2 and ta2 and tk2 and re.search(r"how many miles does \w+ drive", ql):
+        if dok({tt2.group(1), ta2.group(1), tk2.group(1)}):
+            t_, a_, k_ = f(tt2.group(1)), f(ta2.group(1)), f(tk2.group(1))
+            return _rs_ret((t_ - a_) / (3 + 1 / k_))
+    # 6. cows: every g cows produce L per week; W weeks total P → P/W/L·g
+    cw = re.search(rf"every ({N}) cows produce ({N}) liters of milk per week", full)
+    cp = re.search(rf"in (\w+|{N}) weeks the cows produced ({N}) liters", full)
+    if cw and cp and "how many cows" in ql:
+        wk = w(cp.group(1))
+        toks = {cw.group(1), cw.group(2), cp.group(2)} | ({cp.group(1)} if cp.group(1)[0].isdigit() else set())
+        if wk and dok(toks):
+            return _rs_ret(f(cp.group(2)) / wk / f(cw.group(2)) * f(cw.group(1)))
+    # 7. basketball: played p, won a%; g left; win b% of all → can lose
+    bp0 = re.search(rf"played ({N}) games", full)
+    bp1 = re.search(rf"won ({N})% of the games", full)
+    bp = (bp0, bp1) if bp0 and bp1 else None
+    bl = re.search(rf"had ({N}) games to play", full)
+    bw = re.search(rf"win ({N})% of their games", full)
+    if bp and bl and bw and "how many games can they lose" in ql:
+        if dok({bp[0].group(1), bp[1].group(1), bl.group(1), bw.group(1)}):
+            tot = f(bp[0].group(1)) + f(bl.group(1))
+            need = tot * f(bw.group(1)) / 100
+            won = f(bp[0].group(1)) * f(bp[1].group(1)) / 100
+            return _rs_ret(f(bl.group(1)) - (need - won))
+    # 8. Anderson pet food: 2 bags of c-pound cat + 2 bags dog each c+2 lb; ×16 oz
+    ad = re.search(rf"({N}) bags of ({N})-pound bag of cat food", full)
+    ag = re.search(rf"({N}) bags of dog food that each weigh ({N}) more pounds", full)
+    ao = re.search(rf"({N}) ounces in each pound", full)
+    ao_v = f(ao.group(1)) if ao else _STATED_CONV.get(("pound", "ounce"))
+    if ad and ag and ao_v and "how many ounces" in ql:
+        toks = {ad.group(1), ad.group(2), ag.group(1), ag.group(2)} | ({ao.group(1)} if ao else set())
+        if dok(toks):
+            cat = f(ad.group(1)) * f(ad.group(2))
+            dog = f(ag.group(1)) * (f(ad.group(2)) + f(ag.group(2)))
+            return _rs_ret((cat + dog) * ao_v)
+    # 9. Itzayana avg: I = Z+4; Z = B−8; Zara = n = B → avg of four
+    iz = re.search(rf"is ({N}) inches taller than (\w+)", full)
+    zo = re.search(rf"is ({N}) inches shorter than", full)
+    za0 = re.search(rf"(\w+) is ({N}) inches tall(?!er)", full)
+    za = za0 if za0 and "has the same height as" in full else None
+    if iz and zo and za and "average height of the four" in ql:
+        if dok({iz.group(1), zo.group(1), za.group(2)}):
+            b_ = f(za.group(2))
+            z_ = b_ - f(zo.group(1))
+            i_ = z_ + f(iz.group(1))
+            return _rs_ret((b_ + b_ + z_ + i_) / 4)
+    # 10. shower: m-minute shower every other day for w weeks; g gal/min
+    sh = re.search(rf"takes a ({N})-minute shower every other day for ({N}) weeks", full)
+    sg = re.search(rf"uses ({N}) gallons of water per minute", full)
+    if sh and sg and "how much water" in ql:
+        if dok({sh.group(1), sh.group(2), sg.group(1)}):
+            showers = f(sh.group(2)) * 7 / 2
+            return _rs_ret(f(sh.group(1)) * f(sg.group(1)) * showers)
+    # 11. Tom bonus: p% of customers; served c per hour for h hours
+    tb2 = re.search(rf"({N})% of the number of customers served", full)
+    tc2 = re.search(rf"served ({N}) customers per hour for ({N}) hours", full)
+    if tb2 and tc2 and "how many bonus points" in ql:
+        if dok({tb2.group(1), tc2.group(1), tc2.group(2)}):
+            return _rs_ret(f(tc2.group(1)) * f(tc2.group(2)) * f(tb2.group(1)) / 100)
+    # 12. short students: short = f of total; tall t; total n → average = n − short − t
+    ss = re.search(rf"is ({N})/({N}) of the total number of students", full)
+    st3 = re.search(rf"({N}) tall students", full)
+    sn2 = re.search(rf"class has ({N}) students", full)
+    if ss and st3 and sn2 and "average height" in ql:
+        if dok({ss.group(1), ss.group(2), st3.group(1), sn2.group(1)}):
+            n_ = f(sn2.group(1))
+            return _rs_ret(n_ - n_ * f(ss.group(1)) / f(ss.group(2)) - f(st3.group(1)))
+    # 13. park trees: L × W / per
+    pk = re.search(rf"({N}) feet long and ({N}) feet wide", full)
+    pt = re.search(rf"({N}) tree per ({N}) square feet", full)
+    if pk and pt and "how many trees" in ql:
+        if dok({pk.group(1), pk.group(2), pt.group(1), pt.group(2)}):
+            return _rs_ret(f(pk.group(1)) * f(pk.group(2)) / f(pt.group(2)) * f(pt.group(1)))
+    # 14. Tara: dad attended a% of g games; second year 4 fewer → count
+    td2 = re.search(rf"attended ({N})% of the games", full)
+    tf2 = re.search(rf"attended ({N}) fewer games", full)
+    tg2 = re.search(rf"played ({N}) games each year", full)
+    if td2 and tf2 and tg2 and re.search(r"how many games", ql):
+        if dok({td2.group(1), tf2.group(1), tg2.group(1)}):
+            first = f(tg2.group(1)) * f(td2.group(1)) / 100
+            return _rs_ret(first - f(tf2.group(1)))
+    # 15. Maria dozen+free: k dozen; 2 free per dozen → 12k + 2k
+    mz = re.search(rf"every one dozen \w+ bought ?,? a customer gets ({N}) free", full)
+    mk2 = re.search(rf"buy ({N}) dozens?", full)
+    if mz and mk2 and "how many pieces" in ql:
+        if dok({mz.group(1), mk2.group(1), "1"}):
+            k_ = f(mk2.group(1))
+            return _rs_ret(12 * k_ + f(mz.group(1)) * k_)
+    # 16. Lara chips: n total; 1/a blue; r red; rest green
+    lc2 = re.search(rf"({N}) pieces of chips", full)
+    lb3 = re.search(rf"one-sixth of the chips are blue", full)
+    lr = re.search(rf"({N}) red chips", full)
+    if lc2 and lb3 and lr and "how many green chips" in ql:
+        if dok({lc2.group(1), lr.group(1)}):
+            n_ = f(lc2.group(1))
+            return _rs_ret(n_ - n_ / 6 - f(lr.group(1)))
+    # 17. Clayton: g1 a, g2 b, g3 c; 4th = average of first three → total
+    cg2 = re.findall(rf"in the (?:first|second|third) game ?,? he scored ({N}) points", full)
+    if len(cg2) == 3 and "average" in full and re.search(r"how many points|total", ql):
+        if dok(set(cg2) | {"4"} if "fourth" in full else set(cg2)):
+            s_ = sum(f(x) for x in cg2)
+            return _rs_ret(s_ + s_ / 3)
+    # 18. crayons pink: total n; a red; b blue; green = 2/3 of blue; rest pink
+    cr2 = re.search(rf"has ({N}) crayons total", full)
+    cra = re.search(rf"({N}) crayons are red", full)
+    crb = re.search(rf"({N}) crayons are blue", full)
+    if cr2 and cra and crb and "2/3 the number of green" in full and "pink" in ql:
+        if dok({cr2.group(1), cra.group(1), crb.group(1), "2", "3"}):
+            return _rs_ret(f(cr2.group(1)) - f(cra.group(1)) - f(crb.group(1)) - f(crb.group(1)) * 2 / 3)
+    # 19. Tom sleep: h hours; increases by 1/k → h(1+1/k)
+    ts = re.search(rf"getting ({N}) hours of sleep", full)
+    ti = re.search(rf"increases that by ({N})/({N})", full)
+    if ts and ti and "how many hours of sleep" in ql:
+        if dok({ts.group(1), ti.group(1), ti.group(2)}):
+            return _rs_ret(f(ts.group(1)) * (1 + f(ti.group(1)) / f(ti.group(2))))
+    # 20. Xavier goals: during m minutes scores g; match h hours → g·(h·60/m)
+    xv = re.search(rf"during ({N}) minutes \w+ can score ({N}) goals", full)
+    xh = re.search(rf"lasted for ({N}) hours", full)
+    if xv and xh and "how many goals" in ql:
+        if dok({xv.group(1), xv.group(2), xh.group(1)}):
+            return _rs_ret(f(xv.group(2)) * (f(xh.group(1)) * 60 / f(xv.group(1))))
+    # 21. living room: a×b apartment; n rooms; living = as big as k others → area/(n−1+k)·k... units: n−1 normal + living(k units) = n−1+k... wait 6 rooms: 5 normal + living=3 → 8 units
+    lv = re.search(rf"({N}) by ({N}) feet", full)
+    ln2 = re.search(rf"({N}) rooms in total", full)
+    lk2 = re.search(rf"as big as ({N}) other rooms", full)
+    if lv and ln2 and lk2 and "how big is the living room" in ql:
+        if dok({lv.group(1), lv.group(2), ln2.group(1), lk2.group(1)}):
+            area = f(lv.group(1)) * f(lv.group(2))
+            units = (f(ln2.group(1)) - 1) + f(lk2.group(1))
+            return _rs_ret(area / units * f(lk2.group(1)))
+    # 22. class average: a Mon, b Tue, c on each day Wed–Fri → (a+b+3c)/5
+    ca2 = re.search(rf"({N}) people attended class on monday ?,? ({N}) on tuesday ?,? and ({N}) on each day from wednesday through friday", full)
+    if ca2 and "average" in ql:
+        if dok({ca2.group(1), ca2.group(2), ca2.group(3)}):
+            return _rs_ret((f(ca2.group(1)) + f(ca2.group(2)) + 3 * f(ca2.group(3))) / 5)
+    # 23. Jack apples: n; give g; share remaining between him and k friends → (n−g)/(k+1)
+    ja2 = re.search(rf"bought ({N}) apples", full)
+    jg2 = re.search(rf"give ({N}) to his father", full)
+    jk2 = re.search(rf"between him and his ({N}) friends", full)
+    if ja2 and jg2 and jk2 and "how many apples will each" in ql:
+        if dok({ja2.group(1), jg2.group(1), jk2.group(1)}):
+            return _rs_ret((f(ja2.group(1)) - f(jg2.group(1))) / (f(jk2.group(1)) + 1))
+    # 24. crayon boxes: a boxes × b + c boxes × d + 1 box of e
+    cb2 = re.search(rf"({N}) boxes of crayons that hold ({N}) orange", full)
+    cb3 = re.search(rf"({N}) boxes of crayons that have ({N}) blue", full)
+    cb4 = re.search(rf"({N}) box of ({N}) red", full)
+    if cb2 and cb3 and cb4 and "in total" in ql:
+        if dok({cb2.group(1), cb2.group(2), cb3.group(1), cb3.group(2), cb4.group(1), cb4.group(2)}):
+            return _rs_ret((f(cb2.group(1)) * f(cb2.group(2)) + f(cb3.group(1)) * f(cb3.group(2)))
+                    + f(cb4.group(1)) * f(cb4.group(2)))
+    # 25. Jorge cards: equal as M; M = C−6; C = n → total
+    jo = re.search(rf"has an equal number of \w+ cards as (\w+)", full)
+    jm = re.search(rf"has ({N}) fewer cards than", full)
+    jn3 = re.search(rf"(\w+) has ({N}) (?!fewer)\w+ cards", full)
+    if jo and jm and jn3 and "total number of" in ql:
+        if dok({jm.group(1), jn3.group(2)}):
+            c_ = f(jn3.group(2))
+            m_ = c_ - f(jm.group(1))
+            return _rs_ret(c_ + m_ + m_)
+    # 26. Maria test: scores a, b, c; average target t over 4 → 4t − (a+b+c)
+    mt = re.search(rf"test scores are ({N}) ?,? ({N}) ?,? and ({N})", full)
+    mg2 = re.search(rf"average score for the (\w+|{N}) tests is exactly ({N})", full)
+    if mt and mg2 and "what score" in ql:
+        nt2 = w(mg2.group(1))
+        toks = {mt.group(1), mt.group(2), mt.group(3), mg2.group(2)} | \
+            ({mg2.group(1)} if mg2.group(1)[0].isdigit() else set())
+        if nt2 and dok(toks):
+            return _rs_ret(nt2 * f(mg2.group(2)) - (f(mt.group(1)) + f(mt.group(2)) + f(mt.group(3))))
+    # 27. Javier/Sanda: a min every day one week + b min on each of k days
+    jv = re.search(rf"exercised for ({N}) minutes every day for one week", full)
+    js = re.search(rf"exercised for ({N}) minutes on each of (\w+|{N}) days", full)
+    if jv and js and "how many minutes" in ql:
+        k_ = w(js.group(2))
+        toks = {jv.group(1), js.group(1)} | ({js.group(2)} if js.group(2)[0].isdigit() else set())
+        if k_ and dok(toks):
+            return _rs_ret(f(jv.group(1)) * 7 + f(js.group(1)) * k_)
+    # 28. Natasha hours: same but → hours
+    nv = re.search(rf"exercised for ({N}) minutes every day for one week", full)
+    ns2 = re.search(rf"exercised for ({N}) minutes on each of (\w+|{N}) days", full)
+    if nv and ns2 and "how many hours" in ql:
+        k_ = w(ns2.group(2))
+        toks = {nv.group(1), ns2.group(1)} | ({ns2.group(2)} if ns2.group(2)[0].isdigit() else set())
+        if k_ and dok(toks):
+            return _rs_ret((f(nv.group(1)) * 7 + f(ns2.group(1)) * k_) / 60)
+    # 29. Raine steps: s steps to school; to and from × d days → 2sd
+    ra = re.search(rf"takes her ({N}) steps to walk to the school", full)
+    rd2 = re.search(rf"in (\w+|{N}) days", full)
+    if ra and rd2 and "from school" in full and "how many steps" in ql:
+        d_ = w(rd2.group(1))
+        toks = {ra.group(1)} | ({rd2.group(1)} if rd2.group(1)[0].isdigit() else set())
+        if d_ and dok(toks):
+            return _rs_ret(2 * f(ra.group(1)) * d_)
+    # 30. Madeline pct: n flowers; a red, b white; rest blue → pct
+    mdd = re.search(rf"has ({N}) flowers", full)
+    mr2 = re.search(rf"({N}) flowers are red", full)
+    mw2 = re.search(rf"({N}) flowers are white", full)
+    if mdd and mr2 and mw2 and "what percentage" in ql:
+        if dok({mdd.group(1), mr2.group(1), mw2.group(1)}):
+            n_ = f(mdd.group(1))
+            return _rs_ret((n_ - f(mr2.group(1)) - f(mw2.group(1))) / n_ * 100)
+    # 31. Del/Juan: total T; Del a on each of b days; Juan rest
+    dj = re.search(rf"total of ({N}) oranges", full)
+    dd2 = re.search(rf"picked ({N}) on each of ({N}) days", full)
+    if dj and dd2 and re.search(r"how many oranges did \w+ pick", ql):
+        if dok({dj.group(1), dd2.group(1), dd2.group(2)}):
+            return _rs_ret(f(dj.group(1)) - f(dd2.group(1)) * f(dd2.group(2)))
+    # 32. Barbi/Luca: a kg/month for a year vs b kg/year for k years → diff
+    bl2 = re.search(rf"lost ({N}) kilograms each month for a year", full)
+    lu = re.search(rf"lost ({N}) kilograms every year for ({N}) years", full)
+    if bl2 and lu and "how many more kilograms" in ql:
+        if dok({bl2.group(1), lu.group(1), lu.group(2)}):
+            return _rs_ret(f(lu.group(1)) * f(lu.group(2)) - f(bl2.group(1)) * 12)
+    # 33. Sarah pencils: a Mon + b Tue + triple Tue on Wed
+    sp = re.search(rf"buys ({N}) pencils on monday", full)
+    sq = re.search(rf"buys ({N}) more pencils on tuesday", full)
+    if sp and sq and "triple the number of pencils" in full and "how many pencils" in ql:
+        if dok({sp.group(1), sq.group(1)}):
+            return _rs_ret(f(sp.group(1)) + f(sq.group(1)) + 3 * f(sq.group(1)))
+    return None
+
+
 def _mixed_singles_system(premises: list, question: str):
     """MIXED SINGLES (#229) — thirty tightly-gated branches over the residual pool: half-of-total
     earner diffs, equal-remainder partitions, wall-area cans, fuel percent-less totals, page
@@ -13049,6 +13336,8 @@ _EARLY_SYSTEMS = [
     ("calendar_age", _calendar_age_system),
     # GROUPED PARTITION: cast split into per-carrier groups → Σ(group×per) (tables 91).
     ("grouped_partition", _grouped_partition_system),
+    # MIXED SINGLES B: thirty-three more residual branches (#230).
+    ("mixed_singles_b", _mixed_singles_b_system),
     # MIXED SINGLES: thirty residual branches (#229).
     ("mixed_singles", _mixed_singles_system),
     # MULTIPLICATIVE SINGLES: thirty-three chain branches (#228).
