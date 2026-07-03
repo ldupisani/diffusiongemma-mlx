@@ -1976,6 +1976,12 @@ LEXICON.update({
     # a partial); needs a batch-scaling system first (no dev-train twin of that shape yet).
     # #204: containment verbs — typed AND wired into POSSESSION_VERBS (semantics first).
     "contain": ["verb"], "contains": ["verb"], "contained": ["verb"], "containing": ["verb"],
+    # 20th wave — the post-#204 sweep harvest (#205): the containment unlock re-opened the
+    # vocab-only bucket. "grapes" is PLURAL-SURFACE ONLY (like pants/earnings): the singular
+    # "grape" is a wrong-on-inject exclusion ("3 times as many grape candies…" commits 60≠24;
+    # Tommy mixed-fruit 16≠3) — both verified still-declining with only "grapes" typed.
+    "magazine": ["noun"], "hockey": ["noun"], "rainbow": ["noun"],
+    "nerds": ["noun"], "grapes": ["noun"],
 })
 PLURALS.update({
     "samosas": "samosa", "pakoras": "pakora", "vases": "vase", "pins": "pin", "boots": "boot",
@@ -1989,7 +1995,7 @@ PLURALS.update({
     "lunches": "lunch", "roads": "road", "buses": "bus", "calories": "calorie",
     "seats": "seat", "buckets": "bucket", "wives": "wife", "donations": "donation",
     "ducks": "duck", "beds": "bed", "dances": "dance", "clubs": "club",
-    "blocks": "block", "rows": "row", "words": "word",
+    "blocks": "block", "rows": "row", "words": "word", "magazines": "magazine",
     "notebooks": "notebook", "zoos": "zoo", "kitchens": "kitchen", "factories": "factory",
     "deliveries": "delivery", "destinations": "destination", "payments": "payment",
     "expenses": "expense", "batches": "batch", "types": "type", "questions": "question",

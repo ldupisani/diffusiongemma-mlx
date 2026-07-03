@@ -7085,5 +7085,57 @@ class TestIncrement202AgeTails(unittest.TestCase):
             "Allyson's age. If Hiram is 40 years old, how old is Allyson?"), 28)
 
 
+class TestIncrement205VocabWave20(unittest.TestCase):
+    """#205 — the post-#204 sweep harvest: the containment unlock re-opened the vocab-only
+    bucket (magazine/hockey/rainbow/nerds/grapes). "grapes" is plural-surface ONLY (the
+    pants/earnings pattern): the singular "grape" is a wrong-on-inject exclusion — both
+    wrong-classes pinned declining below."""
+
+    def test_containment_relational_color_count(self):
+        # 10 + (10+4) + (14−2) = 36
+        self.assertEqual(reading.solve(
+            "A box of rainbow nerds contains 10 purple candies, 4 more yellow candies, "
+            "and 2 fewer green candies than yellow candies. How many rainbow nerds are "
+            "there in the box?"), 36)
+
+    def test_backward_fraction_chain_magazine(self):
+        # M · (4/5) · (3/4) = 360 → 600
+        self.assertEqual(reading.solve(
+            "Frank spent 1/5 of his money to buy groceries. He then spent 1/4 of the "
+            "remaining money to buy a magazine. If he had $360 left in his wallet, how "
+            "much money did he have at first?"), 600)
+
+    def test_contained_relational_bowls_total(self):
+        # 25 + 27 + 31 = 83
+        self.assertEqual(reading.solve(
+            "Allie, Rob, and Allyn each bought a bowl of grapes. Allie's bowl contained "
+            "two more grapes than Rob's bowl. Allyn's bowl contained four more grapes "
+            "than Allie's bowl. If Rob's bowl contained 25 grapes, what is the total "
+            "combined number of grapes in all three bowls?"), 83)
+
+    def test_contains_card_chain_total(self):
+        # hockey 200; football 4·200 = 800; baseball 800−50 = 750 → 1750
+        self.assertEqual(reading.solve(
+            "A bag contains 50 fewer baseball cards than football cards. There are 4 "
+            "times as many football cards as hockey cards. If there are 200 hockey cards "
+            "in the bag, how many cards are there altogether?"), 1750)
+
+    def test_singular_grape_still_declines_ratio_backward(self):
+        # "grape" (singular modifier) stays unknown — typed, this commits 60≠g24.
+        self.assertEqual(reading.solve(
+            "At the new store, there are 3 times as many grape candies as cherry candies, "
+            "and 2 times as many apple candies as grape candies. All the candies cost "
+            "$2.50 each. If the total cost of the candies is $200, how many grape candies "
+            "does the store have?"), "undetermined")
+
+    def test_singular_grape_still_declines_weight_partition(self):
+        # the mixed-fruit weight partition commits 16≠g3 if grape/fruits become known.
+        self.assertEqual(reading.solve(
+            "Tommy ordered a total weight of 10 kilograms of apple, orange, grape, and "
+            "strawberry fruits. He ordered 3 kilograms of apples, 1 kilogram of orange, "
+            "and 3 kilograms of grapes. How many kilograms of strawberries did he "
+            "order?"), "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()
