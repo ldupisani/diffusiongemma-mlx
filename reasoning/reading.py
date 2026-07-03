@@ -18379,6 +18379,13 @@ _AE_KIN = ("dad", "father", "mom", "mother", "brother", "sister", "grandmother",
            "dog", "rabbit", "wife", "husband")
 _AE_BAN = ("times older", "times younger", "times more")   # gold-inconsistent idioms — never read
 _AE_MULT = ("twice", "thrice", "double", "times")
+# A TEMPORAL-SHIFT phrase ("in N years", "N years ago", "N years from now") — must be CONSUMED by
+# the clause's matched span, else the un-shifted E1/E2/E3 forms would silently read a shifted
+# relation at the present moment ("Three years ago X was twice Y" mis-read as a now-ratio). N is a
+# digit or a number word; "N years old" is an age, not a shift, so it's excluded by the lookahead.
+_AE_SHIFT = re.compile(
+    r"\bin\s+(?:\d+|" + "|".join(NUMBERS) + r")\s+years\b(?!\s+old)"
+    r"|\b(?:\d+|" + "|".join(NUMBERS) + r")\s+years\s+(?:ago|from now)\b", re.I)
 _AE_PERSON = (r"(?:[A-Z][a-z]+(?:['’]s (?:" + "|".join(_AE_KIN) + r"))?"
               r"|(?:[Hh]is|[Hh]er|[Tt]heir|[Tt]he) (?:older |younger |little |big |oldest |youngest )?(?:"
               + "|".join(_AE_KIN) + r"))")
@@ -18474,8 +18481,35 @@ def _ae_clause(cl, P, scene=None):
              _ae_scale(y if pin_now else _ae_add(y, ({}, Fraction(s) * t)), k))
         return [m.span()]
 
-    # E5 sum: "the sum of X and Y's ages (now)? is S"
+    # E7 shifted absolute: "in T years,? X('s current age)? will be/turn N (years old)?" → age(X)+T=N;
+    #                       "T years ago,? X('s age)? was N" → age(X)−T=N. (The absolute twin of E6's
+    #                       shifted ratio — a stated future/past age pins the person's now-age.)
+    m = re.search(rf"\bin ({_RS_N}) years,?\s+({_AE_PERSON})(?:['’]s (?:current |present )?age)?"
+                  rf" will (?:be|turn) ({_RS_N})(?: years old| years)?", cl, re.I)
+    ago = False
+    if m is None:
+        m = re.search(rf"\b({_RS_N}) years ago,?\s+({_AE_PERSON})(?:['’]s age)?"
+                      rf" (?:was|were|turned) ({_RS_N})", cl, re.I)
+        ago = m is not None
+    if m is not None and scene is None:
+        t, n = _ae_frac(m.group(1)), _ae_frac(m.group(3))
+        s = -1 if ago else 1
+        P.eq(_ae_add(age(m.group(2)), ({}, Fraction(s) * t)), ({}, n))
+        return [m.span()]
+
+    # E5b shifted sum (pronoun): "in T years,? the sum of their ages will be S" → Σ now-ages = S − n·T,
+    #     "their" = every person parsed so far (the two the relation just introduced). ≥2 vars required.
+    m = re.search(rf"\bin ({_RS_N}) years,?\s+the sum of their ages will be ({_RS_N})", cl, re.I)
+    if m is not None and scene is None and len(P.vars) >= 2:
+        t, ssum, n = _ae_frac(m.group(1)), _ae_frac(m.group(2)), len(P.vars)
+        P.eq(({v: Fraction(1) for v in P.vars}, Fraction(0)), ({}, ssum - n * t))
+        return [m.span()]
+
+    # E5 sum: "the sum of X and Y's ages (now)? is S"  /  "sum of (the) (current|present)? ages of X and Y (now)? is S"
     m = re.search(rf"sum of (\w+) and (\w+)['’]s? ages?(?: now)? is ({_RS_N})", cl, re.I)
+    if m is None:
+        m = re.search(rf"sum of (?:the )?(?:current |present )?ages of ({_AE_PERSON}) and "
+                      rf"({_AE_PERSON})(?: now)? is ({_RS_N})", cl, re.I)
     if m is not None:
         P.eq(_ae_add(age(m.group(1)), age(m.group(2))), ({}, _ae_frac(m.group(3))))
         return [m.span()]
@@ -18549,6 +18583,9 @@ def _ae_accounted(cl, P, scene):
         if (wm.group(0) in _AE_MULT or wm.group(0) == "half") \
                 and not any(a <= wm.start() and wm.end() <= b for a, b in spans):
             return fail()
+    for sm in _AE_SHIFT.finditer(cl):                    # a temporal shift outside the span → the
+        if not any(a <= sm.start() and sm.end() <= b for a, b in spans):   # un-modeled shifted relation
+            return fail()                                # (E1/E2/E3 ignore it) → decline
     return True
 
 
@@ -18623,6 +18660,12 @@ def _age_equations_system(premises: list, question: str):
                    rf"|combined age|sum of their ages|sum of theirs ages", ql)
     m1 = re.search(r"how old (?:is|was) (?:the |his |her )?(\w+(?:['’]s \w+)?)"
                    r"(?: now| currently| right now)?\s*[?.]?\s*$", ql)
+    # "what is (the) (present|current)? age of X"  /  "what is X's (present|current)? age" — the
+    # what-phrased single-age ask (E1's twin on the question side; digit-free, so no qspan needed).
+    m1b = re.search(r"what (?:is|was|will be) (?:the )?(?:present |current )?age of "
+                    r"(?:the |his |her )?(\w+(?:['’]s \w+)?)", ql)
+    if m1b is None:
+        m1b = re.search(r"what (?:is|was) (\w+)['’]s (?:present |current )?age", ql)
     if m4 is not None:
         a, b = _ae_var(m4.group(1)), _ae_var(m4.group(2))
         if b in ("he", "she"):                            # "Jayson's mom when HE was born"
@@ -18645,6 +18688,8 @@ def _age_equations_system(premises: list, question: str):
         want = {v: Fraction(1) for v in P.vars}
     elif m1 is not None:
         want = {_ae_var(m1.group(1).split("’s ")[-1].split("'s ")[-1]): Fraction(1)}
+    elif m1b is not None:
+        want = {_ae_var(m1b.group(1).split("’s ")[-1].split("'s ")[-1]): Fraction(1)}
     if want is None or any(v not in P.vars for v in want):
         return None
     for dm in re.finditer(rf"{_RS_N}", ql):               # question digits accounted
