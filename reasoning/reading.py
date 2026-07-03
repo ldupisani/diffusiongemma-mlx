@@ -6328,6 +6328,29 @@ def _needs_inverse_relation(premise: str):
     return m.group(1).lower(), k, m.group(4).lower(), -n
 
 
+def _edit1(a: str, b: str) -> bool:
+    """True iff the two strings are exactly ONE edit apart (insert/delete/substitute) — the
+    near-name unifier for GSM8K's own cross-clause misspellings ("Jefferey"/"Jeffery")."""
+    la, lb = len(a), len(b)
+    if abs(la - lb) > 1 or a == b:
+        return False
+    if la == lb:
+        return sum(x != y for x, y in zip(a, b)) == 1
+    if la > lb:
+        a, b, la, lb = b, a, lb, la
+    i = j = diff = 0
+    while i < la and j < lb:
+        if a[i] != b[j]:
+            diff += 1
+            if diff > 1:
+                return False
+            j += 1
+        else:
+            i += 1
+            j += 1
+    return True
+
+
 def _elided_ratio(rp, premise: str):
     """A single-name ratio clause whose standard is ELIDED — "Flora has twice as many books",
     "Stephanie's bike is worth twice as much" — → (subject_entity, k). The standard is anaphoric;
@@ -6400,6 +6423,13 @@ def _anchored_affine_coeffs(premises: list, question: str):
     premises = [re.sub(rf"\b(?:[Hh]is|[Hh]er|[Tt]heir) (?:older |younger |little |big |other )?"
                        rf"(?:{'|'.join(KINSHIP)}),? ([A-Z][a-z]+)\b", r"\1", p)
                 for p in premises]
+    # LOCAL CONJUNCT SPLIT (#215): a long "If A…, and B…, and C…" sentence can reach here with
+    # two relations still fused in one premise (the global splitter took only the last conjunct).
+    # Split at ", and <Name> <verb>" — worst case a fragment fails to classify and the family
+    # declines exactly as it does today.
+    premises = [part for p in premises
+                for part in re.split(r", and (?=[A-Z][a-z]+ (?:has|have|had|is|was|spent|earns?|"
+                                     r"makes?|gets?|owns?))", p)]
     if any(w in p.lower() for p in premises
            for w in ("combined", "total", "together", "between them", "altogether")):
         return None                                                  # a stated total is _affine_system's turf
@@ -6503,7 +6533,14 @@ def _anchored_affine_coeffs(premises: list, question: str):
     entities = set(rels) | {std for _k, std, _c in rels.values()}
     anchor_e, anchor_v = next(iter(anchors.items()))
     if anchor_e not in entities:
-        return None
+        # NEAR-NAME UNIFICATION (#215): GSM8K itself misspells names between clauses
+        # ("Jefferey caught twice…" vs "If Jeffery caught 60") — unify the anchor with a
+        # UNIQUE entity at edit-distance 1, names ≥5 chars (short names stay strict).
+        near = [e for e in entities if len(anchor_e) >= 5 and len(e) >= 5
+                and _edit1(anchor_e, e)]
+        if len(near) != 1:
+            return None
+        anchor_e = near[0]
     free = [e for e in entities if e not in rels]                  # the pivot: the one entity that is no
     if len(free) != 1:                                             # relation's subject (may differ from the
         return None                                                # anchor's own entity)
@@ -6631,6 +6668,8 @@ def _anchored_difference_system(premises: list, question: str):
         return None
     a1, b1 = coeff[e1]
     a2, b2 = coeff[e2]
+    if re.search(r"\b(?:less|fewer)\b[^.?]*\bthan\b", question.lower()):
+        (a1, b1), (a2, b2) = (a2, b2), (a1, b1)   # "how much LESS does X have than Y" → Y − X
     return _compute(f"({_num(a1)} * {_num(pivot)} + ({_num(b1)})) - "
                     f"({_num(a2)} * {_num(pivot)} + ({_num(b2)}))")
 
@@ -10232,6 +10271,54 @@ def _day_relational_chain_system(premises: list, question: str):
     return None
 
 
+_PSR_K = {"twice": 2.0, "thrice": 3.0, "double": 2.0, "half": 0.5,
+          "three times": 3.0, "four times": 4.0}
+
+
+def _pair_sum_relational_system(premises: list, question: str):
+    """PAIR-SUM RELATIONAL (#215) — a ratio within a pair PLUS a pair-sum relation to an
+    anchored third party: "Merill has twice as many marbles as Elliot and the two of them
+    together have five fewer marbles than Selma. Selma has fifty." → A = k·B, A+B = S∓N →
+    B = (S∓N)/(k+1) = 15, Merill = 30. TIGHTLY gated: exactly the three premises (ratio /
+    pair-sum / anchor), a single-name ask inside the pair, every number consumed, positive
+    integers. None otherwise."""
+    ql = question.lower()
+    am = re.search(r"how many \w+ does ([a-z]+) have", ql)
+    if am is None or _has_digit(ql):
+        return None
+    ratio = pair = anchor = None
+    for p in premises:
+        pl = p.lower()
+        rm = re.search(rf"\b([a-z]+) has ({'|'.join(_PSR_K)}) as (?:many|much) \w+ as ([a-z]+)\b", pl)
+        sm = re.search(r"the two of them together have (\d+|[a-z]+) (fewer|more) \w+ than ([a-z]+)\b", pl)
+        nm = re.search(r"\b([a-z]+) has (\d+|[a-z]+) \w+", pl)
+        if rm is not None and ratio is None:
+            ratio = (rm.group(1), _PSR_K[rm.group(2)], rm.group(3))
+        elif sm is not None and pair is None:
+            n = float(sm.group(1)) if sm.group(1).isdigit() else NUMBERS.get(sm.group(1))
+            if n is None:
+                return None
+            pair = (n * (-1 if sm.group(2) == "fewer" else 1), sm.group(3))
+        elif nm is not None and anchor is None:
+            v = float(nm.group(2)) if nm.group(2).isdigit() else NUMBERS.get(nm.group(2))
+            if v is None:
+                return None
+            anchor = (nm.group(1), float(v))
+        elif _has_digit(pl):
+            return None                                  # an unclassified valued premise
+    if ratio is None or pair is None or anchor is None:
+        return None
+    a, k, b = ratio
+    off, third = pair
+    if anchor[0] != third or am.group(1) not in (a, b) or len({a, b, third}) != 3:
+        return None
+    total = anchor[1] + off                              # A + B = S ± N
+    bv = total / (k + 1)
+    av = k * bv
+    result = av if am.group(1) == a else bv
+    return _gated_pos_int(_compute(f"{_num(result)}"))
+
+
 def _max_speed_distance_system(premises: list, question: str):
     """MAX-SPEED × DURATION (#214) — "runs at the maximum speed of 50 km per hour … what
     distance during 120 minutes?" → 50·120/60 = 100. The 'maximum/constant speed' qualifier is
@@ -11291,6 +11378,8 @@ _EARLY_SYSTEMS = [
     ("batch_scaling", _batch_scaling_system),
     # MAX-SPEED × DURATION: "50 km/h … what distance during 120 minutes?" → 100.
     ("max_speed_distance", _max_speed_distance_system),
+    # PAIR-SUM RELATIONAL: A=k·B, A+B = S∓N, anchored S (Merill 30).
+    ("pair_sum_relational", _pair_sum_relational_system),
     # FIRST TWO DAYS + DOUBLE THEIR SUM: "5; another 7; twice the first two days?" → 36.
     ("first_days_double_total", _first_days_double_total_system),
     # HOURS TO EQUAL EARNINGS: "40h at $12; $15/h; hours to equal?" → 32.

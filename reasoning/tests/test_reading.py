@@ -7437,5 +7437,36 @@ class TestIncrement213BatchScaling(unittest.TestCase):
             "120 minutes?"), 100)
 
 
+class TestIncrement215Residue(unittest.TestCase):
+    """#215 — three residue fixes: NEAR-NAME unification (GSM8K misspells its own names
+    across clauses — Jefferey/Jeffery — unify a unique edit-distance-1 pair, names ≥5 chars);
+    the PAIR-SUM relational system (A = k·B, A+B = S∓N, anchored S); the LOCAL conjunct
+    split inside the anchored family for fused "If A…, and B…" premises, which exposed a
+    latent sign bug — "how much LESS does X have than Y" now computes Y − X."""
+
+    def test_near_name_typo_unification(self):
+        # Jefferey=2·Ryan, anchor Jeffery=60 → Ryan 30, Jason 10 → 100
+        self.assertEqual(reading.solve(
+            "Jason, Ryan, and Jeffery went fishing at the lake. Ryan caught three times "
+            "the number of fish that Jason caught. Jefferey caught twice the number of "
+            "fish that Ryan got. If Jeffery caught 60 fish, how many fish did all of "
+            "them catch in total?"), 100)
+
+    def test_pair_sum_relational(self):
+        # M = 2E; M+E = 50−5 = 45 → E = 15, M = 30
+        self.assertEqual(reading.solve(
+            "Merill has twice as many marbles as Elliot and the two of them together "
+            "have five fewer marbles than Selma. If Selma has fifty marbles, how many "
+            "marbles does Merill have?"), 30)
+
+    def test_fused_conjuncts_and_less_than_diff(self):
+        # jenna = 2·(60/3) = 40 → "how much LESS than Bob" = 60 − 40 = 20
+        self.assertEqual(reading.solve(
+            "If Jenna has twice as much money in her bank account as Phil does, and "
+            "Phil has one-third the amount of money that Bob has in his account, and "
+            "Bob has $60 in his account, how much less money does Jenna have in her "
+            "account than Bob?"), 20)
+
+
 if __name__ == "__main__":
     unittest.main()
