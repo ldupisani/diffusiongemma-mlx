@@ -8483,7 +8483,7 @@ def _herd_rate_week_system(premises: list, question: str):
     rate, count = rate_pair[1], count_pair[1]
     if rate.entity != count.measure[0] or count.amount != float(int(count.amount)):
         return None                                      # the rate must hang on EACH counted head
-    return _compute(f"{_num(count.amount)} * {_num(rate.amount)} * 7")
+    return _gated_pos(_compute(f"{_num(count.amount)} * {_num(rate.amount)} * 7"))
 
 
 _WEEKDAYS = ("sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday")

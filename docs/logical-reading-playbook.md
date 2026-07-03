@@ -67,7 +67,9 @@ to run on TEST as an aggregate robustness check (per-item listing is dev-only; T
 only). **Verified clean on both slices** (2026-07-01, at the registry refactor): dev — 807 problems
 reach the early dispatch, 1 has ≥2 claimers and they *agree* (`sum_ratio=affine=66`), 0 disagreements;
 TEST — 144 reach, **0** with ≥2 claimers, 0 disagreements. The named/common-noun family isolation
-holds on the held-out slice too.
+holds on the held-out slice too. Re-verified 2026-07-03 (after campaigns #180–236): dev — 1692 reach,
+4 agree-collisions (all `sum_ratio`=`affine` — the documented 2-entity subsumption overlap), still
+0 disagreements.
 
 Within the registry, the **WHOLE-TEXT solver class** (raw-regex systems, `_daily_share_system`
 onward — see the section banner in `reading.py`) shares three mechanical gates, extracted as
@@ -76,6 +78,14 @@ helpers (2026-07-02 consolidation): `_has_digit` (the "is this premise/question 
 `_gated_pos_int`/`_gated_pos`/`_gated_nonneg` commit gates on the audited result. A new whole-text
 system should compose these, not re-inline them — the inlined copies were the same drift signal the
 registry refactor fixed.
+
+A 2026-07-03 conformance audit of the full registry (123 solvers) found exactly one gate deviation
+(`_herd_rate_week_system` committed `_compute` output ungated; fixed) and confirmed a useful
+composition property: a NAIVE (non-comma-aware) capture regex is precision-SAFE whenever the solver
+also digit-accounts, because the accounting findall splits "1,200" into fragments and the uncaptured
+fragment forces a decline — naive+accounted composes to a safe decline, never a wrong commit. So
+comma-awareness (`_RS_N`) in old solvers is a COVERAGE lever, not a precision bug; a sweep must
+change the capture AND the accounting probe together or they disagree and every comma case declines.
 
 ### Process lessons — mining campaigns (2026-07-02)
 
