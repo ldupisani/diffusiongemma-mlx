@@ -18464,44 +18464,70 @@ def _ae_clause(cl, P, scene=None):
             return ({v: Fraction(1), owner: Fraction(-1)}, Fraction(n))
         return ({v: Fraction(1)}, Fraction(0))
 
-    # E6 shifted: "in T years, X will be K as old as Y (is now)?" / "T years ago, X was K as old as Y"
-    m = re.search(rf"\bin ({_RS_N}) years,? (\w+) will be ({_AE_K}) as old as (\w+)( is now)?", cl, re.I)
+    # E6 shifted: "in T years, X will be K as old as Y (is now)?" / "T years ago, X was K as old as Y".
+    #    The time offset T is digit OR word ("in seven years") — the same as E3/E4's offset atom;
+    #    ages are affine in time, so a word offset is just another Fraction the Gaussian solver takes.
+    m = re.search(rf"\bin ({_RS_N}|\w+) years,? (\w+) will be ({_AE_K}) as old as (\w+)"
+                  rf"( is now| is today| now| today)?", cl, re.I)
     ago = False
     if m is None:
-        m = re.search(rf"\b({_RS_N}) years ago,? (\w+) was ({_AE_K}) as old as (\w+)", cl, re.I)
+        m = re.search(rf"\b({_RS_N}|\w+) years ago,? (\w+) was ({_AE_K}) as old as (\w+)", cl, re.I)
         ago = m is not None
     if m is not None and scene is None:
-        t, k = _ae_frac(m.group(1)), _ae_k(m.group(3))
-        if k is None:
+        t, k = _ae_num(m.group(1)), _ae_k(m.group(3))
+        if t is None or k is None:
             return None
         x, y = age(m.group(2)), age(m.group(4))
-        pin_now = len(m.groups()) >= 5 and m.group(5)      # "… as Y IS NOW" pins the standard
+        pin_now = len(m.groups()) >= 5 and m.group(5)      # "… as Y IS NOW/TODAY" pins the standard to now
         s = -1 if ago else 1
         P.eq(_ae_add(x, ({}, Fraction(s) * t)),
              _ae_scale(y if pin_now else _ae_add(y, ({}, Fraction(s) * t)), k))
         return [m.span()]
 
+    # E8 shifted equality: "in T years,? A will be the same age as B (is now|is today|now|today)?" →
+    #    age(A)+T = age(B); "T years ago,? A was the same age as B (is now)?" → age(A)−T = age(B).
+    #    (The equality twin of E6 — a cross-person same-age relation at a shifted time; k is implicitly 1.)
+    m = re.search(rf"\bin ({_RS_N}|\w+) years,?\s+({_AE_PERSON}) will be the same age as ({_AE_PERSON})"
+                  rf"(?: is now| is today| now| today)?", cl, re.I)
+    ago = False
+    if m is None:
+        m = re.search(rf"\b({_RS_N}|\w+) years ago,?\s+({_AE_PERSON}) was the same age as ({_AE_PERSON})"
+                      rf"(?: is now| is today)?", cl, re.I)
+        ago = m is not None
+    if m is not None and scene is None:
+        t = _ae_num(m.group(1))
+        if t is None:
+            return None
+        s = -1 if ago else 1
+        P.eq(_ae_add(age(m.group(2)), ({}, Fraction(s) * t)), age(m.group(3)))
+        return [m.span()]
+
     # E7 shifted absolute: "in T years,? X('s current age)? will be/turn N (years old)?" → age(X)+T=N;
     #                       "T years ago,? X('s age)? was N" → age(X)−T=N. (The absolute twin of E6's
-    #                       shifted ratio — a stated future/past age pins the person's now-age.)
-    m = re.search(rf"\bin ({_RS_N}) years,?\s+({_AE_PERSON})(?:['’]s (?:current |present )?age)?"
+    #                       shifted ratio — a stated future/past age pins the person's now-age.) T is
+    #                       digit-or-word; the stated age N stays a digit (word ages don't occur).
+    m = re.search(rf"\bin ({_RS_N}|\w+) years,?\s+({_AE_PERSON})(?:['’]s (?:current |present )?age)?"
                   rf" will (?:be|turn) ({_RS_N})(?: years old| years)?", cl, re.I)
     ago = False
     if m is None:
-        m = re.search(rf"\b({_RS_N}) years ago,?\s+({_AE_PERSON})(?:['’]s age)?"
+        m = re.search(rf"\b({_RS_N}|\w+) years ago,?\s+({_AE_PERSON})(?:['’]s age)?"
                       rf" (?:was|were|turned) ({_RS_N})", cl, re.I)
         ago = m is not None
     if m is not None and scene is None:
-        t, n = _ae_frac(m.group(1)), _ae_frac(m.group(3))
+        t, n = _ae_num(m.group(1)), _ae_frac(m.group(3))
+        if t is None:
+            return None
         s = -1 if ago else 1
         P.eq(_ae_add(age(m.group(2)), ({}, Fraction(s) * t)), ({}, n))
         return [m.span()]
 
     # E5b shifted sum (pronoun): "in T years,? the sum of their ages will be S" → Σ now-ages = S − n·T,
     #     "their" = every person parsed so far (the two the relation just introduced). ≥2 vars required.
-    m = re.search(rf"\bin ({_RS_N}) years,?\s+the sum of their ages will be ({_RS_N})", cl, re.I)
+    m = re.search(rf"\bin ({_RS_N}|\w+) years,?\s+the sum of their ages will be ({_RS_N})", cl, re.I)
     if m is not None and scene is None and len(P.vars) >= 2:
-        t, ssum, n = _ae_frac(m.group(1)), _ae_frac(m.group(2)), len(P.vars)
+        t, ssum, n = _ae_num(m.group(1)), _ae_frac(m.group(2)), len(P.vars)
+        if t is None:
+            return None
         P.eq(({v: Fraction(1) for v in P.vars}, Fraction(0)), ({}, ssum - n * t))
         return [m.span()]
 
@@ -18655,10 +18681,10 @@ def _age_equations_system(premises: list, question: str):
     want, extra, qspans = None, Fraction(0), []
     m4 = re.search(r"how old (?:was|is) (?:\w+['’]s )?(\w+) when (\w+) (?:was|is) born", ql)
     m3 = re.search(r"how much older(?: in \w+)? is (\w+) than (\w+)", ql)
-    m2 = re.search(rf"how old will (\w+) be in ({_RS_N}) years", ql)
+    m2 = re.search(rf"how old will (\w+) be in ({_RS_N}|\w+) years", ql)
     m5 = re.search(rf"sum of (?:the )?ages of all (?:({_RS_N}|\w+) )?(?:people|of them|\w+)"
                    rf"|combined age|sum of their ages|sum of theirs ages", ql)
-    m1 = re.search(r"how old (?:is|was) (?:the |his |her )?(\w+(?:['’]s \w+)?)"
+    m1 = re.search(r"how (?:old|many years old) (?:is|was) (?:the |his |her )?(\w+(?:['’]s \w+)?)"
                    r"(?: now| currently| right now)?\s*[?.]?\s*$", ql)
     # "what is (the) (present|current)? age of X"  /  "what is X's (present|current)? age" — the
     # what-phrased single-age ask (E1's twin on the question side; digit-free, so no qspan needed).
@@ -18677,7 +18703,10 @@ def _age_equations_system(premises: list, question: str):
     elif m3 is not None:
         want = {_ae_var(m3.group(1)): Fraction(1), _ae_var(m3.group(2)): Fraction(-1)}
     elif m2 is not None:
-        want, extra = {_ae_var(m2.group(1)): Fraction(1)}, _ae_frac(m2.group(2))
+        extra = _ae_num(m2.group(2))
+        if extra is None:
+            return None
+        want = {_ae_var(m2.group(1)): Fraction(1)}
         qspans.append(m2.span(2))
     elif m5 is not None:
         cnt = _ae_num(m5.group(1)) if m5.group(1) else None

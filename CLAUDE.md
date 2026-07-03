@@ -115,13 +115,15 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   `bench.py`'s firewall: DEV=train inspectable, TEST=test aggregate-only; never imported by the unit
   tests). Scores against the gold `#### N`, reports coverage / precision / a decline-blocker taxonomy
   (currency / percentage / unknown-word / structure) and the **most-frequent unknown words** (the
-  data-driven vocabulary worklist). State (2026-07-03, after campaigns #180–247): dev-train
-  **1017 correct / 0 wrong (~27.4% of dev-train)**, dev-holdout 142/2, TEST **39 correct / 5 wrong
-  (88.6% precision, hit-rate 14.4%; TEST not re-checked since #246 — #247 is holdout-clean)**. The
+  data-driven vocabulary worklist). State (2026-07-03, after campaigns #180–248): dev-train
+  **1018 correct / 0 wrong (~27.4% of dev-train)**, dev-holdout 142/2, TEST **39 correct / 5 wrong
+  (88.6% precision, hit-rate 14.4%; TEST not re-checked since #246 — #247/#248 are holdout-clean)**. The
   #239–246 vocab-singles campaign crossed 1000 dev-train but the TEST checkpoint gained +1 correct /
   +1 wrong (a fold under-read on a 'carrots'-unlocked problem) — the vein is now ~TEST-neutral;
-  general machinery is what moves TEST. #247 widened the generic age-equations solver with
-  shifted-time forms (+3 dev-train), the general lever.
+  general machinery is what moves TEST. #247/#248 kept widening the generic age-equations solver:
+  #247 added shifted-time forms (+3 dev-train); #248 made every shifted form accept WORD-NUMBER time
+  offsets ("in seven years"), added an E8 same-age-as-B-today equality form + a "how many years old is
+  X" ask head (+1 dev-train) — the general lever.
   Coverage = fully-read ceiling × structure hit-rate (see docs/reading-coverage-methodology.md §9;
   the bench prints both) — judge generality by the HOLDOUT hit-rate, never dev-train's. 0 model calls. DEV has a stable-hash **train/holdout split** (`--slice dev-train|dev-holdout`, the anti-overfit
   refinement: tune on dev-train, validate on dev-holdout BEFORE the single TEST look — `dev-holdout` is a
