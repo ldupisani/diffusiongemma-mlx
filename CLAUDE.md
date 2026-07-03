@@ -115,10 +115,12 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   `bench.py`'s firewall: DEV=train inspectable, TEST=test aggregate-only; never imported by the unit
   tests). Scores against the gold `#### N`, reports coverage / precision / a decline-blocker taxonomy
   (currency / percentage / unknown-word / structure) and the **most-frequent unknown words** (the
-  data-driven vocabulary worklist). State (2026-07-03, after campaigns #180–249): dev-train
-  **1066 correct / 0 wrong (~28.6% of dev-train)**, dev-holdout 142/2, TEST **39 correct / 5 wrong
-  (88.6% precision, hit-rate 14.4%; TEST not re-checked since #246 — #247–249 are holdout-clean)**. #249
-  added _vocab_singles_m (48 branches, wave 36) from a fresh blockersweep's cheapest tranche. The
+  data-driven vocabulary worklist). State (2026-07-03, after campaigns #180–250): dev-train
+  **1114 correct / 0 wrong (~29.9% of dev-train)**, dev-holdout 144/2, TEST **39 correct / 5 wrong
+  (88.6% precision, hit-rate 14.4%; TEST not re-checked since #246 — #247–250 are holdout-clean)**. #249
+  added _vocab_singles_m (48 branches, wave 36) and #250 _vocab_singles_n (45 branches, wave 37), both
+  from a fresh blockersweep's cheapest oracle-clean tranche (the vocab-only harvest is exhausted; the
+  frontier is 2600+ structural cases needing coded branches). The
   #239–246 vocab-singles campaign crossed 1000 dev-train but the TEST checkpoint gained +1 correct /
   +1 wrong (a fold under-read on a 'carrots'-unlocked problem) — the vein is now ~TEST-neutral;
   general machinery is what moves TEST. #247/#248 kept widening the generic age-equations solver:
