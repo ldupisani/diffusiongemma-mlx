@@ -4879,12 +4879,12 @@ class TestVocabAndFamilyIsolation(unittest.TestCase):
             "seniors as children. What is the total number of guests served?"), 127)
 
     def test_per_unit_rate_declines_rather_than_mis_sum(self):
-        # "2/5 times as many books AS THE NUMBER OF TABLES ... ARE ON TOP OF EACH TABLE" is a per-table RATE
-        # (total books = density * table-count = 100000), not a flat coordinate-noun count (200) the affine
-        # family assumes — must decline rather than confidently mis-solve (was 700 via the wrong family).
+        # RE-PINNED (#231): the tables×books branch now computes the per-table RATE read this
+        # pin documents as correct — 500 · (2/5·500) = 100000. The affine-family mis-sum this
+        # pin defends against (700) still never fires.
         self.assertEqual(reading.solve(
             "A class has 500 tables and 2/5 times as many books as the number of tables in the class are "
-            "on top of each table. What's the total number of books in the class?"), "undetermined")
+            "on top of each table. What's the total number of books in the class?"), 100000)
 
     def test_noun_fallback_relation_not_claimed_by_named_system(self):
         # a premise with 0-1 names (a coordinate-noun relation) must NOT be accepted by the NAMED
