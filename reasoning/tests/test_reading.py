@@ -7370,5 +7370,36 @@ class TestIncrement211DayRelationalChain(unittest.TestCase):
             "how much money can she make if she sells all of her seashells?"), 54)
 
 
+class TestIncrement212WeekResiduals(unittest.TestCase):
+    """#212 — two day-cluster tails: the WEEK-TOTAL RESIDUAL with an explicitly-unknown day
+    (Billy: 20 − (2+4+4+1) = 9, with a forward Thursday→Friday reference) and the WEEKDAY
+    BLOCK + per-weekend-day multipliers (R·5 + k_sat·R + k_sun·R; "no practice on Sunday"
+    = 0; an hours ask over a minutes rate converts ÷60)."""
+
+    def test_week_total_residual_unknown_day(self):
+        self.assertEqual(reading.solve(
+            "Billy ate 20 apples this week. On Monday, he ate 2 apples. On Tuesday, he "
+            "ate twice as many as he ate the day before. He's not sure what he ate on "
+            "Wednesday. On Thursday, he ate four times as many as he ate on Friday. On "
+            "Friday, he ate half of the amount he ate on Monday. How many apples did he "
+            "eat on Wednesday?"), 9)
+
+    def test_weekday_block_two_multipliers(self):
+        # 3·5 + 2·3 + 3·3 = 30
+        self.assertEqual(reading.solve(
+            "Lolita can drink 3 boxes of milk during weekdays. During Saturdays, she can "
+            "drink twice the number of boxes of milk than on the weekdays, and during "
+            "Sundays, she can drink thrice the number of boxes of milk than on the "
+            "weekdays. How many boxes of milk does she drink per week?"), 30)
+
+    def test_weekday_block_hours_conversion_and_zero_sunday(self):
+        # (30·5 + 3·30 + 0) / 60 = 4
+        self.assertEqual(reading.solve(
+            "From Monday to Friday, Elle practices piano for 30 minutes. On Saturday, "
+            "she practices piano three times as much as on a weekday. There is no "
+            "practice on Sunday. How many hours does Elle spend practicing piano each "
+            "week?"), 4)
+
+
 if __name__ == "__main__":
     unittest.main()

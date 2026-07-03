@@ -10132,7 +10132,7 @@ def _day_relational_chain_system(premises: list, question: str):
     ql = question.lower()
     full = " . ".join(p.lower() for p in premises) + " . " + ql
     entries, used = [], set()
-    loss = price = None
+    loss = price = week_total = None
     pending = None
     for p in premises:
         pl = p.lower()
@@ -10147,6 +10147,9 @@ def _day_relational_chain_system(premises: list, question: str):
             if vm is not None:
                 lm = re.search(r"(?:his|her) \w+ ate (\d+)", pl)
                 prm = re.search(r"sell each \w+ for \$(\d+(?:\.\d+)?)", pl)
+                tm = re.search(r"\bate (\d+) \w+ this week", pl)
+                if tm:
+                    week_total = float(tm.group(1)); used.add(tm.group(1)); continue
                 if lm:
                     loss = float(lm.group(1)); used.add(lm.group(1)); continue
                 if prm:
@@ -10154,7 +10157,9 @@ def _day_relational_chain_system(premises: list, question: str):
                 return None                              # a valued premise outside the chain
             continue
         day = dm.group(1)
-        if rel is not None:
+        if "not sure" in pl and vm is None and rel is None:
+            entries.append((day, "unknown", None))       # "He's not sure what he ate on Wednesday"
+        elif rel is not None:
             if vm is not None:
                 return None                              # a relation clause with a stray digit
             entries.append((day, "rel", rel))
@@ -10166,6 +10171,7 @@ def _day_relational_chain_system(premises: list, question: str):
     if len(entries) < 2:
         return None
     order = [e[0] for e in entries]
+    unknowns = [d for d, k, _x in entries if k == "unknown"]
     vals = {d: x for d, k, x in entries if k == "lit"}
     for _ in range(len(entries) + 1):
         for i, (day, kind, x) in enumerate(entries):
@@ -10175,7 +10181,16 @@ def _day_relational_chain_system(premises: list, question: str):
                     ref = order[i - 1] if i > 0 else None
                 if ref in vals:
                     vals[day] = k * vals[ref]
-    if any(d not in vals for d in order):
+    if any(d not in vals for d in order if d not in unknowns):
+        return None
+    if unknowns:                                         # ONE unknown day + a stated week total →
+        rm = re.search(rf"how many \w+ did (?:he|she|\w+) eat on ({_DRC_DAYS})", ql)   # residual
+        if len(unknowns) == 1 and week_total is not None and rm is not None \
+                and rm.group(1) == unknowns[0] \
+                and all(dd in used for dd in re.findall(r"\d+(?:\.\d+)?",
+                                                        " ".join(premises) + " " + question)):
+            expr = f"{_num(week_total)} - ({' + '.join(_num(vals[d]) for d in order if d not in unknowns)})"
+            return _gated_pos_int(_compute(expr))
         return None
 
     def digits_ok():
@@ -10200,6 +10215,55 @@ def _day_relational_chain_system(premises: list, question: str):
                 expr = f"({expr}) - {_num(loss)}"
             return _gated_pos(_compute(expr))
     return None
+
+
+def _weekday_block_relational_system(premises: list, question: str):
+    """WEEKDAY BLOCK + PER-WEEKEND-DAY MULTIPLIERS (#212) — a per-weekday rate ("3 boxes during
+    weekdays", "From Monday to Friday … 30 minutes") with SEPARATE relational Saturday/Sunday
+    multipliers ("twice … than on the weekdays", "three times as much as on a weekday", "no
+    practice on Sunday" = 0), asked per week → R·5 + k_sat·R + k_sun·R. An "how many HOURS" ask
+    over a minutes rate converts ÷60 (Elle 240/60 = 4). The existing `_weekday_weekend_system`
+    reads ONE weekend clause spanning both days; this sibling reads the two days separately.
+    TIGHTLY gated: the block rate is the ONLY digit; both weekend days classify or are absent
+    (absent day → decline, the week doesn't total); positive result. None otherwise."""
+    ql = question.lower()
+    if not re.search(r"(?:per|each|a) week", ql) or _has_digit(ql):
+        return None
+    rate = unit = None
+    ksat = ksun = None
+    for p in premises:
+        pl = p.lower()
+        block = re.search(r"during (?:the )?weekdays?|from monday to friday", pl)
+        vm = re.search(r"(\d+(?:\.\d+)?)\s*(boxes|minutes|hours|cups|glasses|pages|miles)?", pl)
+        if block is not None:
+            if rate is not None or vm is None or vm.group(1) is None:
+                return None
+            if _has_digit(pl.replace(vm.group(1), " ", 1)):
+                return None
+            rate, unit = float(vm.group(1)), (vm.group(2) or "")
+            continue
+        sat = re.search(r"(?:on|during) saturdays?", pl)
+        sun = re.search(r"(?:on|during) sundays?", pl)
+        rel = _drc_rel(pl)
+        if sat is not None:
+            if rel is None or _has_digit(pl):
+                return None
+            ksat = rel[0]
+        elif sun is not None:
+            if re.search(r"\bno \w+ on sundays?", pl) and not _has_digit(pl):
+                ksun = 0.0
+            elif rel is not None and not _has_digit(pl):
+                ksun = rel[0]
+            else:
+                return None
+        elif _has_digit(pl):
+            return None                                  # an unclassified valued premise
+    if rate is None or ksat is None or ksun is None:
+        return None
+    expr = f"{_num(rate)} * 5 + {_num(ksat)} * {_num(rate)} + {_num(ksun)} * {_num(rate)}"
+    if "how many hours" in ql and unit == "minutes":
+        expr = f"({expr}) / 60"
+    return _gated_pos(_compute(expr))
 
 
 def _today_tomorrow_chain_system(premises: list, question: str):
@@ -11129,6 +11193,8 @@ _EARLY_SYSTEMS = [
     ("today_tomorrow_chain", _today_tomorrow_chain_system),
     # NAMED-DAY RELATIONAL CHAIN: literals + k×day refs; diff/total/sell-all asks.
     ("day_relational_chain", _day_relational_chain_system),
+    # WEEKDAY BLOCK + per-weekend-day multipliers: R·5 + k_sat·R + k_sun·R (Lolita 30, Elle 4h).
+    ("weekday_block_relational", _weekday_block_relational_system),
     # FIRST TWO DAYS + DOUBLE THEIR SUM: "5; another 7; twice the first two days?" → 36.
     ("first_days_double_total", _first_days_double_total_system),
     # HOURS TO EQUAL EARNINGS: "40h at $12; $15/h; hours to equal?" → 32.
