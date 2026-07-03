@@ -7330,5 +7330,45 @@ class TestIncrement209PiecesPool(unittest.TestCase):
             "per game on average?"), 9)
 
 
+class TestIncrement211DayRelationalChain(unittest.TestCase):
+    """#211 — `_day_relational_chain_system`: per-day values (literal or k× a referenced day),
+    asked a day-difference, the total (± an ate-loss), or sell-all money. The day reference is
+    searched in the clause TAIL after the k-word — an optional-group regex silently dropped
+    "…as she painted on Monday" (a wrong value, not a decline). Pending-day slot re-attaches
+    a day clause severed from its relation clause."""
+
+    def test_day_difference(self):
+        # wed 300 − tue 225 = 75
+        self.assertEqual(reading.solve(
+            "On Monday, Matt worked for 450 minutes in his office. On Tuesday, he worked "
+            "half the number of minutes he worked on Monday. On Wednesday, he worked for "
+            "300 minutes. How many more minutes did he work on Wednesday than on "
+            "Tuesday."), 75)
+
+    def test_total_with_loss_and_pending_day(self):
+        # 32 + 16 + 48 − 4 = 92 ("On Tuesday he ran out of sugar" severed from its relation)
+        self.assertEqual(reading.solve(
+            "Zach baked cookies for a bake sale. On Monday he baked 32 cookies. On "
+            "Tuesday he ran out of sugar and could only bake half of the number of "
+            "cookies he baked the day before. On Wednesday he baked three times the "
+            "number of cookies he did on Tuesday, but his brother ate 4 of those "
+            "cookies. How many cookies did he have at the end of the three days?"), 92)
+
+    def test_total_with_named_day_ref(self):
+        # 30 + 60 + 15 = 105 — Wednesday references MONDAY, not the previous day
+        self.assertEqual(reading.solve(
+            "On Monday Elisa paints 30 square feet of her house's walls. On Tuesday she "
+            "paints twice that amount. On Wednesday she finishes up by painting half as "
+            "many square feet as she painted on Monday. How many square feet total does "
+            "Elisa paint in her house?"), 105)
+
+    def test_sell_all_money(self):
+        # (30 + 15) · 1.20 = 54
+        self.assertEqual(reading.solve(
+            "Sally picks 30 seashells on Monday. On Tuesday, she picks half as many "
+            "seashells as she did on Monday. If she can sell each seashell for $1.20, "
+            "how much money can she make if she sells all of her seashells?"), 54)
+
+
 if __name__ == "__main__":
     unittest.main()

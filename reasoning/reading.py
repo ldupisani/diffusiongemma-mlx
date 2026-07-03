@@ -10098,6 +10098,110 @@ def _pieces_pool_system(premises: list, question: str):
 
 
 # --- system family: day chains & two-rate conversions ------------------------------------------
+_DRC_DAYS = "monday|tuesday|wednesday|thursday|friday|saturday|sunday"
+_DRC_K = {"twice": 2.0, "double": 2.0, "three times": 3.0, "thrice": 3.0, "half": 0.5,
+          "four times": 4.0, "five times": 5.0}
+_DRC_KPAT = "twice|double|three times|thrice|half|four times|five times"
+
+
+def _drc_rel(pl: str):
+    """A k×day-reference relation in a clause → (k, ref) where ref is a day, "<prev>" ("the day
+    before"/"that amount"), or None (elided → previous entry). The day reference is searched in
+    the TAIL after the k-word — an optional-group regex silently dropped "…as she painted on
+    Monday" (ref=None → a WRONG value, not a decline). None if no k-frame."""
+    km = re.search(rf"({_DRC_KPAT}) (?:the number|the amount|as many|as much|that amount|"
+                   rf"of the number|of the amount)", pl)
+    if km is None:
+        return None
+    tail = pl[km.end():]
+    refm = re.search(rf"\bon ({_DRC_DAYS})\b", tail)
+    ref = refm.group(1) if refm else ("<prev>" if "the day before" in tail else None)
+    return _DRC_K[km.group(1)], ref
+
+
+def _day_relational_chain_system(premises: list, question: str):
+    """NAMED-DAY RELATIONAL CHAIN (#211) — per-day values where each day is a literal or k× a
+    referenced day ("half the number he worked on Monday", "twice that amount", "half of the
+    number he baked the day before"), asked a DAY-DIFFERENCE ("how many more minutes on
+    Wednesday than on Tuesday?" → 300−225=75), the TOTAL (Σ, optionally − an ate-loss: Zach
+    32+16+48−4=92; Elisa 105), or SELL-ALL money (Σ × per-item price: Sally 45·1.20=54).
+    A day clause severed from its relation clause ("On Tuesday he ran out of sugar" | "could
+    only bake half of…") re-attaches via the PENDING-day slot. TIGHTLY gated: every premise
+    classifies (day-literal / day-relation / ate-loss / unit-price / valueless), every digit
+    accounted, all chain days resolve, results positive. None otherwise."""
+    ql = question.lower()
+    full = " . ".join(p.lower() for p in premises) + " . " + ql
+    entries, used = [], set()
+    loss = price = None
+    pending = None
+    for p in premises:
+        pl = p.lower()
+        dm = re.search(rf"\b(?:on|during) ({_DRC_DAYS})s?\b", pl)
+        rel = _drc_rel(pl)
+        vm = re.search(r"\b(\d+(?:,\d{3})*(?:\.\d+)?)\b", pl)
+        if dm is None:
+            if rel is not None and pending is not None and vm is None:
+                entries.append((pending, "rel", rel))
+                pending = None
+                continue
+            if vm is not None:
+                lm = re.search(r"(?:his|her) \w+ ate (\d+)", pl)
+                prm = re.search(r"sell each \w+ for \$(\d+(?:\.\d+)?)", pl)
+                if lm:
+                    loss = float(lm.group(1)); used.add(lm.group(1)); continue
+                if prm:
+                    price = float(prm.group(1)); used.add(prm.group(1)); continue
+                return None                              # a valued premise outside the chain
+            continue
+        day = dm.group(1)
+        if rel is not None:
+            if vm is not None:
+                return None                              # a relation clause with a stray digit
+            entries.append((day, "rel", rel))
+        elif vm is not None:
+            used.add(vm.group(1))
+            entries.append((day, "lit", float(vm.group(1).replace(",", ""))))
+        else:
+            pending = day                                # "On Tuesday he ran out of sugar"
+    if len(entries) < 2:
+        return None
+    order = [e[0] for e in entries]
+    vals = {d: x for d, k, x in entries if k == "lit"}
+    for _ in range(len(entries) + 1):
+        for i, (day, kind, x) in enumerate(entries):
+            if kind == "rel" and day not in vals:
+                k, ref = x
+                if ref in (None, "<prev>"):
+                    ref = order[i - 1] if i > 0 else None
+                if ref in vals:
+                    vals[day] = k * vals[ref]
+    if any(d not in vals for d in order):
+        return None
+
+    def digits_ok():
+        return all(dd in used for dd in re.findall(r"\d+(?:\.\d+)?",
+                                                   " ".join(premises) + " " + question))
+
+    dm2 = re.search(rf"how many more \w+ did (?:he|she|\w+) \w+ on ({_DRC_DAYS}) "
+                    rf"than on ({_DRC_DAYS})", ql)
+    if dm2:
+        a, b = dm2.group(1), dm2.group(2)
+        if a in vals and b in vals and digits_ok():
+            return _gated_pos(_compute(f"{_num(vals[a])} - {_num(vals[b])}"))
+        return None
+    if re.search(r"how much money can (?:she|he) make", ql) and re.search(r"sells? all", full):
+        if price is not None and digits_ok():
+            return _gated_pos(_compute(f"({' + '.join(_num(vals[d]) for d in order)}) * {_num(price)}"))
+        return None
+    if re.search(r"at the end of the \w+ days|in total|\btotal\b", ql):
+        if digits_ok():
+            expr = " + ".join(_num(vals[d]) for d in order)
+            if loss is not None:
+                expr = f"({expr}) - {_num(loss)}"
+            return _gated_pos(_compute(expr))
+    return None
+
+
 def _today_tomorrow_chain_system(premises: list, question: str):
     """SIGNED DAY CHAIN — "has 65 pounds today; tomorrow he will use 18; the following day he
     will buy 50 more; how many in the end?" → 65 − 18 + 50 = 97. TIGHTLY gated: a digit-free
@@ -11023,6 +11127,8 @@ _EARLY_SYSTEMS = [
     ("pieces_pool", _pieces_pool_system),
     # SIGNED DAY CHAIN: "65 today; use 18 tomorrow; buy 50 next; in the end?" → 97.
     ("today_tomorrow_chain", _today_tomorrow_chain_system),
+    # NAMED-DAY RELATIONAL CHAIN: literals + k×day refs; diff/total/sell-all asks.
+    ("day_relational_chain", _day_relational_chain_system),
     # FIRST TWO DAYS + DOUBLE THEIR SUM: "5; another 7; twice the first two days?" → 36.
     ("first_days_double_total", _first_days_double_total_system),
     # HOURS TO EQUAL EARNINGS: "40h at $12; $15/h; hours to equal?" → 32.
