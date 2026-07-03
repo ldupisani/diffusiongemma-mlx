@@ -7669,6 +7669,31 @@ class TestIncrement219SignedMixedChain(unittest.TestCase):
             "boy then comes in and buys 6 cards from each box. What was the total "
             "cost, in dollars, of the cards he bought?"), 18)
 
+    def test_height_possessive_measure_chain(self):
+        # #222: bill = 72/2 = 36; jan = 36 + 6 = 42 (the possessive-MEASURE elided ratio)
+        self.assertEqual(reading.solve(
+            "Cary is 72 inches tall. Her younger brother Bill is half her height, and "
+            "her younger sister Jan is 6 inches taller than Bill. How tall is Jan?"), 42)
+
+    def test_calendar_age_born_year_chain(self):
+        # 2021 − 1976 = 45; graham 42; janice 21
+        self.assertEqual(reading.solve(
+            "It's February 2021. Mark was born in January 1976. Graham is 3 years "
+            "younger than Mark, and Graham's sister, Janice, is 1/2 the age of Graham. "
+            "How old is Janice?"), 21)
+
+    def test_calendar_age_future_year_ask(self):
+        # simon 2005 = 40; 2010 → 45
+        self.assertEqual(reading.solve(
+            "Jorge is 24 years younger than Simon. In 2005, Jorge is 16 years old. In "
+            "2010, how old would Simon be?"), 45)
+
+    def test_calendar_age_birth_year_ask(self):
+        # now = 1970 + 40 = 2010; brother = 20 → born 1990
+        self.assertEqual(reading.solve(
+            "Karina was born in 1970 and she is currently twice as old as her brother. "
+            "If her current age is 40, in what year was her brother born?"), 1990)
+
     def test_later_unanchored_fraction_declines(self):
         # #220 (TEST-checkpoint-forced): an UNANCHORED fraction after a prior event has a
         # genuinely ambiguous base — same-base ("¼ of his marbles" = of the ORIGINAL) vs

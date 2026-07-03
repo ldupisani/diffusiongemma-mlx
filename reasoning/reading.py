@@ -6375,8 +6375,12 @@ def _elided_ratio(rp, premise: str):
     pl = premise.lower()
     if re.search(r"\bas (?:many|much) (?:\w+ ){0,3}?as\b", pl) or " than" in pl:
         return None                                     # an explicit standard — another family's
-    if not re.search(r"\bas (?:many|much)\b", pl):
-        return None                                     # only the as-many/as-much elided frame (v1)
+    if not re.search(r"\bas (?:many|much)\b", pl) \
+            and not re.search(r"\b(?:half|twice|double|thrice) (?:of )?(?:his|her|their) "
+                              r"(?:height|weight|size|length)\b", pl):
+        return None                                     # the as-many/as-much elided frame, or the
+        #                                                 possessive-MEASURE frame ("half her
+        #                                                 height" → k× the antecedent, #222)
     mult = next((u for u in rp.units if "multiplier" in u.features.get("senses", [])), None)
     if mult is None:
         return None
@@ -10335,6 +10339,89 @@ def _pair_sum_relational_system(premises: list, question: str):
     return _gated_pos_int(_compute(f"{_num(result)}"))
 
 
+def _calendar_age_system(premises: list, question: str):
+    """CALENDAR-AGE chains (#222) — ages anchored to LITERAL YEARS, the one age shape the
+    relational temporal model deliberately doesn't cover (years are absolute, not wrapping):
+    "It's February 2021. Mark was born in January 1976 …" → 45 → Graham 42 → Janice 21;
+    "In 2005, Jorge is 16. In 2010, how old would Simon be?" → 16+24+5 = 45; "Karina was born
+    in 1970, currently twice as old as her brother; her current age is 40 → brother born
+    2010−20 = 1990". TIGHTLY gated: a 4-digit year present; every digit accounted; asked
+    entity resolves. GSM8K's golds take the simple year difference (no birthday-month
+    adjustment). None otherwise."""
+    ql = question.lower()
+    full = " . ".join(p.lower() for p in premises) + " . " + ql
+    if not re.search(r"\b(?:19|20)\d{2}\b", full):
+        return None
+    used = set()
+    ages = {}
+    now_year = None
+    m = re.search(r"it['’]s \w+ ((?:19|20)\d{2})", full)
+    if m:
+        now_year = int(m.group(1)); used.add(m.group(1))
+    born = {}
+    for m in re.finditer(r"(\w+) was born in (?:\w+ )?((?:19|20)\d{2})", full):
+        born[m.group(1)] = int(m.group(2)); used.add(m.group(2))
+    anchor = None
+    m = re.search(r"in ((?:19|20)\d{2}) ?,? (\w+) (?:is|was) (\d+) years? old", full)
+    if m:
+        anchor = (m.group(2), float(m.group(3)), int(m.group(1)))
+        used.add(m.group(1)); used.add(m.group(3))
+    cur = None
+    m = re.search(r"(?:her|his) current age is (\d+)", full)
+    if m:
+        cur = float(m.group(1)); used.add(m.group(1))
+    rels = []
+    for m in re.finditer(r"(\w+) is (\d+) years? (younger|older) than (\w+)", full):
+        rels.append((m.group(1), "off",
+                     float(m.group(2)) * (1 if m.group(3) == "older" else -1), m.group(4)))
+        used.add(m.group(2))
+    for m in re.finditer(r"(\w+) ?,? is (1/2|half|a third|1/3) the age of (\w+)", full):
+        f = _fraction_value(m.group(2))
+        if f is None:
+            return None
+        rels.append((m.group(1), "ratio", f, m.group(3)))
+        if "/" in m.group(2):
+            used.add(m.group(2).split("/")[0]); used.add(m.group(2).split("/")[1])
+    for m in re.finditer(r"(\w+|she|he) is currently (twice|three times) as old as (?:her|his) (\w+)",
+                         full):
+        rels.append((m.group(3), "ratio", 1 / {"twice": 2.0, "three times": 3.0}[m.group(2)],
+                     m.group(1)))
+    if now_year is not None:
+        for n, y in born.items():
+            ages[n] = float(now_year - y)
+    if cur is not None and born:
+        n = next(iter(born))
+        ages[n] = cur
+        now_year = born[n] + int(cur)
+    if anchor is not None:
+        now_year = anchor[2] if now_year is None else now_year
+        ages[anchor[0]] = anchor[1] + (now_year - anchor[2])
+    for _ in range(len(rels) + 1):
+        for subj, kind, x, std in rels:
+            s = subj if subj not in ("she", "he") else (next(iter(born)) if born else None)
+            t = std if std not in ("she", "he") else (next(iter(born)) if born else None)
+            if s and t and s not in ages and t in ages:
+                ages[s] = ages[t] + x if kind == "off" else ages[t] * x
+            if s and t and t not in ages and s in ages:
+                ages[t] = ages[s] - x if kind == "off" else ages[s] / x
+
+    def digits_ok(*extra):
+        u = used | {e for e in extra if e}
+        return all(dd in u for dd in re.findall(r"\d+(?:\.\d+)?",
+                                                " ".join(premises) + " " + question))
+
+    m = re.search(r"in ((?:19|20)\d{2}) ?,? how old would (\w+) be", ql)
+    if m and now_year is not None and m.group(2) in ages and digits_ok(m.group(1)):
+        return _gated_pos(_compute(f"{_num(ages[m.group(2)])} + ({m.group(1)} - {_num(now_year)})"))
+    m = re.search(r"in what year was (?:(?:her|his) )?(\w+) born", ql)
+    if m and now_year is not None and m.group(1) in ages and digits_ok():
+        return _gated_pos(_compute(f"{_num(now_year)} - {_num(ages[m.group(1)])}"))
+    m = re.search(r"how old is (\w+)", ql)
+    if m and m.group(1) in ages and digits_ok():
+        return _gated_pos(_compute(f"{_num(ages[m.group(1)])}"))
+    return None
+
+
 _TMP_NUMW = r"\d+(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve"
 
 
@@ -11809,6 +11896,8 @@ _EARLY_SYSTEMS = [
     ("signed_mixed_chain", _signed_mixed_chain_system),
     # TOTAL-MINUS-PRODUCT: stated total/budget/bill vs Σ(count×each-price), seven asks.
     ("total_minus_product", _total_minus_product_system),
+    # CALENDAR AGE: year-anchored age chains (born-in-year / in-YEAR-is-N / birth-year asks).
+    ("calendar_age", _calendar_age_system),
     # PRODUCT-SUM + CHANGE: "5 at $6, 10 at $14; paid $200; change?" → 30.
     ("product_sum_change", _product_sum_change_system),
     # TARGET PURCHASE GAP: "buy 8 books, $5 each, has $13; need to save?" → 27.
