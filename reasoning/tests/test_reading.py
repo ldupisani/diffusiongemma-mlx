@@ -1769,11 +1769,11 @@ class TestIncrement106SlashFraction(unittest.TestCase):
         self.assertIsNone(reading._fraction_parts("apple"))
 
     def test_single_slash_partitive_declines_safely(self):
-        # _partitive_quantity computes 80×3/8=30 correctly, but the slash fraction's raw value (0.375)
-        # trips the unused-given guard → DECLINE. Kept deliberately: re-exempting it solves this case but
-        # un-declines multi-step chains (net −precision). Safe decline, never a wrong fractional commit.
+        # RE-PINNED (#219): `_signed_mixed_chain_system` now claims this CORRECTLY (80·5/8 = 50)
+        # — the FOLD path's unused-given decline this class documents is unchanged; the EARLY
+        # system answers first. Was pinned "undetermined" while no machinery could solve it.
         self.assertEqual(reading.solve("Mary had 80 dollars. She gave 3/8 of her money to her mom. "
-                                       "How much money does Mary have left?"), "undetermined")
+                                       "How much money does Mary have left?"), 50)
 
     def test_fraction_chain_declines_not_commits_garbage(self):
         # the 2nd fraction "3/10 to her dad" has an ELIDED base we don't compose → decline, never a
@@ -7544,6 +7544,81 @@ class TestIncrement218GiveChain(unittest.TestCase):
             "brother 60 marbles, gave her sister twice that amount and gave her friend "
             "Savanna three times the amount she currently has. How many marbles did "
             "Miriam start with?"), 300)
+
+
+class TestIncrement219SignedMixedChain(unittest.TestCase):
+    """#219 — `_signed_mixed_chain_system` (the fraction+literal vein): a pool (literal /
+    product / derived from "Half of Jerome's money was $43") + in-order steps (literal loss,
+    k× the previous literal, fraction of CURRENT), asked left/kept — or the last step's own
+    amount when the ask names its eater. Steps are position-sorted per clause; the literal
+    form's (?!/) lookahead keeps it off fraction numerators (the overlap dedup would drop
+    the fraction event)."""
+
+    def test_derived_pool_klit(self):
+        # 2·43 − 8 − 24 = 54
+        self.assertEqual(reading.solve(
+            "Half of Jerome's money was $43. He gave $8 to Meg and thrice as much to "
+            "Bianca. How much does Jerome have left?"), 54)
+
+    def test_fraction_of_that_money_numerator_guard(self):
+        # 100 − 25 − 40 = 35 ("1/4" must parse as a fraction, not a literal 1)
+        self.assertEqual(reading.solve(
+            "John receives $100 from his uncle and gives his sister Jenna 1/4 of that "
+            "money. He goes and buys groceries worth $40. How much money does John have "
+            "remaining?"), 35)
+
+    def test_pool_stated_last(self):
+        # 760 − 300 − 150 = 310
+        self.assertEqual(reading.solve(
+            "Maria went on a trip to Belgium. She paid $300 for the ticket and half of "
+            "that for the hotel. How much money does she have left, when she had $760 "
+            "at the beginning?"), 310)
+
+    def test_lit_frac_lit_interleaved(self):
+        # 19 − 5 → 14; −7 → 7; −2 = 5
+        self.assertEqual(reading.solve(
+            "Maria has 19 cookies. She decided to give her friend 5 of them, and half "
+            "of the rest to her family. From the rest, Maria decided to eat 2 cookies. "
+            "How many cookies will she have left?"), 5)
+
+    def test_remainder_getter_vs_last_eater(self):
+        # Mandy GETS the remainder (15); James EATS the last step (3)
+        self.assertEqual(reading.solve(
+            "A bar of chocolate is made up of 60 pieces. If Michael takes half of the "
+            "bar, Paige takes half of the remainder, and Mandy is left with what's left "
+            "of the chocolate bar, how many pieces of chocolate will Mandy get?"), 15)
+        self.assertEqual(reading.solve(
+            "James orders an 8 piece pizza. His friend eats 2 slices and James eats "
+            "half of what is left. How many slices does James eat?"), 3)
+
+    def test_product_pool(self):
+        # 20·9 = 180; half sold → 90
+        self.assertEqual(reading.solve(
+            "Brenda bakes 20 cakes a day. She does this for 9 days and then sells half "
+            "of the cakes. How many cakes are left with Brenda?"), 90)
+
+    def test_two_anchored_fractions_keep_ask(self):
+        # 135·(2/3)·(3/5) = 54 (float noise rounded)
+        self.assertEqual(reading.solve(
+            "Oliver had 135 stickers. He used 1/3 of his stickers, gave 2/5 of the "
+            "remaining to his friend, and kept the remaining stickers. How many "
+            "stickers did he keep?"), 54)
+
+    def test_same_base_second_fraction_still_declines(self):
+        # "and 3/10 to her dad" has an elided base (SAME-base, not of-current) — the
+        # chain must not misread it as of-current; stays declined (the documented residue)
+        self.assertEqual(reading.solve(
+            "John had $200. He gave 3/8 of his money to his mother and 3/10 to his "
+            "father. How much money did John have left?"), "undetermined")
+
+    def test_digit_free_gain_step_declines(self):
+        # "her mother gave Sabrina HALF the number…" is a digit-free GAIN the chain doesn't
+        # model — the uncovered-occurrence guard declines (partial-step commit was 3.33≠5)
+        self.assertEqual(reading.solve(
+            "Sabrina gave 10 cookies to her brother. Her mother gave Sabrina half the "
+            "number of cookies she gave her brother. Then Sabrina gave two-thirds of "
+            "her cookies to her sister. If Sabrina had 20 cookies at the start, how "
+            "many cookies are left with her?"), "undetermined")
 
 
 if __name__ == "__main__":

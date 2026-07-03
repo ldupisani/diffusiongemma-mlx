@@ -10335,6 +10335,139 @@ def _pair_sum_relational_system(premises: list, question: str):
     return _gated_pos_int(_compute(f"{_num(result)}"))
 
 
+_SMC_K = {"twice": 2.0, "thrice": 3.0, "double": 2.0, "half": 0.5, "three times": 3.0,
+          "four times": 4.0}
+_SMC_KPAT = "twice|thrice|double|half|three times|four times"
+_SMC_FRACPAT = (r"(half|two-thirds|one-third|one-fourth|three-fourths|\d+/\d+|a third|a quarter|"
+                r"third|quarter)")
+_SMC_LOSS = (r"(?:gave away|gave|gives|give|spent|spends|spend|paid|pays|pay|used|uses|use|"
+             r"ate|eats|eat|bought|buys|buy|takes|took|take|sells|sold|sell)")
+_SMC_FORMS = [
+    ("klit", re.compile(rf"({_SMC_KPAT}) (?:as much|of that)\b")),
+    ("frac", re.compile(rf"{_SMC_FRACPAT} of (?:the rest|the remainder|what is left|what's left|"
+                        rf"that money|his \w+|her \w+|the \w+|it)\b")),
+    # the numerator lookahead (?!/) keeps a literal read off "1/4"'s numerator — the overlap
+    # dedup would otherwise DROP the fraction event (the literal's span starts earlier)
+    ("lit", re.compile(rf"{_SMC_LOSS}(?: away)?(?: (?:his|her|their) \w+)?(?: \w+)?,? \$?"
+                       rf"(\d+(?:\.\d+)?)(?!/)(?! days| weeks| pieces? pizza)")),
+    ("worth", re.compile(r"worth \$?(\d+(?:\.\d+)?)")),
+]
+
+
+def _signed_mixed_chain_system(premises: list, question: str):
+    """SIGNED MIXED CHAIN (#219, the fraction+literal vein opener) — a pool (literal; a PRODUCT
+    "20 cakes a day … for 9 days"; or DERIVED "Half of Jerome's money was $43" → 86) followed by
+    in-order steps, each a LITERAL loss, K× THE PREVIOUS LITERAL ("thrice as much", "half of
+    that"), or a FRACTION OF CURRENT ("two-thirds of her cookies", "half of the rest", "2/5 of
+    the remaining"), asked what's LEFT/KEPT — or the LAST STEP's own amount when the ask names
+    the last step's eater ("James eats half of what is left. How many slices does James EAT?" →
+    3, while Mandy GETS the remainder → 15). Steps are collected per clause POSITION-SORTED and
+    overlap-deduped (a clause may hold several: "gave $8 to Meg AND thrice as much to Bianca").
+    TIGHTLY gated: needs a frac/klit step or a non-plain pool (pure-literal plain-pool chains
+    are the fold's turf); every clause with an unconsumed digit declines; every digit accounted;
+    positive results. None otherwise."""
+    ql = question.lower()
+    if not re.search(r"(?:left|remaining|remainder|keep|kept|get\b|eat\b)", ql):
+        return None
+    used = set()
+    pool = None
+    pool_kind = "plain"
+    events = []
+    joined = " . ".join(x.lower() for x in premises)
+    for p in premises:
+        pl = p.lower()
+        start = 0
+        if pool is None:
+            m = re.search(r"\bhalf of \w+['’]s money was \$(\d+(?:\.\d+)?)", pl)
+            if m:
+                pool = 2 * float(m.group(1)); used.add(m.group(1)); pool_kind = "derived"
+                continue
+            m = re.search(r"is made up of (\d+) \w+|orders an (\d+) piece", pl)
+            if m:
+                v = m.group(1) or m.group(2)
+                pool = float(v); used.add(v)
+                continue
+            m = re.search(r"(?:bakes|makes) (\d+) \w+ a day", pl)
+            if m:
+                dm = re.search(r"for (\d+) days", joined)
+                if dm:
+                    pool = float(m.group(1)) * float(dm.group(1))
+                    used.add(m.group(1)); used.add(dm.group(1))
+                    pool_kind = "product"
+                    continue
+            m = re.search(r"(?:had|has|receives?|received|collected) \$?(\d+(?:\.\d+)?) ", pl)
+            if m and not re.search(_SMC_LOSS + r" ", pl[:m.start()]):
+                pool = float(m.group(1)); used.add(m.group(1))
+                start = m.end()                          # a loss may share the pool's clause
+        clause_events = []
+        for kind, pat in _SMC_FORMS:
+            for m in pat.finditer(pl, start):
+                clause_events.append((m.start(), m.end(), kind, m))
+        clause_events.sort(key=lambda t: (t[0], t[1]))
+        taken = []
+        for s, e, kind, m in clause_events:
+            if any(s < te and ts < e for ts, te, *_ in taken):
+                continue
+            taken.append((s, e, kind, m))
+        # UNCOVERED-OCCURRENCE GUARD (firewall-forced): a DIGIT-FREE step leaves no trace for
+        # the digit accounting — "her mother gave Sabrina HALF the number…" (a gain), "spent
+        # HALF the amount", "ONE-THIRD of this number" all vanished silently and the chain
+        # committed on partial steps (3.33≠5, 102≠51, 9≠2). Any fraction/multiplier word not
+        # inside a taken event span is an unmodeled step → decline the whole system.
+        for m in re.finditer(rf"(?:{_SMC_FRACPAT[1:-1]}|{_SMC_KPAT})", pl):
+            if m.start() >= start and not any(ts <= m.start() < te for ts, te, *_ in taken):
+                return None
+        for _s, _e, kind, m in taken:
+            events.append((kind, m))
+            if kind in ("lit", "worth"):
+                used.add(m.group(1))
+            elif kind == "frac" and "/" in m.group(1):
+                used.add(m.group(1).split("/")[0])
+                used.add(m.group(1).split("/")[1])
+    if pool is None or not events:
+        return None
+    if not any(k in ("frac", "klit") for k, _m in events) and pool_kind == "plain":
+        return None                      # pure-literal plain-pool chains belong to the fold
+    if any(dd not in used for dd in re.findall(r"\d+(?:\.\d+)?",
+                                               " ".join(premises) + " " + question)):
+        return None
+    current = pool
+    last_lit = last_amt = None
+    last_clause = None
+    parts = [_num(pool)]
+    for kind, m in events:
+        if kind in ("lit", "worth"):
+            v = float(m.group(1))
+            current -= v
+            last_lit, last_amt = v, v
+            parts.append(f"- {m.group(1)}")
+        elif kind == "klit":
+            if last_lit is None:
+                return None
+            v = _SMC_K[m.group(1)] * last_lit
+            current -= v
+            last_lit, last_amt = v, v
+            parts.append(f"- {_num(v)}")
+        else:
+            f = _fraction_value(m.group(1))
+            if f is None or not 0 < f < 1:
+                return None
+            last_amt = f * current
+            current -= last_amt
+            parts = [f"({' '.join(parts)}) * (1 - {_num(f)})"]
+        last_clause = m.string
+    nm = re.search(r"how (?:many|much) (?:\w+ )*?(?:does|do|will|did) (\w+) (?:eat|get|have)", ql)
+    if nm and last_clause is not None and nm.group(1) in last_clause \
+            and re.search(r"\b(?:eat|eats)\b", last_clause):
+        return _gated_pos(_compute(f"{_num(last_amt)}"))
+    if re.search(r"left|remaining|keep|kept|get\b", ql):
+        result = _compute(" ".join(parts))
+        if isinstance(result, float):
+            result = round(result, 9)                    # (1−f) products carry float noise
+        return _gated_pos(result)
+    return None
+
+
 _GC_K = {"twice": 2.0, "double": 2.0, "three times": 3.0, "thrice": 3.0, "half": 0.5,
          "four times": 4.0, "five times": 5.0}
 _GC_KPAT = "twice|double|three times|thrice|half|four times|five times"
@@ -11543,6 +11676,8 @@ _EARLY_SYSTEMS = [
     ("pool_literal_relational_remaining", _pool_literal_relational_remaining_system),
     # BACKWARD FRACTION CHAIN: "lost ⅓, spent ¼ of the rest, $15 left; at first?" → 15/(⅔·¾) = 30.
     ("backward_fraction_chain", _backward_fraction_chain_system),
+    # SIGNED MIXED CHAIN: pool + literal/k×lit/fraction-of-current steps, left/eat asks.
+    ("signed_mixed_chain", _signed_mixed_chain_system),
     # PRODUCT-SUM + CHANGE: "5 at $6, 10 at $14; paid $200; change?" → 30.
     ("product_sum_change", _product_sum_change_system),
     # TARGET PURCHASE GAP: "buy 8 books, $5 each, has $13; need to save?" → 27.
