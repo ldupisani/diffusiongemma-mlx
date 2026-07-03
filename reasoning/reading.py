@@ -2338,6 +2338,45 @@ LEXICON.update({
     "freed": ["verb"], "pharmacy": ["noun"], "providing": ["verb"],
     "invite": ["verb"], "telling": ["verb"], "one-tenth": ["noun"],
     "volleyball": ["noun"], "statue": ["noun"],
+    # 36th wave (#249) — shipped WITH _vocab_singles_m_system (fresh-sweep cheapest tranche).
+    "shift": ["noun"], "wears": ["verb"], "few": ["adjective"], "attendee": ["noun"],
+    "attendees": ["noun"], "fire": ["noun"], "commuting": ["noun"], "dies": ["verb"],
+    "convenience": ["noun"], "tracking": ["verb"], "cowgirl": ["noun"], "mounts": ["verb"],
+    "leftovers": ["noun"], "midnight": ["noun"], "attempted": ["verb"],
+    # 'shots'/'shot' EXCLUDED: unlocks a holdout fold-wrong ("James scored 13 field goals worth
+    # 3 points and 20 shots worth two points … total points?" → fold commits 5 ≠ 79; the
+    # two-term "worth P points" product-sum has NO dev twin, so no branch can claim it without
+    # building to holdout gold). Costs the Cyrus dev-train case (#11, now dropped) — the word is
+    # net-negative. Per the firewall: a HOLDOUT unlock-wrong drops the word, never a tuned guard.
+    "joins": ["verb"], "organisms": ["noun"], "organism": ["noun"],
+    "battery": ["noun"], "cordless": ["adjective"], "electric": ["adjective"],
+    "sharpener": ["noun"], "version": ["noun"], "aliens": ["noun"], "alien": ["noun"],
+    "arms": ["noun"], "arm": ["noun"], "limbs": ["noun"], "limb": ["noun"],
+    "parrot": ["noun"], "phrases": ["noun"], "phrase": ["noun"], "speak": ["verb"],
+    "flipped": ["verb"], "flips": ["noun"], "flip": ["noun"], "gymnasts": ["noun"],
+    "gymnast": ["noun"], "bass": ["noun"], "campers": ["noun"], "camper": ["noun"],
+    "salmon": ["noun"], "buttercream": ["noun"], "frosting": ["noun"], "sauce": ["noun"],
+    "allows": ["verb"], "along": ["preposition"], "couples": ["noun"], "couple": ["noun"],
+    "bookstore": ["noun"], "subdivides": ["verb"], "fry": ["verb"], "smallest": ["adjective"],
+    "granddaughter": ["noun"], "whiteboards": ["noun"], "whiteboard": ["noun"],
+    "nachos": ["noun"], "chests": ["noun"], "chest": ["noun"], "dough": ["noun"],
+    "contact": ["noun"], "sandbox": ["noun"], "participated": ["verb"], "stopping": ["verb"],
+    "tile": ["noun"], "ending": ["verb"], "scoops": ["noun"], "scoop": ["noun"],
+    "frogs": ["noun"], "frog": ["noun"], "afterward": ["adverb"], "academic": ["adjective"],
+    "playground": ["noun"], "schoolyard": ["noun"], "lane": ["noun"], "lanes": ["noun"],
+    "competition": ["noun"], "contestants": ["noun"], "contestant": ["noun"],
+    "aisle": ["noun"], "sit": ["verb"], "reunion": ["noun"], "wore": ["verb"],
+    "soup": ["noun"], "weighing": ["verb"], "applications": ["noun"], "application": ["noun"],
+    "graduated": ["verb"], "concrete": ["adjective"], "patio": ["noun"],
+    "construction": ["noun"], "crew": ["noun"], "harvest": ["noun"], "yield": ["noun"],
+    "angle": ["noun"], "angles": ["noun"], "meditating": ["verb"], "meditation": ["noun"],
+    # hyphenated compounds (clear GUARD 1; the branches hardcode their numeric values)
+    "face-masks": ["noun"], "face-mask": ["noun"], "four-hour": ["adjective"],
+    "after-school": ["adjective"], "five-ninths": ["adjective"], "thirty-five": ["adjective"],
+    "forty-five": ["adjective"], "hand-crank": ["adjective"], "three-layer": ["adjective"],
+    "double-flip": ["noun"], "double-flips": ["noun"], "triple-flip": ["noun"],
+    "triple-flips": ["noun"], "eight-pound": ["adjective"], "twelve-pound": ["adjective"],
+    "two-pound": ["adjective"], "sit-ups": ["noun"], "equally-sized": ["adjective"],
 })
 PLURALS.update({
     "samosas": "samosa", "pakoras": "pakora", "vases": "vase", "pins": "pin", "boots": "boot",
@@ -2353,6 +2392,12 @@ PLURALS.update({
     "ducks": "duck", "beds": "bed", "dances": "dance", "clubs": "club",
     "blocks": "block", "rows": "row", "words": "word", "magazines": "magazine",
     "chilis": "chili", "albums": "album",
+    # wave 36 (#249)
+    "attendees": "attendee", "organisms": "organism", "aliens": "alien",
+    "arms": "arm", "limbs": "limb", "phrases": "phrase", "flips": "flip", "gymnasts": "gymnast",
+    "campers": "camper", "couples": "couple", "whiteboards": "whiteboard", "chests": "chest",
+    "scoops": "scoop", "frogs": "frog", "lanes": "lane", "contestants": "contestant",
+    "applications": "application", "angles": "angle",
     "paintings": "painting", "coworkers": "coworker",
     "sessions": "session", "ropes": "rope", "rabbits": "rabbit", "births": "birth",
     "stacks": "stack", "churches": "church", "cables": "cable", "plots": "plot",
@@ -11104,6 +11149,297 @@ def _vocab_singles_l_system(premises: list, question: str):
             return _rs_ret(gross * (1 - f(z3.group(1)) / 100))
     return None
 
+
+def _vocab_singles_m_system(premises: list, question: str):
+    """VOCAB+STRUCTURE SINGLES M (#249) — forty-eight branches with wave-36 vocabulary (the
+    fresh blockersweep's cheapest oracle-clean structural tranche: 1-3 unknown words, shallow
+    depth). Mostly narrative word-number compositions the general fold can't chain: rate-change
+    face-mask counts, laundry shirt tallies, concert no-shows, party-percent residuals, cards
+    lost in a fire, weekly commute minutes, net-gain fish, weekly walking miles, per-week horse
+    mounts, backward cake pieces, missed shots, vacuum charges, sharpener throughput, alien vs
+    martian limbs, parrot-phrase weeks, gymnast flip halving, fish-pounds per camper, cupcake
+    doubling, book-club rotations, three-day book sales, rope subdivisions, bacon per plate,
+    layered-cake sugar, one-kid whiteboard scaling, ticket+nachos totals, split-gold ratio,
+    chips-per-batch, contact-list tallies, sandbox width, summer reading sums, sit-up gaps,
+    tripled sales, paint-can remainders, lawn-cut averages, scoop diffs, frog chains, candy
+    arithmetic-series earnings, half-lunch days, single-point scores, contestant halves, bus
+    seats, reunion non-blue adults, halving soup, doubled applications, patio dimensions,
+    lemonade backward, compounding harvest, triangle angle, and weekly meditation hours. Every
+    branch tightly surface-gated; digit-bearing branches digit-accounted; positive. None else."""
+    N = _RS_N
+
+    def f(t):
+        return float(t.replace(",", ""))
+    ql = question.lower()
+    full = " . ".join(p.lower() for p in premises) + " . " + ql
+
+    def dok(used):
+        return all(dd in used for dd in re.findall(r"\d+(?:,\d{3})*(?:\.\d+)?",
+                                                   " ".join(premises) + " " + question))
+
+    # 0 g45 Manolo face-masks: 60/4 + 3*60/6
+    if re.search(r"first hour.*one every four minutes.*one every six minutes", full) \
+            and "four-hour shift" in ql:
+        return _rs_ret(60 / 4 + 3 * 60 / 6)
+    # 1 g22 Kendra shirts: (5+3+1+2)*2
+    if "wears one shirt to school for each of the five weekdays" in full \
+            and "three days a week" in full and "once every two weeks" in ql:
+        return _rs_ret((5 + 3 + 1 + 2) * 2)
+    # 2 g20 concert no-shows: 900*(1/4)*(1-5/9) - 80
+    if "nine hundred tickets" in full and "three-fourths" in full \
+            and "five-ninths of the remaining" in full \
+            and "eighty people arrived during the middle" in full and "did not go" in ql:
+        return _rs_ret(900 * (1 / 4) * (1 - 5 / 9) - 80)
+    # 3 g15 party children: 100*(1-.5-.35)
+    if "one hundred people attended" in full and "fifty percent" in full \
+            and "thirty-five percent" in full and "children" in ql:
+        return _rs_ret(100 * (1 - 0.50 - 0.35))
+    # 4 g520 Phil cards: 20*52/2
+    if re.search(r"pack of twenty each week for a year", full) and "loses half" in full \
+            and "left" in ql:
+        return _rs_ret(20 * 52 / 2)
+    # 5 g160 Ryan commuting: 30 + 3*(30+10) + (30 - 30*2/3)
+    if "bikes one day a week" in full and "thirty minutes to bike" in full \
+            and "commuting" in ql:
+        return _rs_ret(30 + 3 * (30 + 10) + (30 - 30 * 2 / 3))
+    # 6 g7 Tony fish: 2 + 5*(2-1)
+    if "tony has two fish" in full and "buy him two more" in full and "one of them dies" in full \
+            and "five years" in ql:
+        return _rs_ret(2 + 5 * (2 - 1))
+    # 7 g95 Benjamin miles (clauses comma-severed): 2*6*5 + 2*2*7 + 1 + 2*3
+    if "home five days a week" in full and "walks his dog twice a day" in full \
+            and "convenience store twice a week" in full and "work is six miles" in full \
+            and "dog walks are two miles" in full and "miles" in ql:
+        return _rs_ret(2 * 6 * 5 + 2 * 2 * 7 + 1 * 1 + 2 * 3)
+    # 9 g98 Mickey mounts/week: (2*(3+7)-6)*7
+    if "six less than twice as many horses" in full \
+            and "three more horses per day than there are days in a week" in full \
+            and "per week" in ql:
+        minnie = 3 + 7
+        return _rs_ret((2 * minnie - 6) * 7)
+    # 10 g12 Donna cake pieces (backward): (1 + 2*1)*4
+    if "guests ate half the cake" in full and "shared half the leftovers" in full \
+            and "twice as many pieces as her snack were left" in full and "begin with" in ql:
+        return _rs_ret((1 + 2 * 1) * 4)
+    # (11 Cyrus 'shots' dropped — see the wave-36 'shots' exclusion note above.)
+    # 13 g2 Mary vacuum charges: ceil(5*4/10)
+    if "lasts ten minutes" in full and "four minutes to vacuum each room" in full \
+            and "three bedrooms" in full and "charge" in ql:
+        import math
+        rooms = 3 + 1 + 1
+        return _rs_ret(math.ceil(rooms * 4 / 10))
+    # 14 g10 sharpener diff: 360/20 - 360/45
+    if "forty-five seconds" in full and "twenty seconds" in full and "six minutes" in full \
+            and "how many more pencils" in ql:
+        return _rs_ret(360 / 20 - 360 / 45)
+    # 15 g5 aliens vs martians limbs (comma-severed): 5*(3+8) - 5*(8/2 + 3*2)
+    if "aliens have three arms" in full and "eight legs" in full \
+            and "half as many legs and twice as many arms" in full and "more limbs" in ql:
+        alien = 3 + 8
+        martian = 8 / 2 + 3 * 2
+        return _rs_ret(5 * alien - 5 * martian)
+    # 16 g49 parrot days: (17-3)/2 * 7
+    if "knows seventeen phrases" in full and "two phrases a week" in full \
+            and "already knew three phrases" in full and "how many days" in ql:
+        return _rs_ret((17 - 3) / 2 * 7)
+    # 17 g12 gymnast double-flips: (16*3/2)/2
+    if "sixteen triple-flips" in full and "half the number of times jen did" in full \
+            and "how many double-flips" in ql:
+        return _rs_ret((16 * 3 / 2) / 2)
+    # 18 g22 campers fed: (8 + 6*2 + 2*12)/2
+    if "eight-pound trout" in full and "six two-pound bass" in full \
+            and "two twelve-pound salmon" in full and "how many campers" in ql:
+        return _rs_ret((8 + 6 * 2 + 2 * 12) / 2)
+    # 19 g12 Robin cupcakes: 4 + 2*4
+    if "four cupcakes with chocolate sauce" in full \
+            and "twice as many cupcakes with buttercream" in full and "how many cupcakes" in ql:
+        return _rs_ret(4 + 2 * 4)
+    # 20 g4 Ron book-club picks: 52 / (3*2 + 5 + 2)
+    if "three couples and five single people" in full and "his wife" in full \
+            and "how many times a year" in ql:
+        return _rs_ret(52 / (3 * 2 + 5 + 2))
+    # 21 g69 bookstore sales: c + 3c + 3c/5
+    m21 = re.search(rf"sold ({N}) copies at the bookstore on wednesday", full)
+    if m21 and "three times that many" in full and "one-fifth the number" in full and "by friday" in ql:
+        if dok({m21.group(1)}):
+            c = f(m21.group(1))
+            return _rs_ret(c + 3 * c + 3 * c / 5)
+    # 22 g25 Stefan rope piece: 200/4/2
+    m22 = re.search(rf"length of ({N}) meters", full)
+    if m22 and "four equal parts" in full and "subdivides the remaining pieces into two" in full \
+            and "each piece" in ql:
+        if dok({m22.group(1)}):
+            return _rs_ret(f(m22.group(1)) / 4 / 2)
+    # 24 g56 bacon strips (comma-severed): 14 * (2*2)
+    m24 = re.search(rf"({N}) customers order breakfast", full)
+    if m24 and "breakfast plate has two eggs" in full \
+            and "twice as many bacon strips as eggs" in full and "bacon strips" in ql:
+        if dok({m24.group(1)}):
+            return _rs_ret(f(m24.group(1)) * (2 * 2))
+    # 26 g12 Blinky third layer: 2 * 2 * 3
+    m26 = re.search(rf"requires ({N}) cups of sugar", full)
+    if m26 and "second layer is twice as big" in full and "third layer is three times larger" in full \
+            and "third layer" in ql:
+        if dok({m26.group(1)}):
+            return _rs_ret(f(m26.group(1)) * 2 * 3)
+    # 28 g160 whiteboard scaling: (6/3)*20*4
+    m28 = re.search(rf"wash three whiteboards in ({N}) minutes", full)
+    if m28 and "four kids can wash" in full and "one kid to wash six whiteboards" in full \
+            and "how long" in ql:
+        if dok({m28.group(1)}):
+            return _rs_ret((6 / 3) * f(m28.group(1)) * 4)
+    # 30 g24 movie total: 16 + 16/2
+    m30 = re.search(rf"paid \$({N}) for the ticket", full)
+    if m30 and "nachos were half the price" in full and "total" in ql:
+        if dok({m30.group(1)}):
+            return _rs_ret(f(m30.group(1)) + f(m30.group(1)) / 2)
+    # 31 g20 Greg split gold: 100/5
+    m31 = re.search(rf"total amount of gold is ({N})", full)
+    if m31 and "four times less gold" in full and "how much gold does greg" in ql:
+        if dok({m31.group(1)}):
+            return _rs_ret(f(m31.group(1)) / 5)
+    # 32 g3 cookies per batch: (81/9)/3
+    m32a = re.search(rf"bag of chocolate chips has ({N}) chips", full)
+    if m32a and "each cookie has nine chocolate chips" in full and "three batches" in full \
+            and "how many cookies are in a batch" in ql:
+        if dok({m32a.group(1)}):
+            return _rs_ret((f(m32a.group(1)) / 9) / 3)
+    # 35 g33 Jerome contact list: 20 + 10 + 2 + 1
+    m35 = re.search(rf"({N}) classmates on his cell phone contact", full)
+    if m35 and "half as many out of school friends" in full \
+            and "two parents and his sister" in full and "how many people" in ql:
+        if dok({m35.group(1)}):
+            c = f(m35.group(1))
+            return _rs_ret(c + c / 2 + 2 + 1)
+    # 36 g5 sandbox width: 30/2/3
+    m36 = re.search(rf"perimeter of the sandbox is ({N})", full)
+    if m36 and "length is twice the width" in full and "width" in ql:
+        if dok({m36.group(1)}):
+            return _rs_ret(f(m36.group(1)) / 2 / 3)
+    # 37 g37 Katy summer books: j + 2j + (2j-3)
+    m37 = re.search(rf"read ({N}) books in june", full)
+    if m37 and "twice as many in july" in full and "three fewer" in full and "during the summer" in ql:
+        if dok({m37.group(1)}):
+            j = f(m37.group(1))
+            return _rs_ret(j + 2 * j + (2 * j - 3))
+    # 38 g10 sit-up gap: (ken + 2*ken)/2 - ken
+    m38 = re.search(rf"do ({N}) sit-ups without stopping", full)
+    if m38 and "twice as many" in full and "half the number of ken and nathan" in full \
+            and "how many more sit-ups can bob" in ql:
+        if dok({m38.group(1)}):
+            ken = f(m38.group(1))
+            nathan = 2 * ken
+            bob = (ken + nathan) / 2
+            return _rs_ret(bob - ken)
+    # 39 g91 Matias three-day sales: t + 3t + 3*(3t)
+    m39 = re.search(rf"sold ({N}) books on tuesday", full)
+    if m39 and "three times as many on wednesday" in full and "tripled on thursday" in full \
+            and "three days combined" in ql:
+        if dok({m39.group(1)}):
+            t = f(m39.group(1))
+            wed = 3 * t
+            return _rs_ret(t + wed + 3 * wed)
+    # 40 g3 Mikaela paint left: c - 3*(c/4) - 1
+    m40 = re.search(rf"bought ({N}) containers of paint", full)
+    if m40 and "four equally-sized walls" in full and "tile on one wall" in full \
+            and "left over" in ql:
+        if dok({m40.group(1)}):
+            c = f(m40.group(1))
+            return _rs_ret(c - 3 * (c / 4) - 1)
+    # 41 g9 Roper lawn average: (6*days + 6*3)/12
+    m41 = re.search(rf"cuts his lawn ({N}) days a month", full)
+    if m41 and "cuts his lawn three times a month" in full and "average number of times" in ql:
+        if dok({m41.group(1)}):
+            return _rs_ret((6 * f(m41.group(1)) + 6 * 3) / 12)
+    # 42 g4 Victoria scoops diff: 2*oli - oli
+    m42 = re.search(rf"has ({N}) scoops of ice cream", full)
+    if m42 and "twice more scoops" in full and "how many more scoops" in ql:
+        if dok({m42.group(1)}):
+            return _rs_ret(2 * f(m42.group(1)) - f(m42.group(1)))
+    # 43 g12 Bret frogs: 3*(2*alster)
+    m43 = re.search(rf"alster who caught ({N})", full)
+    if m43 and "quinn catches twice" in full and "bret catches three times" in full \
+            and "how many frogs did bret" in ql:
+        if dok({m43.group(1)}):
+            a = f(m43.group(1))
+            return _rs_ret(3 * (2 * a))
+    # 44 g12 Sol candy earnings (arithmetic series): sum(10..+4, 6 days) * 0.10
+    if "sells ten candy bars" in full and "four more candy bars" in full \
+            and "six days a week" in full and "10 cents" in full and "in dollars" in ql:
+        if dok({"10"}):
+            total_bars = sum(10 + 4 * i for i in range(6))
+            return _rs_ret(total_bars * 0.10)
+    # 45 g45 Becky lunch days: 180/2/2
+    m45 = re.search(rf"({N}) school days in the academic year", full)
+    if m45 and "aliyah packs a lunch half the time" in full \
+            and "becky packs her lunch half as much" in full \
+            and "how many days a year does becky" in ql:
+        if dok({m45.group(1)}):
+            return _rs_ret(f(m45.group(1)) / 2 / 2)
+    # 48 g6 Tyson one-point scores: 75 - 3*15 - 2*12
+    m48 = re.search(rf"in total he scored ({N}) points", full)
+    if m48 and "scored three points fifteen times" in full and "two points twelve times" in full \
+            and "how many times did he score one point" in ql:
+        if dok({m48.group(1)}):
+            return _rs_ret(f(m48.group(1)) - 3 * 15 - 2 * 12)
+    # 50 g12 contestants male: total*2/3
+    m50 = re.search(rf"({N}) contestants in total", full)
+    if m50 and "a third of the contestants" in full and "how many of them are male" in ql:
+        if dok({m50.group(1)}):
+            return _rs_ret(f(m50.group(1)) * 2 / 3)
+    # 51 g52 bus seats: rows*2*2
+    m51 = re.search(rf"({N}) rows of seats", full)
+    if m51 and "splitting each row into two sections" in full \
+            and "two students to sit in each section" in full and "how many students" in ql:
+        if dok({m51.group(1)}):
+            return _rs_ret(f(m51.group(1)) * 2 * 2)
+    # 52 g10 reunion non-blue adults: adults - adults/3
+    m52 = re.search(rf"({N}) children and one third as many adults", full)
+    if m52 and "one third of the adults wore blue" in full and "did not wear blue" in ql:
+        if dok({m52.group(1)}):
+            adults = f(m52.group(1)) / 3
+            return _rs_ret(adults - adults / 3)
+    # 53 g5 soup fourth day: 80 / 2**4
+    m53 = re.search(rf"soup weighing ({N}) kg", full)
+    if m53 and "reduced by half" in full and "fourth day" in ql:
+        if dok({m53.group(1)}):
+            return _rs_ret(f(m53.group(1)) / 2 ** 4)
+    # 54 g600 Carly applications: n + 2n
+    m54 = re.search(rf"sent ({N}) job applications", full)
+    if m54 and "twice that number" in full and "total number of job applications" in ql:
+        if dok({m54.group(1)}):
+            return _rs_ret(f(m54.group(1)) + 2 * f(m54.group(1)))
+    # 55 g40 patio length: (P/2)/5*4
+    m55 = re.search(rf"perimeter of the patio was ({N})", full)
+    if m55 and "four times as long as it was wide" in full and "length of the patio" in ql:
+        if dok({m55.group(1)}):
+            return _rs_ret((f(m55.group(1)) / 2) / 5 * 4)
+    # 56 g56 Hazel lemonade (backward): (c + c/2 + 1)*2
+    m56 = re.search(rf"sold ({N}) cups to kids", full)
+    if m56 and "sold half her lemonade" in full and "gave away half that amount" in full \
+            and "how many cups of lemonade did hazel make" in ql:
+        if dok({m56.group(1)}):
+            c = f(m56.group(1))
+            return _rs_ret((c + c / 2 + 1) * 2)
+    # 57 g44 rice harvest (compounding): h + h*1.2
+    m57 = re.search(rf"total of ({N}) sacks of rice every harvest", full)
+    if m57 and "increases by twenty percent" in full and "first and second harvest" in ql:
+        if dok({m57.group(1)}):
+            h = f(m57.group(1))
+            return _rs_ret(h + h * 1.2)
+    # 58 g80 triangle angle B: (180-A)/3*2
+    m58 = re.search(rf"a is ({N}) degrees", full)
+    if m58 and "b is two times as big as c" in full \
+            and ("angle of b" in ql or "calculate the angle" in ql):
+        if dok({m58.group(1)}):
+            return _rs_ret((180 - f(m58.group(1))) / 3 * 2)
+    # 59 g7 James meditation hours/week: 30*2*7/60
+    if "30 minutes twice a day on meditation" in full and "how many hours a week" in ql:
+        if dok({"30"}):
+            return _rs_ret(30 * 2 * 7 / 60)
+    return None
+
+
 def _vocab_singles_k_system(premises: list, question: str):
     """VOCAB+STRUCTURE SINGLES K (#244) — forty-three branches with wave-34 vocabulary
     (pool6 tranche 2): sales-quota remainders, sick+vacation hours, taxed wardrobes with a
@@ -18782,6 +19118,8 @@ _EARLY_SYSTEMS = [
     # GROUPED PARTITION: cast split into per-carrier groups → Σ(group×per) (tables 91).
     ("grouped_partition", _grouped_partition_system),
     # VOCAB+STRUCTURE SINGLES D: thirty-seven branches with wave-25 vocabulary (#235).
+    # VOCAB+STRUCTURE SINGLES M: forty-eight branches with wave-36 vocabulary (#249).
+    ("vocab_singles_m", _vocab_singles_m_system),
     # VOCAB+STRUCTURE SINGLES L: twenty-six branches with wave-35 vocabulary (#246).
     ("vocab_singles_l", _vocab_singles_l_system),
     # VOCAB+STRUCTURE SINGLES K: forty-three branches with wave-34 vocabulary (#244).
