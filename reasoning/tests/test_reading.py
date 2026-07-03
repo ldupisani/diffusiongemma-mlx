@@ -7943,5 +7943,31 @@ class TestIncrement238AgeEquations(unittest.TestCase):
         self.assertIsNone(reading._age_equations_system(prem, q))
 
 
+class TestIncrement239VocabSinglesF(unittest.TestCase):
+    """#239 — vocab+structure singles F (wave 29) + GUARD 11 (period-basis mismatch)."""
+
+    def test_exemplar_branch_solves(self):
+        # one representative of the forty-two: the two-phase weight loss
+        self.assertEqual(reading.solve(
+            "Jordan decides to start an exercise program when he weighs 250 pounds. "
+            "For the first 4 weeks, he loses 3 pounds a week. After that, he loses 2 "
+            "pounds a week for 8 weeks. How much does Jordan now weigh?"), 222)
+
+    def test_guard11_period_basis_mismatch_declines(self):
+        # a per-DAY premise asked over a bare question-final WEEK: the fold's unit
+        # conversion (gallons→quarts) must not commit the per-day amount as the weekly
+        # answer. INTENT pin: not a number (the string shape may churn with vocab waves).
+        self.assertNotIsInstance(reading.solve(
+            "John drinks 1.5 gallons of water a day. "
+            "How many quarts does he drink a week?"), (int, float))
+
+    def test_guard11_digit_span_exempt(self):
+        # a DIGIT span in the question ("in 10 years") is not the guard's shape — the
+        # question-duration chain composes it (the Adam pin, kept close for contrast)
+        self.assertEqual(reading.solve(
+            "Adam teaches 50 students a year. "
+            "How many students will Adam teach in 10 years?"), 500)
+
+
 if __name__ == "__main__":
     unittest.main()
