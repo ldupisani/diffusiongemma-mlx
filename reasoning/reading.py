@@ -10020,23 +10020,49 @@ def _pieces_pool_system(premises: list, question: str):
 
     cm = re.search(r"\b(?:orders?|ordered|buys?|bought|made|got)\s+(\d+|one|two|three|four|five|"
                    r"six|seven|eight|nine|ten)\s+(?:different |large |whole |big |birthday |cookie )*"
-                   r"(?:pizzas?|pies?|pans?|boxes?|cakes?)\b", full)
+                   r"(?:pizzas?|pies?|pans?|box(?:es)?|cakes?)\b", full)
     C = _wn(cm.group(1)) if cm else None
+    onem = None
+    if C is None:                                        # a SINGLE container ("orders a pizza",
+        onem = re.search(r"\b(?:orders?|ordered|buys?|bought)\s+(?:a|an|1)\s+"    # "bought 1 box
+                         r"(?:large |whole )?(?:pizza|pie|cake|box of pizza)\b", full)   # of pizza")
+        if onem is not None:
+            C = 1.0
     pm = (re.search(r"cut(?:\s+\w+){0,3} into (\d+)(?: big| square| large)* (?:slices?|pieces?)", full)
           or re.search(r"\b(\d+) slices? (?:each|in a)", full)
           or re.search(r"each (?:pizza|pie|pan|cake) (?:has|had|is|was) (\d+) slices?", full)
           or re.search(r"(?:pizza|pie|cake) (?:has|had|with) (\d+) slices?", full))
     P = _wn(pm.group(1)) if pm else None
     used = {m.group(1) for m in (cm, pm) if m}
+    if onem is not None and "1" in onem.group(0):
+        used.add("1")
 
     def digits_ok(*extra):
         u = used | {e for e in extra if e}
         return all(d in u for d in re.findall(r"\d+(?:\.\d+)?", body + " " + question))
 
-    if re.search(r"how many slices? (?:will remain|(?:are|were|is|was) left|remain\b|left\b)", ql):
+    if re.search(r"how many slices? (?:of \w+ )?(?:will remain|(?:are|were|is|was) left|remain\b|left\b)", ql):
         em = re.search(r"(?:eats?|ate)\s+(\d+) slices?", full)
         if C and P and em and digits_ok(em.group(1)):
             return _gated_pos_int(_compute(f"{_num(C)} * {_num(P)} - {em.group(1)}"))
+        fm2 = re.search(r"(\w+(?:-\w+)?|\d+/\d+) of (?:the|it|his|her)[^.]*?(?:was |were )?eaten", full)
+        f = _fraction_value(fm2.group(1)) if fm2 else None
+        if C and P and f and 0 < f < 1 \
+                and digits_ok(fm2.group(1) if "/" in fm2.group(1) else None):
+            return _gated_pos_int(_compute(f"{_num(C)} * {_num(P)} * (1 - {_num(f)})"))
+        return None
+    if re.search(r"how many calories did (?:he|she|\w+) eat", ql):
+        efm = re.search(r"eats? (\w+(?:-\w+)?|\d+/\d+) of (?:it|the \w+)", full)
+        f = _fraction_value(efm.group(1)) if efm else None
+        calm = re.search(r"each slice (?:was|is|has|had|contains) (\d+) calories", full)
+        if C and P and f and 0 < f <= 1 and calm \
+                and digits_ok(calm.group(1), efm.group(1) if "/" in efm.group(1) else None):
+            return _gated_pos(_compute(f"{_num(C)} * {_num(P)} * {_num(f)} * {calm.group(1)}"))
+        return None
+    if re.search(r"how many goals did they score per game on average", ql):
+        gmm = re.search(r"(?:had|played) (\d+) games", full)
+        if C and P and gmm and "one slice for every goal" in full and digits_ok(gmm.group(1)):
+            return _gated_pos(_compute(f"{_num(C)} * {_num(P)} / {gmm.group(1)}"))
         return None
     km = re.search(r"how much did (\d+) slices? cost", ql)
     if re.search(r"how much did each (?:piece|slice|brownie)(?: of \w+)? cost", ql) or km:
@@ -10051,7 +10077,7 @@ def _pieces_pool_system(premises: list, question: str):
                        r"eight|nine|ten)(?: of (?:his|her|their))? friends", full)
         persons = _wn(gm.group(1)) if gm else ((1 + _wn(fm.group(1))) if fm and _wn(fm.group(1)) else None)
         em = re.search(r"each person (?:will eat|eats|gets?|will get)\s+(\d+) slices?", full)
-        if persons and P and em and C is None \
+        if persons and P and em and cm is None \
                 and digits_ok(gm.group(1) if gm else fm.group(1), em.group(1)):
             return _gated_pos_int(_compute(f"{_num(persons)} * {em.group(1)} / {_num(P)}"))
         return None

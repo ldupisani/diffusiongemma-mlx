@@ -7308,6 +7308,27 @@ class TestIncrement209PiecesPool(unittest.TestCase):
             "Luigi bought four pizzas for $80 and 2 sodas. Each pizza was cut into 5 "
             "pieces. How much did each piece of pizza cost, in dollars?"), "undetermined")
 
+    def test_calories_of_fraction_eaten(self):
+        # 1·8·½·300 = 1200 (single container via "orders a pizza")
+        self.assertEqual(reading.solve(
+            "Bob orders a pizza with 8 slices. He eats half of it and each slice was "
+            "300 calories. How many calories did he eat?"), 1200)
+
+    def test_fraction_remain(self):
+        # 1·16·(1−¾) = 4
+        self.assertEqual(reading.solve(
+            "A family bought 1 box of pizza that is cut into 16 slices. Only "
+            "three-fourths of the pizza was eaten by the family. How many slices of "
+            "pizza were left?"), 4)
+
+    def test_goals_per_game_average(self):
+        # 6·12/8 = 9 (slice-per-goal identity)
+        self.assertEqual(reading.solve(
+            "Mr. Mitchell is buying pizzas for the soccer team. He buys one slice for "
+            "every goal they scored on the season. A large pizza has 12 slices. If he "
+            "bought 6 pizzas, and the team had 8 games, how many goals did they score "
+            "per game on average?"), 9)
+
 
 if __name__ == "__main__":
     unittest.main()
