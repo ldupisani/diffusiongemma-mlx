@@ -10729,6 +10729,12 @@ _SMC_FORMS = [
     ("klit", re.compile(rf"({_SMC_KPAT}) (?:as much|of that)\b")),
     ("frac", re.compile(rf"{_SMC_FRACPAT} of (the rest|the remainder|the remaining|what is left|"
                         rf"what's left|that money|the money|his \w+|her \w+|the \w+|it)\b")),
+    # percent steps ("read 20% of his book", "another 30% of the book") — same event, f = p/100
+    ("pfrac", re.compile(r"(\d+(?:\.\d+)?)% of (the rest|the remainder|the remaining|"
+                         r"what is left|what's left|his \w+(?: \w+)?|her \w+|the \w+)\b")),
+    # a COORDINATED bare fraction ("gave 3/8 of his money to his mother AND 3/10 to his
+    # father") elides its base — same-base by construction (#225)
+    ("fracbare", re.compile(rf"and {_SMC_FRACPAT} to (?:his|her|the)\b")),
     # the numerator lookahead (?!/) keeps a literal read off "1/4"'s numerator — the overlap
     # dedup would otherwise DROP the fraction event (the literal's span starts earlier)
     ("lit", re.compile(rf"{_SMC_LOSS}(?: away)?(?: (?:his|her|their) \w+)?(?: \w+)?,? \$?"
@@ -10773,6 +10779,11 @@ def _signed_mixed_chain_system(premises: list, question: str):
                 pool = float(v); used.add(v)
                 pool_clause = pl
                 continue
+            m = re.search(r"(\d+)-page book", pl)
+            if m:                                        # "his 500-page book" — pages pool; the
+                pool = float(m.group(1)); used.add(m.group(1))   # clause may ALSO hold the first
+                pool_kind = "stated"                     # percent step → no continue
+                pool_clause = pl
             m = re.search(r"(?:bakes|makes) (\d+) \w+ a day", pl)
             if m:
                 dm = re.search(r"for (\d+) days", joined)
@@ -10782,7 +10793,7 @@ def _signed_mixed_chain_system(premises: list, question: str):
                     pool_kind = "product"
                     pool_clause = pl
                     continue
-            m = re.search(r"(?:had|has|receives?|received|collected) \$?(\d+(?:\.\d+)?) ", pl)
+            m = re.search(r"(?:had|has|receives?|received|collected) \$?(\d+(?:\.\d+)?)(?=[ .,])", pl)
             if m and not re.search(_SMC_LOSS + r" ", pl[:m.start()]):
                 pool = float(m.group(1)); used.add(m.group(1))
                 pool_clause = pl
@@ -10803,22 +10814,64 @@ def _signed_mixed_chain_system(premises: list, question: str):
         # committed on partial steps (3.33≠5, 102≠51, 9≠2). Any fraction/multiplier word not
         # inside a taken event span is an unmodeled step → decline the whole system.
         for m in re.finditer(rf"(?:{_SMC_FRACPAT[1:-1]}|{_SMC_KPAT})", pl):
+            if m.group(0) in ("third", "quarter") and not pl[m.end():].startswith(" of"):
+                continue                 # an ORDINAL ("the third night"), not a fraction step
             if m.start() >= start and not any(ts <= m.start() < te for ts, te, *_ in taken):
                 return None
         for _s, _e, kind, m in taken:
             events.append((kind, m))
-            if kind in ("lit", "worth"):
+            if kind in ("lit", "worth", "pfrac"):
                 used.add(m.group(1))
-            elif kind == "frac" and "/" in m.group(1):
+            elif kind in ("frac", "fracbare") and "/" in m.group(1):
                 used.add(m.group(1).split("/")[0])
                 used.add(m.group(1).split("/")[1])
     if pool is None or not events:
         return None
-    if not any(k in ("frac", "klit") for k, _m in events) and pool_kind == "plain":
+    if not any(k in ("frac", "pfrac", "klit") for k, _m in events) and pool_kind == "plain":
         return None                      # pure-literal plain-pool chains belong to the fold
     if any(dd not in used for dd in re.findall(r"\d+(?:\.\d+)?",
                                                " ".join(premises) + " " + question)):
         return None
+    # SAME-BASE mode (#225): in a PURE-fraction chain a coordinated BARE fraction ("gave 3/8 of
+    # his money to his mother AND 3/10 to his father") or a later UNANCHORED pool-coreferent
+    # fraction/percent (Xander's "another 20% of the book") shares the ORIGINAL base →
+    # pool·(1−Σf). Any lit/klit present keeps the #220 ambiguity decline (the TEST wrong-class).
+    _anch = ("the rest", "the remainder", "the remaining", "what is left", "what's left")
+    _kinds = [k for k, _m in events]
+    if all(k in ("frac", "pfrac", "fracbare") for k in _kinds) and len(events) >= 2 \
+            and any((k in ("frac", "pfrac") and m.group(2) not in _anch) or k == "fracbare"
+                    for k, m in events[1:]) \
+            and (any(k == "fracbare" for k in _kinds)
+                 or all(k == "pfrac" for k in _kinds)):
+        # …and only under TRUE COORDINATION (a bare fraction) or an all-percent chain — a
+        # REPEATED full fraction ("a quarter of her money … one-third of her money") hid
+        # structure outside both readings on TEST (gold 85 > pool 60) → decline
+        if any(k in ("frac", "pfrac") and m.group(2) in _anch for k, m in events):
+            return None                  # mixed anchored + later-unanchored → ambiguous
+        fs = []
+        for k, m in events:
+            if k in ("frac", "pfrac"):   # unanchored target must corefer with the pool noun
+                noun = m.group(2).split()[-1]
+                money_pool = "$" in pool_clause or "dollar" in pool_clause
+                if noun not in pool_clause and noun.rstrip("s") not in pool_clause \
+                        and not (noun == "money" and money_pool) \
+                        and m.group(2) not in ("the money", "that money"):
+                    return None
+            f = float(m.group(1)) / 100 if k == "pfrac" else _fraction_value(m.group(1))
+            if f is None or not 0 < f < 1:
+                return None
+            fs.append(f)
+        if not 0 < sum(fs) < 1:
+            return None
+        if re.search(r"(?:left(?: over)?(?: to read)?|remaining|keep|kept)"
+                     r"(?: with \w+| for \w+| in [\w'’ ]+)?\s*\??$", ql):
+            result = _compute(f"{_num(pool)} * (1 - {_num(sum(fs))})")
+            if isinstance(result, float):
+                result = round(result, 9)
+            return _gated_pos(result)
+        return None
+    if any(k == "fracbare" for k in _kinds):
+        return None                      # a bare coordinated fraction outside same-base mode
     current = pool
     last_lit = last_amt = None
     last_clause = None

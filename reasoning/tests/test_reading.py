@@ -1776,10 +1776,11 @@ class TestIncrement106SlashFraction(unittest.TestCase):
                                        "How much money does Mary have left?"), 50)
 
     def test_fraction_chain_declines_not_commits_garbage(self):
-        # the 2nd fraction "3/10 to her dad" has an ELIDED base we don't compose → decline, never a
-        # near-$200 fractional commit (the pre-fix bug was returning 199.625)
+        # RE-PINNED (#225): the elided base NOW composes — a coordinated bare fraction is
+        # SAME-BASE: 200·(1 − 3/8 − 3/10) = 65. (The pre-#106 bug returned 199.625; the #106
+        # decline held until the same-base branch landed.)
         self.assertEqual(reading.solve("Ann had 200 dollars. She gave 3/8 of her money to her mom and "
-                                       "3/10 to her dad. How much money does Ann have left?"), "undetermined")
+                                       "3/10 to her dad. How much money does Ann have left?"), 65)
 
 
 class TestImperativeQuestionClause(unittest.TestCase):
@@ -7605,11 +7606,11 @@ class TestIncrement219SignedMixedChain(unittest.TestCase):
             "stickers did he keep?"), 54)
 
     def test_same_base_second_fraction_still_declines(self):
-        # "and 3/10 to her dad" has an elided base (SAME-base, not of-current) — the
-        # chain must not misread it as of-current; stays declined (the documented residue)
+        # RE-PINNED (#225): the SAME-BASE branch now composes this correctly —
+        # 200·(1 − 3/8 − 3/10) = 65 (a coordinated bare fraction shares the original base)
         self.assertEqual(reading.solve(
             "John had $200. He gave 3/8 of his money to his mother and 3/10 to his "
-            "father. How much money did John have left?"), "undetermined")
+            "father. How much money did John have left?"), 65)
 
     def test_digit_free_gain_step_declines(self):
         # "her mother gave Sabrina HALF the number…" is a digit-free GAIN the chain doesn't
@@ -7756,6 +7757,21 @@ class TestIncrement219SignedMixedChain(unittest.TestCase):
             "One kilogram of tomatoes is 20% cheaper than one kilogram of cucumbers. "
             "One kilogram of cucumbers costs $5. What is the price of two kilograms of "
             "tomatoes and three kilograms of cucumbers?"), 23)
+
+    def test_same_base_percent_nights(self):
+        # #225: 500·(1 − 0.2 − 0.2 − 0.3) = 150 — percent steps, "the third night" ordinal
+        # exempted from the uncovered-occurrence guard
+        self.assertEqual(reading.solve(
+            "Xander read 20% of his 500-page book in one hour. The next night he read "
+            "another 20% of the book. On the third night, he read 30% of his book. How "
+            "many pages does he have left to read?"), 150)
+
+    def test_same_base_requires_pure_fraction_chain(self):
+        # a literal step present → the base stays ambiguous → decline (the #220 rule; Leo)
+        self.assertEqual(reading.solve(
+            "Leo had 80 marbles. He gave 20 marbles to his cousin and then gave 1/4 of "
+            "his marbles to his sister. How many marbles does Leo have left?"),
+            "undetermined")
 
     def test_later_unanchored_fraction_declines(self):
         # #220 (TEST-checkpoint-forced): an UNANCHORED fraction after a prior event has a
