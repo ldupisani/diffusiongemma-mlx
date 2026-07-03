@@ -10341,11 +10341,14 @@ _SMC_KPAT = "twice|thrice|double|half|three times|four times"
 _SMC_FRACPAT = (r"(half|two-thirds|one-third|one-fourth|three-fourths|\d+/\d+|a third|a quarter|"
                 r"third|quarter)")
 _SMC_LOSS = (r"(?:gave away|gave|gives|give|spent|spends|spend|paid|pays|pay|used|uses|use|"
-             r"ate|eats|eat|bought|buys|buy|takes|took|take|sells|sold|sell)")
+             r"ate|eats|eat)")  # NO sell/buy/take families: selling is a GAIN in a money
+#                                 context and buying a GAIN in an object context (TEST-
+#                                 checkpoint-caught wrong-classes); money-buys read via
+#                                 "worth $"/"paid"
 _SMC_FORMS = [
     ("klit", re.compile(rf"({_SMC_KPAT}) (?:as much|of that)\b")),
-    ("frac", re.compile(rf"{_SMC_FRACPAT} of (?:the rest|the remainder|what is left|what's left|"
-                        rf"that money|his \w+|her \w+|the \w+|it)\b")),
+    ("frac", re.compile(rf"{_SMC_FRACPAT} of (the rest|the remainder|the remaining|what is left|"
+                        rf"what's left|that money|the money|his \w+|her \w+|the \w+|it)\b")),
     # the numerator lookahead (?!/) keeps a literal read off "1/4"'s numerator — the overlap
     # dedup would otherwise DROP the fraction event (the literal's span starts earlier)
     ("lit", re.compile(rf"{_SMC_LOSS}(?: away)?(?: (?:his|her|their) \w+)?(?: \w+)?,? \$?"
@@ -10372,6 +10375,7 @@ def _signed_mixed_chain_system(premises: list, question: str):
     used = set()
     pool = None
     pool_kind = "plain"
+    pool_clause = ""
     events = []
     joined = " . ".join(x.lower() for x in premises)
     for p in premises:
@@ -10381,11 +10385,13 @@ def _signed_mixed_chain_system(premises: list, question: str):
             m = re.search(r"\bhalf of \w+['’]s money was \$(\d+(?:\.\d+)?)", pl)
             if m:
                 pool = 2 * float(m.group(1)); used.add(m.group(1)); pool_kind = "derived"
+                pool_clause = pl
                 continue
             m = re.search(r"is made up of (\d+) \w+|orders an (\d+) piece", pl)
             if m:
                 v = m.group(1) or m.group(2)
                 pool = float(v); used.add(v)
+                pool_clause = pl
                 continue
             m = re.search(r"(?:bakes|makes) (\d+) \w+ a day", pl)
             if m:
@@ -10394,10 +10400,12 @@ def _signed_mixed_chain_system(premises: list, question: str):
                     pool = float(m.group(1)) * float(dm.group(1))
                     used.add(m.group(1)); used.add(dm.group(1))
                     pool_kind = "product"
+                    pool_clause = pl
                     continue
             m = re.search(r"(?:had|has|receives?|received|collected) \$?(\d+(?:\.\d+)?) ", pl)
             if m and not re.search(_SMC_LOSS + r" ", pl[:m.start()]):
                 pool = float(m.group(1)); used.add(m.group(1))
+                pool_clause = pl
                 start = m.end()                          # a loss may share the pool's clause
         clause_events = []
         for kind, pat in _SMC_FORMS:
@@ -10434,6 +10442,7 @@ def _signed_mixed_chain_system(premises: list, question: str):
     current = pool
     last_lit = last_amt = None
     last_clause = None
+    first_event = True
     parts = [_num(pool)]
     for kind, m in events:
         if kind in ("lit", "worth"):
@@ -10452,15 +10461,44 @@ def _signed_mixed_chain_system(premises: list, question: str):
             f = _fraction_value(m.group(1))
             if f is None or not 0 < f < 1:
                 return None
+            # TEST-checkpoint tightenings: (a) a fraction of "the/his/her <noun>" reads as
+            # OF-CURRENT only when the noun COREFERS with the POOL clause's noun ("half of the
+            # CAKES" ← "bakes 20 CAKES a day"; "money" corefers with a $/dollars pool) — an
+            # unrelated definite ("half of the students") is a SUBGROUP, not a depletion.
+            # (b) THE #181 DEPLETION RULE, final form: an UNANCHORED fraction ("of his marbles",
+            # "of her money") is of-current ONLY as the FIRST EVENT, where of-original and
+            # of-current coincide. After ANY prior event the base is genuinely ambiguous
+            # (same-base "gave ⅓ of her money … and ¼ of her money" = gold 5, vs of-current
+            # after a literal = a second TEST wrong) → decline. Remainder-ANCHORED fractions
+            # ("of the rest/remaining/what is left") are of-current at any position.
+            tgt = m.group(2)
+            anchored = tgt in ("the rest", "the remainder", "the remaining",
+                               "what is left", "what's left")
+            if not anchored and tgt not in ("the money", "that money", "it"):
+                noun = tgt.split()[-1]
+                money_pool = "$" in pool_clause or "dollar" in pool_clause
+                if noun not in pool_clause and noun.rstrip("s") not in pool_clause \
+                        and not (noun == "money" and money_pool):
+                    return None
+            if not anchored and not first_event:
+                return None                              # a later un-anchored fraction — ambiguous base
             last_amt = f * current
             current -= last_amt
             parts = [f"({' '.join(parts)}) * (1 - {_num(f)})"]
+        first_event = False
         last_clause = m.string
     nm = re.search(r"how (?:many|much) (?:\w+ )*?(?:does|do|will|did) (\w+) (?:eat|get|have)", ql)
     if nm and last_clause is not None and nm.group(1) in last_clause \
             and re.search(r"\b(?:eat|eats)\b", last_clause):
         return _gated_pos(_compute(f"{_num(last_amt)}"))
-    if re.search(r"left|remaining|keep|kept|get\b", ql):
+    if re.search(r"\bget\b", ql) and "left with" not in joined:
+        return None                                      # a "get" ask is the REMAINDER only for
+    #                                                      an explicit "is left with" getter
+    # the remainder word must be QUESTION-FINAL — a mid-question "left" can sit inside a
+    # relative clause ("2/5 of what was LEFT … how many did the brother GET?") where the true
+    # ask is a step amount, not the remainder (TEST-checkpoint-caught wrong-class)
+    if re.search(r"(?:left(?: over)?|remaining|keep|kept)(?: with \w+| for \w+)?\s*\??$", ql) \
+            or (re.search(r"\bget\b", ql) and "left with" in joined):
         result = _compute(" ".join(parts))
         if isinstance(result, float):
             result = round(result, 9)                    # (1−f) products carry float noise

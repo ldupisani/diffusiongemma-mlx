@@ -7620,6 +7620,16 @@ class TestIncrement219SignedMixedChain(unittest.TestCase):
             "her cookies to her sister. If Sabrina had 20 cookies at the start, how "
             "many cookies are left with her?"), "undetermined")
 
+    def test_later_unanchored_fraction_declines(self):
+        # #220 (TEST-checkpoint-forced): an UNANCHORED fraction after a prior event has a
+        # genuinely ambiguous base — same-base ("¼ of his marbles" = of the ORIGINAL) vs
+        # of-current both occur in the gold; guessing committed TEST wrongs. Only a
+        # remainder-ANCHORED later fraction ("of the rest/what is left") is of-current.
+        self.assertEqual(reading.solve(
+            "Leo had 80 marbles. He gave 20 marbles to his cousin and then gave 1/4 of "
+            "his marbles to his sister. How many marbles does Leo have left?"),
+            "undetermined")
+
 
 if __name__ == "__main__":
     unittest.main()
