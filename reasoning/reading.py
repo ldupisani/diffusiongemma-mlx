@@ -1996,6 +1996,13 @@ LEXICON.update({
     # structure-blocked beyond the word (provisioning algebra, equation solving, threshold
     # semantics) — type them only WITH their structures (the semantics-first rule).
     "fox": ["noun"], "maximum": ["adjective"],
+    # 21st wave (#217, the post-#215 harvest): "spots" is PLURAL-SURFACE ONLY (bare "spot" is a
+    # verb collision). "stationery" STAYS EXCLUDED — the #215 sign fix cured its old −50 wrong
+    # (the sweep re-classified it as a pure gain) but the diff's holdout half caught a SECOND
+    # wrong-class ("a stationery SHOP" modifier → 20≠2, a multi-step price misread); 4th
+    # instance of sweep-safe ≠ holdout-safe. NEW wrong-on-inject respected: "quantity"
+    # (Adam 22≠240 — "3 times that quantity" needs an anaphoric-quantity read first).
+    "spots": ["noun"], "album": ["noun"],
 })
 PLURALS.update({
     "samosas": "samosa", "pakoras": "pakora", "vases": "vase", "pins": "pin", "boots": "boot",
@@ -2010,7 +2017,7 @@ PLURALS.update({
     "seats": "seat", "buckets": "bucket", "wives": "wife", "donations": "donation",
     "ducks": "duck", "beds": "bed", "dances": "dance", "clubs": "club",
     "blocks": "block", "rows": "row", "words": "word", "magazines": "magazine",
-    "chilis": "chili",
+    "chilis": "chili", "albums": "album",
     "notebooks": "notebook", "zoos": "zoo", "kitchens": "kitchen", "factories": "factory",
     "deliveries": "delivery", "destinations": "destination", "payments": "payment",
     "expenses": "expense", "batches": "batch", "types": "type", "questions": "question",
