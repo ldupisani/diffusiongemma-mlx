@@ -9999,7 +9999,7 @@ def _percent_price_relational_system(premises: list, question: str):
     premise instead buys BOTH items → Σ count·price, each count-noun mapping to exactly one of the
     two premises. None otherwise."""
     ql = question.lower()
-    if "how much" not in ql or _has_digit(ql):
+    if ("how much" not in ql and "what is the price of" not in ql) or _has_digit(ql):
         return None
     pct = sign = None
     pct_prem = base_prem = None
@@ -10007,7 +10007,7 @@ def _percent_price_relational_system(premises: list, question: str):
     count_pairs = []
     for p in premises:
         pl = p.lower()
-        m = re.search(r"(\d+(?:\.\d+)?)\s*% (more|less) expensive", pl)
+        m = re.search(r"(\d+(?:\.\d+)?)\s*% (?:(more|less) expensive|(cheaper))", pl)
         if m is not None:
             if pct_prem is not None:
                 return None                              # two percent premises
@@ -10026,7 +10026,11 @@ def _percent_price_relational_system(premises: list, question: str):
                         or _has_digit(pside.replace(m.group(0), " ")):
                     return None
                 base, base_prem = float(bm2.group(1).replace(",", "")), bside
-            pct, sign, pct_prem = float(m.group(1)), (1 if m.group(2) == "more" else -1), pside
+            pct, sign, pct_prem = (float(m.group(1)),
+                                   (1 if m.group(2) == "more" else -1),   # "cheaper" (group 3)
+                                   pside)                                  # → less: sign −1
+            if m.group(3) is not None:
+                sign = -1
             continue
         bm = re.search(r"\$\s*(\d+(?:,\d{3})*(?:\.\d+)?)", pl)
         if bm is not None:
@@ -10035,7 +10039,7 @@ def _percent_price_relational_system(premises: list, question: str):
                 return None                              # ambiguous standard / an unread digit
             base, base_prem = float(bm.group(1).replace(",", "")), pl
             continue
-        pairs = re.findall(r"(\w+)\s+(?:packets?|packs?|boxes?|bags?|cans?|bottles?)\s+of\s+(\w+)", pl)
+        pairs = re.findall(r"(\w+)\s+(?:packets?|packs?|boxes?|bags?|cans?|bottles?|kilograms?|kilos?|pounds?)\s+of\s+(\w+)", pl)
         stripped = pl
         pairs_valued = []
         for w, noun in pairs:
@@ -10046,6 +10050,14 @@ def _percent_price_relational_system(premises: list, question: str):
         if _has_digit(stripped):
             return None                                  # an unclassified valued premise
         count_pairs.extend(pairs_valued)
+    # the purchase counts may ride in the QUESTION ("What is the price of two kilograms of
+    # tomatoes and three kilograms of cucumbers?") — without this scan the no-counts path
+    # returned the bare scaled price (a confident-wrong, 4 != 23)
+    for w, noun in re.findall(r"(\w+)\s+(?:packets?|packs?|boxes?|bags?|cans?|bottles?|"
+                              r"kilograms?|kilos?|pounds?)\s+of\s+(\w+)", ql):
+        n = NUMBERS.get(w) if not w.isdigit() else float(w)
+        if n is not None:
+            count_pairs.append((float(n), noun))
     if pct_prem is None or base_prem is None or not 0 < pct <= 500 or base <= 0:
         return None
     scaled = base * (1 + sign * pct / 100)
@@ -10053,9 +10065,11 @@ def _percent_price_relational_system(premises: list, question: str):
         total = []
         for n, noun in count_pairs:
             in_pct, in_base = noun in pct_prem, noun in base_prem
-            if in_pct == in_base:                        # in both / in neither — can't map the item
+            if not in_pct and not in_base:               # in neither — can't map the item
                 return None
-            total.append(f"{_num(n)} * {_num(scaled if in_pct else base)}")
+            # in BOTH → the base premise owns its noun (the pct premise names the standard
+            # only in its than-phrase: "…20% cheaper than one kilogram of CUCUMBERS")
+            total.append(f"{_num(n)} * {_num(base if in_base else scaled)}")
         result = _compute(" + ".join(total))
         return _gated_pos(result)
     stop = {"how", "much", "did", "does", "do", "will", "would", "he", "she", "they", "it",
@@ -10337,6 +10351,44 @@ def _pair_sum_relational_system(premises: list, question: str):
     av = k * bv
     result = av if am.group(1) == a else bv
     return _gated_pos_int(_compute(f"{_num(result)}"))
+
+
+def _percent_money_tails_system(premises: list, question: str):
+    """PERCENT-OF-MONEY tails (#224), three branches: PERCENT-INCREASED BILL ("bill is $60;
+    increased by thirty percent; total bill?" -> 78); SPENT-PERCENT BACKWARD ("spent 35% of her
+    allowance; spent $14; left?" -> 14*65/35 = 26); PAY-FRACTION PRODUCT ("5 dozen roses, $6
+    each, only pays 80%" -> 5*12*6*0.8 = 288). Every digit accounted per branch; positive."""
+    ql = question.lower()
+    full = " . ".join(p.lower() for p in premises) + " . " + ql
+
+    def digits_ok(used):
+        return all(dd in used for dd in re.findall(r"\d+(?:\.\d+)?",
+                                                   " ".join(premises) + " " + question))
+
+    bm = re.search(r"bill is \$(\d+(?:\.\d+)?)", full)
+    im = re.search(r"increased by (\w+|\d+(?:\.\d+)?) percent", full)
+    if bm and im and re.search(r"how much is (?:his|her) total(?: \w+)* bill", ql):
+        p = float(im.group(1)) if im.group(1).replace(".", "").isdigit() \
+            else NUMBERS.get(im.group(1))
+        if p and 0 < p <= 500 and digits_ok({bm.group(1)} |
+                                            ({im.group(1)} if im.group(1)[0].isdigit() else set())):
+            return _gated_pos(_compute(f"{bm.group(1)} * (1 + {_num(p)} / 100)"))
+        return None
+    sm = re.search(r"spent (\d+(?:\.\d+)?)% of (?:her|his) \w+", full)
+    xm = re.search(r"spent \$(\d+(?:\.\d+)?)", full)
+    if sm and xm and re.search(r"how much (?:money )?is left", ql):
+        p = float(sm.group(1))
+        if 0 < p < 100 and digits_ok({sm.group(1), xm.group(1)}):
+            return _gated_pos(_compute(f"{xm.group(1)} * (100 - {sm.group(1)}) / {sm.group(1)}"))
+        return None
+    dm = re.search(r"buys (\d+) dozen \w+", full)
+    em = re.search(r"each \w+ costs? \$(\d+(?:\.\d+)?)", full)
+    pm = re.search(r"only needs to pay (\d+(?:\.\d+)?)%", full)
+    if dm and em and pm and re.search(r"how much did (?:he|she|\w+) pay", ql):
+        if digits_ok({dm.group(1), em.group(1), pm.group(1)}):
+            return _gated_pos(_compute(f"{dm.group(1)} * 12 * {em.group(1)} * {pm.group(1)} / 100"))
+        return None
+    return None
 
 
 _GP_NUMW = r"\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve"
@@ -12050,6 +12102,8 @@ _EARLY_SYSTEMS = [
     ("calendar_age", _calendar_age_system),
     # GROUPED PARTITION: cast split into per-carrier groups → Σ(group×per) (tables 91).
     ("grouped_partition", _grouped_partition_system),
+    # PERCENT-OF-MONEY tails: increased bill / spent-percent backward / pay-fraction product.
+    ("percent_money_tails", _percent_money_tails_system),
     # ENUMERATED-SUM COMPARE: bill denominations / team scores, "how much more" (Oliver 45).
     ("enum_sum_compare", _enum_sum_compare_system),
     # RATE × HOURS × DAYS: "5 mph, 2h every morning, five days?" → 50 (Mira).

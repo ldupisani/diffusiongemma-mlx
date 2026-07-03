@@ -3860,12 +3860,12 @@ class TestPercentChange(unittest.TestCase):
             "how much did Anna pay after the discount?"), 40)
 
     def test_spend_remainder_declines(self):
-        # "spent P% … how much left" is a 2-step remainder (÷ then −), not a new-value change — forward
-        # resolver must not misfire (no accept word / "left" is not the new value), and it isn't an
-        # "original" question so the inverse resolver stays out too → DECLINE.
+        # RE-PINNED (#224): `_percent_money_tails_system` now claims this CORRECTLY (14·65/35
+        # = 26) — the percent-change resolvers this class pins are unchanged (they still stay
+        # out); the EARLY system answers first. Was pinned "undetermined" while unsolvable.
         self.assertEqual(reading.solve(
             "Anna spent 35% of her allowance. If she spent $14, how much money is left in her allowance?"),
-            "undetermined")
+            26)
 
     def test_multi_step_percent_declines(self):
         # a 3rd number (5 toys) makes it multi-step (per-item × discount) — DECLINE, don't commit 3×0.8.
@@ -7729,6 +7729,33 @@ class TestIncrement219SignedMixedChain(unittest.TestCase):
         self.assertEqual(reading.solve(
             "Mira jogs every morning. She jogs 5 miles per hour. If she jogs for 2 "
             "hours every morning, how many miles can she jog for five days?"), 50)
+
+    def test_percent_increased_bill(self):
+        # #224: 60 · 1.3 = 78 (word percent "thirty")
+        self.assertEqual(reading.solve(
+            "Maximoff's monthly bill is $60 per month. His monthly bill increased by "
+            "thirty percent when he started working at home. How much is his total "
+            "monthly bill working from home?"), 78)
+
+    def test_spent_percent_backward(self):
+        # 14 · 65/35 = 26
+        self.assertEqual(reading.solve(
+            "Mitzel spent 35% of her allowance. If she spent $14, how much money is "
+            "left in her allowance?"), 26)
+
+    def test_pay_fraction_of_dozen_product(self):
+        # 5·12·6·0.8 = 288
+        self.assertEqual(reading.solve(
+            "Jan buys 5 dozen roses. Each rose cost $6. Since he bought so many he "
+            "only needs to pay 80%. How much did he pay?"), 288)
+
+    def test_cheaper_relational_with_question_counts(self):
+        # tomatoes = 5·0.8 = 4; 2·4 + 3·5 = 23 (counts ride in the QUESTION; the
+        # standard's noun appears in BOTH premises — the base premise owns it)
+        self.assertEqual(reading.solve(
+            "One kilogram of tomatoes is 20% cheaper than one kilogram of cucumbers. "
+            "One kilogram of cucumbers costs $5. What is the price of two kilograms of "
+            "tomatoes and three kilograms of cucumbers?"), 23)
 
     def test_later_unanchored_fraction_declines(self):
         # #220 (TEST-checkpoint-forced): an UNANCHORED fraction after a prior event has a
