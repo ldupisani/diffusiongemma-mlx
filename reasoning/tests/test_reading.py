@@ -5089,9 +5089,13 @@ class TestIncrement111ComparativeExemptionRequiresQuantity(unittest.TestCase):
     the guard and we DECLINE instead of summing a partial total."""
 
     def test_degenerate_comparative_declines(self):
+        # RE-PINNED (#207): the anchored-sum system now claims this CORRECTLY (Billy = 2·75 − 25
+        # = 125; together = 200) once " together" joined its sum cues — the GUARD 3 exemption
+        # behavior this class pins is unchanged (the fold path still declines); the EARLY system
+        # answers first. Was pinned "undetermined" while no machinery could solve it.
         self.assertEqual(reading.solve(
             "Billy has $25 less than twice the money Sam has. If Sam has $75, "
-            "how much money do they have together?"), "undetermined")
+            "how much money do they have together?"), 200)
 
     def test_consumed_comparative_still_solves(self):
         # a comparative that DOES produce a Quantity stays exempt and solves
@@ -7182,6 +7186,55 @@ class TestIncrement206PercentPriceRelational(unittest.TestCase):
         self.assertEqual(reading.solve(
             "A radio costs $30. A speaker costs $50. A new stereo is 20% more expensive. "
             "How much does the new stereo cost?"), "undetermined")
+
+
+class TestIncrement207AnchoredElidedRatio(unittest.TestCase):
+    """#207 — three extensions to the anchored-affine family's shared extractor: KIN-APPOSITION
+    normalization ("his brother Fred" names ONE person — the kinship is decorative for the
+    algebra), the ELIDED-standard ratio ("Flora has twice as many books" — the standard is the
+    nearest antecedent), and " together" joining the sum/single twins' cue lists in sync."""
+
+    def test_kin_apposition_offset_chain(self):
+        # jerry = 3·george; george = fred − 6; fred = 18 → 36
+        self.assertEqual(reading.solve(
+            "Jerry has three times as many stickers as George. George has 6 fewer stickers "
+            "than his brother Fred. If Fred has 18 stickers, how many stickers does Jerry "
+            "have?"), 36)
+
+    def test_elided_standard_and_together_sum(self):
+        # flora = 2·50; gary = 50/2 → 50+100+25 = 175
+        self.assertEqual(reading.solve(
+            "Harry has 50 books in his library. His sister Flora has twice as many books "
+            "and their cousin Gary has half the books Harry has. How many books do the "
+            "three of them own together?"), 175)
+
+    def test_elided_standard_money_total(self):
+        # stephanie = 2·356 → 356 + 712 = 1068
+        self.assertEqual(reading.solve(
+            "Marion's bike cost $356. Stephanie's bike is worth twice as much. What is "
+            "the total price of their bikes?"), 1068)
+
+    def test_elided_ratio_without_anchor_declines(self):
+        # an elided ratio with NO anchored antecedent anywhere — nothing licenses a standard
+        self.assertEqual(reading.solve(
+            "Stephanie's bike is worth twice as much. What is the total price of their "
+            "bikes?"), "undetermined")
+
+    def test_named_subset_together_sums_only_named(self):
+        # " together" with two NAMED entities sums the subset, not the whole cast
+        self.assertEqual(reading.solve(
+            "Harry has 50 books in his library. His sister Flora has twice as many books "
+            "and their cousin Gary has half the books Harry has. How many books do Harry "
+            "and Flora own together?"), 150)
+
+    def test_coordinated_elided_clauses_share_one_standard(self):
+        # "her brother has thrice as much WHILE her sister has only half as much" — BOTH
+        # elide "as Joanna's": 8 + 24 + 4 = 36 (nearest-antecedent chaining gave 44 — the
+        # firewall-caught misbind; an elided subject never becomes the next antecedent)
+        self.assertEqual(reading.solve(
+            "Joanna has $8. Compared to her money, her brother has thrice as much while "
+            "her sister has only half as much. How much money do the three of them have "
+            "altogether?"), 36)
 
 
 if __name__ == "__main__":

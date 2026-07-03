@@ -6282,6 +6282,38 @@ def _noun_anchor_fact(rp: "Reading"):
     return _noun_entity_key(qn), vals[0].features["value"]
 
 
+def _elided_ratio(rp, premise: str):
+    """A single-name ratio clause whose standard is ELIDED — "Flora has twice as many books",
+    "Stephanie's bike is worth twice as much" — → (subject_entity, k). The standard is anaphoric;
+    `_anchored_affine_coeffs` binds it to the PREVIOUS classified premise's entity (nearest
+    antecedent, the natural read of comparative ellipsis). None unless: a multiplier/fraction is
+    present; the clause has an as-many/as-much frame with NO explicit standard after it (an
+    "as X" tail is `_ratio_relation`'s explicit shape / the coordinate-noun family's turf); no
+    stated value; no comparative (an offset is a different relation; "times more" is banned
+    upstream); exactly one name."""
+    if any("value" in u.features.get("senses", []) and u.features.get("value") is not None
+           for u in rp.units):
+        return None
+    if any("comparative" in u.features.get("senses", []) for u in rp.units):
+        return None
+    pl = premise.lower()
+    if re.search(r"\bas (?:many|much) (?:\w+ ){0,3}?as\b", pl) or " than" in pl:
+        return None                                     # an explicit standard — another family's
+    if not re.search(r"\bas (?:many|much)\b", pl):
+        return None                                     # only the as-many/as-much elided frame (v1)
+    mult = next((u for u in rp.units if "multiplier" in u.features.get("senses", [])), None)
+    if mult is None:
+        return None
+    k = (mult.features["fraction"][0] / mult.features["fraction"][1]) if "fraction" in mult.features \
+        else mult.features.get("value")
+    if not k:
+        return None
+    names = [u for u in rp.units if "name" in u.features.get("senses", [])]
+    if len(names) != 1:
+        return None
+    return _entity(names[0]), float(k)
+
+
 def _anchored_affine_coeffs(premises: list, question: str):
     """Shared extraction for the ANCHOR-pinned affine family (`_anchored_sum_system`/`_anchored_single_system`):
     builds the same relation graph as `_affine_system`, but pins the free pivot from a bare ABSOLUTE value (an
@@ -6315,6 +6347,13 @@ def _anchored_affine_coeffs(premises: list, question: str):
                       " ".join(premises + [question]).lower())
     if re.search(r"\b(old|older|younger|age|ages|aged)\b", _agetext):
         return None
+    # KIN-APPOSITION NORMALIZATION (#207, the age-chain's trick on counts): "His sister Flora has
+    # twice as many books" / "than his brother Fred" name ONE person, but the kin noun counts as a
+    # second (or third) name, so the premise mis-classifies (a 2-name apposition even extracted a
+    # bogus sister=2×flora relation). The kinship is decorative for the algebra — keep the name.
+    premises = [re.sub(rf"\b(?:[Hh]is|[Hh]er|[Tt]heir) (?:older |younger |little |big |other )?"
+                       rf"(?:{'|'.join(KINSHIP)}),? ([A-Z][a-z]+)\b", r"\1", p)
+                for p in premises]
     if any(w in p.lower() for p in premises
            for w in ("combined", "total", "together", "between them", "altogether")):
         return None                                                  # a stated total is _affine_system's turf
@@ -6330,6 +6369,7 @@ def _anchored_affine_coeffs(premises: list, question: str):
     rels, anchors, measures = {}, {}, set()
     rps = [analyze(p) for p in premises]
     cast_n = _cast_size(rps)               # for the SET-SIZE-cardinal skip below
+    last_entity = None                     # nearest antecedent for the elided-standard ratio
     for p, rp in zip(premises, rps):
         two_names = _name_count(rp) == 2
         if not any(s in u.features.get("senses", []) for u in rp.units
@@ -6360,6 +6400,12 @@ def _anchored_affine_coeffs(premises: list, question: str):
         nc = _name_count(rp)
         rel = _affine_relation(rp) if nc == 2 else None      # exactly 2 names — else this may be the
         anc = _anchor_fact(rp) if (rel is None and nc == 1) else None   # coordinate-noun fallback firing,
+        elided = False
+        if rel is None and anc is None and nc == 1 and last_entity is not None:
+            el = _elided_ratio(rp, p)                        # "Flora has twice as many books" — the
+            if el is not None and el[0] != last_entity:      # standard is the nearest antecedent
+                rel = (el[0], el[1], last_entity, 0.0)
+                elided = True
         if rel is None and anc is None:                       # which is a DIFFERENT family's turf (see
             return None                    # an UNCLASSIFIED premise (e.g. a depletion action like "gave out
             #                                 half her apples", or an unsupported relation frame like "an equal
@@ -6384,11 +6430,17 @@ def _anchored_affine_coeffs(premises: list, question: str):
                 rels[std_e] = (1.0 / k, subj_e, -c / k)
             else:
                 rels[subj_e] = (k, std_e, c)
+            if not elided:                    # COORDINATED elided clauses share ONE standard ("her
+                last_entity = subj_e          # brother has thrice as much WHILE her sister has half
+            #                                   as much" — both elide "as Joanna's"); an elliptically
+            #                                   introduced subject never becomes the next antecedent
+            #                                   (Joanna: sister←brother mis-bound 44 ≠ gold 36)
         else:
             e, v = anc
             if e in anchors:
                 return None
             anchors[e] = v
+            last_entity = e
             vals = [u for u in rp.units if "value" in u.features.get("senses", [])
                     and u.features.get("value") is not None]
             if len(vals) == 1:                          # an anchor premise has EXACTLY one value (unambiguous)
@@ -6438,8 +6490,11 @@ def _anchored_sum_system(premises: list, question: str):
     with `_anchored_single_system`); adds its OWN sum-cue gate and a "dozen"-measure decline (the anchor's
     "6 dozen" already converts to raw units internally, so a "how many DOZEN" question needs a ÷12 we don't
     do)."""
-    if not any(w in question.lower() for w in ("altogether", "in all", " total", "combined", "in total")):
+    if not any(w in question.lower() for w in ("altogether", "in all", " total", "combined", "in total",
+                                               " together")):        # " together" (#207): "own together?" —
         return None                                                  # not a SUM question — not this shape
+        #                                                              kept in sync with the single twin's
+        #                                                              decline list (else it intercepts)
     # DEFER to `_chain_count_price` (dispatched before us): a money-spend total WITH a per-item price is a
     # count×price problem — folding only the counts would drop the price (Dorothy 22≠33). It re-invokes us
     # with a plain count question ("how many in total?") to get the count, so this gate never blocks that call.
@@ -6482,7 +6537,8 @@ def _anchored_single_system(premises: list, question: str):
     extractors — "how many stamps does SHE NEED to ADD to have a collection AS LARGE AS Bert's?" asks
     Bert−Peggy, not Bert's raw value; naively grabbing the first name in the question gave a confident-wrong,
     900 vs gold 825), and requires the asked entity to be a NAME reachable from the anchor."""
-    if any(w in question.lower() for w in ("altogether", "in all", " total", "combined", "in total")):
+    if any(w in question.lower() for w in ("altogether", "in all", " total", "combined", "in total",
+                                           " together")):            # " together" in sync with the sum twin
         return None                                                  # a sum question is the other twin's shape
     if re.search(r"\bneeds?\b", question.lower()):
         return None
