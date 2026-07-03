@@ -7491,5 +7491,60 @@ class TestIncrement216FusionAndAdjuncts(unittest.TestCase):
             "18 books, how many books did Patricia read?"), 21)
 
 
+class TestIncrement218GiveChain(unittest.TestCase):
+    """#218 — `_give_chain_system`: a holdings pool + relational gives (literal, k× a prior
+    give ± offset, k× the running total, k× the current holding), asked left/kept, the
+    backward initial, a recipient difference, or cents→nickels (÷5, which must be checked
+    BEFORE the generic left ask — raw cents was the draft's first bug; the offset form must
+    be tried before the plain k-forms, which match its tail and drop the ±n — the second)."""
+
+    def test_offset_relational_give_left(self):
+        # 50 − (10 + 20) = 20
+        self.assertEqual(reading.solve(
+            "Ken had fifty pencils, and he wanted to share some of them with his two "
+            "friends, Manny and Nilo. Ken gave ten pencils to Manny and ten more pencils "
+            "to Nilo than he gave to Manny. He kept the rest of the pencils. How many "
+            "pencils did Ken keep?"), 20)
+
+    def test_nickels_left_conversion(self):
+        # (95 − 25 − 50) / 5 = 4
+        self.assertEqual(reading.solve(
+            "Ray has 95 cents in nickels. If Ray gives 25 cents to Peter, and twice as "
+            "many cents to Randi as he gave to Peter, how many nickels does Ray have "
+            "left?"), 4)
+
+    def test_nickels_recipient_difference(self):
+        # (60 − 30) / 5 = 6
+        self.assertEqual(reading.solve(
+            "Ray has 175 cents in nickels. Ray gives 30 cents to Peter, and he gives "
+            "twice as many cents to Randi as he gave to Peter. How many more nickels "
+            "does Randi have than Peter?"), 6)
+
+    def test_running_total_reference(self):
+        # 72 − (12 + 14 + 4) = 42
+        self.assertEqual(reading.solve(
+            "Colton had 72 dolphin stickers. He gave 4 stickers each to 3 friends. He "
+            "also gave his friend Mandy 2 more than he gave his three friends total. And "
+            "he gave Justin 10 less than Mandy. How many stickers does Colton have "
+            "left?"), 42)
+
+    def test_backward_initial_from_remaining(self):
+        # 4 + 8 + (4·8 − 5) + 6 = 45 — the offset-before-k form-order pin
+        self.assertEqual(reading.solve(
+            "Hector purchased a container of gumballs. He gave 4 to Todd, then he gave "
+            "twice as many as he had given Todd to Alisha, and then he gave 5 less than "
+            "four times as many to Bobby as he had given to Alisha. If Hector had 6 "
+            "gumballs remaining, what is the total number of gumballs that Hector "
+            "purchased?"), 45)
+
+    def test_start_with_current_holding_reference(self):
+        # 30 + 60 + 120 + 90 = 300
+        self.assertEqual(reading.solve(
+            "Miriam currently has 30 marbles, but she used to have more. Miriam gave her "
+            "brother 60 marbles, gave her sister twice that amount and gave her friend "
+            "Savanna three times the amount she currently has. How many marbles did "
+            "Miriam start with?"), 300)
+
+
 if __name__ == "__main__":
     unittest.main()

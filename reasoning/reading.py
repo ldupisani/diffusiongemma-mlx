@@ -10335,6 +10335,191 @@ def _pair_sum_relational_system(premises: list, question: str):
     return _gated_pos_int(_compute(f"{_num(result)}"))
 
 
+_GC_K = {"twice": 2.0, "double": 2.0, "three times": 3.0, "thrice": 3.0, "half": 0.5,
+         "four times": 4.0, "five times": 5.0}
+_GC_KPAT = "twice|double|three times|thrice|half|four times|five times"
+_GC_FORMS = [
+    # "gave 4 stickers each to 3 friends" → n×k
+    ("each_to_k", re.compile(r"gave (\d+|[a-z]+) \w+ each to (\d+|[a-z]+) friends")),
+    # "gave ten pencils to Manny" / "gave 4 to Todd" / "gives 25 cents to Peter"
+    ("lit", re.compile(r"g(?:a|i)ve[s]? (\d+|[a-z]+)(?: \w+)? to ([a-z]+)")),
+    # "gave her brother 60 marbles"
+    ("lit2", re.compile(r"g(?:a|i)ve[s]? (?:his|her) (\w+) (\d+) \w+")),
+    # "ten more pencils to Nilo than he gave to Manny"
+    ("more_than_to", re.compile(r"(\d+|[a-z]+) more \w+ to ([a-z]+) than (?:he|she) gave to ([a-z]+)")),
+    # "5 less than four times as many to Bobby as he had given to Alisha" — the OFFSET form
+    # must be tried BEFORE the plain k-forms (they match its tail and silently drop the ±n)
+    ("off_k", re.compile(rf"(\d+|[a-z]+) (less|more) than ({_GC_KPAT}) as many to ([a-z]+) "
+                         rf"as (?:he|she) (?:had )?g(?:ave|iven)(?: to)? ([a-z]+)")),
+    # "gave twice as many as he had given Todd to Alisha"
+    ("k_of_prior", re.compile(rf"g(?:a|i)ve[s]?(?: him| her)? ({_GC_KPAT}) as many (?:\w+ )?"
+                              rf"(?:as he (?:had )?g(?:ave|iven)) (?:to )?([a-z]+) to ([a-z]+)")),
+    # "twice as many cents to Randi as he gave to Peter"
+    ("k_of_prior2", re.compile(rf"({_GC_KPAT}) as many (?:\w+ )?to ([a-z]+) as (?:he|she) "
+                               rf"(?:had )?g(?:ave|iven)(?: to)? ([a-z]+)")),
+    # "gave her sister twice that amount"
+    ("k_prev", re.compile(rf"gave (?:his|her) (\w+) ({_GC_KPAT}) that amount")),
+    # "gave her friend Savanna three times the amount she currently has"
+    ("k_current", re.compile(rf"gave (?:his|her) friend ([a-z]+) ({_GC_KPAT}) the amount "
+                             rf"(?:he|she) currently has")),
+    # "gave his friend Mandy 2 more than he gave his three friends total"
+    ("more_total", re.compile(r"gave (?:his|her) friend ([a-z]+) (\d+|[a-z]+) more than "
+                              r"(?:he|she) gave (?:his|her) (?:\w+ )?friends total")),
+    # "gave Justin 10 less than Mandy"
+    ("off_of", re.compile(r"gave ([a-z]+) (\d+|[a-z]+) (less|more) than ([a-z]+)")),
+]
+
+
+def _give_chain_system(premises: list, question: str):
+    """RELATIONAL GIVE CHAIN (#218) — a holdings pool + a sequence of gives, each literal or
+    relational to a PRIOR give (k×, ±offset, k× the running total, k× the current holding),
+    asked LEFT/KEPT (pool − Σ), the INITIAL (backward: Σ + remaining, or pool + Σ for "start
+    with"), a recipient DIFFERENCE, or the cents→NICKELS conversions (÷5). Ken 20, Ray 4/6,
+    Colton 42, Hector 45, Miriam 300. TIGHTLY gated: ≥2 give verbs; every give clause matches
+    a known form (an unresolvable standard declines the whole system); every digit accounted;
+    integer/positive results. None otherwise."""
+    ql = question.lower()
+    full = " . ".join(p.lower() for p in premises) + " . " + ql
+    if len(re.findall(r"\bgave\b|\bgives\b", full)) < 2:
+        return None
+    used = set()
+
+    def _wn(tok):
+        t = tok.lower()
+        return float(t) if t.replace(".", "").isdigit() else \
+            (float(NUMBERS[t]) if t in NUMBERS else None)
+
+    pool = None
+    pm = re.search(r"\b(?:currently has|has|had) (\d+|[a-z]+) (?:cents|[a-z]+)", full)
+    if pm is not None:
+        pool = _wn(pm.group(1))
+        if pool is not None and pm.group(1).isdigit():
+            used.add(pm.group(1))
+    nickels = "cents in nickels" in full
+    remaining = None
+    rm = re.search(r"had (\d+|[a-z]+) \w+ (?:remaining|left)", full)
+    if rm is not None:
+        remaining = _wn(rm.group(1))
+        if rm.group(1).isdigit():
+            used.add(rm.group(1))
+    gives = []
+
+    def val_of(name):
+        for r, v in gives:
+            if r == name:
+                return v
+        return None
+
+    for p in premises:
+        pl = p.lower()
+        for form, pat in _GC_FORMS:
+            m = pat.search(pl)
+            if m is None:
+                continue
+            if form == "each_to_k":
+                n, k = _wn(m.group(1)), _wn(m.group(2))
+                if n is None or k is None:
+                    return None
+                gives.append(("friends", n * k))
+                used.update(g for g in (m.group(1), m.group(2)) if g.isdigit())
+            elif form == "lit":
+                n, rec = _wn(m.group(1)), m.group(2)
+                if n is None:
+                    continue
+                if val_of(rec) is None:
+                    gives.append((rec, n))
+                    if m.group(1).isdigit():
+                        used.add(m.group(1))
+            elif form == "lit2":
+                rec, n = m.group(1), _wn(m.group(2))
+                if n is not None and val_of(rec) is None:
+                    gives.append((rec, n))
+                    used.add(m.group(2))
+            elif form == "more_than_to":
+                n, rec, std = _wn(m.group(1)), m.group(2), m.group(3)
+                base = val_of(std)
+                if n is None or base is None:
+                    return None
+                gives.append((rec, base + n))
+                if m.group(1).isdigit():
+                    used.add(m.group(1))
+            elif form == "off_k":
+                n, sign, k, rec, std = (_wn(m.group(1)), m.group(2), _GC_K[m.group(3)],
+                                        m.group(4), m.group(5))
+                base = val_of(std)
+                if n is None or base is None:
+                    return None
+                gives.append((rec, k * base + (n if sign == "more" else -n)))
+                if m.group(1).isdigit():
+                    used.add(m.group(1))
+            elif form in ("k_of_prior", "k_of_prior2"):
+                k = _GC_K[m.group(1)]
+                std, rec = (m.group(2), m.group(3)) if form == "k_of_prior" \
+                    else (m.group(3), m.group(2))
+                base = val_of(std)
+                if base is None:
+                    return None
+                gives.append((rec, k * base))
+            elif form == "k_prev":
+                rec, k = m.group(1), _GC_K[m.group(2)]
+                if not gives:
+                    return None
+                gives.append((rec, k * gives[-1][1]))
+            elif form == "k_current":
+                rec, k = m.group(1), _GC_K[m.group(2)]
+                if pool is None:
+                    return None
+                gives.append((rec, k * pool))
+            elif form == "more_total":
+                rec, n = m.group(1), _wn(m.group(2))
+                if n is None or not gives:
+                    return None
+                gives.append((rec, sum(v for _r, v in gives) + n))
+                if m.group(2).isdigit():
+                    used.add(m.group(2))
+            elif form == "off_of":
+                rec, n, sign, std = m.group(1), _wn(m.group(2)), m.group(3), m.group(4)
+                base = val_of(std)
+                if n is None or base is None:
+                    return None
+                gives.append((rec, base + (n if sign == "more" else -n)))
+                if m.group(2).isdigit():
+                    used.add(m.group(2))
+            break
+    if len(gives) < 2:
+        return None
+
+    def digits_ok():
+        return all(dd in used for dd in re.findall(r"\d+(?:\.\d+)?",
+                                                   " ".join(premises) + " " + question))
+
+    total_given = sum(v for _r, v in gives)
+    # the NICKELS unit-conversion branches come FIRST — a generic left/keep match would
+    # return raw cents
+    if nickels and re.search(r"how many nickels does \w+ have left", ql):
+        if pool is not None and digits_ok():
+            return _gated_pos_int(_compute(f"({_num(pool)} - {_num(total_given)}) / 5"))
+        return None
+    if nickels and re.search(r"how many more nickels does (\w+) have than (\w+)", ql):
+        m = re.search(r"how many more nickels does (\w+) have than (\w+)", ql)
+        a, b = val_of(m.group(1)), val_of(m.group(2))
+        if a is not None and b is not None and digits_ok():
+            return _gated_pos_int(_compute(f"({_num(a)} - {_num(b)}) / 5"))
+        return None
+    if re.search(r"how many \w+ did \w+ start with", ql):
+        if pool is not None and remaining is None and digits_ok():
+            return _gated_pos(_compute(f"{_num(pool)} + {_num(total_given)}"))
+        return None
+    if remaining is not None and re.search(r"\w+ purchased?\b|were in the container", ql):
+        if digits_ok():
+            return _gated_pos(_compute(f"{_num(total_given)} + {_num(remaining)}"))
+        return None
+    if re.search(r"how many \w+ does \w+ have left|how many \w+ did \w+ keep", ql):
+        if pool is not None and remaining is None and digits_ok():
+            return _gated_pos(_compute(f"{_num(pool)} - {_num(total_given)}"))
+    return None
+
+
 def _max_speed_distance_system(premises: list, question: str):
     """MAX-SPEED × DURATION (#214) — "runs at the maximum speed of 50 km per hour … what
     distance during 120 minutes?" → 50·120/60 = 100. The 'maximum/constant speed' qualifier is
@@ -11396,6 +11581,8 @@ _EARLY_SYSTEMS = [
     ("max_speed_distance", _max_speed_distance_system),
     # PAIR-SUM RELATIONAL: A=k·B, A+B = S∓N, anchored S (Merill 30).
     ("pair_sum_relational", _pair_sum_relational_system),
+    # RELATIONAL GIVE CHAIN: pool + literal/k×prior gives; left/initial/diff/nickels asks.
+    ("give_chain", _give_chain_system),
     # FIRST TWO DAYS + DOUBLE THEIR SUM: "5; another 7; twice the first two days?" → 36.
     ("first_days_double_total", _first_days_double_total_system),
     # HOURS TO EQUAL EARNINGS: "40h at $12; $15/h; hours to equal?" → 32.
