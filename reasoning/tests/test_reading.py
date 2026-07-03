@@ -7468,5 +7468,28 @@ class TestIncrement215Residue(unittest.TestCase):
             "account than Bob?"), 20)
 
 
+class TestIncrement216FusionAndAdjuncts(unittest.TestCase):
+    """#216 — two GSM8K-typo/noise tolerances in the anchored family: the MISSING-PERIOD
+    fusion ("In total Emma spent $58 If Elsa spent…") splits at a mid-premise " If <Name>
+    <verb>"; the leading "In total <Name> spent" is a SINGLE-entity amount exempt from the
+    combined-total guard; a capitalized EVENT adjunct ("in their school's Book Tournament")
+    is stripped so it can't inflate the name count."""
+
+    def test_missing_period_fusion_and_single_entity_total(self):
+        # emma 58; elsa 116; elizabeth 464 → 638
+        self.assertEqual(reading.solve(
+            "Elizabeth, Emma, and Elsa went shopping on Wednesday. In total Emma spent "
+            "$58 If Elsa spent twice as much as Emma, and Elizabeth spent four times as "
+            "much as Elsa, how much money did they spend in total?"), 638)
+
+    def test_capitalized_event_adjunct_stripped(self):
+        # amanda = 18/3 = 6; kara = 3; patricia = 21
+        self.assertEqual(reading.solve(
+            "Candice read 3 times as many books as Amanda in their school's Book "
+            "Tournament. Kara read half the number of books that Amanda read, and "
+            "Patricia read 7 times the number of books that Kara read. If Candice read "
+            "18 books, how many books did Patricia read?"), 21)
+
+
 if __name__ == "__main__":
     unittest.main()

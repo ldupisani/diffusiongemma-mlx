@@ -6426,12 +6426,21 @@ def _anchored_affine_coeffs(premises: list, question: str):
     # LOCAL CONJUNCT SPLIT (#215): a long "If A…, and B…, and C…" sentence can reach here with
     # two relations still fused in one premise (the global splitter took only the last conjunct).
     # Split at ", and <Name> <verb>" — worst case a fragment fails to classify and the family
-    # declines exactly as it does today.
+    # declines exactly as it does today. #216 adds the MISSING-PERIOD fusion ("In total Emma
+    # spent $58 If Elsa spent twice as much" — GSM8K's own typo) via a mid-premise " If " split.
     premises = [part for p in premises
-                for part in re.split(r", and (?=[A-Z][a-z]+ (?:has|have|had|is|was|spent|earns?|"
-                                     r"makes?|gets?|owns?))", p)]
+                for part in re.split(r"(?:, and | If )(?=[A-Z][a-z]+ (?:has|have|had|is|was|spent|"
+                                     r"earns?|makes?|gets?|owns?))", p)]
+    # PROPER-NOUN EVENT ADJUNCT (#216): "…as Amanda in their school's Book Tournament" — the
+    # capitalized event name inflates the name count and the premise mis-classifies. The
+    # adjunct is scene-setting; strip it (worst case: decline, as today).
+    premises = [re.sub(r" in (?:his|her|their) \w+['’]s [A-Z]\w+(?: [A-Z]\w+)?", "", p)
+                for p in premises]
     if any(w in p.lower() for p in premises
-           for w in ("combined", "total", "together", "between them", "altogether")):
+           for w in ("combined", "total", "together", "between them", "altogether")
+           # #216: "In total EMMA spent $58" is a SINGLE-ENTITY amount, not a combined total —
+           # the narrow leading form is exempt; any other total-word premise still declines.
+           if not re.match(r"[Ii]n total [A-Z]\w+ (?:spent|has|had|made|earned|received)\b", p.strip())):
         return None                                                  # a stated total is _affine_system's turf
     # "share"/"shared" signals a DISTRIBUTED total ("Mr. Sam SHARED $5250 between his two sons") — but NOT
     # the purpose infinitive "20 cookies TO SHARE in class" (intent, no total), which wrongly tripped this
