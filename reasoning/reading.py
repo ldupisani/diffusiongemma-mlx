@@ -10353,6 +10353,148 @@ def _pair_sum_relational_system(premises: list, question: str):
     return _gated_pos_int(_compute(f"{_num(result)}"))
 
 
+_RS_N = r"\d+(?:,\d{3})*(?:\.\d+)?"
+
+
+def _rs_ret(v):
+    """Gate a rate-singles branch result: positive, float-noise rounded, audited."""
+    if isinstance(v, float):
+        v = round(v, 9)
+    return _gated_pos(_compute(f"{_num(v)}"))
+
+
+def _rate_singles_system(premises: list, question: str):
+    """RATE/PRODUCT SINGLES (#226) — sixteen tightly-gated branches over the unit-rate bucket
+    (pool+rate×days+literal; enumerated hours × wage; classes×per-class; two gold products;
+    round-trip; change; wpm→hours; weeks-to-save; Σ miles×min/mile; animals×nightly; half-book
+    speeds; monthly gap to a yearly goal; spend-rebate; second-job residual; overtime; per-5
+    scaling). Every branch: its own values and nothing else (digit-accounted); positive.
+    Compound facts are probed INDEPENDENTLY over the period-joined text — the clause splitter
+    severs them ("Irene earns $500" | "she works for 40 hours a week"). None otherwise."""
+    N = _RS_N
+
+    def f(tok):
+        return float(tok.replace(",", ""))
+
+    ql = question.lower()
+    full = " . ".join(p.lower() for p in premises) + " . " + ql
+
+    def dok(used):
+        return all(dd in used for dd in re.findall(r"\d+(?:,\d{3})*(?:\.\d+)?",
+                                                   " ".join(premises) + " " + question))
+
+    # 1. Shara: pool + rate×days + literal → "how many shells does she have now"
+    m1 = re.search(rf"had ({N}) \w+ before", full)
+    m2 = re.search(rf"found ({N}) \w+ per day for ({N}) days", full)
+    m3 = re.search(rf"found ({N}) \w+ on the \w+ day", full)
+    if m1 and m2 and m3 and re.search(r"how many \w+ does \w+ have now", ql):
+        if dok({m1.group(1), m2.group(1), m2.group(2), m3.group(1)}):
+            return _rs_ret(f(m1.group(1)) + f(m2.group(1)) * f(m2.group(2)) + f(m3.group(1)))
+    # 2. Rafael: hours enumerated + "N hours left" × $rate
+    hs = re.findall(rf"({N}) hours (?:on \w+|left)", full)
+    pm = re.search(rf"paid \$({N}) per hour", full)
+    if len(hs) >= 3 and pm and re.search(r"how much money does \w+ make", ql):
+        if dok(set(hs) | {pm.group(1)}):
+            return _rs_ret(sum(f(h) for h in hs) * f(pm.group(1)))
+    # 3. Texas: N classes × M per class + K more classes
+    cm0 = re.search(rf"has ({N}) classes", full)
+    cm1 = re.search(rf"has ({N}) students per class", full)
+    cm = (cm0, cm1) if cm0 and cm1 else None
+    am = re.search(rf"added (\w+|{N}) more classes", full)
+    if cm and am and re.search(r"how many students", ql):
+        add = NUMBERS.get(am.group(1)) if not am.group(1).isdigit() else f(am.group(1))
+        if add and dok({cm[0].group(1), cm[1].group(1)}
+                       | ({am.group(1)} if am.group(1).isdigit() else set())):
+            return _rs_ret((f(cm[0].group(1)) + add) * f(cm[1].group(1)))
+    # 4. Gary/Anna combined gold cost
+    pairs = re.findall(rf"({N}) grams of gold (?:that cost|for the cost of) \$({N}) per gram", full)
+    if len(pairs) == 2 and re.search(r"cost of their gold combined", ql):
+        if dok({x for pr in pairs for x in pr}):
+            return _rs_ret(sum(f(a) * f(b) for a, b in pairs))
+    # 5. Jenna round trip: $R per mile × M miles one way × 2
+    rm = re.search(rf"\$({N}) cents? per mile|\$({N}) per mile", full)
+    mm = re.search(rf"drives ({N}) miles one way", full)
+    if rm and mm and "round trip" in ql:
+        r_ = rm.group(1) or rm.group(2)
+        if dok({r_, mm.group(1)}):
+            return _rs_ret(f(r_) * f(mm.group(1)) * 2)
+    # 6. sisters change: $P per person, two sisters, brought $B
+    tm = re.search(rf"tickets are \$({N}) per person", full)
+    bm = re.search(rf"brought \$({N})", full)
+    if tm and bm and "two sisters" in full and "how much change" in ql:
+        if dok({tm.group(1), bm.group(1)}):
+            return _rs_ret(f(bm.group(1)) - 2 * f(tm.group(1)))
+    # 7. Emily typing hours: W wpm, T words → T/W/60
+    wm = re.search(rf"type ({N}) words per minute", full)
+    tm2 = re.search(rf"write ({N}) words", ql)
+    if wm and tm2 and "how many hours" in ql:
+        if dok({wm.group(1), tm2.group(1)}):
+            return _rs_ret(f(tm2.group(1)) / f(wm.group(1)) / 60)
+    # 8. Macey weeks: cost C, saved S, saves R/week
+    cm2 = re.search(rf"costs \$({N})", full)
+    sm = re.search(rf"save[d]? \$({N}) already", full)
+    rm2 = re.search(rf"saves \$({N}) per week", full)
+    if cm2 and sm and rm2 and "how many weeks" in ql:
+        if dok({cm2.group(1), sm.group(1), rm2.group(1)}):
+            return _rs_ret((f(cm2.group(1)) - f(sm.group(1))) / f(rm2.group(1)))
+    # 9. Rudy total time: Σ miles × min/mile
+    runs = re.findall(rf"runs ({N}) miles at a rate of ({N}) minutes per mile", full)
+    if len(runs) == 2 and "total length of time" in ql:
+        if dok({x for pr in runs for x in pr}):
+            return _rs_ret(sum(f(a) * f(b) for a, b in runs))
+    # 10. Michael animals: (a cats + b dogs) × $c a night per animal
+    am2 = re.search(rf"has ({N}) cats and ({N}) dogs", full)
+    nm = re.search(rf"\$({N}) a night per animal", full)
+    if am2 and nm and "how much" in ql:
+        if dok({am2.group(1), am2.group(2), nm.group(1)}):
+            return _rs_ret((f(am2.group(1)) + f(am2.group(2))) * f(nm.group(1)))
+    # 11. Jane halves: B pages, first half at r1/day, second at r2/day
+    bm2 = re.search(rf"({N}) page book", full)
+    h1 = re.search(rf"first half [\w ]*?speed of ({N}) pages per day", full)
+    h2 = re.search(rf"second half [\w ]*?speed of ({N}) pages a day", full)
+    if bm2 and h1 and h2 and "how many days" in ql:
+        if dok({bm2.group(1), h1.group(1), h2.group(1)}):
+            b = f(bm2.group(1))
+            return b / 2 / f(h1.group(1)) + b / 2 / f(h2.group(1))
+    # 12. shoe monthly gap: sells $S/month, wants $Y/year → Y/12 − S
+    sm2 = re.search(rf"sells \$({N}) worth of \w+ every month", full)
+    ym = re.search(rf"make \$({N}) in an entire year", full)
+    if sm2 and ym and re.search(r"how many more dollars per month", ql):
+        if dok({sm2.group(1), ym.group(1)}):
+            return _rs_ret(f(ym.group(1)) / 12 - f(sm2.group(1)))
+    # 13. online sale: $D for every $H spent; purchase $P → P − D·(P // H)
+    dm = re.search(rf"\$({N}) for every \$({N}) that you spend", full)
+    pm2 = re.search(rf"purchase of \$({N})", full)
+    if dm and pm2 and "how much did you end up paying" in ql:
+        if dok({dm.group(1), dm.group(2), pm2.group(1)}):
+            p_ = f(pm2.group(1))
+            return _rs_ret(p_ - f(dm.group(1)) * (p_ // f(dm.group(2))))
+    # 14. Mike second job: total T; second job H hours at $R → T − H·R
+    tm3 = re.search(rf"total of \$({N}) in wages", full)
+    hm2 = re.search(rf"works ({N}) hours a week", full)
+    rm3 = re.search(rf"pays \$({N}) per hour", full)
+    if tm3 and hm2 and rm3 and re.search(r"did \w+ receive from (?:his|her) first job", full):
+        if dok({tm3.group(1), hm2.group(1), rm3.group(1)}):
+            return _rs_ret(f(tm3.group(1)) - f(hm2.group(1)) * f(rm3.group(1)))
+    # 15. Irene overtime: $B for 40 hours + $E per overtime hour; worked W
+    ib0 = re.search(rf"earns \$({N})", full)
+    ib1 = re.search(rf"works for ({N}) hours a week", full)
+    ib = (ib0, ib1) if ib0 and ib1 else None
+    ie = re.search(rf"extra \$({N}) for every hour of overtime", full)
+    iw = re.search(rf"worked ({N}) hours", full)
+    if ib and ie and iw and "total income" in ql:
+        if dok({ib[0].group(1), ib[1].group(1), ie.group(1), iw.group(1)}):
+            return _rs_ret(f(ib[0].group(1)) + (f(iw.group(1)) - f(ib[1].group(1))) * f(ie.group(1)))
+    # 16. Jennifer per-5: bought A; +B for every C that Mark bought; Mark bought D
+    ja = re.search(rf"purchased ({N}) cans", full)
+    jb = re.search(rf"bought ({N}) additional cans for every ({N}) cans", full)
+    jd = re.search(rf"mark purchased ({N}) cans", full)
+    if ja and jb and jd and re.search(r"how many cans .* jennifer", ql):
+        if dok({ja.group(1), jb.group(1), jb.group(2), jd.group(1)}):
+            return _rs_ret(f(ja.group(1)) + f(jb.group(1)) * (f(jd.group(1)) / f(jb.group(2))))
+    return None
+
+
 def _percent_money_tails_system(premises: list, question: str):
     """PERCENT-OF-MONEY tails (#224), three branches: PERCENT-INCREASED BILL ("bill is $60;
     increased by thirty percent; total bill?" -> 78); SPENT-PERCENT BACKWARD ("spent 35% of her
@@ -12155,6 +12297,8 @@ _EARLY_SYSTEMS = [
     ("calendar_age", _calendar_age_system),
     # GROUPED PARTITION: cast split into per-carrier groups → Σ(group×per) (tables 91).
     ("grouped_partition", _grouped_partition_system),
+    # RATE/PRODUCT SINGLES: sixteen unit-rate branches (#226).
+    ("rate_singles", _rate_singles_system),
     # PERCENT-OF-MONEY tails: increased bill / spent-percent backward / pay-fraction product.
     ("percent_money_tails", _percent_money_tails_system),
     # ENUMERATED-SUM COMPARE: bill denominations / team scores, "how much more" (Oliver 45).

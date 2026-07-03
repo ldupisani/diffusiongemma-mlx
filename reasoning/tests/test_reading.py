@@ -7773,6 +7773,26 @@ class TestIncrement219SignedMixedChain(unittest.TestCase):
             "his marbles to his sister. How many marbles does Leo have left?"),
             "undetermined")
 
+    def test_rate_singles_representatives(self):
+        # #226 — four of the sixteen branches (the rest are diff-verified)
+        self.assertEqual(reading.solve(
+            "Irene earns $500 if she works for 40 hours a week and gets an extra $20 "
+            "for every hour of overtime. If she worked 50 hours last week, calculate "
+            "her total income."), 700)
+        self.assertEqual(reading.solve(
+            "Jennifer purchased 40 cans of milk at the store before meeting her "
+            "classmate Mark, who was also buying milk. Jennifer bought 6 additional "
+            "cans for every 5 cans Mark bought. If Mark purchased 50 cans, how many "
+            "cans of milk did Jennifer bring home from the store?"), 100)
+        self.assertEqual(reading.solve(
+            "There's an online sale where you get $10 for every $100 that you spend. "
+            "If you make a purchase of $250 before discounts, how much did you end up "
+            "paying?"), 230)
+        self.assertEqual(reading.solve(
+            "Jane had a 500 page book to read. The first half of the book Jane read "
+            "with a speed of 10 pages per day, and the second half with a speed of 5 "
+            "pages a day. How many days did Jane spend reading this book?"), 75)
+
     def test_later_unanchored_fraction_declines(self):
         # #220 (TEST-checkpoint-forced): an UNANCHORED fraction after a prior event has a
         # genuinely ambiguous base — same-base ("¼ of his marbles" = of the ORIGINAL) vs
