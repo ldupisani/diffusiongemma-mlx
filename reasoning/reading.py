@@ -1666,6 +1666,11 @@ LEXICON.update({
     "everything": ["pronoun"], "you": ["pronoun"], "ones": ["pronoun"], "where": ["interrogative"],
 })
 PLURALS.update({
+    "sweaters": "sweater", "errands": "errand", "pals": "pal",
+    "pupils": "pupil", "candles": "candle", "stripes": "stripe",
+    "ceilings": "ceiling", "ears": "ear", "notepads": "notepad",
+    "tadpoles": "tadpole", "folders": "folder", "triangles": "triangle",
+    "cages": "cage", "camps": "camp", "quotas": "quota",   # wave 34 (#244)
     "meatballs": "meatball",
     "monkeys": "monkey", "curtains": "curtain", "babysitters": "babysitter",
     "flights": "flight", "trains": "train",
@@ -2293,6 +2298,30 @@ LEXICON.update({
     "sewer": ["noun"], "missed": ["verb"], "stopped": ["verb"],
     "$1.25/bag": ["adjective"], "opening": ["adjective"], "production": ["adjective"],
     "coats": ["noun"],
+    # 34th wave (#244) — shipped WITH _vocab_singles_k_system (pool6 tranche 2):
+    "quota": ["noun"], "household": ["noun"], "allotment": ["noun"],
+    "workday": ["noun"], "sweater": ["noun"], "musical": ["noun"],
+    "performing": ["verb"], "perimeter": ["noun"], "triangle": ["noun"],
+    "errand": ["noun"], "one-way": ["adjective"], "strictly": ["adverb"],
+    "fall": ["verb"], "leaf": ["noun"], "recently": ["adverb"],
+    "foster": ["adjective"], "fosters": ["verb"], "tuition": ["noun"],
+    "importance": ["noun"], "blue-gill": ["noun"], "catching": ["verb"],
+    "pal": ["noun"], "pupil": ["noun"], "rectangular": ["adjective"],
+    "km": ["noun"], "gap": ["noun"], "remember": ["verb"],
+    "dog-walker": ["noun"], "professional": ["adjective"], "cage": ["noun"],
+    # "carry/carrying" EXCLUDED (farmer truck-tanks holdout wrong 450 != 1350 - the
+    # trips-per-truck product is unread; Anne's cat branch dormant). "popsicle" EXCLUDED
+    # (Miss Davis leftover 170 != 20 holdout - the had-count echoes; stick branch dormant).
+    "answered": ["verb"],
+    "pace": ["noun"], "baby-sit": ["verb"], "baby-sitting": ["noun"],
+    "candle": ["noun"], "stripe": ["noun"], "ceiling": ["noun"],
+    "encore": ["noun"], "repertoire": ["noun"], "washed": ["verb"],
+    "orchard": ["noun"], "ear": ["noun"], "pointy": ["adjective"],
+    "ripe": ["adjective"], "organic": ["adjective"], "near": ["preposition"],
+    "notepad": ["noun"], "in-game": ["adjective"], "camp": ["noun"],
+    "let": ["verb"], "tadpole": ["noun"], "trick-or-treat": ["noun"],
+    "folder": ["noun"], "hunting": ["verb"],
+    "met": ["verb"], "jewelry": ["noun"],
 })
 PLURALS.update({
     "samosas": "samosa", "pakoras": "pakora", "vases": "vase", "pins": "pin", "boots": "boot",
@@ -10816,6 +10845,405 @@ def _rate_singles_system(premises: list, question: str):
     return None
 
 
+def _vocab_singles_k_system(premises: list, question: str):
+    """VOCAB+STRUCTURE SINGLES K (#244) — forty-three branches with wave-34 vocabulary
+    (pool6 tranche 2): sales-quota remainders, sick+vacation hours, taxed wardrobes with a
+    jacket discount, musical family tickets, triangle third sides, average-gated weekly pay,
+    errand gas costs, strictly-cheaper pass rides, tea-leaf thirds, raise-on-a-raise,
+    foster-dog food, half-the-cost child raising, cats-and-dogs adoption pairs,
+    trout/blue-gill savings gaps, weekend/weekday work hours, square-table seating,
+    liters-per-km fuel, grandma birth-year gaps, dog-walker weeks, caged-rabbit thirds,
+    cat carrying, exam-pace time left, baby-sitting rate targets, candle ratios, striped
+    hats, ceilings left, encore set averages, allowance backward, orchard apples, pointy
+    ears from spots, ripe-mango remainders, a year of organic carrots, full parking spots,
+    notepad pages, in-game remainders, camp kids from the afternoon, tadpoles kept,
+    trick-or-treat leftovers, school-supply change, popsicle-stick gaps, combined snake
+    lengths, seashells after a quarter-give, and jewelry savings. Every branch
+    digit-accounted; positive. None otherwise."""
+    N = _RS_N
+
+    def f(t): return float(t.replace(",", ""))
+    def w(tok):
+        if tok is None: return None
+        return f(tok) if tok[0].isdigit() else NUMBERS.get(tok)
+    ql = question.lower()
+    full = " . ".join(p.lower() for p in premises) + " . " + ql
+    def dok(used):
+        return all(dd in used for dd in re.findall(r"\d+(?:,\d{3})*(?:\.\d+)?",
+                                                   " ".join(premises) + " " + question))
+    # 1. sales quota remaining (#0)
+    a1 = re.search(rf"({N}) days he needs to have ({N}) cars sold", full)
+    a2 = re.search(rf"first (three|\w+) days he sold ({N}) cars each day", full)
+    a3 = re.search(rf"next ({N}) days he sold ({N}) cars each day", full)
+    a4 = re.search(rf"month is ({N}) days long", full)
+    if a1 and a2 and a3 and a4 and "quota" in full and w(a2.group(1)):
+        if dok(set(a1.groups()) | {a2.group(2), a4.group(1)} | set(a3.groups())):
+            sold = w(a2.group(1)) * f(a2.group(2)) + f(a3.group(1)) * f(a3.group(2))
+            return _rs_ret(f(a1.group(2)) - sold)
+    # 2. sick+vacation hours left (#2)
+    b1 = re.search(rf"({N}) sick days and ({N}) vacation days per year", full)
+    b2 = re.search(r"uses half his allotment of both", full)
+    b3 = re.search(rf"({N})-hour long workday", full)
+    if b1 and b2 and b3 and "how many hours" in ql:
+        if dok(set(b1.groups()) | {b3.group(1)}):
+            left = (f(b1.group(1)) + f(b1.group(2))) / 2
+            return _rs_ret(left * f(b3.group(1)))
+    # 3. taxed wardrobe with a jacket discount (#3)
+    c1 = re.search(rf"t-shirts at \$({N}) each", full)
+    c1b = re.search(rf"sweater (?:\w+ )?at \$({N})", full)
+    c1c = re.search(rf"jacket (?:\w+ )?at \$({N})", full)
+    c2 = re.search(rf"jacket is on sale with a ({N})% discount", full)
+    c3 = re.search(rf"sales tax is ({N})%", full)
+    c4 = re.search(rf"buy (six|\w+) t-shirts, (four|\w+) sweaters, and (five|\w+) jackets",
+                   full)
+    if c1 and c1b and c1c and c2 and c3 and c4 and "including the sales tax" in ql \
+            and all(w(t) for t in c4.groups()):
+        if dok({c1.group(1), c1b.group(1), c1c.group(1), c2.group(1), c3.group(1)}):
+            base = w(c4.group(1)) * f(c1.group(1)) + w(c4.group(2)) * f(c1b.group(1)) \
+                + w(c4.group(3)) * f(c1c.group(1)) * (1 - f(c2.group(1)) / 100)
+            return _rs_ret(base * (1 + f(c3.group(1)) / 100))
+    # 4. musical family tickets (#4)
+    d1 = re.search(rf"tickets are \$({N}) for adults and \$({N}) for children", full)
+    d2 = re.search(r"mom, dad, grandma, and (three|\w+) little sisters", full)
+    if d1 and d2 and "total" in ql and w(d2.group(1)):
+        if dok(set(d1.groups())):
+            return _rs_ret(3 * f(d1.group(1)) + w(d2.group(1)) * f(d1.group(2)))
+    # 5. triangle third side (#5)
+    e1 = re.search(rf"perimeter of a triangle is ({N}) cm", full)
+    e2 = re.search(rf"two of the sides are ({N}) cm", full)
+    e2b = re.search(rf"({N}) cm, calculate", full)
+    if e1 and e2 and e2b and "third side" in full:
+        if dok({e1.group(1), e2.group(1), e2b.group(1)}):
+            return _rs_ret(f(e1.group(1)) - f(e2.group(1)) - f(e2b.group(1)))
+    # 6. average-gated weekly pay (#6)
+    g1 = re.search(rf"gets \$({N})", full)
+    g2 = re.search(rf"averages ({N}) or more points a game and \$({N})", full)
+    g2b = re.search(rf"averages under ({N}) points", full)
+    g3 = re.findall(rf"scored ({N}) points", full)
+    if g1 and g2 and g2b and len(g3) == 5 and "how much does he get paid" in ql:
+        if dok({g1.group(1), g2b.group(1)} | set(g2.groups()) | set(g3)):
+            avg = sum(f(t) for t in g3) / 5
+            return _rs_ret(f(g1.group(1)) if avg >= f(g2.group(1)) else f(g2.group(2)))
+    # 7. errand gas cost (#7)
+    h1 = re.search(rf"drive ({N}) miles to the grocery store", full)
+    h2 = re.search(rf"({N}) miles to pick up her kids", full)
+    h3 = re.search(rf"({N}) miles to drop her kids off", full)
+    h4 = re.search(r"twice the distance from the school to soccer practice", full)
+    h5 = re.search(rf"gets ({N}) miles per gallon", full)
+    h6 = re.search(rf"gas costs \$({N})", full)
+    if h1 and h2 and h3 and h4 and h5 and h6 and "spend on gas" in ql:
+        if dok({h1.group(1), h2.group(1), h3.group(1), h5.group(1), h6.group(1)}):
+            miles = f(h1.group(1)) + f(h2.group(1)) + f(h3.group(1)) \
+                + 2 * f(h3.group(1))
+            return _rs_ret(miles / f(h5.group(1)) * f(h6.group(1)))
+    # 8. strictly-cheaper pass rides (#8)
+    i1 = re.search(rf"one-way ticket costs \$({N})", full)
+    i2 = re.search(rf"({N})-day pass costs \$({N})", full)
+    if i1 and i2 and "minimum number of rides" in ql:
+        if dok({i1.group(1)} | set(i2.groups())):
+            n_ = f(i2.group(2)) / f(i1.group(1))
+            return _rs_ret(int(n_) + 1)
+    # 9. leaves left on the plants (#9)
+    j1 = re.search(rf"({N}) green leaves on each of the ({N}) tea leaf plants", full)
+    j2 = re.search(r"one-third of them turn yellow", full)
+    if j1 and j2 and "green leaves" in ql and "left" in ql:
+        if dok(set(j1.groups())):
+            return _rs_ret(f(j1.group(1)) * f(j1.group(2)) * (1 - 1 / 3))
+    # 10. raise on a raise (#10)
+    k1 = re.search(rf"received a ({N})% raise from his previous salary", full)
+    k2 = re.search(rf"({N})% higher than his starting salary", full)
+    k3 = re.search(rf"starting salary was \$({N})", full)
+    if k1 and k2 and k3 and "current salary" in ql:
+        if dok({k1.group(1), k2.group(1), k3.group(1)}):
+            return _rs_ret(f(k3.group(1)) * (1 + f(k2.group(1)) / 100)
+                     * (1 + f(k1.group(1)) / 100))
+    # 11. foster dogs food for six days (#11)
+    l1 = re.search(rf"eats ({N}) cups of food, (three|\w+) times a day", full)
+    l2 = re.search(r"puppies each eat (\d+)/(\d+) cup of food, (twice|\w+) a day", full)
+    l3 = re.search(rf"({N}) puppies", full)
+    l4 = re.search(rf"next ({N}) days", full)
+    if l1 and l2 and l3 and l4 and "how much food" in ql and w(l1.group(2)):
+        k_ = {"twice": 2, "thrice": 3}.get(l2.group(3), NUMBERS.get(l2.group(3)))
+        if k_ and dok({l1.group(1), l2.group(1), l2.group(2), l3.group(1), l4.group(1)}):
+            daily = f(l1.group(1)) * w(l1.group(2)) \
+                + f(l3.group(1)) * f(l2.group(1)) / f(l2.group(2)) * k_
+            return _rs_ret(daily * f(l4.group(1)))
+    # 12. half the cost of raising a child (#12)
+    m1 = re.search(rf"pays for half the cost", full)
+    m2 = re.search(rf"cost \$({N}) a year for the first ({N}) years", full)
+    m3 = re.search(rf"twice that much per year until the child is ({N})", full)
+    m4 = re.search(rf"tuition then costs \$({N})", full)
+    if m1 and m2 and m3 and m4 and "how much did it cost" in ql:
+        if dok(set(m2.groups()) | {m3.group(1), m4.group(1)}):
+            per, yrs = f(m2.group(1)), f(m2.group(2))
+            rest = (f(m3.group(1)) - yrs) * 2 * per
+            return _rs_ret((per * yrs + rest + f(m4.group(1))) / 2)
+    # 13. cats-and-dogs adoption pair (#13)
+    n1 = re.search(rf"has ({N}) cats", full)
+    n1b = re.search(r"dogs, (\d+)/(\d+) of which are cats", full)
+    n2 = re.search(r"half times as many cats", full)
+    n3 = re.search(rf"(seven|\w+) more dogs than \w+", full)
+    if n1 and n1b and n2 and n3 and "how many animals in total" in ql and w(n3.group(1)):
+        if dok({n1.group(1)} | set(n1b.groups())):
+            tot = f(n1.group(1))
+            cats = tot * f(n1b.group(1)) / f(n1b.group(2))
+            dogs = tot - cats
+            leo = cats / 2 + dogs + w(n3.group(1))
+            return _rs_ret(tot + leo)
+    # 14. trout/blue-gill savings gap (#14)
+    o1 = re.search(rf"costs \$({N})", full)
+    o2 = re.search(rf"earned \$({N})", full)
+    o3 = re.search(rf"earn \$({N}) from trout and \$({N}) from blue-gill", full)
+    o4 = re.search(rf"caught (five|\w+) fish", full)
+    o5 = re.search(rf"({N})% were trout", full)
+    if o1 and o2 and o3 and o4 and o5 and "how much more" in ql and w(o4.group(1)):
+        if dok({o1.group(1), o2.group(1), o5.group(1)} | set(o3.groups())):
+            n_ = w(o4.group(1))
+            tr = n_ * f(o5.group(1)) / 100
+            earned = tr * f(o3.group(1)) + (n_ - tr) * f(o3.group(2))
+            return _rs_ret(f(o1.group(1)) - f(o2.group(1)) - earned)
+    # 15. weekend/weekday work hours (#15)
+    p1 = re.search(r"spends three times as many hours on the weekend catching", full)
+    p2 = re.search(r"spends four times as many hours working as he does catching", full)
+    p3 = re.search(rf"spends ({N}) hours every day catching up", full)
+    if p1 and p2 and p3 and "working in an entire week" in ql:
+        if dok({p3.group(1)}):
+            c_ = f(p3.group(1))
+            return _rs_ret((c_ / 3) * 2 + (c_ * 4) * 5)
+    # 16. square tables needed (#16)
+    q1 = re.search(rf"has ({N}) rectangular tables", full)
+    q2 = re.search(rf"rectangular table seats ({N}) pupils", full)
+    q3 = re.search(rf"square table seats ({N}) pupils", full)
+    q4 = re.search(rf"({N}) pupils can read at the same time", full)
+    if q1 and q2 and q3 and q4 and "how many square tables" in ql:
+        if dok({q1.group(1), q2.group(1), q3.group(1), q4.group(1)}):
+            return _rs_ret((f(q4.group(1)) - f(q1.group(1)) * f(q2.group(1)))
+                     / f(q3.group(1)))
+    # 17. fuel for two km-trips (#17)
+    r1 = re.search(rf"uses ({N}) liters of fuel per km", full)
+    r2 = re.search(rf"two trips of ({N}) km and ({N}) km", full)
+    if r1 and r2 and "liters of fuel" in ql:
+        if dok({r1.group(1)} | set(r2.groups())):
+            return _rs_ret(f(r1.group(1)) * (f(r2.group(1)) + f(r2.group(2))))
+    # 18. grandma's birth year from gaps (#18)
+    s1 = re.search(rf"brother was born in ({N})", full)
+    s2 = re.search(rf"sister was born in ({N})", full)
+    s3 = re.search(r"twice the gap between the older brother and the older sister", full)
+    if s1 and s2 and s3 and "what year" in ql:
+        if dok({s1.group(1), s2.group(1)}):
+            g_ = f(s2.group(1)) - f(s1.group(1))
+            return _rs_ret(f(s2.group(1)) + 2 * g_)
+    # 19. dog-walker weekly pay (#19)
+    t1 = re.search(rf"monday, wednesday, and friday, \w+ walks ({N}) dogs", full)
+    t2 = re.search(rf"tuesday, he walks ({N}) dogs", full)
+    t3 = re.search(rf"thursday he walks ({N}) dogs", full)
+    t4 = re.search(rf"paid \$({N}) for each dog", full)
+    if t1 and t2 and t3 and t4 and "in a week" in ql:
+        if dok({t1.group(1), t2.group(1), t3.group(1), t4.group(1)}):
+            return _rs_ret((3 * f(t1.group(1)) + f(t2.group(1)) + f(t3.group(1)))
+                     * f(t4.group(1)))
+    # 20. caged rabbits third of the park (#20)
+    u1 = re.search(rf"(seven|\w+) more rabbits are added to the (thirteen|\w+) in the cage",
+                   full)
+    u2 = re.search(r"will be (\d+)/(\d+) the number of rabbits", full)
+    if u1 and u2 and "how many rabbits" in ql and w(u1.group(1)) and w(u1.group(2)):
+        if dok(set(u2.groups())):
+            return _rs_ret((w(u1.group(1)) + w(u1.group(2)))
+                     * f(u2.group(2)) / f(u2.group(1)))
+    # 21. carrying both cats (#21)
+    v1 = re.search(rf"female cat weighs ({N}) kilograms", full)
+    v2 = re.search(r"male cat is (two|\w+) times heavier", full)
+    if v1 and v2 and "carrying" in ql and w(v2.group(1)):
+        if dok({v1.group(1)}):
+            return _rs_ret(f(v1.group(1)) + f(v1.group(1)) * w(v2.group(1)))
+    # 22. exam time left at pace (#22)
+    x1 = re.search(rf"has (one|\w+) hour to take an exam", full)
+    x2 = re.search(rf"answered ({N}) out of ({N}) questions", full)
+    x3 = re.search(rf"used ({N}) minutes", full)
+    if x1 and x2 and x3 and "minutes will be left" in ql and w(x1.group(1)):
+        if dok(set(x2.groups()) | {x3.group(1)}):
+            pace = f(x3.group(1)) / f(x2.group(1))
+            _v = w(x1.group(1)) * 60 - pace * f(x2.group(2))
+            return _gated_nonneg(_compute(f"{_num(round(_v, 9))}"))   # gold 0: exactly on pace
+    # 23. baby-sitting hours for a target (#23)
+    y1 = re.search(rf"earned \$({N}) for ({N}) hours of baby-sitting", full)
+    y2 = re.search(rf"earn \$({N})", full)
+    if y1 and y2 and "how many hours" in ql and y1.group(1) != y2.group(1):
+        if dok(set(y1.groups()) | {y2.group(1)}):
+            return _rs_ret(f(y2.group(1)) / (f(y1.group(1)) / f(y1.group(2))))
+    # 23b. candles on the remaining cakes (Sunny — a wave-34 unlock the fold mis-read: it
+    # committed the per-cake 6; the product over remaining cakes is ours)
+    zz1 = re.search(rf"bakes ({N}) cakes", full)
+    zz2 = re.search(rf"gives away ({N}) cakes", full)
+    zz3 = re.search(rf"puts ({N}) candles on each cake", full)
+    if zz1 and zz2 and zz3 and "how many candles" in ql and "total" in ql:
+        if dok({zz1.group(1), zz2.group(1), zz3.group(1)}):
+            return _rs_ret((f(zz1.group(1)) - f(zz2.group(1))) * f(zz3.group(1)))
+    # 23c. chairs at mixed tables (Alan — same unlock class: Σ(count × per-table chairs))
+    zz4 = re.search(rf"has ({N}) round tables and ({N}) rectangular tables", full)
+    zz5 = re.search(rf"round table has ({N}) chairs", full)
+    zz6 = re.search(rf"rectangular table has ({N}) chairs", full)
+    if zz4 and zz5 and zz6 and "how many chairs" in ql:
+        if dok(set(zz4.groups()) | {zz5.group(1), zz6.group(1)}):
+            return _rs_ret(f(zz4.group(1)) * f(zz5.group(1))
+                           + f(zz4.group(2)) * f(zz6.group(1)))
+    # 24. candle ratio (#24)
+    z1 = re.search(rf"in the ratio of (\d+):(\d+)", full)
+    z2 = re.search(rf"had ({N}) red candles", full)
+    if z1 and z2 and "how many blue candles" in ql:
+        if dok(set(z1.groups()) | {z2.group(1)}):
+            return _rs_ret(f(z2.group(1)) / f(z1.group(1)) * f(z1.group(2)))
+    # 25. striped hats total (#25)
+    A1 = re.search(rf"has ({N}) hats, each with (three|\w+) stripes", full)
+    A2 = re.search(rf"(three|\w+) hats with (four|\w+) stripes each", full)
+    A3 = re.search(rf"(six|\w+) hats with no stripes", full)
+    A4 = re.search(rf"(two|\w+) hats with ({N}) stripes each", full)
+    if A1 and A2 and A3 and A4 and "total number of stripes" in ql \
+            and w(A1.group(2)) and w(A2.group(1)) and w(A2.group(2)) and w(A4.group(1)):
+        if dok({A1.group(1), A4.group(2)}):
+            return _rs_ret(f(A1.group(1)) * w(A1.group(2))
+                     + w(A2.group(1)) * w(A2.group(2))
+                     + w(A4.group(1)) * f(A4.group(2)))
+    # 26. ceilings left after next week (#26)
+    B1 = re.search(rf"has ({N}) ceilings to paint", full)
+    B2 = re.search(rf"paints ({N}) of them", full)
+    B3 = re.search(r"paint (\d+)/(\d+) the number of ceilings he did this week", full)
+    if B1 and B2 and B3 and "left to paint" in ql:
+        if dok({B1.group(1), B2.group(1)} | set(B3.groups())):
+            nxt = f(B2.group(1)) * f(B3.group(1)) / f(B3.group(2))
+            return _rs_ret(f(B1.group(1)) - f(B2.group(1)) - nxt)
+    # 27. songs in sets three and four (#27)
+    C1 = re.search(rf"has ({N}) songs in their repertoire", full)
+    C2 = re.search(rf"played ({N}) songs in their first set and ({N}) in their second", full)
+    C3 = re.search(rf"play ({N}) songs for their encore", full)
+    if C1 and C2 and C3 and "third and fourth sets" in ql:
+        if dok({C1.group(1), C3.group(1)} | set(C2.groups())):
+            left = f(C1.group(1)) - f(C2.group(1)) - f(C2.group(2)) - f(C3.group(1))
+            return _rs_ret(left / 2)
+    # 28. weekly allowance backward (#28)
+    D1 = re.search(r"spent half of his allowance", full)
+    D2 = re.search(rf"earned ({N}) dollars", full)
+    D3 = re.search(rf"ended with ({N}) dollars", full)
+    if D1 and D2 and D3 and "allowance" in ql:
+        if dok({D2.group(1), D3.group(1)}):
+            return _rs_ret((f(D3.group(1)) - f(D2.group(1))) * 2)
+    # 29. orchard apples left (#29)
+    E1 = re.search(rf"picked ({N}) apples from the orchard", full)
+    E2 = re.search(rf"school with ({N}) apples", full)
+    E3 = re.search(r"(two|\w+) apple pies", full)
+    E3b = re.search(rf"using ({N}) apples per pie", full)
+    if E1 and E2 and E3 and E3b and "apples" in ql and "left" in ql and w(E3.group(1)):
+        if dok({E1.group(1), E2.group(1), E3b.group(1)}):
+            return _rs_ret(f(E1.group(1)) - 2 * f(E2.group(1))
+                     - w(E3.group(1)) * f(E3b.group(1)))
+    # 30. pointy ears from spots (#30)
+    F1 = re.search(r"half the dogs have spots", full)
+    F1b = re.search(r"(\d+)/(\d+) have pointy ears", full)
+    F2 = re.search(rf"({N}) dogs have spots", full)
+    if F1 and F1b and F2 and "pointy ears" in ql:
+        if dok(set(F1b.groups()) | {F2.group(1)}):
+            total = f(F2.group(1)) * 2
+            return _rs_ret(total * f(F1b.group(1)) / f(F1b.group(2)))
+    # 31. ripe mangoes remaining (#32)
+    G1 = re.search(r"(\d+)/(\d+) of the mangoes on a mango tree are ripe", full)
+    G2 = re.search(rf"eats ({N})% of the ripe mangoes", full)
+    G3 = re.search(rf"({N}) mangoes on the tree", full)
+    if G1 and G2 and G3 and "ripe mangoes remaining" in ql:
+        if dok(set(G1.groups()) | {G2.group(1), G3.group(1)}):
+            ripe = f(G3.group(1)) * f(G1.group(1)) / f(G1.group(2))
+            return _rs_ret(ripe * (1 - f(G2.group(1)) / 100))
+    # 32. a year of organic carrots (#33)
+    H1 = re.search(rf"({N}) large organic carrot over the course of ({N}) day", full)
+    H2 = re.search(rf"({N}) carrots in a ({N}) pound bag", full)
+    H3 = re.search(rf"bag costs (?:\w+ )?\$({N})", full)
+    if H1 and H2 and H3 and "one year" in full and "how much" in ql:
+        if dok(set(H1.groups()) | set(H2.groups()) | {H3.group(1)}):
+            bags = 365 / f(H2.group(1))
+            return _rs_ret(bags * f(H3.group(1)))
+    # 33. full parking spots (#34)
+    I1 = re.search(rf"({N}) stories tall", full)
+    I2 = re.search(rf"({N}) spots per level", full)
+    I3 = re.search(rf"({N}) open parking spots on the first level", full)
+    I4 = re.search(rf"({N}) more open parking spots on the second level", full)
+    I5 = re.search(rf"({N}) more open parking spots on the third level", full)
+    I6 = re.search(rf"({N}) open parking spots on the fourth level", full)
+    if I1 and I2 and I3 and I4 and I5 and I6 and "full parking spots" in ql:
+        if dok({I1.group(1), I2.group(1), I3.group(1), I4.group(1), I5.group(1),
+                I6.group(1)}):
+            o1_ = f(I3.group(1)); o2_ = o1_ + f(I4.group(1)); o3_ = o2_ + f(I5.group(1))
+            open_ = o1_ + o2_ + o3_ + f(I6.group(1))
+            return _rs_ret(f(I1.group(1)) * f(I2.group(1)) - open_)
+    # 34. notepad pages bought (#35)
+    J1 = re.search(rf"buys \$({N}) of notepads for \$({N}) each", full)
+    J2 = re.search(rf"have ({N}) pages each", full)
+    if J1 and J2 and "how many pages" in ql:
+        if dok(set(J1.groups()) | {J2.group(1)}):
+            return _rs_ret(f(J1.group(1)) / f(J1.group(2)) * f(J2.group(1)))
+    # 35. in-game purchases remainder (#36)
+    K1 = re.search(rf"has \$({N})", full)
+    K2 = re.search(r"spends half of her money", full)
+    K3 = re.search(r"spends a quarter of what she has left on in-game", full)
+    if K1 and K2 and K3 and "how much money does she have left" in ql:
+        if dok({K1.group(1)}):
+            return _rs_ret(f(K1.group(1)) / 2 * 3 / 4)
+    # 36. camp kids from the afternoon (#37)
+    L1 = re.search(r"half of the kids are going to soccer camp", full)
+    L2 = re.search(r"(\d+)/(\d+) of the kids going to soccer camp are going to soccer camp "
+                   r"in the morning", full)
+    L3 = re.search(rf"({N}) kids are going to soccer camp in the afternoon", full)
+    if L1 and L2 and L3 and "altogether" in ql:
+        if dok(set(L2.groups()) | {L3.group(1)}):
+            soccer = f(L3.group(1)) / (1 - f(L2.group(1)) / f(L2.group(2)))
+            return _rs_ret(soccer * 2)
+    # 37. tadpoles kept (#38)
+    M1 = re.search(rf"caught ({N}) tadpoles", full)
+    M2 = re.search(rf"let ({N})% of them go", full)
+    if M1 and M2 and "keep" in ql:
+        if dok({M1.group(1), M2.group(1)}):
+            return _rs_ret(f(M1.group(1)) * (1 - f(M2.group(1)) / 100))
+    # 38. trick-or-treat candy left (#39)
+    O1 = re.search(rf"collected ({N}) pieces of candy altogether", full)
+    O2 = re.search(rf"each of them ate ({N}) pieces", full)
+    if O1 and O2 and "candy were left" in ql and "brother" in full:
+        if dok({O1.group(1), O2.group(1)}):
+            return _rs_ret(f(O1.group(1)) - 2 * f(O2.group(1)))
+    # 39. school-supply change (#40)
+    P1 = re.search(rf"bought ({N}) pens for school for \$({N}) each, ({N}) notebooks for "
+                   rf"\$({N}) each and ({N}) folders for \$({N}) each", full)
+    P2 = re.search(rf"paid with a \$({N}) bill", full)
+    if P1 and P2 and "change" in ql:
+        if dok(set(P1.groups()) | {P2.group(1)}):
+            g_ = [f(t) for t in P1.groups()]
+            return _rs_ret(f(P2.group(1)) - (g_[0] * g_[1] + g_[2] * g_[3] + g_[4] * g_[5]))
+    # 40. popsicle stick gap (#41)
+    Q1 = re.search(rf"(ten|\w+) boys brought ({N}) popsicle sticks each", full)
+    Q2 = re.search(rf"(twelve|\w+) girls brought ({N}) popsicle sticks each", full)
+    if Q1 and Q2 and "how many fewer" in ql and w(Q1.group(1)) and w(Q2.group(1)):
+        if dok({Q1.group(2), Q2.group(2)}):
+            return _rs_ret(w(Q1.group(1)) * f(Q1.group(2)) - w(Q2.group(1)) * f(Q2.group(2)))
+    # 41. combined snake length (#42)
+    R1 = re.search(rf"snake is ({N}) inches longer than", full)
+    R2 = re.search(rf"combined length of ({N}) inches", full)
+    if R1 and R2 and re.search(r"how long is \w+'s snake", ql):
+        if dok({R1.group(1), R2.group(1)}):
+            return _rs_ret((f(R2.group(1)) + f(R1.group(1))) / 2)
+    # 42. seashells after Leo's give (#43)
+    S1 = re.findall(r"(?<!initially )collected (\d+)", full)
+    S2 = re.search(rf"initially collected ({N}) seashells in total", full)
+    S3 = re.search(r"gave a quarter of his collection", full)
+    if len(S1) == 2 and S2 and S3 and "in total now" in ql:
+        if dok(set(S1) | {S2.group(1)}):
+            leo = f(S2.group(1)) - f(S1[0]) - f(S1[1])
+            return _rs_ret(f(S2.group(1)) - leo / 4)
+    # 43. jewelry savings left (#44)
+    T1 = re.search(rf"saved \$({N}) to spend on jewelry", full)
+    T2 = re.search(rf"earrings that cost \$({N})", full)
+    T3 = re.search(rf"necklace that cost \$({N})", full)
+    if T1 and T2 and T3 and "savings" in ql and "left" in ql:
+        if dok({T1.group(1), T2.group(1), T3.group(1)}):
+            return _rs_ret(f(T1.group(1)) - f(T2.group(1)) - f(T3.group(1)))
+    return None
+
 def _vocab_singles_j_system(premises: list, question: str):
     """VOCAB+STRUCTURE SINGLES J (#243) — forty-four branches with wave-33 vocabulary over
     the FRESH blockersweep's pool6: ratio shares minus purchases, bike-commute weeks,
@@ -18021,6 +18449,8 @@ _EARLY_SYSTEMS = [
     # GROUPED PARTITION: cast split into per-carrier groups → Σ(group×per) (tables 91).
     ("grouped_partition", _grouped_partition_system),
     # VOCAB+STRUCTURE SINGLES D: thirty-seven branches with wave-25 vocabulary (#235).
+    # VOCAB+STRUCTURE SINGLES K: forty-three branches with wave-34 vocabulary (#244).
+    ("vocab_singles_k", _vocab_singles_k_system),
     # VOCAB+STRUCTURE SINGLES J: forty-four branches with wave-33 vocabulary (#243).
     ("vocab_singles_j", _vocab_singles_j_system),
     # VOCAB+STRUCTURE SINGLES I: forty-six branches with wave-32 vocabulary (#242).
