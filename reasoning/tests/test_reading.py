@@ -4235,9 +4235,12 @@ class TestShoppingTotal(unittest.TestCase):
 
     def test_for_total_price_declines(self):
         # "four pizzas for $80" is a TOTAL, not a per-each price → must not pair as 4×80.
-        self.assertNotIsInstance(reading.solve(
+        # RE-PINNED (#209): `_pieces_pool_system` now claims this synthetic CORRECTLY —
+        # 80/(4·5) = 4 per piece (the real Luigi dev case's gold). The _shopping_total
+        # mis-pairing this pin defends against still declines (the 4×80=320 read never fires).
+        self.assertEqual(reading.solve(
             "Luigi bought four pizzas for $80. Each pizza was cut into 5 pieces. How much did each piece "
-            "cost in total?"), (int, float))
+            "cost in total?"), 4)
 
     def test_no_total_cue_declines(self):
         # no "in all"/"total" cue → a pair may be split into the question clause → decline (Alexander 5≠9).
@@ -7255,6 +7258,55 @@ class TestIncrement208NeedsInverse(unittest.TestCase):
             "Loris needs three more books to have the same number as Lamont, who has "
             "twice the number of books Darryl has. If Darryl has 20 books, calculate "
             "the total number of books the three have."), 97)
+
+
+class TestIncrement209PiecesPool(unittest.TestCase):
+    """#209 — `_pieces_pool_system`: a slices/pieces pool (containers × per-container) with
+    ONE downstream op, six ask branches. Premises PERIOD-joined so severed clauses can't
+    create false adjacencies ("…gets 3 slices each pizza…" stole the per-container read)."""
+
+    def test_remain_after_eating(self):
+        # 2·8 − 7 = 9
+        self.assertEqual(reading.solve(
+            "If there are 8 slices in a large pizza, how many slices will remain if "
+            "Mary orders 2 large pizzas and eats 7 slices?"), 9)
+
+    def test_cost_per_piece(self):
+        # 80 / (4·5) = 4
+        self.assertEqual(reading.solve(
+            "Luigi bought four pizzas for $80. Each pizza was cut into 5 pieces. How "
+            "much did each piece of pizza cost, in dollars?"), 4)
+
+    def test_cost_of_k_slices(self):
+        # 72 / (3·12) · 5 = 10
+        self.assertEqual(reading.solve(
+            "Kim buys 3 pizzas. They are 12 slices each. The pizza cost $72. How much "
+            "did 5 slices cost?"), 10)
+
+    def test_pizzas_to_order_group(self):
+        # 18·3 / 9 = 6 — the false-adjacency regression case (period-join)
+        self.assertEqual(reading.solve(
+            "There is a group of 18 people who are ordering pizza. If each person gets "
+            "3 slices and each pizza has 9 slices, how many pizzas should they order?"), 6)
+
+    def test_slices_per_person(self):
+        # 3·8 / (1+5) = 4
+        self.assertEqual(reading.solve(
+            "John with his five friends ordered 3 pizzas. Each pizza had 8 slices. If "
+            "they all finished and ate the same amount of pizzas, how many slices did "
+            "each person eat?"), 4)
+
+    def test_revenue_slices_times_price(self):
+        # 9·4·5 = 180
+        self.assertEqual(reading.solve(
+            "A pie shop charges $5 for a slice of pie. They cut each whole pie into 4 "
+            "slices. How much money will the pie shop make if they sell 9 pies?"), 180)
+
+    def test_stray_value_declines(self):
+        # an unaccounted digit (the 2 sodas) must decline the whole system
+        self.assertEqual(reading.solve(
+            "Luigi bought four pizzas for $80 and 2 sodas. Each pizza was cut into 5 "
+            "pieces. How much did each piece of pizza cost, in dollars?"), "undetermined")
 
 
 if __name__ == "__main__":

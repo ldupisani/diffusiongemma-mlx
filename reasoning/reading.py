@@ -9995,6 +9995,82 @@ def _percent_price_relational_system(premises: list, question: str):
     return _gated_pos(result)
 
 
+def _pieces_pool_system(premises: list, question: str):
+    """PIECES-POOL COMPOSITIONS (#209) — a pool of slices/pieces (containers × pieces-per-
+    container) with ONE downstream op, six ask branches: REMAIN ("2 pizzas of 8; eats 7; left?"
+    → 9), PER-PIECE COST ("four pizzas for $80, cut into 5" → 4), K-SLICES COST (Kim 72/36·5 =
+    10), PIZZAS-TO-ORDER (persons·per-person/P: "group of 18, 3 slices each person, 9 per
+    pizza" → 6), SLICES-PER-PERSON (C·P/persons: "John with his five friends, 3 pizzas of 8"
+    → 4), REVENUE ("$5 a slice, 4 slices a pie, sell 9 pies" → 180). Premises PERIOD-joined —
+    severed clauses must not create false adjacencies ("…gets 3 slices each pizza…" stole the
+    per-container read). TIGHTLY gated per branch: the branch's own values and nothing else
+    (every digit accounted); counts positive integers; money positive. None otherwise."""
+    ql = question.lower()
+    body = " . ".join(premises)
+    full = body.lower() + " . " + ql
+    if not re.search(r"\bslices?\b|\bpieces?\b", full):
+        return None
+
+    def _wn(tok):
+        if tok is None:
+            return None
+        t = tok.lower()
+        return float(t) if t.replace(".", "").isdigit() else \
+            (float(NUMBERS[t]) if t in NUMBERS else None)
+
+    cm = re.search(r"\b(?:orders?|ordered|buys?|bought|made|got)\s+(\d+|one|two|three|four|five|"
+                   r"six|seven|eight|nine|ten)\s+(?:different |large |whole |big |birthday |cookie )*"
+                   r"(?:pizzas?|pies?|pans?|boxes?|cakes?)\b", full)
+    C = _wn(cm.group(1)) if cm else None
+    pm = (re.search(r"cut(?:\s+\w+){0,3} into (\d+)(?: big| square| large)* (?:slices?|pieces?)", full)
+          or re.search(r"\b(\d+) slices? (?:each|in a)", full)
+          or re.search(r"each (?:pizza|pie|pan|cake) (?:has|had|is|was) (\d+) slices?", full)
+          or re.search(r"(?:pizza|pie|cake) (?:has|had|with) (\d+) slices?", full))
+    P = _wn(pm.group(1)) if pm else None
+    used = {m.group(1) for m in (cm, pm) if m}
+
+    def digits_ok(*extra):
+        u = used | {e for e in extra if e}
+        return all(d in u for d in re.findall(r"\d+(?:\.\d+)?", body + " " + question))
+
+    if re.search(r"how many slices? (?:will remain|(?:are|were|is|was) left|remain\b|left\b)", ql):
+        em = re.search(r"(?:eats?|ate)\s+(\d+) slices?", full)
+        if C and P and em and digits_ok(em.group(1)):
+            return _gated_pos_int(_compute(f"{_num(C)} * {_num(P)} - {em.group(1)}"))
+        return None
+    km = re.search(r"how much did (\d+) slices? cost", ql)
+    if re.search(r"how much did each (?:piece|slice|brownie)(?: of \w+)? cost", ql) or km:
+        tm = re.search(r"\$(\d+(?:\.\d+)?)", body)
+        if C and P and tm and digits_ok(tm.group(1), km.group(1) if km else None):
+            expr = f"{tm.group(1)} / ({_num(C)} * {_num(P)})"
+            return _gated_pos(_compute(f"({expr}) * {km.group(1)}" if km else expr))
+        return None
+    if re.search(r"how many pizzas? should they order", ql):
+        gm = re.search(r"group of (\d+) people", full)
+        fm = re.search(r"\b(?:and|with (?:his|her))\s+(\d+|one|two|three|four|five|six|seven|"
+                       r"eight|nine|ten)(?: of (?:his|her|their))? friends", full)
+        persons = _wn(gm.group(1)) if gm else ((1 + _wn(fm.group(1))) if fm and _wn(fm.group(1)) else None)
+        em = re.search(r"each person (?:will eat|eats|gets?|will get)\s+(\d+) slices?", full)
+        if persons and P and em and C is None \
+                and digits_ok(gm.group(1) if gm else fm.group(1), em.group(1)):
+            return _gated_pos_int(_compute(f"{_num(persons)} * {em.group(1)} / {_num(P)}"))
+        return None
+    if re.search(r"how many slices? did each (?:person|one) (?:eat|get)", ql):
+        fm = re.search(r"\bwith (?:his|her)\s+(\d+|one|two|three|four|five|six|seven|eight|nine|"
+                       r"ten)(?: of (?:his|her|their))? friends", full)
+        persons = (1 + _wn(fm.group(1))) if fm and _wn(fm.group(1)) else None
+        if C and P and persons and digits_ok(fm.group(1)):
+            return _gated_pos_int(_compute(f"{_num(C)} * {_num(P)} / {_num(persons)}"))
+        return None
+    if re.search(r"how much money will .* make", ql):
+        sm = re.search(r"sell (\d+) (?:pies?|pizzas?|cakes?)", full)
+        prm = re.search(r"charges? \$(\d+(?:\.\d+)?) for a slice", full)
+        if sm and prm and P and digits_ok(sm.group(1), prm.group(1)):
+            return _gated_pos(_compute(f"{sm.group(1)} * {_num(P)} * {prm.group(1)}"))
+        return None
+    return None
+
+
 # --- system family: day chains & two-rate conversions ------------------------------------------
 def _today_tomorrow_chain_system(premises: list, question: str):
     """SIGNED DAY CHAIN — "has 65 pounds today; tomorrow he will use 18; the following day he
@@ -10917,6 +10993,8 @@ _EARLY_SYSTEMS = [
     ("same_pct_bonus", _same_pct_bonus_system),
     # PERCENT-SCALED PRICE: "new plan 30% more expensive; old was $150?" → 195; + counts → 22.
     ("percent_price_relational", _percent_price_relational_system),
+    # PIECES POOL: containers × per-container slices + ONE op (remain/cost/order/share/revenue).
+    ("pieces_pool", _pieces_pool_system),
     # SIGNED DAY CHAIN: "65 today; use 18 tomorrow; buy 50 next; in the end?" → 97.
     ("today_tomorrow_chain", _today_tomorrow_chain_system),
     # FIRST TWO DAYS + DOUBLE THEIR SUM: "5; another 7; twice the first two days?" → 36.
