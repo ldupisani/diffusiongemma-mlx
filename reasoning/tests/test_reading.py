@@ -7694,6 +7694,42 @@ class TestIncrement219SignedMixedChain(unittest.TestCase):
             "Karina was born in 1970 and she is currently twice as old as her brother. "
             "If her current age is 40, in what year was her brother born?"), 1990)
 
+    def test_grouped_partition_tables(self):
+        # #223: 16·2 + 5·3 + 11·4 = 91 (the cast size recovered from _STATED_CONV — "There
+        # are 32 tables in a hall" is eaten as a conversion statement)
+        self.assertEqual(reading.solve(
+            "There are 32 tables in a hall. Half the tables have 2 chairs each, 5 have "
+            "3 chairs each and the rest have 4 chairs each. How many chairs in total "
+            "are in the hall?"), 91)
+
+    def test_grouped_partition_food_drive(self):
+        # 15·12 + 2·0 + 13·4 = 232
+        self.assertEqual(reading.solve(
+            "The fifth grade class at Rosa Parks Elementary School is holding a food "
+            "drive. Half the students in Ms. Perez's class collected 12 cans each, two "
+            "students didn't collect any, and the remaining 13 students students each "
+            "collected 4 cans. If Ms. Perez's class has 30 students, how many cans did "
+            "they collect total?"), 232)
+
+    def test_bill_denomination_compare(self):
+        # (10·20 + 3·5) − (15·10 + 4·5) = 45
+        self.assertEqual(reading.solve(
+            "Oliver has 10 $20 and 3 $5 bills. William has 15 $10 and 4 $5 bills. How "
+            "much more money does Oliver have than William?"), 45)
+
+    def test_team_score_compare(self):
+        # (12+10) − (8+11) = 3 — team membership tracked across severed clauses
+        self.assertEqual(reading.solve(
+            "In the first team, Beth scored 12 while Jan scored 10. In the second team, "
+            "Judy scored 8 while Angel scored 11. How many more points did the first "
+            "team get than the second team?"), 3)
+
+    def test_rate_hours_days(self):
+        # 5·2·5 = 50
+        self.assertEqual(reading.solve(
+            "Mira jogs every morning. She jogs 5 miles per hour. If she jogs for 2 "
+            "hours every morning, how many miles can she jog for five days?"), 50)
+
     def test_later_unanchored_fraction_declines(self):
         # #220 (TEST-checkpoint-forced): an UNANCHORED fraction after a prior event has a
         # genuinely ambiguous base — same-base ("¼ of his marbles" = of the ORIGINAL) vs

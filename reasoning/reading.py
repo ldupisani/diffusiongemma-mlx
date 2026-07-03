@@ -10339,6 +10339,156 @@ def _pair_sum_relational_system(premises: list, question: str):
     return _gated_pos_int(_compute(f"{_num(result)}"))
 
 
+_GP_NUMW = r"\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve"
+
+
+def _grouped_partition_system(premises: list, question: str):
+    """GROUPED-PARTITION PRODUCT-SUM (#223) — a cast of N carriers split into groups (half →
+    k each / literal M → k each / "didn't collect any" → 0 / "the remaining M each collected
+    k" / "the rest have k each"), asked the carried total → Σ(group × per). Tables 16·2 + 5·3
+    + 11·4 = 91; food-drive 15·12 + 2·0 + 13·4 = 232. The cast size may live in
+    `_STATED_CONV` — "There are 32 tables in a hall" pattern-matches a conversion statement
+    and is EATEN as META, so the recorded >1 pair value is recovered here. TIGHTLY gated:
+    groups must SUM to the cast; every digit accounted; positive. None otherwise."""
+    ql = question.lower()
+    full = " . ".join(p.lower() for p in premises) + " . " + ql
+    used = set()
+
+    def _wn(tok):
+        if tok is None:
+            return None
+        t = tok.lower()
+        return float(t) if t.replace(".", "").isdigit() else \
+            (float(NUMBERS[t]) if t in NUMBERS else None)
+
+    total = None
+    tm = re.search(rf"(?:there are|class has) ({_GP_NUMW}) (\w+)", full)
+    if tm is not None:
+        total = _wn(tm.group(1))
+        if total is not None and tm.group(1).isdigit():
+            used.add(tm.group(1))
+    if total is None:
+        cands = {v for (_a, _b), v in _STATED_CONV.items() if v > 1 and v == int(v)}
+        if len(cands) == 1:
+            total = cands.pop()
+    if total is None:
+        return None
+    groups = []
+    for m in re.finditer(rf"half (?:the|of the) \w+ (?:in [\w.'’ ]+? )?(?:have|has|collected) "
+                         rf"({_GP_NUMW}) \w+ each", full):
+        groups.append((total / 2, _wn(m.group(1))))
+        if m.group(1).isdigit():
+            used.add(m.group(1))
+    for m in re.finditer(rf"\b({_GP_NUMW}) (?:\w+ )?have ({_GP_NUMW}) \w+ each", full):
+        g, p_ = _wn(m.group(1)), _wn(m.group(2))
+        if g is None or p_ is None:
+            return None
+        groups.append((g, p_))
+        used.update(x for x in (m.group(1), m.group(2)) if x.isdigit())
+    for m in re.finditer(rf"\b({_GP_NUMW}) (?:\w+ )?didn['’]t collect any", full):
+        groups.append((_wn(m.group(1)), 0.0))
+        if m.group(1).isdigit():
+            used.add(m.group(1))
+    for m in re.finditer(rf"(?:the )?remaining ({_GP_NUMW}) (?:\w+ )+?(?:each )?collected "
+                         rf"({_GP_NUMW})", full):
+        g, p_ = _wn(m.group(1)), _wn(m.group(2))
+        groups.append((g, p_))
+        used.update(x for x in (m.group(1), m.group(2)) if x.isdigit())
+    acc = sum(g for g, _p in groups)
+    rm = re.search(rf"the rest have ({_GP_NUMW}) \w+ each", full)
+    if rm is not None:
+        if rm.group(1).isdigit():
+            used.add(rm.group(1))
+        groups.append((total - acc, _wn(rm.group(1))))
+        acc = total
+    if not groups or abs(acc - total) > 1e-9:
+        return None
+    if any(dd not in used for dd in re.findall(r"\d+(?:\.\d+)?",
+                                               " ".join(premises) + " " + question)):
+        return None
+    if re.search(r"how many \w+ (?:in total|did they collect (?:in )?total|total)", ql):
+        return _gated_pos(_compute(" + ".join(f"{_num(g)} * {_num(p_)}" for g, p_ in groups)))
+    return None
+
+
+def _enum_sum_compare_system(premises: list, question: str):
+    """ENUMERATED-SUM COMPARE (#223) — two entities, each an enumerated sum (bill-denomination
+    products "10 $20 and 3 $5 bills", or team scores accumulated from "In the first team, X
+    scored 12" clauses across the splitter's severing), asked "how much/many more … than" →
+    ΣA − ΣB. Oliver 245−200 = 45; teams 22−19 = 3. Every digit accounted; positive."""
+    ql = question.lower()
+    m = re.search(r"how (?:much|many) more (?:\w+ )+?did the (\w+) team (?:\w+ )*?than the "
+                  r"(\w+) team", ql) \
+        or re.search(r"how (?:much|many) more (?:\w+ )+?does (\w+) have than (\w+)", ql)
+    if m is None:
+        return None
+    used = set()
+
+    def _wn(tok):
+        t = tok.lower()
+        return float(t) if t.replace(".", "").isdigit() else \
+            (float(NUMBERS[t]) if t in NUMBERS else None)
+
+    vals = {}
+    current_team = None
+    for p in premises:
+        pl = p.lower()
+        tm_ = re.search(r"in the (first|second|third) team", pl)
+        if tm_ is not None:
+            current_team = tm_.group(1)
+        om = re.search(r"\b([a-z]+) (?:has|had)\b", pl)
+        if om is not None:
+            owner, tot, found = om.group(1), 0.0, False
+            for dm in re.finditer(rf"({_GP_NUMW}) \$({_GP_NUMW})\b", pl):
+                n, d_ = _wn(dm.group(1)), _wn(dm.group(2))
+                if n is None or d_ is None:
+                    return None
+                tot += n * d_
+                found = True
+                used.update(x for x in (dm.group(1), dm.group(2)) if x.isdigit())
+            if found:
+                vals[owner] = vals.get(owner, 0.0) + tot
+        sm = re.search(rf"\b[a-z]+ scored ({_GP_NUMW})", pl)
+        if sm is not None and current_team is not None:
+            v = _wn(sm.group(1))
+            if v is None:
+                return None
+            vals[current_team] = vals.get(current_team, 0.0) + v
+            if sm.group(1).isdigit():
+                used.add(sm.group(1))
+    a, b = m.group(1), m.group(2)
+    if a in vals and b in vals \
+            and all(dd in used for dd in re.findall(r"\d+(?:\.\d+)?",
+                                                    " ".join(premises) + " " + question)):
+        return _gated_pos(_compute(f"{_num(vals[a])} - {_num(vals[b])}"))
+    return None
+
+
+def _rate_hours_days_system(premises: list, question: str):
+    """RATE × HOURS × DAYS (#223) — "jogs 5 miles per hour, 2 hours every morning; how many
+    miles for five days?" → 5·2·5 = 50. Every digit accounted; positive."""
+    ql = question.lower()
+    full = " . ".join(p.lower() for p in premises) + " . " + ql
+    rm = re.search(rf"({_GP_NUMW}) miles? (?:per|an) hour", full)
+    hm = re.search(rf"for ({_GP_NUMW}) hours? every (?:morning|day)", full)
+    dm = re.search(rf"for ({_GP_NUMW}) days", ql)
+    if rm is None or hm is None or dm is None or "how many miles" not in ql:
+        return None
+    used = {g for g in (rm.group(1), hm.group(1), dm.group(1)) if g.isdigit()}
+    if any(dd not in used for dd in re.findall(r"\d+(?:\.\d+)?",
+                                               " ".join(premises) + " " + question)):
+        return None
+
+    def _wn(tok):
+        t = tok.lower()
+        return float(t) if t.isdigit() else float(NUMBERS.get(t, 0) or 0)
+
+    vals = [_wn(rm.group(1)), _wn(hm.group(1)), _wn(dm.group(1))]
+    if not all(vals):
+        return None
+    return _gated_pos(_compute(f"{_num(vals[0])} * {_num(vals[1])} * {_num(vals[2])}"))
+
+
 def _calendar_age_system(premises: list, question: str):
     """CALENDAR-AGE chains (#222) — ages anchored to LITERAL YEARS, the one age shape the
     relational temporal model deliberately doesn't cover (years are absolute, not wrapping):
@@ -11898,6 +12048,12 @@ _EARLY_SYSTEMS = [
     ("total_minus_product", _total_minus_product_system),
     # CALENDAR AGE: year-anchored age chains (born-in-year / in-YEAR-is-N / birth-year asks).
     ("calendar_age", _calendar_age_system),
+    # GROUPED PARTITION: cast split into per-carrier groups → Σ(group×per) (tables 91).
+    ("grouped_partition", _grouped_partition_system),
+    # ENUMERATED-SUM COMPARE: bill denominations / team scores, "how much more" (Oliver 45).
+    ("enum_sum_compare", _enum_sum_compare_system),
+    # RATE × HOURS × DAYS: "5 mph, 2h every morning, five days?" → 50 (Mira).
+    ("rate_hours_days", _rate_hours_days_system),
     # PRODUCT-SUM + CHANGE: "5 at $6, 10 at $14; paid $200; change?" → 30.
     ("product_sum_change", _product_sum_change_system),
     # TARGET PURCHASE GAP: "buy 8 books, $5 each, has $13; need to save?" → 27.
