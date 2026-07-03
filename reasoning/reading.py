@@ -1991,6 +1991,11 @@ LEXICON.update({
     # system in place (its #203 exclusion wrong WAS the unscaled-batch partial read).
     "quadruple": ["multiplier"], "chili": ["noun"], "tomatoes": ["noun"],
     "require": ["verb"], "requires": ["verb"], "required": ["verb"],
+    # #214: fox + "maximum" (adjective — "the maximum speed of 50 km/h" is decorative for the
+    # arithmetic). "most"/"least"/"leaves" stay UNKNOWN: probed 2026-07-03, every dev case is
+    # structure-blocked beyond the word (provisioning algebra, equation solving, threshold
+    # semantics) — type them only WITH their structures (the semantics-first rule).
+    "fox": ["noun"], "maximum": ["adjective"],
 })
 PLURALS.update({
     "samosas": "samosa", "pakoras": "pakora", "vases": "vase", "pins": "pin", "boots": "boot",
@@ -10227,6 +10232,25 @@ def _day_relational_chain_system(premises: list, question: str):
     return None
 
 
+def _max_speed_distance_system(premises: list, question: str):
+    """MAX-SPEED × DURATION (#214) — "runs at the maximum speed of 50 km per hour … what
+    distance during 120 minutes?" → 50·120/60 = 100. The 'maximum/constant speed' qualifier is
+    decorative for the arithmetic (the problem stipulates constant speed). TIGHTLY gated: one
+    per-hour speed, a distance ask with an explicit minutes/hours duration, no other digits.
+    None otherwise."""
+    ql = question.lower()
+    full = " . ".join(p.lower() for p in premises) + " . " + ql
+    sm = re.search(r"speed of (\d+(?:\.\d+)?) (?:kilometers?|km|miles?|meters?) (?:per|an) hour", full)
+    dm = re.search(r"what distance [^.?]*?(?:during|in) (\d+(?:\.\d+)?) (minutes?|hours?)", ql)
+    if sm is None or dm is None:
+        return None
+    if any(d not in {sm.group(1), dm.group(1)}
+           for d in re.findall(r"\d+(?:\.\d+)?", " ".join(premises) + " " + question)):
+        return None
+    expr = f"{sm.group(1)} * {dm.group(1)}" + (" / 60" if dm.group(2).startswith("minute") else "")
+    return _gated_pos(_compute(expr))
+
+
 def _batch_scaling_system(premises: list, question: str):
     """BATCH SCALING (#213, the semantic-tier item that re-enables "require") — a per-batch
     ingredient list ("a can of chilis, two cans of beans, and 50% more tomatoes than beans to a
@@ -11265,6 +11289,8 @@ _EARLY_SYSTEMS = [
     ("weekday_block_relational", _weekday_block_relational_system),
     # BATCH SCALING: per-batch ingredient list × batch multiplier (Carla 24; re-enables require).
     ("batch_scaling", _batch_scaling_system),
+    # MAX-SPEED × DURATION: "50 km/h … what distance during 120 minutes?" → 100.
+    ("max_speed_distance", _max_speed_distance_system),
     # FIRST TWO DAYS + DOUBLE THEIR SUM: "5; another 7; twice the first two days?" → 36.
     ("first_days_double_total", _first_days_double_total_system),
     # HOURS TO EQUAL EARNINGS: "40h at $12; $15/h; hours to equal?" → 32.

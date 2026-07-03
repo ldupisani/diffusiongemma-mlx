@@ -7429,6 +7429,13 @@ class TestIncrement213BatchScaling(unittest.TestCase):
             "tomato seeds while Ted planted 20 fewer tomato seeds than Mike. How many "
             "tomato seeds did they plant altogether?"), "undetermined")
 
+    def test_max_speed_times_duration(self):
+        # #214: 50 km/h × 120 min / 60 = 100 (the "maximum speed" qualifier is decorative)
+        self.assertEqual(reading.solve(
+            "A fox can run at the maximum speed of 50 kilometers per hour. Considering "
+            "the fox would run at a constant speed, what distance would he make during "
+            "120 minutes?"), 100)
+
 
 if __name__ == "__main__":
     unittest.main()
