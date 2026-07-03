@@ -7137,5 +7137,52 @@ class TestIncrement205VocabWave20(unittest.TestCase):
             "order?"), "undetermined")
 
 
+class TestIncrement206PercentPriceRelational(unittest.TestCase):
+    """#206 — the comma-less conditional-question split ("If P how much Q?" → condition premise)
+    + `_percent_price_relational_system`: an item priced "P% more/less expensive" than a stated
+    base → base·(1 ± p/100), with an optional purchase-counts premise buying BOTH items. The
+    scaled-vs-base ask needs a DISCRIMINATIVE token (in the percent premise, absent from the
+    base premise); an ask about the base item declines."""
+
+    def test_conditional_question_splits_without_comma(self):
+        premises, question = reading._parse_problem(
+            "Mark gets a new phone plan that is 30% more expensive than his old plan. "
+            "If his old plan was $150 a month how much does his new plan cost?")
+        self.assertEqual(question, "how much does his new plan cost?")
+        self.assertEqual(premises[-1], "If his old plan was $150 a month")
+
+    def test_noun_standard_condition_in_question(self):
+        # 150 · 1.3 = 195
+        self.assertEqual(reading.solve(
+            "Mark gets a new phone plan that is 30% more expensive than his old plan. "
+            "If his old plan was $150 a month how much does his new plan cost?"), 195)
+
+    def test_implicit_standard_same_item(self):
+        # 2000 · 1.02 = 2040
+        self.assertEqual(reading.solve(
+            "Alan bought a $2000 phone online. John bought it 2% more expensive in a "
+            "local store. How much did John spend on his phone?"), 2040)
+
+    def test_shared_sentence_base_plus_purchase_counts(self):
+        # chips = 4·1.75 = 7; 2·7 + 2·4 = 22
+        self.assertEqual(reading.solve(
+            "A pack of pretzels costs $4, while a pack of chips is 75% more expensive. "
+            "Maciek went and bought two packets of chips and two packets of pretzels. "
+            "How much did he pay for his purchases?"), 22)
+
+    def test_ask_about_base_item_declines(self):
+        # every ask word lives in the base premise too — no discriminative token → decline
+        self.assertEqual(reading.solve(
+            "Mark gets a new phone plan that is 30% more expensive than his old plan. "
+            "If his new plan seems pricey, how much did his old plan cost if it was "
+            "$150 a month?"), "undetermined")
+
+    def test_two_base_prices_ambiguous_declines(self):
+        # two candidate standards — the system must not guess which one the percent scales
+        self.assertEqual(reading.solve(
+            "A radio costs $30. A speaker costs $50. A new stereo is 20% more expensive. "
+            "How much does the new stereo cost?"), "undetermined")
+
+
 if __name__ == "__main__":
     unittest.main()

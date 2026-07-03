@@ -8598,14 +8598,34 @@ def _everyday_plus_half_subdays_system(premises: list, question: str):
     (the every-day hours rate); a digit-free "half as long as" premise; positive integer. None
     otherwise."""
     ql = question.lower()
-    dm = re.search(r"(\d+) days? a week", ql)
-    if "how long" not in ql or dm is None \
-            or _has_digit(ql.replace(dm.group(0), "")):
+    if "how long" not in ql:
         return None
+    dm = re.search(r"(\d+) days? a week", ql)
+    count_premise = None
+    if dm is not None:
+        if _has_digit(ql.replace(dm.group(0), "")):
+            return None
+    else:
+        # the #206 conditional-question split moves "If he plays … 4 days a week" out of the
+        # question into a premise — accept it from an "If"-conditional premise whose ONLY
+        # digit is the count (same tightness as the in-question read).
+        if _has_digit(ql):
+            return None
+        for p in premises:
+            pl = p.lower()
+            m = re.search(r"(\d+) days? a week", pl)
+            if m is not None and pl.lstrip().startswith("if ") \
+                    and not _has_digit(pl.replace(m.group(0), "")):
+                dm, count_premise = m, p
+                break
+        if dm is None:
+            return None
     sub_days = float(dm.group(1))
     rate = None
     half_seen = False
     for p in premises:
+        if p is count_premise:
+            continue
         pl = p.lower()
         rm = re.search(r"for (\d+(?:\.\d+)?) hours every day", pl)
         if rm is not None and rate is None:
@@ -9802,6 +9822,90 @@ def _same_pct_bonus_system(premises: list, question: str):
     return _gated_pos_int(result)
 
 
+def _percent_price_relational_system(premises: list, question: str):
+    """PERCENT-SCALED PRICE RELATION (#206) — one item's price is "P% more/less EXPENSIVE" than a
+    stated base price: "a new plan 30% more expensive than his old plan; old plan was $150/month"
+    → 150·1.3 = 195; "Alan bought a $2000 phone; John bought it 2% more expensive" → 2040; with
+    purchase counts ("pretzels $4; chips 75% more expensive; two packets of each") → 2·4 + 2·7 =
+    22. TIGHTLY gated: a digit-free "how much" question; exactly ONE "% more/less expensive"
+    premise (digit-free once the percent is removed); exactly ONE base-price premise (one $V, no
+    other digit, no %); every other premise digit-free or a pure purchase-counts premise. The
+    scaled-vs-base ask is disambiguated by a DISCRIMINATIVE TOKEN — an ask content-word present in
+    the percent premise but absent from the base premise ("new", "John"); an ask about the BASE
+    item finds none (its words appear in both or only the base premise) and DECLINES. A counts
+    premise instead buys BOTH items → Σ count·price, each count-noun mapping to exactly one of the
+    two premises. None otherwise."""
+    ql = question.lower()
+    if "how much" not in ql or _has_digit(ql):
+        return None
+    pct = sign = None
+    pct_prem = base_prem = None
+    base = None
+    count_pairs = []
+    for p in premises:
+        pl = p.lower()
+        m = re.search(r"(\d+(?:\.\d+)?)\s*% (more|less) expensive", pl)
+        if m is not None:
+            if pct_prem is not None:
+                return None                              # two percent premises
+            pside = pl
+            if _has_digit(pl.replace(m.group(0), " ")):
+                # the base price may share the sentence ("pretzels costs $4, while chips are
+                # 75% more expensive") — split at the comma bounding the percent clause; the
+                # other side must be exactly the base-price statement.
+                ci = pl.rfind(",", 0, m.start())
+                if ci == -1:
+                    return None
+                bside, pside = pl[:ci], pl[ci + 1:]
+                bm2 = re.search(r"\$\s*(\d+(?:,\d{3})*(?:\.\d+)?)", bside)
+                if base_prem is not None or bm2 is None \
+                        or _has_digit(bside.replace(bm2.group(0), " ")) \
+                        or _has_digit(pside.replace(m.group(0), " ")):
+                    return None
+                base, base_prem = float(bm2.group(1).replace(",", "")), bside
+            pct, sign, pct_prem = float(m.group(1)), (1 if m.group(2) == "more" else -1), pside
+            continue
+        bm = re.search(r"\$\s*(\d+(?:,\d{3})*(?:\.\d+)?)", pl)
+        if bm is not None:
+            if base_prem is not None or "%" in pl \
+                    or _has_digit(pl.replace(bm.group(0), " ")):
+                return None                              # ambiguous standard / an unread digit
+            base, base_prem = float(bm.group(1).replace(",", "")), pl
+            continue
+        pairs = re.findall(r"(\w+)\s+(?:packets?|packs?|boxes?|bags?|cans?|bottles?)\s+of\s+(\w+)", pl)
+        stripped = pl
+        pairs_valued = []
+        for w, noun in pairs:
+            n = NUMBERS.get(w) if not w.isdigit() else float(w)
+            if n is not None:
+                pairs_valued.append((float(n), noun))
+                stripped = stripped.replace(w, " ", 1)
+        if _has_digit(stripped):
+            return None                                  # an unclassified valued premise
+        count_pairs.extend(pairs_valued)
+    if pct_prem is None or base_prem is None or not 0 < pct <= 500 or base <= 0:
+        return None
+    scaled = base * (1 + sign * pct / 100)
+    if count_pairs:                                      # BOTH items bought → Σ count·price
+        total = []
+        for n, noun in count_pairs:
+            in_pct, in_base = noun in pct_prem, noun in base_prem
+            if in_pct == in_base:                        # in both / in neither — can't map the item
+                return None
+            total.append(f"{_num(n)} * {_num(scaled if in_pct else base)}")
+        result = _compute(" + ".join(total))
+        return _gated_pos(result)
+    stop = {"how", "much", "did", "does", "do", "will", "would", "he", "she", "they", "it",
+            "his", "her", "their", "the", "a", "an", "for", "on", "of", "to", "in", "at",
+            "is", "was", "cost", "costs", "pay", "paid", "spend", "spent", "money",
+            "purchase", "purchases", "now", "then"}
+    ask_words = {w.strip(".,?!:;") for w in ql.split()} - stop
+    if not any(w and w in pct_prem and w not in base_prem for w in ask_words):
+        return None                                      # the ask doesn't pick out the SCALED item
+    result = _compute(f"{_num(base)} * (1 + {_num(sign)} * {_num(pct)} / 100)")
+    return _gated_pos(result)
+
+
 # --- system family: day chains & two-rate conversions ------------------------------------------
 def _today_tomorrow_chain_system(premises: list, question: str):
     """SIGNED DAY CHAIN — "has 65 pounds today; tomorrow he will use 18; the following day he
@@ -10722,6 +10826,8 @@ _EARLY_SYSTEMS = [
     ("monthly_buy_sellback_loss", _monthly_buy_sellback_loss_system),
     # SAME-PCT BONUS ON A NEW BASE: "$100k+$10k bonus last year; $200k this year?" → 220000.
     ("same_pct_bonus", _same_pct_bonus_system),
+    # PERCENT-SCALED PRICE: "new plan 30% more expensive; old was $150?" → 195; + counts → 22.
+    ("percent_price_relational", _percent_price_relational_system),
     # SIGNED DAY CHAIN: "65 today; use 18 tomorrow; buy 50 next; in the end?" → 97.
     ("today_tomorrow_chain", _today_tomorrow_chain_system),
     # FIRST TWO DAYS + DOUBLE THEIR SUM: "5; another 7; twice the first two days?" → 36.
@@ -10927,6 +11033,23 @@ def _parse_problem(text: str):
         return None
     question = clauses[qpos]                              # the question clause; the rest are premises
     premises = clauses[:qpos] + clauses[qpos + 1:]        # (a leading "If P," clause is now a premise)
+    # COMMA-LESS CONDITIONAL QUESTION (#206): "If his old plan was $150 a month how much does his
+    # new plan cost?" — with no comma, `_split_clauses` never separates the condition, so its fact
+    # stays trapped in the question clause (the comma form already lands as a premise above). Split
+    # before the LAST interrogative head: the last match skips an embedded relative ("half of WHAT
+    # she has … HOW MANY"). A misfire risk is only ever a re-shaped decline, never a new commit —
+    # the condition premise and the shortened question both still face every guard.
+    if _key(question.split()[0]) == "if" and "," not in question:
+        heads = list(re.finditer(
+            r"\b(?:then\s+)?(?:how\s+(?:many|much|old|long|far|fast|high|tall)"
+            r"|what|who|which|calculate|find|determine|compute)\b", question, re.IGNORECASE))
+        if heads and heads[-1].start() > 3:
+            cond = question[:heads[-1].start()].rstrip().rstrip(",")
+            question = question[heads[-1].start():]
+            if re.match(r"then\b", question, re.IGNORECASE):
+                question = question[4:].lstrip()
+            premises = premises + [cond]                  # textually adjacent to the question →
+            #                                               last in discourse order
     _STATED_CONV.clear()                                  # conversion-statement premises are META, not
     kept = []                                             # data: record the factor, drop the clause
     for p in premises:
