@@ -2120,6 +2120,9 @@ LEXICON.update({
     # instance of sweep-safe ≠ holdout-safe. NEW wrong-on-inject respected: "quantity"
     # (Adam 22≠240 — "3 times that quantity" needs an anaphoric-quantity read first).
     "spots": ["noun"], "album": ["noun"],
+    # 27th wave (#237) — shipped WITH _rate_chain_system (the generic dimensional-chain
+    # solver): the minimal words its two dev targets are guard-1-blocked on.
+    "rope": ["noun"], "session": ["noun"], "half-hour": ["noun"],
 })
 PLURALS.update({
     "samosas": "samosa", "pakoras": "pakora", "vases": "vase", "pins": "pin", "boots": "boot",
@@ -2136,6 +2139,7 @@ PLURALS.update({
     "blocks": "block", "rows": "row", "words": "word", "magazines": "magazine",
     "chilis": "chili", "albums": "album",
     "paintings": "painting", "coworkers": "coworker",
+    "sessions": "session", "ropes": "rope",
     "stacks": "stack", "churches": "church", "cables": "cable", "plots": "plot",
     "sticks": "stick", "servings": "serving", "robots": "robot",
     "runners": "runner", "windows": "window", "scouts": "scout",
@@ -15400,6 +15404,195 @@ def _relational_product_sum_system(premises: list, question: str):
     return _gated_pos_int(result)
 
 
+# --- generic rate chain (dimensional analysis over stated unit bridges) ------------------------
+# The GENERALIZATION of the specific rate×span family (_rate_hours_days, _per_second_minutes_week,
+# _rate_days_weeks, …): instead of one regex per unit combination, read every "V <num> per <den>"
+# quantity as a dimensioned rate and multiply through the chain until units cancel to the asked
+# measure. Registered LAST in _EARLY_SYSTEMS so every specific solver wins first — this only
+# catches what they decline (and `reading_diff collisions` audits it against all of them).
+
+# (big, small): how many smalls in one big — CLOCK/CALENDAR facts only. Deliberately absent:
+# hour→day (activity hours per day is NOT 24 — "3 miles per hour, how far in a week?" must
+# DECLINE unless the text states an hours-per-day bridge) and month→anything (varies).
+_RC_SAFE = {("minute", "second"): 60.0, ("hour", "minute"): 60.0, ("week", "day"): 7.0,
+            ("hour", "half-hour"): 2.0}
+_RC_WORDS = None                                         # lazy "|"-joined NUMBERS alternation
+_RC_STOP = {"time", "for", "of", "per", "in", "at", "on", "to", "and", "or", "the", "a", "an"}
+
+
+def _rc_sg(w):
+    """Unit-normalize: LEXICON singular, else a bare-plural strip (jumps → jump — chain units
+    include event nouns the LEXICON doesn't carry)."""
+    s = _singular_of(w)
+    if s:
+        return s
+    if len(w) > 3 and w.endswith("s") and not w.endswith("ss"):
+        return w[:-1]
+    return w
+
+
+def _rc_quantities(seg: str):
+    """Every (value, num_unit, den_unit, match_span) rate/bridge reading in one clause: money
+    rates ("$10 for every half-hour"), verbal count rates ("jumps 4 times per minute"), plain
+    rates/bridges ("45 minutes each day", "2 sessions each day", "one lesson per week"), and
+    duration attributes ("the lesson lasts 1 hour" → hours per lesson)."""
+    global _RC_WORDS
+    if _RC_WORDS is None:
+        _RC_WORDS = "|".join(re.escape(w) for w in NUMBERS)
+    out = []
+    sl = seg.lower()
+
+    def val(t):
+        return float(t.replace(",", "")) if t and t[0].isdigit() else NUMBERS.get(t)
+
+    for m in re.finditer(rf"\$\s*({_RS_N}) (?:for )?(?:per|an?|each|every) ((?:half-)?[a-z]+)", sl):
+        out.append((float(m.group(1).replace(",", "")), "dollar", _rc_sg(m.group(2)), m.span(), "money"))
+    for m in re.finditer(rf"(\w+)s ({_RS_N}|{_RC_WORDS}) times (?:per|an?|each|every) ([a-z]+)", sl):
+        v = val(m.group(2))
+        if v is not None:
+            out.append((v, _rc_sg(m.group(1)), _rc_sg(m.group(3)), (m.start(2), m.end(2)), "verbal"))
+    for m in re.finditer(rf"\b({_RS_N}|{_RC_WORDS}) ((?:half-)?[a-z]+?)s? "
+                         rf"(?:per|an?|each|every) ((?:half-)?[a-z]+)\b", sl):
+        v = val(m.group(1))
+        if v is None or m.group(2) in _RC_STOP:
+            continue
+        out.append((v, _rc_sg(m.group(2)), _rc_sg(m.group(3)), m.span(), "plain"))
+    for m in re.finditer(rf"\b([a-z]+) lasts ({_RS_N}|{_RC_WORDS}) ((?:half-)?[a-z]+?)s?\b", sl):
+        v = val(m.group(2))
+        if v is not None:
+            out.append((v, _rc_sg(m.group(3)), _rc_sg(m.group(1)), (m.start(2), m.end(2)), "lasts"))
+    return out
+
+
+def _rate_chain_system(premises: list, question: str):
+    """GENERIC RATE CHAIN — dimensional analysis over stated unit bridges: "jumps 4 times per
+    minute; 10 minutes each session; 2 sessions each day; how many jumps in 5 days?" →
+    4·10·2·5 = 400; "$10 for every half-hour; one lesson per week; the lesson lasts 1 hour;
+    how much would the teacher earn in 5 weeks?" → 10·2·1·1·5 = 100. ONE rate carries the asked
+    measure (or a clock-convertible time unit); every other quantity is a bridge (num_unit per
+    den_unit); the chain multiplies denominator→numerator through stated bridges and the
+    _RC_SAFE clock/calendar whitelist until it reaches the question's span. TIGHTLY gated: a
+    span-final "how many <M> / how much money … in/over N <unit>" question, no comparative, no
+    month/year span; EVERY digit AND word-number/multiplier token sits inside a consumed match
+    (a relational clause — "twice the speed", "two bodyguards" — declines); no weekday/weekend
+    selection; exactly ONE rate; unambiguous bridges, all used, no cycles; positive result.
+    None otherwise."""
+    ql = question.lower()
+    if _has_comparative(ql):
+        return None
+    am = re.search(r"how many ([a-z]+)", ql)
+    money = re.search(r"how much (?:money|will|would|does|do|did)", ql) and \
+        re.search(r"\b(?:earn|earns|make|makes|spend|spends|paid|pay|cost)\b", ql)
+    asked = "dollar" if money else (_rc_sg(am.group(1)) if am else None)
+    if asked is None:
+        return None
+    global _RC_WORDS
+    if _RC_WORDS is None:
+        _RC_WORDS = "|".join(re.escape(w) for w in NUMBERS)
+    sm = re.search(rf"\b(?:in|over|during|within) (?:the next )?({_RS_N}|{_RC_WORDS}|an?) "
+                   rf"((?:half-)?[a-z]+?)s?\b(?![ -]|\w)", ql)
+    if sm is None:
+        return None
+    n = 1.0 if sm.group(1) in ("a", "an") else \
+        (float(sm.group(1).replace(",", "")) if sm.group(1)[0].isdigit() else NUMBERS.get(sm.group(1)))
+    span_u = _rc_sg(sm.group(2))
+    if n is None or n <= 0 or span_u in ("month", "year"):
+        return None
+    segs = [p.lower() for p in premises] + [ql]          # a bridge may ride in the question's
+    quants = []                                          # if-clause
+    for si, seg in enumerate(segs):
+        quants.extend((v, nu, du, si, sp, kind) for v, nu, du, sp, kind in _rc_quantities(seg))
+    if not quants:
+        return None
+    used_spans = {}                                      # si → consumed character spans
+    for _v, _nu, _du, si, sp, _kind in quants:
+        used_spans.setdefault(si, []).append(sp)
+    used_spans.setdefault(len(segs) - 1, []).append(sm.span(1))
+
+    def covered(si, a, b):
+        return any(x <= a and b <= y for x, y in used_spans.get(si, []))
+
+    for si, seg in enumerate(segs):                      # every digit accounted …
+        if "weekday" in seg or "weekend" in seg:
+            return None                                  # day-selection is other solvers' turf
+        for m in re.finditer(rf"{_RS_N}|\.\d+", seg):
+            if not covered(si, m.start(), m.end()):
+                return None
+        for m in re.finditer(r"[a-z-]+", seg):           # … and every word-number/multiplier too
+            if (m.group(0) in NUMBERS or m.group(0) in ("twice", "thrice", "double")) \
+                    and not covered(si, m.start(), m.end()):
+                return None                              # a relational/count clause we can't read
+
+    def conv_of(u):
+        """Factor converting ONE u into the asked unit via the clock whitelist, or None."""
+        if u == asked:
+            return 1.0
+        if (asked, u) in _RC_SAFE:
+            return 1.0 / _RC_SAFE[(asked, u)]
+        if (u, asked) in _RC_SAFE:
+            return _RC_SAFE[(u, asked)]
+        return None
+
+    rates = [(q, conv_of(q[1])) for q in quants if conv_of(q[1]) is not None]
+    if len(rates) != 1:
+        return None                                      # zero or ambiguous asked-measure rates
+    (v0, _nu0, du0, _, _, kind0), conv = rates[0]
+    bridges = {}
+    for q in quants:
+        if q is rates[0][0]:
+            continue
+        if q[1] in bridges:
+            return None                                  # two bridges share a numerator: ambiguous
+        bridges[q[1]] = q
+    if kind0 != "verbal":
+        pat = re.compile(rf"\b{re.escape(asked)}s?\b")
+        for si, seg in enumerate(segs[:-1]):
+            for m in pat.finditer(seg):
+                if not covered(si, m.start(), m.end()):
+                    return None                          # an unread mention of the asked measure —
+        #                                                  its clause may carry an amount ("an
+        #                                                  apple every evening" — a TEST wrong)
+    seen, used_bridges, factors = set(), set(), []
+
+    def resolve(u):
+        """How many `u`s the whole span holds — walk stated bridges, then the clock whitelist."""
+        if u in seen:
+            return False                                 # a cycle
+        seen.add(u)
+        if u == span_u:
+            factors.append(n)
+            return True
+        if u in bridges:
+            vb, _, db, _, _, _ = bridges[u]
+            used_bridges.add(u)
+            factors.append(vb)
+            return resolve(db)
+        bigs = [big for (big, small) in _RC_SAFE if small == u]
+        if len(bigs) == 1:
+            factors.append(_RC_SAFE[(bigs[0], u)])
+            return resolve(bigs[0])
+        return None
+
+    if not resolve(du0) or len(used_bridges) != len(bridges):
+        return None                                      # unreachable span / an unused stated bridge
+    if not bridges and conv == 1.0 and du0 == span_u:
+        return None                                      # DEGENERATE single-hop rate×span: the
+        #                                                  incumbents' turf (proportion, the fold's
+        #                                                  rate-duration synth) — if they all decline
+        #                                                  such a text they see semantics this matcher
+        #                                                  doesn't (a TEST wrong proved it); the chain
+        #                                                  solver's value-add is ≥2 hops
+    expr = " * ".join(_num(x) for x in [v0] + [x for x in factors if x != 1.0]) or _num(v0)
+    if conv < 1.0:
+        expr = f"({expr}) / {_num(1.0 / conv)}"          # e.g. minutes asked in hours: ÷60
+    elif conv > 1.0:
+        expr = f"({expr}) * {_num(conv)}"
+    result = _compute(expr)
+    if isinstance(result, float):
+        result = round(result, 9)
+    return _gated_pos(result)
+
+
 # --- ARITHMETIC SYSTEM-SOLVER REGISTRY -------------------------------------------------------
 # The word-problem system solvers are REGISTERED here, not hand-inlined in solve() — honoring the
 # engine's founding rule ("new reasoning is REGISTERED, never special-cased"). Each is a
@@ -15626,6 +15819,10 @@ _EARLY_SYSTEMS = [
     ("age_future_vs_now", _age_future_vs_now_system),
     # SIMULTANEOUS AGE: "7 years older than David and twice his age?" → 7/(2−1) = 7.
     ("age_simultaneous", _age_simultaneous_system),
+    # GENERIC RATE CHAIN (dimensional analysis) — LAST on purpose: every specific rate/span
+    # solver above wins first; this catches only what they all decline (jumps/min × min/session
+    # × sessions/day × days → 400). The collisions audit checks it against every one of them.
+    ("rate_chain", _rate_chain_system),
 ]
 
 # LATE systems run AFTER the read-synthesize fixpoint has built `context` (they consume derived

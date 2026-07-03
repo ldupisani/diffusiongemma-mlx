@@ -116,6 +116,19 @@ change the capture AND the accounting probe together or they disagree and every 
    (vocab waves, number words, the word-percent merge, compositions). Judge candidate work by
    generality first.
 
+5. **A GENERIC solver registered LAST must respect incumbent declines (#237).** The generic
+   rate-chain solver (dimensional analysis over stated unit bridges — the generalization of the
+   specific rate×span family) shipped with two gates a TEST checkpoint forced: (a) the DEGENERATE
+   single-hop shape (no bridge, rate denominator = span unit, "4/day … in 30 days") must DECLINE —
+   the specifics and the fold already own that shape, and a text they ALL decline carries unread
+   semantics (the TEST wrong: an indefinite-article amount, "an apple every evening", invisible to
+   digit AND word-number accounting — "a/an" = 1 is a real count no accounting scan sees); the
+   generic solver's value-add is ≥2 hops only. (b) Word-number/multiplier accounting: every NUMBERS
+   word and twice/thrice/double must sit inside a consumed match, else a relational clause
+   ("twice the speed", "two bodyguards") silently drops. Clock/calendar constants are a WHITELIST
+   (s↔min, min↔h, day→week, half-hour→h) — hour→day (24) and month→anything stay out on purpose:
+   activity hours per day is not 24.
+
 ## Goal & stance
 
 - Deterministic reasoning, **not an LLM**. A valid statement gets a definitive, auditable reading;

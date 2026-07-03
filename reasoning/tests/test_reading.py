@@ -7834,5 +7834,58 @@ class TestIncrement219SignedMixedChain(unittest.TestCase):
             "undetermined")
 
 
+class TestIncrement237GenericRateChain(unittest.TestCase):
+    """#237 — the GENERIC RATE-CHAIN solver (dimensional analysis over stated unit bridges),
+    the generalization of the specific rate×span family. Registered LAST in _EARLY_SYSTEMS."""
+
+    def test_three_hop_event_chain(self):
+        # verbal count rate × two stated bridges × a day span: 6 · 5 · 3 · 4 = 360
+        self.assertEqual(reading.solve(
+            "When Rita jumps rope, she jumps 6 times per minute. She jumps for 5 minutes "
+            "each session and does 3 sessions each day. How many jumps will Rita do in "
+            "4 days?"), 360)
+
+    def test_money_chain_with_half_hour_conversion(self):
+        # $8/half-hour → ×2/hour; 1 hour/lesson; 1 lesson/week; 3 weeks → 48
+        self.assertEqual(reading.solve(
+            "Mara pays the teacher $8 for every half-hour of teaching her son. If Leon is "
+            "taking one lesson per week, and the lesson lasts 1 hour, how much money "
+            "would the teacher earn in 3 weeks?"), 48)
+
+    def test_hour_rate_without_daily_bridge_declines(self):
+        # NO hour→day clock constant on purpose (activity hours/day is not 24): a per-hour
+        # rate asked over a week with no stated hours-per-day bridge must DECLINE.
+        self.assertNotEqual(reading.solve(
+            "Sam reads 30 pages per hour. How many pages does Sam read in a week?"),
+            30 * 24 * 7)
+
+    def test_relational_multiplier_declines(self):
+        # an unconsumed multiplier word ("twice") is a clause this reader can't represent
+        self.assertNotEqual(reading.solve(
+            "A tram travels at twice the speed that Nell walks. Nell walks 3 miles per "
+            "hour. How many miles does the tram travel in 2 hours?"), 6)
+
+    def test_unconsumed_entity_count_declines(self):
+        # "two guards" is a word-number outside every rate/bridge match → the per-head
+        # multiplication is _herd_rate_week's shape, not a unit chain: never 20·8·7 = 1120
+        self.assertNotEqual(reading.solve(
+            "Ty hires two guards. They each charge $20 an hour. He hires them for 8 "
+            "hours each day. How much does he pay in 7 days?"), 1120)
+
+    def test_month_span_declines(self):
+        # month→days varies; a month span never chains through the clock whitelist
+        self.assertNotEqual(reading.solve(
+            "A printer prints 40 pages each day. How many pages does it print in "
+            "2 months?"), 40 * 60)
+
+    def test_degenerate_single_hop_declines(self):
+        # a no-bridge rate×span ("12 pages each day … in 4 days") is the INCUMBENTS' turf
+        # (proportion / the fold's rate-duration synth) — the chain solver itself must pass
+        # (a TEST confident-wrong forced this gate: the incumbents' declines carry signal).
+        prem, q = reading._parse_problem(
+            "Vera reads 12 pages each day. How many pages does Vera read in 4 days?")
+        self.assertIsNone(reading._rate_chain_system(prem, q))
+
+
 if __name__ == "__main__":
     unittest.main()
