@@ -7793,6 +7793,26 @@ class TestIncrement219SignedMixedChain(unittest.TestCase):
             "with a speed of 10 pages per day, and the second half with a speed of 5 "
             "pages a day. How many days did Jane spend reading this book?"), 75)
 
+    def test_money_singles_representatives(self):
+        # #227 — four of the twenty-five branches (the rest are diff-verified)
+        self.assertEqual(reading.solve(
+            "The total cost of Olivia's groceries was $42. The bananas cost her $12, "
+            "the bread cost her $9, and the milk cost her $7. The only other groceries "
+            "she bought were apples. In dollars, how much money did the apples cost "
+            "her?"), 14)
+        self.assertEqual(reading.solve(
+            "Samuel has $5, $10, and $20 bills which amount to $150 in his wallet. His "
+            "$10-bills amount to $50, and he has 4 $20-bills. How many bills does "
+            "Samuel have in his wallet?"), 13)
+        self.assertEqual(reading.solve(
+            "Kim orders a $10 meal and a drink for 2.5. She gives a 20% tip. She pays "
+            "with a $20 bill. How much does she get in change?"), 5)
+        self.assertEqual(reading.solve(
+            "Randy has some money in his piggy bank. He spends 2 dollars every time he "
+            "goes to the store. He makes 4 trips to the store every month. If he had "
+            "$104 dollars left in his piggy bank after a year, how much money, in "
+            "dollars, did he have at first?"), 200)
+
     def test_later_unanchored_fraction_declines(self):
         # #220 (TEST-checkpoint-forced): an UNANCHORED fraction after a prior event has a
         # genuinely ambiguous base — same-base ("¼ of his marbles" = of the ORIGINAL) vs

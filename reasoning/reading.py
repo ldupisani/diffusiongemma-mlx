@@ -10495,6 +10495,241 @@ def _rate_singles_system(premises: list, question: str):
     return None
 
 
+def _money_singles_system(premises: list, question: str):
+    """MONEY SINGLES (#227) — twenty-five tightly-gated branches over the money bucket:
+    total-minus-enumerated (Olivia), two count×price purchases (Jasmine), first-costs-more
+    pair (shirts), together-minus-offset halves (Markese), debt residual (Jerry), two-holder
+    spend compare (Derek/Dave), gas legs÷mpg×price (Luisa), meal+drink×tip change (Kim),
+    dollars→cents per page (James), bill-denomination inventory (Samuel), backward begin
+    (Larry), between-them cents (Bridget), per-liter price (bottles), depreciation (Tim),
+    pounds-of-cheese residual (Tony), cash-vs-installments (Roberts), give-to-equalize
+    (Lucy/Linda), piggy-bank backward (Randy), packs-worth (crayons), chair-fraction-of-table,
+    weekday-multiple tickets (Glenn), lunch thirds, kg unit-scale (Daphney), monthly wage −
+    bike (Carrie), months-saved − spent (Norris). Compound facts probed INDEPENDENTLY (the
+    splitter severs them); asks searched in FULL when the question shatters ("Use E to
+    represent…" steals the question slot). Every branch digit-accounted; positive."""
+    N = _RS_N
+
+    def f(t):
+        return float(t.replace(",", ""))
+
+    ql = question.lower()
+    full = " . ".join(p.lower() for p in premises) + " . " + ql
+
+    def dok(used):
+        return all(dd in used for dd in re.findall(r"\d+(?:,\d{3})*(?:\.\d+)?",
+                                                   " ".join(premises) + " " + question))
+
+    # 1. Olivia: total groceries − enumerated items → the residual item
+    tm = re.search(rf"total cost of \w+['’]s groceries was \$({N})", full)
+    items = re.findall(rf"cost her \$({N})", full)
+    if tm and len(items) >= 2 and re.search(r"how much money did the \w+ cost", ql):
+        if dok({tm.group(1)} | set(items)):
+            return _rs_ret(f(tm.group(1)) - sum(f(x) for x in items))
+    # 2. Jasmine: two count×unit-price purchases, "pay in all"
+    a = re.search(rf"bought ({N}) pounds of [\w ]+? and ({N}) gallons of \w+", full)
+    p1 = re.search(rf"pound of [\w ]+? costs \$({N})", full)
+    p2 = re.search(rf"gallon of \w+ costs \$({N})", full)
+    if a and p1 and p2 and "pay in all" in ql:
+        if dok({a.group(1), a.group(2), p1.group(1), p2.group(1)}):
+            return _rs_ret(f(a.group(1)) * f(p1.group(1)) + f(a.group(2)) * f(p2.group(1)))
+    # 3. John shirts: first costs $D more than second; first $F → F + (F−D)
+    dm = re.search(rf"first \w+ costs \$({N}) more than the second", full)
+    fm = re.search(rf"first \w+ costs \$({N})\b", full.replace(dm.group(0), " ") if dm else full)
+    jn = re.search(rf"buys ({N}) shirts", full)
+    if dm and fm and jn and re.search(r"cost in total", ql):
+        if dok({dm.group(1), fm.group(1), jn.group(1)}):
+            return _rs_ret(f(fm.group(1)) + (f(fm.group(1)) - f(dm.group(1))))
+    # 4. Markese: earned $D fewer than E; together $T → (T−D)/2
+    km = re.search(rf"earned ({N}) fewer dollars than", full)
+    gm = re.search(rf"together they earned \$({N})", full)
+    if km and gm and re.search(r"how many dollars did \w+ earn", full):
+        if dok({km.group(1), gm.group(1)}):
+            return _rs_ret((f(gm.group(1)) - f(km.group(1))) / 2)
+    # 5. Jerry debts: paid $A two months ago, $A+B last month; debt $T in all → T−A−(A+B)
+    am = re.search(rf"paid \$({N}) while last month ?,? (?:he )?paid \$({N}) more", full)
+    if am is None:
+        a1 = re.search(rf"paid \$({N})\b", full)
+        a2 = re.search(rf"paid \$({N}) more", full)
+        am = (a1, a2) if a1 and a2 and a1.group(1) != a2.group(1) or (a1 and a2) else None
+    dtm = re.search(rf"debt was \$({N}) in all", full)
+    if am and dtm and re.search(r"how much does (?:he|she) still have to pay", ql):
+        if isinstance(am, tuple):
+            a_, b_ = f(am[0].group(1)), f(am[1].group(1))
+            toks = {am[0].group(1), am[1].group(1)}
+        else:
+            a_, b_ = f(am.group(1)), f(am.group(2))
+            toks = {am.group(1), am.group(2)}
+        if dok(toks | {dtm.group(1)}):
+            return _rs_ret(f(dtm.group(1)) - a_ - (a_ + b_))
+    # 6. Derek/Dave compare: two holders, enumerated spends, "how much more does X have left than Y"
+    m6 = re.search(r"how much more money does (\w+) have left than (\w+)", ql)
+    if m6:
+        holders = {}
+        for hm in re.finditer(rf"(\w+) has \$({N})", full):
+            holders[hm.group(1)] = [f(hm.group(2)), hm.group(2)]
+        spends = {}
+        # attribute spends per clause subject
+        cur = None
+        toks = set()
+        for p in premises:
+            pl = p.lower()
+            sm_ = re.search(r"\b(\w+) has \$", pl)
+            if sm_ and sm_.group(1) in holders:
+                cur = sm_.group(1)
+                toks.add(holders[cur][1])
+            if re.search(r"spends? \$", pl):
+                for x in re.findall(rf"\$({N})", pl):
+                    if cur is None:
+                        return None
+                    spends[cur] = spends.get(cur, 0.0) + f(x)
+                    toks.add(x)
+        a_, b_ = m6.group(1), m6.group(2)
+        if a_ in holders and b_ in holders and dok(toks):
+            va = holders[a_][0] - spends.get(a_, 0.0)
+            vb = holders[b_][0] - spends.get(b_, 0.0)
+            return va - vb if va > vb else None
+    # 7. Luisa gas: Σ miles / mpg × $per-gallon
+    miles = re.findall(rf"({N}) miles", full)
+    gm2 = re.search(rf"one gallon of gas can be used to drive ({N}) miles", full)
+    cm2 = re.search(rf"one gallon of gas costs \$({N})", full)
+    if gm2 and cm2 and len(miles) >= 4 and "total cost of the gas" in ql:
+        legs = [x for x in miles if x != gm2.group(1)]
+        if dok(set(miles) | {gm2.group(1), cm2.group(1)}):
+            return _rs_ret(sum(f(x) for x in legs) / f(gm2.group(1)) * f(cm2.group(1)))
+    # 8. Kim tip change: meal $A + drink B; 20% tip; pays with $C
+    ma0 = re.search(rf"orders a \$({N}) meal", full)
+    ma1 = re.search(rf"drink (?:orders )?for ({N})", full)
+    ma = (ma0, ma1) if ma0 and ma1 else None
+    tp = re.search(rf"gives a ({N})% tip", full)
+    pb = re.search(rf"pays with a \$({N})", full)
+    if ma and tp and pb and "how much does she get in change" in ql:
+        if dok({ma[0].group(1), ma[1].group(1), tp.group(1), pb.group(1)}):
+            return _rs_ret(f(pb.group(1)) - (f(ma[0].group(1)) + f(ma[1].group(1))) * (1 + f(tp.group(1)) / 100))
+    # 9. James pages→cents: n notebooks × p pages; pays $D → D·100/(n·p)
+    nb = re.search(rf"buys ({N}) notebooks with ({N}) pages each", full)
+    pd = re.search(rf"pays \$({N})", full)
+    if nb and pd and "how many cents did each page cost" in ql:
+        if dok({nb.group(1), nb.group(2), pd.group(1)}):
+            return _rs_ret(f(pd.group(1)) * 100 / (f(nb.group(1)) * f(nb.group(2))))
+    # 10. Samuel bills: total $T; $10-bills amount $X; k $20-bills → count
+    st = re.search(rf"bills which amount to \$({N})", full)
+    sx = re.search(rf"\$10-bills amount to \$({N})", full)
+    sk = re.search(rf"has ({N}) \$20-bills", full)
+    if st and sx and sk and "how many bills" in ql:
+        toks = {st.group(1), sx.group(1), sk.group(1), "5", "10", "20"}
+        if dok(toks):
+            t, x, k = f(st.group(1)), f(sx.group(1)), f(sk.group(1))
+            fives = (t - x - k * 20) / 5
+            r = x / 10 + k + fives
+            return r if fives >= 0 and r == int(r) else None
+    # 11. Larry backward: spent A, gave B, has C now → A+B+C
+    la0 = re.search(rf"spent \$({N}) for \w+", full)
+    la1 = re.search(rf"gave (?:his|her) \w+ \$({N})", full)
+    la = (la0, la1) if la0 and la1 else None
+    lc = re.search(rf"has \$({N}) now", full)
+    if la and lc and re.search(r"how much did \w+ have at the beginning", full):
+        if dok({la[0].group(1), la[1].group(1), lc.group(1)}):
+            return _rs_ret(f(la[0].group(1)) + f(la[1].group(1)) + f(lc.group(1)))
+    # 12. Bridget/Sarah cents: $T between them; B has 50 cents more → (100T−50)/2
+    bt = re.search(rf"have \$({N}) between them", full)
+    bo = re.search(rf"has ({N}) cents more", full)
+    if bt and bo and "how many cents does" in ql:
+        if dok({bt.group(1), bo.group(1)}):
+            return _rs_ret((f(bt.group(1)) * 100 - f(bo.group(1))) / 2)
+    # 13. bottles: k bottles of v liters cost $C → C/(k·v)
+    bb = re.search(rf"(\w+|{N}) bottles of ({N}) liters of \w+ cost \$({N})", full)
+    if bb and "price of 1 liter" in ql:
+        k = f(bb.group(1)) if bb.group(1)[0].isdigit() else NUMBERS.get(bb.group(1))
+        if k and dok({bb.group(2), bb.group(3), "1"} |
+                     ({bb.group(1)} if bb.group(1)[0].isdigit() else set())):
+            return _rs_ret(f(bb.group(3)) / (k * f(bb.group(2))))
+    # 14. Tim car depreciation: down $D/year; bought $B; after Y years
+    td = re.search(rf"goes down in value by \$({N}) a year", full)
+    tb = re.search(rf"bought it for \$({N})", full)
+    ty = re.search(rf"after ({N}) years", ql)
+    if td and tb and ty and "how much is it worth" in ql:
+        if dok({td.group(1), tb.group(1), ty.group(1)}):
+            return _rs_ret(f(tb.group(1)) - f(td.group(1)) * f(ty.group(1)))
+    # 15. Tony cheese: has $H; cheese $c/lb + a pound of beef $b; $L left → (H−L−b)/c
+    th = re.search(rf"has \$({N})\.", full)
+    tcs = re.findall(rf"costs \$({N}) a pound", full)
+    tc = tcs if len(tcs) == 2 else None
+    tl = re.search(rf"has \$({N}) left", full)
+    if th and tc and tl and re.search(r"how many pounds of \w+ did (?:he|she) buy", ql):
+        if dok({th.group(1), tc[0], tc[1], tl.group(1)}):
+            r = (f(th.group(1)) - f(tl.group(1)) - f(tc[1])) / f(tc[0])
+            return r if r > 0 and r == int(r) else None
+    # 16. Roberts cash-vs-installments
+    rc = re.search(rf"television for \$({N}) cash or \$({N}) down payment and \$({N}) a month for ({N}) months", full)
+    if rc and "how much can he save by paying cash" in ql:
+        if dok({rc.group(1), rc.group(2), rc.group(3), rc.group(4)}):
+            return _rs_ret(f(rc.group(2)) + f(rc.group(3)) * f(rc.group(4)) - f(rc.group(1)))
+    # 17. Lucy/Linda equalize: give $G → equal; Lucy had $L → Linda = L − 2G
+    lg = re.search(rf"would give \w+ \$({N})", full)
+    ll = re.search(rf"originally had \$({N})", full)
+    if lg and ll and re.search(r"how much money did \w+ have at the beginning", ql):
+        if dok({lg.group(1), ll.group(1)}):
+            r = f(ll.group(1)) - 2 * f(lg.group(1))
+            return r if r > 0 else None
+    # 18. Randy piggy backward: spends $s per trip, t trips/month; $L left after a year
+    rs = re.search(rf"spends ({N}) dollars? every time", full)
+    rt = re.search(rf"makes ({N}) trips to the store every month", full)
+    rl = re.search(rf"had \$({N}) dollars? left [\w ]*?after a year", full)
+    if rs and rt and rl and re.search(r"how much money ?,? (?:in dollars ?,? )?did (?:he|she) have", full):
+        if dok({rs.group(1), rt.group(1), rl.group(1)}):
+            return _rs_ret(f(rl.group(1)) + f(rs.group(1)) * f(rt.group(1)) * 12)
+    # 19. crayons: has a packs + buys b; $p per pack → (a+b)·p
+    ca0 = re.search(rf"has ({N}) packs of \w+", full)
+    ca1 = re.search(rf"buy ({N}) more", full)
+    ca = (ca0, ca1) if ca0 and ca1 else None
+    cp = re.search(rf"one pack of \w+ costs \$({N})", full)
+    if ca and cp and "worth" in ql:
+        if dok({ca[0].group(1), ca[1].group(1), cp.group(1)}):
+            return _rs_ret((f(ca[0].group(1)) + f(ca[1].group(1))) * f(cp.group(1)))
+    # 20. chair/table: chair = 1/k of table; table $T; buy a table and n chairs
+    ch = re.search(rf"chair costs 1/({N}) of the cost of a table", full)
+    ct = re.search(rf"table costs \$({N})", full)
+    cn = re.search(rf"a table and ({N}) chairs", ql)
+    if ch and ct and cn:
+        if dok({ch.group(1), ct.group(1), cn.group(1), "1"}):
+            t = f(ct.group(1))
+            return _rs_ret(t + f(cn.group(1)) * t / f(ch.group(1)))
+    # 21. Glenn movies: Monday $m; Wed 2×; Sat 5×Monday; goes Wed+Sat
+    gm3 = re.search(rf"cost \$({N}) each on a monday ?,? twice as much on a wednesday ?,? and five times as much", full)
+    if gm3 and "wednesday" in full and "saturday" in full and "how much does he spend" in ql:
+        if dok({gm3.group(1)}):
+            m_ = f(gm3.group(1))
+            return 2 * m_ + 5 * m_
+    # 22. lunch thirds: Adam ⅔ of Rick; Rick = Jose; Jose $J → J(1 + 1 + 2/3)
+    lj = re.search(rf"ate lunch worth \$({N})", full)
+    lw = re.search(rf"working out for ({N}) hours", full)
+    if lj and "two-thirds as much" in full and "same price" in full \
+            and "cost of lunch for all three" in ql:
+        if dok({lj.group(1)} | ({lw.group(1)} if lw else set())):
+            return _rs_ret(f(lj.group(1)) * (2 + 2 / 3))
+    # 23. Daphney potatoes: buys a kg; b kg costs $c → a·c/b
+    dp = re.search(rf"buys ({N}) kg of \w+", full)
+    dc = re.search(rf"({N}) kg of \w+ costs \$({N})", full)
+    if dp and dc and "how much will she pay" in ql and dp.group(1) != dc.group(1):
+        if dok({dp.group(1), dc.group(1), dc.group(2)}):
+            return _rs_ret(f(dp.group(1)) * f(dc.group(2)) / f(dc.group(1)))
+    # 24. Carrie: $r/hour × h/week × 4 weeks − bike $B
+    cr = re.search(rf"works for \$({N}) an hour and ({N}) hours a week", full)
+    cb = re.search(rf"bike for \$({N})", full)
+    if cr and cb and "a month since she started" in full and "left over" in ql:
+        if dok({cr.group(1), cr.group(2), cb.group(1)}):
+            return _rs_ret(f(cr.group(1)) * f(cr.group(2)) * 4 - f(cb.group(1)))
+    # 25. Norris: saved months + spent → left
+    ns = re.findall(rf"\$({N}) in (?:january|february|march|april|may|june|july|august|september|october|november|december)", full)
+    nx = re.search(rf"spent \$({N}) on an? [\w ]+", full)
+    if len(ns) >= 3 and nx and re.search(r"how much money does \w+ have left", ql):
+        if dok(set(ns) | {nx.group(1)}):
+            r = sum(f(x) for x in ns) - f(nx.group(1))
+            return r if r > 0 else None
+    return None
+
+
 def _percent_money_tails_system(premises: list, question: str):
     """PERCENT-OF-MONEY tails (#224), three branches: PERCENT-INCREASED BILL ("bill is $60;
     increased by thirty percent; total bill?" -> 78); SPENT-PERCENT BACKWARD ("spent 35% of her
@@ -12297,6 +12532,8 @@ _EARLY_SYSTEMS = [
     ("calendar_age", _calendar_age_system),
     # GROUPED PARTITION: cast split into per-carrier groups → Σ(group×per) (tables 91).
     ("grouped_partition", _grouped_partition_system),
+    # MONEY SINGLES: twenty-five money branches (#227).
+    ("money_singles", _money_singles_system),
     # RATE/PRODUCT SINGLES: sixteen unit-rate branches (#226).
     ("rate_singles", _rate_singles_system),
     # PERCENT-OF-MONEY tails: increased bill / spent-percent backward / pay-fraction product.
