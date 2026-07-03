@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import copy
 import re
+from fractions import Fraction
 from dataclasses import dataclass, field
 from itertools import product
 from typing import Optional
@@ -2123,6 +2124,11 @@ LEXICON.update({
     # 27th wave (#237) — shipped WITH _rate_chain_system (the generic dimensional-chain
     # solver): the minimal words its two dev targets are guard-1-blocked on.
     "rope": ["noun"], "session": ["noun"], "half-hour": ["noun"],
+    # 28th wave (#238) — shipped WITH _age_equations_system. "sum" RE-ADMITTED from the
+    # wrong-on-inject exclusion list (the #213 'require' precedent: the missing structure is
+    # the age-sum equation); each word stands or falls by the diff + the TEST checkpoint.
+    "sum": ["noun"], "rabbit": ["noun"], "theirs": ["pronoun"],
+    "based": ["verb"], "birth": ["noun"],
 })
 PLURALS.update({
     "samosas": "samosa", "pakoras": "pakora", "vases": "vase", "pins": "pin", "boots": "boot",
@@ -2139,7 +2145,7 @@ PLURALS.update({
     "blocks": "block", "rows": "row", "words": "word", "magazines": "magazine",
     "chilis": "chili", "albums": "album",
     "paintings": "painting", "coworkers": "coworker",
-    "sessions": "session", "ropes": "rope",
+    "sessions": "session", "ropes": "rope", "rabbits": "rabbit", "births": "birth",
     "stacks": "stack", "churches": "church", "cables": "cable", "plots": "plot",
     "sticks": "stick", "servings": "serving", "robots": "robot",
     "runners": "runner", "windows": "window", "scouts": "scout",
@@ -5843,6 +5849,12 @@ def _combined_total(premises: list, asked_measure, rel_mod, rel_desc):
         rp = analyze(p)
         if any("comparative" in u.features.get("senses", []) for u in rp.units):
             continue
+        if any("multiplier" in u.features.get("senses", []) for u in rp.units) \
+                or any(_fraction_parts(u.surface) is not None for u in rp.units):
+            continue                                     # "TWICE the total number of…" RELATES the total,
+            #                                              it doesn't state one — reading a bare value off
+            #                                              such a clause committed the people-count "two
+            #                                              friends" as the total (0.5 ≠ 40, wave-28 unblock)
         tot_nouns = [_descriptor(u)[0] for u in rp.units if u.features.get("senses") == ["noun"]]
         # UNIT/MEASURE GATE: the asked measure must match the total's measure (else "combined YEARS … how
         # many MONTHS" would commit a wrong-unit number); money totals often have no measure noun ("$76").
@@ -15581,6 +15593,297 @@ def _rate_chain_system(premises: list, question: str):
     return _gated_pos(result)
 
 
+# --- generic age equations (linear algebra over now-ages) --------------------------------------
+# The GENERALIZATION of the specific age family (_age_shift, _age_chain, _age_past_anchor,
+# _years_until_ratio, …): every person's age is AFFINE IN TIME (age_X(t) = a_X + t), so each
+# premise is a LINEAR EQUATION over the now-ages and the ask is a linear expression evaluated
+# iff the row space determines it — an UNDERDETERMINED system still answers a determined ask
+# (Jayson: mom-at-birth = a_mom − a_jayson is fixed although neither age is). A scene
+# "when OWNER was N" substitutes age(v) → ({v:1, owner:−1}, N); the owner's own scene age is
+# exactly the constant N. Registered LAST so every specific age solver wins first.
+
+_AE_KIN = ("dad", "father", "mom", "mother", "brother", "sister", "grandmother", "grandma",
+           "grandfather", "grandpa", "son", "daughter", "cousin", "uncle", "aunt", "cat",
+           "dog", "rabbit", "wife", "husband")
+_AE_BAN = ("times older", "times younger", "times more")   # gold-inconsistent idioms — never read
+_AE_MULT = ("twice", "thrice", "double", "times")
+_AE_PERSON = (r"(?:[A-Z][a-z]+(?:['’]s (?:" + "|".join(_AE_KIN) + r"))?"
+              r"|(?:[Hh]is|[Hh]er|[Tt]heir|[Tt]he) (?:older |younger |little |big |oldest |youngest )?(?:"
+              + "|".join(_AE_KIN) + r"))")
+_AE_K = r"(?:twice|double|half|a third|one third|a quarter|" + _RS_N + r" times|\w+ times)"
+
+
+def _ae_frac(tok):
+    """A Fraction from a digit token (comma-aware)."""
+    tok = tok.replace(",", "")
+    return Fraction(str(float(tok))) if "." in tok else Fraction(tok)
+
+
+def _ae_num(tok):
+    """A Fraction from a digit token or a word number; None otherwise."""
+    t = tok.lower()
+    if t and t[0].isdigit():
+        return _ae_frac(t)
+    n = NUMBERS.get(t)
+    return Fraction(str(n)) if n is not None else None
+
+
+def _ae_k(tok):
+    """The ratio multiplier a K-surface asserts (twice/half/"N times"/"three times"), or None."""
+    t = tok.lower().strip()
+    fixed = {"twice": 2, "double": 2, "thrice": 3, "half": Fraction(1, 2),
+             "a third": Fraction(1, 3), "one third": Fraction(1, 3), "a quarter": Fraction(1, 4)}
+    if t in fixed:
+        return Fraction(fixed[t])
+    m = re.match(rf"({_RS_N}|\w+) times$", t)
+    return _ae_num(m.group(1)) if m else None
+
+
+def _ae_var(name):
+    """Normalize a person reference to a variable: strip possessors ("Tom's cat" → cat),
+    articles/pronouns and age-irrelevant kin qualifiers ("his older brother" → brother)."""
+    w = name.lower().strip().strip(" .,?!:;")
+    w = re.sub(r"^\w+['’]s ", "", w)
+    w = re.sub(r"^(?:his|her|their|the|a|an) ", "", w)
+    w = re.sub(r"^(?:older|younger|little|big|oldest|youngest) ", "", w)
+    return w
+
+
+def _ae_add(a, b):
+    c = dict(a[0])
+    for v, x in b[0].items():
+        c[v] = c.get(v, Fraction(0)) + x
+    return (c, a[1] + b[1])
+
+
+def _ae_scale(a, k):
+    return ({v: x * k for v, x in a[0].items()}, a[1] * k)
+
+
+class _AgeParse:
+    """Accumulated linear system: rows of (coeffs, const) meaning Σ coeffs·a_v = const."""
+
+    def __init__(self):
+        self.rows, self.vars = [], set()
+
+    def eq(self, lhs, rhs):
+        d, c = _ae_add(lhs, _ae_scale(rhs, -1))
+        d = {v: x for v, x in d.items() if x}
+        self.rows.append((d, -c))
+        self.vars.update(d)
+
+
+def _ae_clause(cl, P, scene=None):
+    """Extract ONE equation from a clause into P; returns the consumed match spans, or None
+    if nothing parses. scene: (owner_var, scene_age) — a "when OWNER was N" substitution."""
+    def age(name):
+        v = _ae_var(name)
+        if scene is not None:
+            owner, n = scene
+            if v == owner or v in ("he", "she", "his", "her", "his age", "her age"):
+                return ({}, Fraction(n))
+            return ({v: Fraction(1), owner: Fraction(-1)}, Fraction(n))
+        return ({v: Fraction(1)}, Fraction(0))
+
+    # E6 shifted: "in T years, X will be K as old as Y (is now)?" / "T years ago, X was K as old as Y"
+    m = re.search(rf"\bin ({_RS_N}) years,? (\w+) will be ({_AE_K}) as old as (\w+)( is now)?", cl, re.I)
+    ago = False
+    if m is None:
+        m = re.search(rf"\b({_RS_N}) years ago,? (\w+) was ({_AE_K}) as old as (\w+)", cl, re.I)
+        ago = m is not None
+    if m is not None and scene is None:
+        t, k = _ae_frac(m.group(1)), _ae_k(m.group(3))
+        if k is None:
+            return None
+        x, y = age(m.group(2)), age(m.group(4))
+        pin_now = len(m.groups()) >= 5 and m.group(5)      # "… as Y IS NOW" pins the standard
+        s = -1 if ago else 1
+        P.eq(_ae_add(x, ({}, Fraction(s) * t)),
+             _ae_scale(y if pin_now else _ae_add(y, ({}, Fraction(s) * t)), k))
+        return [m.span()]
+
+    # E5 sum: "the sum of X and Y's ages (now)? is S"
+    m = re.search(rf"sum of (\w+) and (\w+)['’]s? ages?(?: now)? is ({_RS_N})", cl, re.I)
+    if m is not None:
+        P.eq(_ae_add(age(m.group(1)), age(m.group(2))), ({}, _ae_frac(m.group(3))))
+        return [m.span()]
+
+    # E4 offset-on-ratio: "X('s age) is N (years)? more/less than K (as old as|the age of) Y"
+    m = re.search(rf"\b({_AE_PERSON})(?:['’]s age) ?(?:is|was) ({_RS_N}|\w+) (?:years? )?(more|less) "
+                  rf"than ({_AE_K})(?: as old as| the age of)? ({_AE_PERSON})(?:['’]s age)?", cl)
+    if m is None:
+        m = re.search(rf"\b({_AE_PERSON}) (?:is|was) ({_RS_N}|\w+) (?:years? )?(more|less) "
+                      rf"than ({_AE_K})(?: as old as| the age of)? ({_AE_PERSON})(?:['’]s age)?", cl)
+    if m is not None:
+        n, k = _ae_num(m.group(2)), _ae_k(m.group(4))
+        if n is None or k is None:
+            return None
+        sign = 1 if m.group(3) == "more" else -1
+        P.eq(age(m.group(1)), _ae_add(_ae_scale(age(m.group(5)), k), ({}, Fraction(sign) * n)))
+        return [m.span()]
+
+    # E2 ratio: "X is K as old as Y" / "X is K Y's age" / "X is K the age of Y" / "X is K his age"
+    m = re.search(rf"\b({_AE_PERSON}) (?:is|was) (?:currently )?({_AE_K})"
+                  rf"(?: as old as ({_AE_PERSON}|he is|she is)| the age of ({_AE_PERSON})"
+                  rf"| ({_AE_PERSON})['’]s age| (his|her) age)", cl)
+    if m is not None:
+        k = _ae_k(m.group(2))
+        if k is None:
+            return None
+        ystr = re.sub(r" is$", "", next(g for g in m.groups()[2:] if g))
+        P.eq(age(m.group(1)), _ae_scale(age(ystr), k))
+        return [m.span()]
+
+    # E3 offset: "X is N years/months older/younger than Y"
+    m = re.search(rf"\b({_AE_PERSON}) (?:is|was) ({_RS_N}|\w+) (years?|months?) (older|younger) "
+                  rf"than ({_AE_PERSON})", cl)
+    if m is not None:
+        n = _ae_num(m.group(2))
+        if n is None:
+            return None
+        sign = 1 if m.group(4) == "older" else -1
+        P.eq(age(m.group(1)), _ae_add(age(m.group(5)), ({}, Fraction(sign) * n)))
+        return [m.span()]
+
+    # E1 absolute: "X is (currently|now|only)? N (years/months old)?" — clause-final or "… now"
+    m = re.search(rf"\b({_AE_PERSON}) (?:is|was|turned)(?: currently| now| only)? ({_RS_N})"
+                  rf"(?: (years?|months?) old)?(?= now\b|[ ]*$|[.,?!])", cl.strip())
+    if m is not None:
+        P.eq(age(m.group(1)), ({}, _ae_frac(m.group(2))))
+        return [m.span()]
+
+    return None
+
+
+def _ae_accounted(cl, P, scene):
+    """Parse `cl` into ONE equation and require every digit AND multiplier word to sit inside
+    the consumed spans; TRANSACTIONAL — a failed attempt pops its row. A digit-free,
+    multiplier-free clause that parses nothing is vacuously fine (narrative)."""
+    before = len(P.rows)
+
+    def fail():
+        del P.rows[before:]
+        return False
+
+    spans = _ae_clause(cl, P, scene)
+    if spans is None:
+        if _has_digit(cl) or any(w in cl.lower().split() for w in _AE_MULT) or "half" in cl.lower():
+            return fail()                                # a valued/relational clause we can't read
+        return True
+    for dm in re.finditer(rf"{_RS_N}", cl):
+        if not any(a <= dm.start() and dm.end() <= b for a, b in spans):
+            return fail()
+    for wm in re.finditer(r"[a-z]+", cl.lower()):
+        if (wm.group(0) in _AE_MULT or wm.group(0) == "half") \
+                and not any(a <= wm.start() and wm.end() <= b for a, b in spans):
+            return fail()
+    return True
+
+
+def _ae_solve(rows, want, variables):
+    """Gaussian elimination over Fractions; then reduce `want` against the pivots — the value
+    iff `want` lies in the row space (None on inconsistent premises or a free residual)."""
+    vs = sorted(variables)
+    A = [[r[0].get(v, Fraction(0)) for v in vs] + [r[1]] for r in rows]
+    piv, ri = {}, 0
+    for ci in range(len(vs)):
+        pr = next((k for k in range(ri, len(A)) if A[k][ci] != 0), None)
+        if pr is None:
+            continue
+        A[ri], A[pr] = A[pr], A[ri]
+        A[ri] = [x / A[ri][ci] for x in A[ri]]
+        for k in range(len(A)):
+            if k != ri and A[k][ci] != 0:
+                A[k] = [a - A[k][ci] * b for a, b in zip(A[k], A[ri])]
+        piv[ci] = ri
+        ri += 1
+    if any(row[-1] != 0 for row in A[ri:]):
+        return None
+    w = [want.get(v, Fraction(0)) for v in vs]
+    val = Fraction(0)
+    for ci, r in piv.items():
+        if w[ci] != 0:
+            c = w[ci]
+            val += c * A[r][-1]
+            w = [a - c * b for a, b in zip(w, A[r][:-1])]
+    return None if any(x != 0 for x in w) else val
+
+
+def _age_equations_system(premises: list, question: str):
+    """GENERIC AGE EQUATIONS — see the section comment: premises → linear equations over
+    now-ages (absolute / ratio / offset / offset-on-ratio / sum-of-ages / time-shifted with an
+    optional "is now" pin / "when X was N" scenes, leading or trailing); asks: single age
+    (now / in T years), pairwise difference ("how much older"), age-at-birth ("how old was M
+    when J was born" = a_M − a_J), sum of the cast ("all N people" must match the parsed cast).
+    TIGHTLY gated: the gold-inconsistent times-older/younger/more idioms decline the WHOLE
+    system; every digit and multiplier word must sit inside a consumed equation span (an
+    unreadable valued clause declines); the ask must be DETERMINED by the row space; positive
+    integer ages only. None otherwise."""
+    ql = question.lower()
+    body = " ".join(premises).lower() + " " + ql
+    if any(b in body for b in _AE_BAN):
+        return None
+    if not re.search(r"\bold\b|\bage\b|\bages\b|\bolder\b|\byounger\b", body):
+        return None
+    P = _AgeParse()
+    for p in premises:
+        scene, rest = None, p
+        m = re.match(rf"when (\w+) (?:is|was) ({_RS_N}),?\s*(.*)", p, re.I)
+        if m is not None:
+            scene, rest = (_ae_var(m.group(1)), _ae_frac(m.group(2))), m.group(3)
+        else:
+            m = re.search(rf"(.*\S)\s+when (\w+(?:['’]s \w+)?|his \w+|her \w+) "
+                          rf"(?:is|was) ({_RS_N})\s*[.?!]?$", p, re.I)
+            if m is not None:
+                scene, rest = (_ae_var(m.group(2)), _ae_frac(m.group(3))), m.group(1)
+        if _ae_accounted(rest, P, scene):                 # whole segment first (E5's "X and Y" …)
+            continue
+        for cl in re.split(r"\s+(?:and|while)\s+", rest):   # … then and/while conjuncts
+            if cl.strip() and not _ae_accounted(cl, P, scene):
+                return None
+    if not P.rows:
+        return None
+    want, extra, qspans = None, Fraction(0), []
+    m4 = re.search(r"how old (?:was|is) (?:\w+['’]s )?(\w+) when (\w+) (?:was|is) born", ql)
+    m3 = re.search(r"how much older(?: in \w+)? is (\w+) than (\w+)", ql)
+    m2 = re.search(rf"how old will (\w+) be in ({_RS_N}) years", ql)
+    m5 = re.search(rf"sum of (?:the )?ages of all (?:({_RS_N}|\w+) )?(?:people|of them|\w+)"
+                   rf"|combined age|sum of their ages|sum of theirs ages", ql)
+    m1 = re.search(r"how old (?:is|was) (?:the |his |her )?(\w+(?:['’]s \w+)?)"
+                   r"(?: now| currently| right now)?\s*[?.]?\s*$", ql)
+    if m4 is not None:
+        a, b = _ae_var(m4.group(1)), _ae_var(m4.group(2))
+        if b in ("he", "she"):                            # "Jayson's mom when HE was born"
+            pm = re.search(r"(\w+)['’]s \w+ when", ql)
+            if pm is None:
+                return None
+            b = _ae_var(pm.group(1))
+        want = {a: Fraction(1), b: Fraction(-1)}
+    elif m3 is not None:
+        want = {_ae_var(m3.group(1)): Fraction(1), _ae_var(m3.group(2)): Fraction(-1)}
+    elif m2 is not None:
+        want, extra = {_ae_var(m2.group(1)): Fraction(1)}, _ae_frac(m2.group(2))
+        qspans.append(m2.span(2))
+    elif m5 is not None:
+        cnt = _ae_num(m5.group(1)) if m5.group(1) else None
+        if cnt is not None and cnt != len(P.vars):
+            return None                                   # "all 4 people" ≠ the parsed cast
+        if m5.group(1):
+            qspans.append(m5.span(1))
+        want = {v: Fraction(1) for v in P.vars}
+    elif m1 is not None:
+        want = {_ae_var(m1.group(1).split("’s ")[-1].split("'s ")[-1]): Fraction(1)}
+    if want is None or any(v not in P.vars for v in want):
+        return None
+    for dm in re.finditer(rf"{_RS_N}", ql):               # question digits accounted
+        if not any(a <= dm.start() and dm.end() <= b for a, b in qspans):
+            return None
+    val = _ae_solve(P.rows, want, P.vars)
+    if val is None or val <= 0 or val.denominator != 1:
+        return None
+    return _gated_pos(_compute(f"{_num(float(val + extra))}"))
+
+
 # --- ARITHMETIC SYSTEM-SOLVER REGISTRY -------------------------------------------------------
 # The word-problem system solvers are REGISTERED here, not hand-inlined in solve() — honoring the
 # engine's founding rule ("new reasoning is REGISTERED, never special-cased"). Each is a
@@ -15811,6 +16114,10 @@ _EARLY_SYSTEMS = [
     # solver above wins first; this catches only what they all decline (jumps/min × min/session
     # × sessions/day × days → 400). The collisions audit checks it against every one of them.
     ("rate_chain", _rate_chain_system),
+    # GENERIC AGE EQUATIONS (linear algebra over now-ages) — LAST for the same reason: the
+    # specific age solvers above win first; this answers determined asks over the residual
+    # (underdetermined systems included — mom-at-birth is a determined DIFFERENCE).
+    ("age_equations", _age_equations_system),
 ]
 
 # LATE systems run AFTER the read-synthesize fixpoint has built `context` (they consume derived

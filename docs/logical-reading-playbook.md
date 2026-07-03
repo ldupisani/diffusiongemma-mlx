@@ -129,6 +129,21 @@ change the capture AND the accounting probe together or they disagree and every 
    (s↔min, min↔h, day→week, half-hour→h) — hour→day (24) and month→anything stay out on purpose:
    activity hours per day is not 24.
 
+6. **AGES ARE AFFINE IN TIME — one linear system subsumes the age-solver family (#238).** The
+   generic `_age_equations_system` (registered LAST, after the specifics) models every person's
+   age as a_X + t; each premise is a linear equation over now-ages (ratio / offset / sum / shifted
+   with an optional "is now" pin / "when X was N" scenes as the substitution age(v) → a_v − a_owner
+   + N, the owner's own scene age being exactly N), solved by Fraction-exact elimination with a
+   ROW-SPACE evaluation: an UNDERDETERMINED system still answers a determined ask (mom-at-birth =
+   a_mom − a_kid is fixed although neither age is). It moved TEST +3 with 0 new wrongs (35/4 →
+   38/4, 90.5% — the lesson-4 generality thesis confirmed live). Two campaign lessons: (a) "sum"
+   was RE-ADMITTED from the wrong-on-inject exclusion list WITH its structure (the #213 'require'
+   pattern, 2nd instance) — but the diff caught the OTHER unlock: `_combined_total` read a bare
+   value off a MULTIPLIER-bearing clause ("twice the total number of…" — the people-count "two
+   friends" committed as the total, 0.5≠40); the fix is general (a multiplier/fraction clause
+   RELATES a total, it never states one) and lives in the shared helper, not a word revert.
+   (b) The gold-inconsistent ban list (times older/younger/more) gates the WHOLE system off.
+
 ## Goal & stance
 
 - Deterministic reasoning, **not an LLM**. A valid statement gets a definitive, auditable reading;

@@ -7887,5 +7887,61 @@ class TestIncrement237GenericRateChain(unittest.TestCase):
         self.assertIsNone(reading._rate_chain_system(prem, q))
 
 
+class TestIncrement238AgeEquations(unittest.TestCase):
+    """#238 — the GENERIC AGE-EQUATIONS solver: ages are affine in time, premises are linear
+    equations over now-ages, asks evaluate iff the row space determines them. Registered LAST."""
+
+    def test_relational_chain_with_cast_sum(self):
+        # offsets + an offset-on-ratio, summed over the whole cast: 14+16+12+27 = 69
+        self.assertEqual(reading.solve(
+            "Marta is 14 and is two years younger than Onel, while Sana is four years "
+            "younger than Onel. If Jom is three more than twice as old as Sana, what is "
+            "the sum of the ages of all 4 people?"), 69)
+
+    def test_shifted_relation_with_now_pin(self):
+        # "in 6 years, twice as old as Ron IS NOW" pins the standard: A = 2·8 − 6 = 10 → diff 2
+        self.assertEqual(reading.solve(
+            "In 6 years, Ana will be twice as old as Ron is now. Ron is 8 now. How much "
+            "older is Ana than Ron, right now, in years?"), 2)
+
+    def test_scene_determines_difference_only(self):
+        # UNDERDETERMINED system, determined ask: mom-at-birth = a_mom − a_kid is fixed
+        # although no absolute now-age is stated (the row-space evaluation, not a full solve)
+        self.assertEqual(reading.solve(
+            "When Tario is 10 his dad is four times his age and his mom is 2 years "
+            "younger than his dad. How old was Tario's mom when he was born?"), 28)
+
+    def test_possessive_ratio_chain(self):
+        # possessive-kin variables: cat 6 → rabbit 3 → dog 9
+        self.assertEqual(reading.solve(
+            "Tim's cat is 6 years old. His rabbit is half the age of his cat. His dog is "
+            "three times as old as his rabbit. How old is the dog?"), 9)
+
+    def test_sum_equation_with_offset(self):
+        # a + b = 9, a = b + 1 → 5
+        self.assertEqual(reading.solve(
+            "The sum of Marco and Mira's ages now is 9. Marco is 1 year older than Mira. "
+            "How old is Marco?"), 5)
+
+    def test_times_older_ban_declines(self):
+        # "N times older" is gold-inconsistent corpus-wide (documented ban): never commit ×3
+        self.assertNotEqual(reading.solve(
+            "Kiara is twice as old as Bea. Jon is 3 times older than Bea. If Kiara is 30, "
+            "how old is Jon?"), 45)
+
+    def test_unread_valued_clause_declines(self):
+        # a valued clause that parses no equation ("sold 5 cakes") declines the SYSTEM
+        # (the fold may still answer; pin the system itself)
+        prem, q = reading._parse_problem(
+            "Rea is 10 years old. Rea sold 5 cakes. How old will Rea be in 3 years?")
+        self.assertIsNone(reading._age_equations_system(prem, q))
+
+    def test_undetermined_ask_declines(self):
+        # one offset relation, no anchor: Mia's age is NOT in the row space
+        prem, q = reading._parse_problem(
+            "Mia is two years older than Ben. How old is Mia?")
+        self.assertIsNone(reading._age_equations_system(prem, q))
+
+
 if __name__ == "__main__":
     unittest.main()
