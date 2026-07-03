@@ -115,9 +115,9 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   `bench.py`'s firewall: DEV=train inspectable, TEST=test aggregate-only; never imported by the unit
   tests). Scores against the gold `#### N`, reports coverage / precision / a decline-blocker taxonomy
   (currency / percentage / unknown-word / structure) and the **most-frequent unknown words** (the
-  data-driven vocabulary worklist). State (2026-07-03, after campaigns #180–222): dev-train
-  **367 correct / 0 wrong**, dev-holdout 127/2, TEST **33 correct / 4 wrong (89.2% precision,
-  ceiling 16.3%)**.
+  data-driven vocabulary worklist). State (2026-07-03, after campaigns #180–225): dev-train
+  **378 correct / 0 wrong (10.2% of dev-train)**, dev-holdout 127/2, TEST **33 correct / 4 wrong
+  (89.2% precision, ceiling 16.3%)**.
   Coverage = fully-read ceiling × structure hit-rate (see docs/reading-coverage-methodology.md §9;
   the bench prints both) — judge generality by the HOLDOUT hit-rate, never dev-train's. 0 model calls. DEV has a stable-hash **train/holdout split** (`--slice dev-train|dev-holdout`, the anti-overfit
   refinement: tune on dev-train, validate on dev-holdout BEFORE the single TEST look — `dev-holdout` is a
