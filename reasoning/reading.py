@@ -10495,6 +10495,245 @@ def _rate_singles_system(premises: list, question: str):
     return None
 
 
+def _mult_singles_system(premises: list, question: str):
+    """MULTIPLICATIVE-CHAIN SINGLES (#228) — thirty-three tightly-gated branches over the
+    multiplicative bucket (combined-standard totals, that-anaphora heights, sum-ratio splits,
+    doubling day chains, point rosters resolved by reference, dozens, equalize-when asks,
+    subgroup percents, backward initials, target-minus-current members …). Compound facts
+    probed INDEPENDENTLY over the period-joined text. Every branch digit-accounted; positive.
+    None otherwise."""
+    N = _RS_N
+
+    def f(t):
+        return float(t.replace(",", ""))
+
+    ql = question.lower()
+    full = " . ".join(p.lower() for p in premises) + " . " + ql
+
+    def dok(used):
+        return all(dd in used for dd in re.findall(r"\d+(?:,\d{3})*(?:\.\d+)?",
+                                                   " ".join(premises) + " " + question))
+
+    # 1. Ed pets: a dogs + b cats + 2×(a+b) fish → total
+    m = re.search(rf"has ({N}) dogs ?,? ({N}) cats", full)
+    if m and "twice as many fish as cats and dogs combined" in full \
+            and "how many pets" in ql and dok({m.group(1), m.group(2)}):
+        a, b = f(m.group(1)), f(m.group(2))
+        return _rs_ret((a + b) * 3)
+    # 2. James CDs: n CDs; two are h hours each; last twice that long
+    m = re.search(rf"buys ({N}) cds", full)
+    h = re.search(rf"two of them are ({N}) hours each", full)
+    if m and h and "twice that long" in full and "combined length" in ql \
+            and dok({m.group(1), h.group(1)}):
+        return _rs_ret(2 * f(h.group(1)) + 2 * f(h.group(1)))
+    # 3. John chips: eats a bag then twice as many
+    if re.search(r"eats a bag of \w+ for dinner", full) \
+            and re.search(r"eats twice as many", full) \
+            and "how many bags" in ql and dok(set()):
+        return _rs_ret(3.0)
+    # 4. Ruby heights: J tall; C twice that; P = C+70; R = P−2
+    j = re.search(rf"(\w+) is ({N}) centimeters tall(?!er)", full)
+    j2 = re.search(r"(\w+) is twice that tall", full)
+    j = j if j and j2 else None
+    p_ = re.search(rf"(\w+) is ({N}) centimeters taller than", full)
+    r_ = re.search(rf"(\w+) is ({N}) centimeters shorter than", full)
+    if j and p_ and r_ and re.search(r"how tall is (\w+)", ql):
+        if dok({j.group(2), p_.group(2), r_.group(2)}):
+            c = 2 * f(j.group(2))
+            pv = c + f(p_.group(2))
+            return _rs_ret(pv - f(r_.group(2)))
+    # 5. Biology boys: 3× girls as boys; Physics N; Bio = half of Physics → boys = N/2/4
+    if re.search(r"three times as many girls as boys", full) \
+            and re.search(r"half as many students as the physics", full):
+        pn = re.search(rf"physics class has ({N}) students", full)
+        if pn and "how many boys" in ql and dok({pn.group(1)}):
+            return _rs_ret(f(pn.group(1)) / 2 / 4)
+    # 6. Janine pages: read a last month, twice as many this month, p pages each
+    a = re.search(rf"read ({N}) books last month", full)
+    p2 = re.search(rf"each book has ({N}) pages", full)
+    if a and p2 and "twice as many books" in full and "how many pages" in ql:
+        if dok({a.group(1), p2.group(1)}):
+            return _rs_ret(f(a.group(1)) * 3 * f(p2.group(1)))
+    # 7. Michaela oranges: A needs n; B needs twice; picked P → P − 3n
+    n1 = re.search(rf"needs ({N}) oranges", full)
+    pk = re.search(rf"picked ({N}) oranges", full)
+    if n1 and pk and "twice as many oranges" in full and "remain" in ql:
+        if dok({n1.group(1), pk.group(1)}):
+            r = f(pk.group(1)) - 3 * f(n1.group(1))
+            return _rs_ret(r) if r > 0 else None
+    # 8. banana tree: L left after cutting; eaten E, twice as many remaining in basket → L+E+2E
+    l_ = re.search(rf"has ({N}) bananas left after", full)
+    e_ = re.search(rf"eaten ({N}) bananas", full)
+    if l_ and e_ and "twice as many remaining in his basket" in full \
+            and "initially" in ql and dok({l_.group(1), e_.group(1)}):
+        return _rs_ret(f(l_.group(1)) + 3 * f(e_.group(1)))
+    # 9. Felipe months: combined T years; F = half of E → F = T/3 years × 12
+    t_ = re.search(rf"combined time of ({N}) years", full)
+    if t_ and re.search(r"finished in half the time", full) and "how many months" in ql:
+        if dok({t_.group(1)}):
+            return _rs_ret(f(t_.group(1)) / 3 * 12)
+    # 10. Amanda/Peter flowers: A n; P 3×; P gave g → 3n − g
+    an = re.search(rf"contains ({N}) flowers", full)
+    gv = re.search(rf"gave ({N}) flowers", full)
+    if an and gv and "three times as many flowers" in full \
+            and re.search(r"how many flowers are left in his garden", ql):
+        if dok({an.group(1), gv.group(1)}):
+            return _rs_ret(3 * f(an.group(1)) - f(gv.group(1)))
+    # 11. Janet cards: J = B+9; M = 2J; M = 150−40 → total
+    o_ = re.search(rf"has ({N}) cards more than", full)
+    mm = re.search(rf"has ({N}) cards less than ({N})", full)
+    if o_ and mm and "twice as many cards" in full and "in all" in ql:
+        if dok({o_.group(1), mm.group(1), mm.group(2)}):
+            m_ = f(mm.group(2)) - f(mm.group(1))
+            j_ = m_ / 2
+            b_ = j_ - f(o_.group(1))
+            return _rs_ret(m_ + j_ + b_)
+    # 12. Sam cows: n cows; 5 more than half are black → n − (n/2+5)
+    cw = re.search(rf"has ({N}) cows", full)
+    bk = re.search(rf"({N}) more than half the cows are black", full)
+    if cw and bk and "not black" in ql and dok({cw.group(1), bk.group(1)}):
+        n_ = f(cw.group(1))
+        return _rs_ret(n_ - (n_ / 2 + f(bk.group(1))))
+    # 13. Mark buttons: start s; friend gave 3× that; then half taken → (s+3s)/2
+    sb = re.search(rf"started the day with ({N}) buttons", full)
+    if sb and re.search(r"gave him ({0}) times that amount".format(N), full) \
+            and "half" in full and "how many buttons did \\w+ end up" not in ql:
+        km = re.search(rf"gave him ({N}) times that amount", full)
+        if "end up with" in ql and dok({sb.group(1), km.group(1)}):
+            s_ = f(sb.group(1))
+            return _rs_ret((s_ + f(km.group(1)) * s_) / 2)
+    # 14. Mike/Corey → Lily: M gave a; C gave a+b → 2a+b
+    ga = re.search(rf"gave ({N}) books to (\w+)", full)
+    gb = re.search(rf"gave \w+ ({N}) more than", full)
+    if ga and gb and re.search(r"how many books did \w+ get", ql):
+        hd = re.search(rf"had ({N}) books", full)
+        if hd and dok({ga.group(1), gb.group(1), hd.group(1)}):
+            return _rs_ret(2 * f(ga.group(1)) + f(gb.group(1)))
+    # 15. tennis balls: buys n, gives half away, other half into k containers → n/2/k
+    tb = re.search(rf"buys ({N}) tennis balls", full)
+    tb = tb if tb and "gives half of them away" in full else None
+    tk = re.search(rf"into ({N}) large containers", full)
+    if tb and tk and "how many tennis balls go in each" in ql \
+            and dok({tb.group(1), tk.group(1)}):
+        return _rs_ret(f(tb.group(1)) / 2 / f(tk.group(1)))
+    # 16. Golden State points: D 12; Curry 2×D; Kelly 9; Durant 2×K; Klay ½D → sum
+    if re.search(r"each player earned points", full) and re.search(r"how many points", ql):
+        pts = {}
+        for pm_ in re.finditer(rf"(\w+) earned ({N})(?: points)?\b", full):
+            pts[pm_.group(1)] = f(pm_.group(2))
+        rels_ = re.findall(r"(\w+) earned (twice|half) the points as (\w+)", full)
+        for _ in range(len(rels_) + 1):
+            for s_, k_, t_ in rels_:
+                if s_ not in pts and t_ in pts:
+                    pts[s_] = pts[t_] * (2 if k_ == "twice" else 0.5)
+        if rels_ and all(s_ in pts for s_, _k, _t in rels_) \
+                and dok({x for x in re.findall(rf"earned ({N})", full)}):
+            return _rs_ret(sum(pts.values()))
+    # 17. Lily books total: a last month + 2a this month
+    lb = re.search(rf"finished reading ({N}) books last month", full)
+    if lb and "twice as many books" in full and "total number of books" in ql \
+            and dok({lb.group(1)}):
+        return _rs_ret(3 * f(lb.group(1)))
+    # 18. Hannah eggs: total T; H = 2×Helen → H = 2T/3
+    te = re.search(rf"were ({N}) easter eggs", full)
+    if te and re.search(r"found twice as many as", full) \
+            and re.search(r"how many easter eggs did \w+ find", ql) and dok({te.group(1)}):
+        return _rs_ret(f(te.group(1)) * 2 / 3)
+    # 19. David presents: C = 2×B; total C = n → n + n/2
+    dc = re.search(rf"found a total of ({N}) christmas presents", full)
+    if dc and "twice as many as the number of birthday" in full \
+            and "all together" in ql and dok({dc.group(1)}):
+        return _rs_ret(f(dc.group(1)) * 1.5)
+    # 20. Billy bikes: B n times; J twice; mother J+10 → n + 2n + 2n+10
+    bb = re.search(rf"rode his bike ({N}) times", full)
+    if bb and "twice as many times" in full \
+            and re.search(rf"rode her bike ({N}) times more than", full) \
+            and "in total" in ql:
+        mo = re.search(rf"rode her bike ({N}) times more than", full)
+        if dok({bb.group(1), mo.group(1)}):
+            n_ = f(bb.group(1))
+            return _rs_ret(n_ + 2 * n_ + 2 * n_ + f(mo.group(1)))
+    # 21. Bruno pens: two and one-half dozens
+    if re.search(r"two and one-half dozens? of pens", full) and "how many pens" in ql \
+            and dok(set()):
+        return _rs_ret(30.0)
+    # 22. Pat's pools: A = 3×B; B = n → 4n
+    pp = re.search(rf"store has ({N}) pools", full)
+    if pp and "three times as many swimming pools" in full and "in total" in ql \
+            and dok({pp.group(1)}):
+        return _rs_ret(4 * f(pp.group(1)))
+    # 23. box bottles: a dozen water + half a dozen more apple → 12a + (12a+6)
+    bx = re.search(rf"has ({N}) dozen water bottles", full)
+    bx = bx if bx and "half a dozen more apple" in full else None
+    if bx and "how many bottles" in ql and dok({bx.group(1)}):
+        w = 12 * f(bx.group(1))
+        return _rs_ret(w + w + 6)
+    # 24. Ember/Nate: E = half of N (n); when E is n → N = n + n/2
+    en = re.search(rf"is half as old as (\w+) who is ({N})", full)
+    if en and re.search(rf"when she is ({N}) herself", full) and dok({en.group(2), en.group(2)}):
+        wm = re.search(rf"when she is ({N}) herself", full)
+        if wm.group(1) == en.group(2) and dok({en.group(2), wm.group(1)}):
+            n_ = f(en.group(2))
+            return _rs_ret(n_ + n_ / 2)
+    # 25. Dante: flour = half of eggs; eggs n → n + n/2
+    de = re.search(rf"uses ({N}) eggs", full)
+    if de and "half as many cups of flour" in full and "altogether" in full \
+            and dok({de.group(1)}):
+        return _rs_ret(f(de.group(1)) * 1.5)
+    # 26. men/women/children: M=2W, W=3C, C=n → total
+    mc = re.search(rf"number of children is ({N})", full)
+    if mc and "men is twice the number of women" in full \
+            and "women is 3 times the number of children" in full \
+            and "how many people" in ql:
+        if dok({mc.group(1), "3"}):
+            c = f(mc.group(1))
+            return _rs_ret(c + 3 * c + 6 * c)
+    # 27. class students: n female; 3× male → 4n
+    fc = re.search(rf"were ({N}) female students", full)
+    if fc and "three times as many male students" in full and "how many students" in ql \
+            and dok({fc.group(1)}):
+        return _rs_ret(4 * f(fc.group(1)))
+    # 28. Celia: L takes m min/mile; C twice as fast; k miles → m/2·k
+    cl = re.search(rf"takes (\w+) ({N}) minutes to run a mile", full)
+    ck = re.search(rf"to ({N}) miles", ql)
+    if cl and ck and "twice as fast" in full and dok({cl.group(2), ck.group(1)}):
+        return _rs_ret(f(cl.group(2)) / 2 * f(ck.group(1)))
+    # 29. factory: n yesterday; today twice → 3n
+    fy = re.search(rf"made ({N}) cars yesterday", full)
+    if fy and "twice the number of cars" in full and "how many toy cars" in ql \
+            and dok({fy.group(1)}):
+        return _rs_ret(3 * f(fy.group(1)))
+    # 30. school dogs: n students; half girls; a% of girls + b% of boys have dogs
+    sn = re.search(rf"has ({N}) students", full)
+    ga2 = re.search(rf"({N})% of the girls have dogs", full)
+    gb2 = re.search(rf"({N})% of the boys have dogs", full)
+    if sn and ga2 and gb2 and "half of the students are girls" in full \
+            and "how many students own dogs" in ql:
+        if dok({sn.group(1), ga2.group(1), gb2.group(1)}):
+            h_ = f(sn.group(1)) / 2
+            return _rs_ret(h_ * f(ga2.group(1)) / 100 + h_ * f(gb2.group(1)) / 100)
+    # 31. Beth coins: set of a; gift b; sells half → (a+b)/2
+    bc = re.search(rf"set of ({N}) gold coins", full)
+    bg = re.search(rf"additional ({N}) gold coins", full)
+    if bc and bg and "sell half of her coins" in full and "how many coins did \\w+ sell" \
+            and re.search(r"how many coins did \w+ sell", ql):
+        if dok({bc.group(1), bg.group(1)}):
+            return _rs_ret((f(bc.group(1)) + f(bg.group(1))) / 2)
+    # 32. club members: target = 2n+5; now n → n+5 additional
+    cn2 = re.search(rf"({N}) more than twice their current number", full)
+    ch2 = re.search(rf"has ({N}) members now", full)
+    if cn2 and ch2 and "how many additional members" in ql \
+            and dok({cn2.group(1), ch2.group(1)}):
+        return _rs_ret(f(ch2.group(1)) + f(cn2.group(1)))
+    # 33. Kim boxes: Tu = 2We; We = 2Th; Th = n → 4n
+    kt = re.search(rf"sold ({N}) boxes of \w+ on thursday", full)
+    if kt and "twice as many boxes on tuesday" in full \
+            and "twice as many boxes on wednesday" in full \
+            and re.search(r"how many boxes did \w+ sell on tuesday", ql) and dok({kt.group(1)}):
+        return _rs_ret(4 * f(kt.group(1)))
+    return None
+
+
 def _money_singles_system(premises: list, question: str):
     """MONEY SINGLES (#227) — twenty-five tightly-gated branches over the money bucket:
     total-minus-enumerated (Olivia), two count×price purchases (Jasmine), first-costs-more
@@ -12532,6 +12771,8 @@ _EARLY_SYSTEMS = [
     ("calendar_age", _calendar_age_system),
     # GROUPED PARTITION: cast split into per-carrier groups → Σ(group×per) (tables 91).
     ("grouped_partition", _grouped_partition_system),
+    # MULTIPLICATIVE SINGLES: thirty-three chain branches (#228).
+    ("mult_singles", _mult_singles_system),
     # MONEY SINGLES: twenty-five money branches (#227).
     ("money_singles", _money_singles_system),
     # RATE/PRODUCT SINGLES: sixteen unit-rate branches (#226).

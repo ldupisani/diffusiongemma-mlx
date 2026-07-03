@@ -5008,10 +5008,11 @@ class TestSelfMultipleSum(unittest.TestCase):
             "How many miles did Anna run in total?"), 15)
 
     def test_aggregate_ratio_not_self(self):
-        # "twice as many fish AS cats and dogs combined" carries a standard — NOT anaphoric → don't misfire.
+        # RE-PINNED (#228): the combined-standard branch now claims this CORRECTLY —
+        # 2 + 3 + 2·(2+3) = 15. The anaphora non-misfire this pin defends is unchanged.
         self.assertEqual(reading.solve(
             "Ed has 2 dogs, 3 cats and twice as many fish as cats and dogs combined. "
-            "How many pets does Ed have?"), "undetermined")
+            "How many pets does Ed have?"), 15)
 
 
 # === DECLINE-SAFETY GUARDS: the precision guards that DECLINE rather than commit a partial answer ===
@@ -5180,10 +5181,12 @@ class TestIncrement131TimeIndexedRelationalDecline(unittest.TestCase):
             reading.Quantity("mary", ("box", frozenset()), 200, "sell", derived=True))
 
     def test_time_indexed_problem_declines(self):
+        # RE-PINNED (#228): the day-indexed doubling branch now claims this CORRECTLY —
+        # 1200·2·2 = 4800. Was pinned "undetermined" while no machinery could solve it.
         self.assertEqual(reading.solve(
             "She sold twice as many boxes on Tuesday as she did on Wednesday, and she sold twice as many "
             "boxes on Wednesday as she did on Thursday. If Kim sold 1200 boxes of cupcakes on Thursday, "
-            "how many boxes did she sell on Tuesday?"), "undetermined")
+            "how many boxes did she sell on Tuesday?"), 4800)
 
 
 class TestIncrement133PeriodNotApplied(unittest.TestCase):
