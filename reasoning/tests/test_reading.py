@@ -7620,6 +7620,55 @@ class TestIncrement219SignedMixedChain(unittest.TestCase):
             "her cookies to her sister. If Sabrina had 20 cookies at the start, how "
             "many cookies are left with her?"), "undetermined")
 
+    def test_total_minus_product_other_item(self):
+        # #221: 15 − 3·3 = 6
+        self.assertEqual(reading.solve(
+            "Mrs. Thompson bought 3 chickens for $3 each. She also bought a bag of "
+            "potatoes. Mrs. Thompson paid $15 in total. How much did the potatoes "
+            "cost?"), 6)
+
+    def test_total_minus_product_residual_count(self):
+        # (24 − 9·2) / 1.50 = 4
+        self.assertEqual(reading.solve(
+            "Chenny bought 9 plates at $2 each. She also bought spoons at $1.50 each. "
+            "How many spoons did Chenny buy if she paid a total of $24 for the plates "
+            "and spoon?"), 4)
+
+    def test_budget_residual_per_person(self):
+        # (100 − 8·9) / 2 = 14
+        self.assertEqual(reading.solve(
+            "Jaco wants to buy Christmas gifts for his 8 friends that are worth $9 "
+            "each. Also, he wants to buy gifts for his mother and father that are of "
+            "the same amount. He has a $100 budget to buy all gifts. How much is "
+            "Jaco's budget for each of his mother and father's gift?"), 14)
+
+    def test_change_derived_per_item(self):
+        # (20 − 11) / 3 = 3
+        self.assertEqual(reading.solve(
+            "James buys 3 packs of candy. He pays with a $20 bill and gets $11 change. "
+            "How much did each pack of candy cost?"), 3)
+
+    def test_needed_minus_has(self):
+        # 2·49 − 20 = 78
+        self.assertEqual(reading.solve(
+            "Cory has $20.00 and she wants to buy two packs of candies that cost "
+            "$49.00 each. How much money does Cory need so she will be able to buy "
+            "the pack of candies?"), 78)
+
+    def test_customer_orders_revenue(self):
+        # 7·5 + 8·4 = 67
+        self.assertEqual(reading.solve(
+            "At a coffee shop, 7 customers order coffee at $5 each and 8 customers "
+            "order tea at $4 each. How much money did the coffee shop make?"), 67)
+
+    def test_shared_count_over_each_prices(self):
+        # 6·(1.25 + 1.75) = 18
+        self.assertEqual(reading.solve(
+            "The card shop has two boxes of cards. The first box contains cards that "
+            "cost $1.25 each. The second box contains cards that cost $1.75 each. A "
+            "boy then comes in and buys 6 cards from each box. What was the total "
+            "cost, in dollars, of the cards he bought?"), 18)
+
     def test_later_unanchored_fraction_declines(self):
         # #220 (TEST-checkpoint-forced): an UNANCHORED fraction after a prior event has a
         # genuinely ambiguous base — same-base ("¼ of his marbles" = of the ORIGINAL) vs

@@ -10335,6 +10335,97 @@ def _pair_sum_relational_system(premises: list, question: str):
     return _gated_pos_int(_compute(f"{_num(result)}"))
 
 
+_TMP_NUMW = r"\d+(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve"
+
+
+def _total_minus_product_system(premises: list, question: str):
+    """TOTAL-MINUS-PRODUCT family (#221) — a stated total/budget/bill against Σ(count×each-price),
+    seven asks: the OTHER item's cost ("3 chickens at $3 each; paid $15; the potatoes?" → 6);
+    the RESIDUAL COUNT ((24 − 9·2)/1.50 → 4 spoons); the PER-PERSON residual budget ((100 −
+    8·9)/2 → 14); the CHANGE-derived per-item ((20 − 11)/3 → 3); NEEDED − HAS (2·49 − 20 → 78);
+    plain REVENUE over customer orders (7·5 + 8·4 → 67); and a SHARED COUNT over each-prices
+    ("buys 6 cards from each box" × (1.25 + 1.75) → 18). TIGHTLY gated per ask: the branch's own
+    values and nothing else; positive (integer where a count). None otherwise."""
+    ql = question.lower()
+    full = " . ".join(p.lower() for p in premises) + " . " + ql
+    used = set()
+
+    def _wn(tok):
+        if tok is None:
+            return None
+        t = tok.lower()
+        return float(t) if t.replace(".", "").isdigit() else \
+            (float(NUMBERS[t]) if t in NUMBERS else None)
+
+    prods = []
+    for m in re.finditer(rf"\b({_TMP_NUMW}) ([a-z]+?)s? (?:at|for|that (?:are worth|cost)) "
+                         rf"\$({_TMP_NUMW}) each", full):
+        n, p_ = _wn(m.group(1)), _wn(m.group(3))
+        if n is None or p_ is None:
+            return None
+        prods.append((n, p_, m.group(2)))
+        used.update(g for g in (m.group(1), m.group(3)) if g[0].isdigit())
+    for m in re.finditer(rf"\b({_TMP_NUMW}) customers? orders? (\w+) at \$({_TMP_NUMW}) each", full):
+        n, p_ = _wn(m.group(1)), _wn(m.group(3))
+        if n is None or p_ is None:
+            return None
+        prods.append((n, p_, m.group(2)))
+        used.update(g for g in (m.group(1), m.group(3)) if g[0].isdigit())
+    tm = re.search(rf"paid (?:a total of )?\$({_TMP_NUMW})(?: in total)?", full)
+    total = _wn(tm.group(1)) if tm else None
+    if total is not None and tm.group(1)[0].isdigit():
+        used.add(tm.group(1))
+    bm = re.search(rf"has a \$({_TMP_NUMW}) budget", full)
+    budget = _wn(bm.group(1)) if bm else None
+    if budget is not None:
+        used.add(bm.group(1))
+    bill_m = re.search(rf"pays with a \$({_TMP_NUMW}) bill", full)
+    chg_m = re.search(rf"gets \$({_TMP_NUMW}) change", full)
+    hm = re.search(rf"has \$({_TMP_NUMW})", full)
+
+    def digits_ok(*extra):
+        u = used | {e for e in extra if e}
+        return all(dd in u for dd in re.findall(r"\d+(?:\.\d+)?",
+                                                " ".join(premises) + " " + question))
+
+    prod_sum = sum(n * p_ for n, p_, _w in prods)
+    m = re.search(r"how much did the (\w+) cost", ql)
+    if m and total is not None and prods and digits_ok():
+        if any(m.group(1).rstrip("s") == w.rstrip("s") for _n, _p, w in prods):
+            return None                                  # asks a PRICED item, not the residual
+        return _gated_pos(_compute(f"{_num(total)} - {_num(prod_sum)}"))
+    m = re.search(r"how many (\w+) did \w+ buy", ql)
+    if m and total is not None and prods:
+        pm2 = re.search(rf"{m.group(1)}s? at \$({_TMP_NUMW}) each", full)
+        if pm2 and digits_ok(pm2.group(1)):
+            return _gated_pos_int(_compute(f"({_num(total)} - {_num(prod_sum)}) / {pm2.group(1)}"))
+        return None
+    if "budget for each" in ql and budget is not None and prods and digits_ok():
+        return _gated_pos(_compute(f"({_num(budget)} - {_num(prod_sum)}) / 2"))
+    m = re.search(r"how much did each (\w+)", ql)
+    if m and bill_m is not None and chg_m is not None:
+        nm2 = re.search(rf"buys ({_TMP_NUMW}) {m.group(1)}s?", full)
+        if nm2 and digits_ok(bill_m.group(1), chg_m.group(1), nm2.group(1)):
+            return _gated_pos(_compute(f"({bill_m.group(1)} - {chg_m.group(1)}) / {nm2.group(1)}"))
+        return None
+    if re.search(r"how much (?:more )?money does \w+ need", ql) and hm is not None:
+        pm3 = re.search(rf"({_TMP_NUMW}) packs? of \w+ that cost \$({_TMP_NUMW})(?:\.\d+)? each", full)
+        if pm3 and digits_ok(hm.group(1), pm3.group(1), pm3.group(2)):
+            n, p_ = _wn(pm3.group(1)), _wn(pm3.group(2))
+            return _gated_pos(_compute(f"{_num(n)} * {_num(p_)} - {hm.group(1)}"))
+        return None
+    if re.search(r"how much money did the \w+(?: \w+)? make", ql) and len(prods) >= 2 \
+            and total is None and budget is None and digits_ok():
+        return _gated_pos(_compute(" + ".join(f"{_num(n)} * {_num(p_)}" for n, p_, _w in prods)))
+    if re.search(r"what was the total cost", ql):
+        sc = re.search(rf"buys ({_TMP_NUMW}) \w+ from each box", full)
+        prices = re.findall(rf"cost \$({_TMP_NUMW}) each", full)
+        if sc and len(prices) >= 2 and not prods \
+                and digits_ok(sc.group(1), *prices):
+            return _gated_pos(_compute(f"{sc.group(1)} * ({' + '.join(prices)})"))
+    return None
+
+
 _SMC_K = {"twice": 2.0, "thrice": 3.0, "double": 2.0, "half": 0.5, "three times": 3.0,
           "four times": 4.0}
 _SMC_KPAT = "twice|thrice|double|half|three times|four times"
@@ -11716,6 +11807,8 @@ _EARLY_SYSTEMS = [
     ("backward_fraction_chain", _backward_fraction_chain_system),
     # SIGNED MIXED CHAIN: pool + literal/k×lit/fraction-of-current steps, left/eat asks.
     ("signed_mixed_chain", _signed_mixed_chain_system),
+    # TOTAL-MINUS-PRODUCT: stated total/budget/bill vs Σ(count×each-price), seven asks.
+    ("total_minus_product", _total_minus_product_system),
     # PRODUCT-SUM + CHANGE: "5 at $6, 10 at $14; paid $200; change?" → 30.
     ("product_sum_change", _product_sum_change_system),
     # TARGET PURCHASE GAP: "buy 8 books, $5 each, has $13; need to save?" → 27.
