@@ -12248,13 +12248,16 @@ def _vocab_singles_u_system(premises: list, question: str):
     if m and m2 and m3 and "how much weight" in ql:
         if dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret(f(m.group(1)) * (1 - f(m2.group(1)) / 100) * (1 - f(m3.group(1)) / 100))
-    # 548 g828 watermelons: weight*price*count
-    m = re.search(rf"weighs ({N}) pounds", full)
-    m2 = re.search(rf"\$({N}) a pound", full)
-    m3 = re.search(rf"({N}) watermelons", full)
-    if m and m2 and m3 and "how much money would he make" in ql:
-        if dok({m.group(1), m2.group(1), m3.group(1)}):
-            return _rs_ret(f(m.group(1)) * f(m2.group(1)) * f(m3.group(1)))
+    # 548 g828 watermelons: weight*price*count — the ITEM noun is incidental (anything sold by the pound),
+    # so bind it categorically ("a WATERMELON weighs 23 pounds" → sell 18 of them) and reuse it by lemma.
+    m = re.search(rf"a {_W} weighs ({N}) pounds", full)
+    if m and _cat(m.group(1), "noun"):
+        nn = _number_re(m.group(1))
+        m2 = re.search(rf"\$({N}) a pound", full)
+        m3 = re.search(rf"selling ({N}) {nn}", full)
+        if m2 and m3 and "how much money would he make" in ql:
+            if dok({m.group(2), m2.group(1), m3.group(1)}):
+                return _rs_ret(f(m.group(2)) * f(m2.group(1)) * f(m3.group(1)))
     # 549 g80 panels: 6*2*4 + 8*4
     m = re.search(rf"({N}) glass panels each", full)
     m2 = re.search(rf"({N}) double windows", full)
