@@ -20594,14 +20594,23 @@ def _enum_sum_compare_system(premises: list, question: str):
 
 
 def _rate_hours_days_system(premises: list, question: str):
-    """RATE × HOURS × DAYS (#223) — "jogs 5 miles per hour, 2 hours every morning; how many
-    miles for five days?" → 5·2·5 = 50. Every digit accounted; positive."""
+    """RATE × DURATION × DAYS (#223, generalized) — "<moves> N <dist> per <t1>, M <t2> every <daypart>;
+    how many <dist2> for K days?" → rate·(duration converted to the rate's time unit)·days, the result
+    converted to the asked distance unit. "jogs 5 miles per hour, 2 hours every morning; how many miles
+    for five days?" → 5·2·5 = 50 miles. ANY distance unit (miles/km/m/ft/yd/…) and ANY time units that
+    have a known `CONVERSIONS` factor (a duration in minutes against a per-hour rate converts; unknown
+    unit pairs DECLINE rather than guess). Verb-agnostic (the motion verb is incidental — never matched).
+    Every digit accounted (the tight structure + full digit-accounting keep multi-rate/progressive
+    problems of the same surface shape declining); positive."""
     ql = question.lower()
     full = " . ".join(p.lower() for p in premises) + " . " + ql
-    rm = re.search(rf"({_GP_NUMW}) miles? (?:per|an) hour", full)
-    hm = re.search(rf"for ({_GP_NUMW}) hours? every (?:morning|day)", full)
-    dm = re.search(rf"for ({_GP_NUMW}) days", ql)
-    if rm is None or hm is None or dm is None or "how many miles" not in ql:
+    _D = r"miles?|kilometers?|km|meters?|centimeters?|cm|millimeters?|mm|feet|foot|yards?|inch(?:es)?"
+    _T = r"seconds?|minutes?|mins?|hours?|hrs?|days?|weeks?"
+    rm = re.search(rf"({_GP_NUMW}) ({_D}) (?:per|an|a) ({_T})", full)          # rate: N <dist> per <t>
+    hm = re.search(rf"for ({_GP_NUMW}) ({_T}) every (?:morning|day|evening|afternoon|night)", full)
+    dm = re.search(rf"for ({_GP_NUMW}) days", ql)                              # number of daily periods
+    am = re.search(rf"how many ({_D})", ql)                                    # the asked distance unit
+    if rm is None or hm is None or dm is None or am is None:
         return None
     used = {g for g in (rm.group(1), hm.group(1), dm.group(1)) if g.isdigit()}
     if any(dd not in used for dd in re.findall(r"\d+(?:\.\d+)?",
@@ -20612,10 +20621,15 @@ def _rate_hours_days_system(premises: list, question: str):
         t = tok.lower()
         return float(t) if t.isdigit() else float(NUMBERS.get(t, 0) or 0)
 
-    vals = [_wn(rm.group(1)), _wn(hm.group(1)), _wn(dm.group(1))]
-    if not all(vals):
+    rate, dur, days = _wn(rm.group(1)), _wn(hm.group(1)), _wn(dm.group(1))
+    if not all((rate, dur, days)):
         return None
-    return _gated_pos(_compute(f"{_num(vals[0])} * {_num(vals[1])} * {_num(vals[2])}"))
+    tconv = _conv(hm.group(2), rm.group(3))          # DURATION time unit → the RATE's time unit
+    dconv = _conv(rm.group(2), am.group(1))          # RATE distance unit → the ASKED distance unit
+    if tconv is None or dconv is None:               # units with no known conversion → decline, never guess
+        return None
+    return _gated_pos(_compute(
+        f"{_num(rate)} * ({_num(dur)} * {_num(tconv)}) * {_num(days)} * {_num(dconv)}"))
 
 
 def _calendar_age_system(premises: list, question: str):
