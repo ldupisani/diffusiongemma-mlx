@@ -5624,6 +5624,14 @@ def _split_clauses(sentence: str) -> list:
                                 for s in ("value", "multiplier")):
                 i = sentence.find(sep, i + 1)
                 continue
+            # NOUN ENUMERATION under "(the) number/amount of X and Y" — "the total number of pines and
+            # redwoods that are there" is ONE quantity phrase (Σ of two nouns), NOT two clauses. Splitting
+            # at "and" strands "redwoods …" and truncates the ask to "… of pines". Keep together when the
+            # left ends with "number/amount of <noun>" and the right begins with a noun.
+            if sep in (", and ", " and ") and re.search(r"\b(?:number|amount) of \w+$", left.lower()) \
+                    and _rtoks and "noun" in analyze(_rtoks[0]).units[0].features.get("senses", []):
+                i = sentence.find(sep, i + 1)
+                continue
             if left.lower().startswith(("for every", "for each")):
                 i = sentence.find(sep, i + 1)            # "For every X, <main>" is ONE per-occurrence
                 continue                                 # clause (the rate's per_unit + the main amount)
@@ -6043,6 +6051,14 @@ def _noun_std_entity(rp: Reading, after_idx: int):
         #                                                     right after it is the same immediate head the
         #                                                     no-scan-ahead rule intends (unlike a pronoun,
         #                                                     which stays a hard stop)
+    elif _key(tail[i].surface) in ("his", "her", "their", "its", "my", "your", "our") \
+            and i + 1 < len(tail) \
+            and ("noun" in tail[i + 1].features.get("senses", [])
+                 or "adjective" in tail[i + 1].features.get("senses", [])):
+        i += 1                                              # skip a POSSESSIVE determiner ("than HIS pants")
+        #                                                     ONLY when a noun/adjective follows — a possessed
+        #                                                     noun IS the standard; a bare object pronoun
+        #                                                     ("as many as HER") has no head and stays a stop
     if i >= len(tail):
         return None
     nxt = tail[i]
@@ -6061,12 +6077,26 @@ def _asked_noun_entity(qr: Reading):
                  and "quantifier" in u.features.get("senses", [])), None)
     if many is not None:
         coll = _follow(many, "collection")
-        return _noun_entity_key(coll) if coll is not None else None
+        if coll is not None:
+            return _noun_entity_key(coll)
+        # a bare "how much/many" with NO bound collection falls through to the money-category ask below
     for i, u in enumerate(qr.units):
         if _key(u.surface) in COUNT_NOUNS and i + 1 < len(qr.units) and _key(qr.units[i + 1].surface) == "of":
             nxt = qr.units[i + 2] if i + 2 < len(qr.units) else None
             if nxt is not None and "noun" in nxt.features.get("senses", []):
                 return _noun_entity_key(nxt)
+    # MONEY-CATEGORY ask: "How much was John's OUTFIT?" — a COPULA "how much" question ending in a category
+    # noun asks that category's total value (outfit = shirt + pants). Tightly gated to the copula form and
+    # NO action/holding verb (spend/pay/buy/cost/have/earn/…), so it never steals a "how much did he spend"
+    # total or a "how much money does he have" holding — only the "how much was <poss> <noun>" value ask.
+    qk = [_key(u.surface) for u in qr.units]
+    if "much" in qk and any(w in qk for w in ("was", "is", "were", "worth")) \
+            and not any(w in qk for w in ("spend", "spent", "pay", "paid", "buy", "bought", "cost",
+                                          "save", "saved", "have", "has", "had", "make", "made",
+                                          "earn", "earned", "left", "need", "needs", "receive", "get")):
+        nouns = [u for u in qr.units if "noun" in u.features.get("senses", [])]
+        if nouns:
+            return _noun_entity_key(nouns[-1])
     return None
 
 # --- ARITHMETIC SYSTEM-SOLVERS: relation extraction, then the solver families (see registry) ---
@@ -6558,36 +6588,105 @@ def _offset_sum_system(premises: list, question: str):
     return subj_v if asked == subj_e else std_v
 
 
+def _comparative_noun_pair(rp: "Reading"):
+    """The coordinate-NOUN (subject, standard) for a percent/fraction comparative with NO name pair —
+    "the number of REDWOODS is 20% more than the number of PINES", "John's SHIRT cost 60% more than his
+    PANTS" → ("redwood", "pine") / ("shirt", "pant"). The noun-fallback twin of the 2-name path, mirroring
+    what `_ratio_relation`/`_pure_offset_relation` already carry: SUBJECT = the head noun of the clause
+    (the first noun before the comparative, skipping a leading possessor / article / "the NUMBER/AMOUNT
+    of" wrapper — so "shirt", not the wrapper "number" nor the mis-nouned "cost"); STANDARD = the noun
+    after "than" via `_noun_std_entity`. None unless both resolve to DIFFERENT noun keys."""
+    comp = next((u for u in rp.units if "comparative" in u.features.get("senses", [])), None)
+    if comp is None:
+        return None
+    ci = rp.units.index(comp)
+    # TWO surface structures. TRANSITIVE ("a garden HAS 20% more ROSES than tulips"): the subject is the
+    # noun IMMEDIATELY after the comparative — same shape as `_pure_offset_relation`'s noun fallback.
+    after = rp.units[ci + 1] if ci + 1 < len(rp.units) else None
+    if after is not None and ("noun" in after.features.get("senses", [])
+                              or "adjective" in after.features.get("senses", [])):
+        subj_u = after
+    else:
+        # COPULA ("the number of REDWOODS is 20% more than pines", "John's SHIRT cost 60% more than pants").
+        # PREFER the head of a "the NUMBER/AMOUNT of X" phrase BEFORE the comparative — its X is the subject
+        # ("the number of REDWOODS is …"), robust to a leading locative/possessor prefix ("In a national
+        # PARK, the number of redwoods …" must not grab "park"/"national").
+        subj_u = None
+        heads = [j for j in range(ci - 1) if _key(rp.units[j].surface) in COUNT_NOUNS
+                 and _key(rp.units[j + 1].surface) == "of"]
+        if heads:
+            k = heads[-1] + 2
+            if k < ci and ("noun" in rp.units[k].features.get("senses", [])
+                           or "adjective" in rp.units[k].features.get("senses", [])):
+                subj_u = rp.units[k]
+        if subj_u is None:
+            # no "number of" wrapper: the first noun, skipping a leading possessor / article / pronoun
+            # ("John's SHIRT cost 60% more" → shirt, not the mis-nouned "cost").
+            i = 0
+            while i < ci:
+                u = rp.units[i]
+                senses = u.features.get("senses", [])
+                if any(s in senses for s in ("name", "possessive", "pronoun", "article")):
+                    i += 1
+                    continue
+                if "noun" in senses or "adjective" in senses:
+                    subj_u = u
+                    break
+                i += 1
+        if subj_u is None:
+            return None
+    std_u = _noun_std_entity(rp, rp.units.index(subj_u))
+    if std_u is None:
+        return None
+    subj_key, std_key = _noun_entity_key(subj_u), _noun_entity_key(std_u)
+    if subj_key == std_key:
+        return None
+    return subj_key, std_key
+
+
+def _scaled_comparative_relation(rp: "Reading", mag: float):
+    """Shared body for `_percent_relation`/`_fraction_relation`: given a comparative magnitude `mag`
+    (0.50 for "50%", 0.4 for "2/5"), resolve direction (more xor fewer/less → factor 1 ± mag) and the two
+    entities → (subject, factor, standard). Two paths: the two-NAME path (subject before the verb,
+    standard immediately after "than") and the coordinate-NOUN fallback (`_comparative_noun_pair`, for a
+    clause with no name pair — the noun-entity anchored/affine sum family consumes it). None otherwise."""
+    more = any(_key(u.surface) == "more" for u in rp.units)
+    less = any(_key(u.surface) in ("fewer", "less") for u in rp.units)
+    if more == less:                              # need EXACTLY one direction (xor)
+        return None
+    k = 1 + mag if more else 1 - mag
+    names = [u for u in rp.units if "name" in u.features.get("senses", [])]
+    verbs = [u for u in rp.units if "verb" in u.features.get("senses", [])]
+    if len(names) == 2 and verbs:
+        vpos = rp.units.index(verbs[0])
+        subj = next((u for u in names if rp.units.index(u) < vpos), None)   # subject precedes the verb;
+        if subj is None:                                                   # standard is the other name
+            return None
+        std = next(u for u in names if u is not subj)
+        si = rp.units.index(std)
+        if (_key(rp.units[si - 1].surface) if si > 0 else "") != "than":
+            return None                           # the standard must be the "than" comparand
+        return _entity(subj), k, _entity(std)
+    if len(names) != 2:                           # NOT-TWO-NAMES: coordinate-noun fallback
+        pair = _comparative_noun_pair(rp)
+        if pair is not None:
+            return pair[0], k, pair[1]
+    return None
+
+
 def _percent_relation(rp: "Reading"):
     """A single PERCENTAGE-comparative relation in a clause → (subject, factor, standard), where
     subject = factor × standard and factor = 1 ± (the percent). The sibling of `_ratio_relation` for the
     one shape it rejects (a comparative, reading.py:6090): "Beth sees 50% MORE ants than Abe" → Beth =
     1.5 × Abe; "…30% FEWER/LESS…" → 0.7 ×. The percent unit already carries the pre-divided fraction in
-    `features['value']` (0.50 for "50%"), so the factor is 1 ± value directly. TIGHTLY gated — exactly
-    two names, a percent unit, exactly ONE direction (more xor fewer/less), the subject BEFORE the verb,
-    and the standard immediately after "than". None otherwise, so it can only ADD coverage."""
-    names = [u for u in rp.units if "name" in u.features.get("senses", [])]
-    verbs = [u for u in rp.units if "verb" in u.features.get("senses", [])]
-    if len(names) != 2 or not verbs:
-        return None
+    `features['value']` (0.50 for "50%"), so the factor is 1 ± value directly. Handles both a two-NAME
+    pair and a coordinate-NOUN pair ("redwoods is 20% more than pines") via `_scaled_comparative_relation`
+    — exactly ONE direction (more xor fewer/less), the standard after "than". None otherwise, so it can
+    only ADD coverage."""
     pct = next((u for u in rp.units if "percent" in u.features.get("senses", [])), None)
     if pct is None or "value" not in pct.features:
         return None
-    more = any(_key(u.surface) == "more" for u in rp.units)
-    less = any(_key(u.surface) in ("fewer", "less") for u in rp.units)
-    if more == less:                              # need EXACTLY one direction (xor)
-        return None
-    k = 1 + pct.features["value"] if more else 1 - pct.features["value"]
-    vpos = rp.units.index(verbs[0])
-    subj = next((u for u in names if rp.units.index(u) < vpos), None)   # subject precedes the verb;
-    if subj is None:                                                   # the standard is the other name
-        return None
-    std = next(u for u in names if u is not subj)
-    si = rp.units.index(std)
-    prev = _key(rp.units[si - 1].surface) if si > 0 else ""
-    if prev != "than":                            # the standard must be the "than" comparand
-        return None
-    return _entity(subj), k, _entity(std)
+    return _scaled_comparative_relation(rp, pct.features["value"])
 
 
 def _fraction_relation(rp: "Reading"):
@@ -6597,33 +6696,24 @@ def _fraction_relation(rp: "Reading"):
     → Aitana = 1.4 × Jayda. Deliberately fires ONLY on a fraction, never a bare integer: "2 times more"
     is the ambiguous ×N-vs-×(N+1) idiom the offset/ratio machinery owns, but a fraction "more" is
     unambiguously 1±F (you never say "2/5 more" to mean "0.4× as much"). Any "times" operator token
-    between the fraction and "more" is ignored. TIGHTLY gated exactly like `_percent_relation` — exactly
-    two names, one direction (more xor fewer/less), subject BEFORE the verb, standard immediately after
-    "than". None otherwise, so it can only ADD coverage."""
-    names = [u for u in rp.units if "name" in u.features.get("senses", [])]
-    verbs = [u for u in rp.units if "verb" in u.features.get("senses", [])]
-    if len(names) != 2 or not verbs:
-        return None
+    between the fraction and "more" is ignored. Two-NAME or coordinate-NOUN pair, via
+    `_scaled_comparative_relation`. None otherwise, so it can only ADD coverage."""
     frac = next((u for u in rp.units if _fraction_parts(u.surface) is not None), None)
     if frac is None:
         return None
+    # the fraction must SCALE the comparative directly — "2/5 [times] more" — not be part of a QUANTITY
+    # ("half A DOZEN more" = +6, a pure OFFSET the offset machinery owns, NOT ×1.5). Require the comparative
+    # to follow the fraction with only an optional "times" between them (a real dev-train confident-wrong:
+    # "half a dozen more apple bottles" → 60 vs gold 54 when this guard was missing).
+    fi = rp.units.index(frac)
+    comp = next((u for u in rp.units if "comparative" in u.features.get("senses", [])), None)
+    if comp is None:
+        return None
+    ci = rp.units.index(comp)
+    if ci <= fi or any(_key(u.surface) != "times" for u in rp.units[fi + 1:ci]):
+        return None
     num, den = _fraction_parts(frac.surface)
-    f = num / den
-    more = any(_key(u.surface) == "more" for u in rp.units)
-    less = any(_key(u.surface) in ("fewer", "less") for u in rp.units)
-    if more == less:                              # need EXACTLY one direction (xor)
-        return None
-    k = 1 + f if more else 1 - f
-    vpos = rp.units.index(verbs[0])
-    subj = next((u for u in names if rp.units.index(u) < vpos), None)   # subject precedes the verb;
-    if subj is None:                                                   # the standard is the other name
-        return None
-    std = next(u for u in names if u is not subj)
-    si = rp.units.index(std)
-    prev = _key(rp.units[si - 1].surface) if si > 0 else ""
-    if prev != "than":                            # the standard must be the "than" comparand
-        return None
-    return _entity(subj), k, _entity(std)
+    return _scaled_comparative_relation(rp, num / den)
 
 
 def _affine_relation(rp: "Reading"):
@@ -6891,6 +6981,21 @@ def _noun_anchored_sum_system(premises: list, question: str):
         return None
     pivot = _compute(f"({_num(anchor_v)} - ({_num(b_anc)})) / {_num(a_anc)}")
     qr = analyze(question)
+    # ENUMERATION ask: "the total number of X and Y" names 2+ system entities joined by "and" → sum exactly
+    # those (a subset sum; for "pines and redwoods" that IS the full Σ). `_asked_noun_entity` returns only
+    # the FIRST noun (an entity → the decline below), so parse the enumeration directly off the "number of"
+    # head. Every enumerated noun must be a known entity, so it can only sum a genuine subset.
+    for _i, _u in enumerate(qr.units):
+        if _key(_u.surface) in COUNT_NOUNS and _i + 1 < len(qr.units) \
+                and _key(qr.units[_i + 1].surface) == "of":
+            _tail = qr.units[_i + 2:]
+            if any(_key(_t.surface) == "and" for _t in _tail):
+                _ents = [_noun_entity_key(_t) for _t in _tail if "noun" in _t.features.get("senses", [])]
+                _ents = [e for e in dict.fromkeys(_ents) if e in coeff]
+                if len(_ents) >= 2:
+                    return _compute(" + ".join(
+                        f"({_num(coeff[e][0])} * {_num(pivot)} + ({_num(coeff[e][1])}))" for e in _ents))
+            break
     asked = _asked_noun_entity(qr)
     if asked is None or asked in coeff:
         return None                                        # a specific entity ask — not this SUM shape
@@ -7041,15 +7146,28 @@ def _noun_anchor_fact(rp: "Reading"):
             or any(_fraction_parts(u.surface) is not None for u in rp.units) \
             or any(_key(u.surface) in ("every", "each", "per") for u in rp.units):
         return None
-    if not any("verb" in u.features.get("senses", []) for u in rp.units):
-        return None
+    _PRICE_WORDS = ("cost", "costs", "sells", "sold", "priced")
+    if not any("verb" in u.features.get("senses", []) for u in rp.units) \
+            and not any(_key(u.surface) in _PRICE_WORDS for u in rp.units):
+        return None                                   # no verb AND no price word → not a stated-fact clause
     vals = [u for u in rp.units if "value" in u.features.get("senses", []) and u.features.get("value") is not None]
     if len(vals) != 1:
         return None
     qn = _follow(vals[0], "quantifies")
-    if qn is None or "noun" not in qn.features.get("senses", []):
-        return None
-    return _noun_entity_key(qn), vals[0].features["value"]
+    if qn is not None and "noun" in qn.features.get("senses", []):
+        return _noun_entity_key(qn), vals[0].features["value"]
+    # MONEY PRICE anchor: "his PANTS cost $50" states pants' PRICE = 50 (a value, not a count). The money
+    # value quantifies no noun, so anchor the clause's SUBJECT noun (the last noun before the price word) to
+    # it. "cost" is frequently mis-sensed as a NOUN, so key the price word by SURFACE, not the verb sense.
+    # The anchored-sum arithmetic is linear either way (a price sums like a count), so shirt = 1.6·pants +
+    # pants = the outfit total. Confined to `_noun_anchored_sum_system` (this fact's only caller).
+    if vals[0].features.get("measure") == MONEY:
+        pi = next((i for i, u in enumerate(rp.units) if _key(u.surface) in _PRICE_WORDS), None)
+        if pi is not None:
+            subj = next((u for u in reversed(rp.units[:pi]) if "noun" in u.features.get("senses", [])), None)
+            if subj is not None:
+                return _noun_entity_key(subj), vals[0].features["value"]
+    return None
 
 
 _NEEDS_INVERSE = re.compile(
@@ -13973,13 +14091,10 @@ def _vocab_singles_p_system(premises: list, question: str):
     if m and m2 and "third anthill" in ql:
         if dok({m.group(1), m2.group(1)}):
             return _rs_ret(f(m.group(1)) * (1 - f(m2.group(1)) / 100) ** 2)
-    # 259 g1320 redwoods: pines + pines*(1+pct/100)
-    m = re.search(rf"({N})% more than the number of pines", full)
-    m2 = re.search(rf"({N}) pines", full)
-    if m and m2 and "total number of pines" in full and "redwoods" in full:
-        if dok({m.group(1), m2.group(1)}):
-            p = f(m2.group(1))
-            return _rs_ret(p + p * (1 + f(m.group(1)) / 100))
+    # 259 g1320 redwoods: SUBSUMED by the generic `_noun_anchored_sum_system` once the percent extractor
+    # got its coordinate-NOUN fallback (redwoods = pines·(1+20%) for any noun pair), a "number of X and Y"
+    # clause-split guard kept the enumeration ask intact, and the solver learned to SUM an enumerated ask.
+    # Hardcoded branch DELETED.
     # 262 g480 refuel: 2*cost*(1+pct/100)
     m = re.search(rf"cost \$({N}) to refill", full)
     m2 = re.search(rf"up by ({N})%", full)
@@ -14134,13 +14249,9 @@ def _vocab_singles_o_system(premises: list, question: str):
         return all(dd in used for dd in re.findall(r"\d+(?:,\d{3})*(?:\.\d+)?",
                                                    " ".join(premises) + " " + question))
 
-    # 125 g130 outfit: shirt = pants*(1+pct/100); outfit = shirt+pants
-    m = re.search(rf"shirt cost ({N})% more than his pants", full)
-    m2 = re.search(rf"pants cost \$({N})", full)
-    if m and m2 and "outfit" in ql:
-        if dok({m.group(1), m2.group(1)}):
-            p = f(m2.group(1))
-            return _rs_ret(p * (1 + f(m.group(1)) / 100) + p)
+    # 125 g130 outfit: SUBSUMED by the generic `_noun_anchored_sum_system` once the percent extractor got
+    # its coordinate-NOUN fallback (shirt = pants·(1+60%) for any noun pair), plus a MONEY PRICE anchor
+    # ("pants cost $50") and a "how much was X's <category>" money-category ask. Hardcoded branch DELETED.
     # 126 g21 red pencils: packs*1 + extrapacks*2
     m = re.search(rf"buys ({N}) packs of colored pencils", full)
     m2 = re.search(rf"({N}) of the packs have two extra red", full)
