@@ -8217,6 +8217,23 @@ class TestAnimalCategorySum(unittest.TestCase):
         self.assertEqual(reading.solve(base.format("2/5")), 960)    # 400 + 400*1.4
         self.assertEqual(reading.solve(base.format("3/5")), 1040)   # 400 + 400*1.6
 
+    def test_conv_reads_unit_pair(self):
+        # #274: _conv looks up CONVERSIONS by canonicalised units (abbreviations/plurals ok)
+        self.assertEqual(reading._conv("feet", "inches"), 12)
+        self.assertEqual(reading._conv("meters", "cm"), 100)
+        self.assertEqual(reading._conv("hours", "minutes"), 60)
+        self.assertEqual(reading._conv("yard", "foot"), 3)
+        self.assertEqual(reading._conv("meter", "meter"), 1.0)
+        self.assertIsNone(reading._conv("cats", "dogs"))
+
+    def test_unit_conversion_reads_units_from_text(self):
+        # the blizzard branch hardcoded meters→cm (×100); it now reads the unit pair, so km→m works too
+        blizz = ("Bald Mountain received 1.5 {u1} of snow last week. During a blizzard, Billy Mountain "
+                 "received 3.5 {u1} of snow and Mount Pilot received 126 {u2} of snow. How many more "
+                 "{u2} of snow did Billy Mountain and Mount Pilot have then Bald Mountain?")
+        self.assertEqual(reading.solve(blizz.format(u1="meters", u2="centimeters")), 326)
+        self.assertEqual(reading.solve(blizz.format(u1="kilometers", u2="meters")), 2126)
+
     def test_n_times_coefficient_is_read(self):
         # the hula branch hardcoded 'three times' as 3; 'four times' now reads 4
         self.assertEqual(reading.solve(

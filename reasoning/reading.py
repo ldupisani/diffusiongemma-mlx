@@ -513,6 +513,29 @@ CONVERSIONS = {("minute", "hour"): 1 / 60, ("hour", "minute"): 60, ("second", "m
                ("gallon", "quart"): 4, ("quart", "gallon"): 1 / 4,
                ("gallon", "pint"): 8, ("pint", "gallon"): 1 / 8}
 
+# Measure abbreviations/aliases → canonical singular unit, so a branch can read the unit words from the
+# text and convert via CONVERSIONS instead of hardcoding the factor.
+_UNIT_ALIAS = {"min": "minute", "mins": "minute", "sec": "second", "secs": "second", "hr": "hour",
+               "hrs": "hour", "cm": "centimeter", "mm": "millimeter", "km": "kilometer", "ft": "foot",
+               "yd": "yard", "in": "inch", "kg": "kilogram", "gm": "gram", "oz": "ounce",
+               "lb": "pound", "lbs": "pound", "ml": "milliliter"}
+
+
+def _unit_canon(unit: str) -> str:
+    """Canonical singular unit name for a measure word or abbreviation ('mins'→'minute', 'ft'→'foot',
+    'meters'→'meter')."""
+    k = _UNIT_ALIAS.get(_key(unit), _key(unit))
+    return _singular_of(k) or k
+
+
+def _conv(frm: str, to: str):
+    """The factor to convert a `frm`-unit quantity into `to` units (from CONVERSIONS) — 1.0 for the same
+    unit, None if not a known conversion. So `_conv('feet','inches')` = 12, `_conv('meters','cm')` = 100."""
+    a, b = _unit_canon(frm), _unit_canon(to)
+    if a == b:
+        return 1.0
+    return CONVERSIONS.get((a, b))
+
 # Coreference: a pronoun's grammatical gender, and a small name→gender lexicon used to pick a
 # compatible antecedent. Both grown deliberately (no guessing from spelling).
 PRONOUN_GENDER = {"he": "male", "she": "female", "it": "neuter", "they": "plural",
@@ -11957,12 +11980,13 @@ def _vocab_singles_u_system(premises: list, question: str):
             return _rs_ret(5 * each / f(m.group(1)) + 5 * each / f(m2.group(1)))
     # 533 g13 seals: (total - eleph)/9  ("eight times" word; "2 hours . 10 minutes" severed)
     m2 = re.search(rf"({N}) minutes looking at the elephants", full)
-    mh = re.search(rf"spent ({N}) hours", full)
-    mm = re.search(rf"({N}) minutes at the zoo", full)
-    if m2 and mh and mm and "eight times as long looking at the penguins" in full \
+    mh = re.search(rf"spent ({N}) {_W}", full)
+    mm = re.search(rf"({N}) {_W} at the zoo", full)
+    conv = _conv(mh.group(2), mm.group(2)) if (mh and mm) else None
+    if m2 and mh and mm and conv is not None and "eight times as long looking at the penguins" in full \
             and "how many minutes did he spent looking at the seals" in ql:
         if dok({m2.group(1), mh.group(1), mm.group(1)}):
-            total = f(mh.group(1)) * 60 + f(mm.group(1))
+            total = f(mh.group(1)) * conv + f(mm.group(1))
             return _rs_ret((total - f(m2.group(1))) / (8 + 1))
     # 535 g130 competitions: c1 + c1*5/8 + (c1 + c1*5/8)
     m = re.search(rf"won ({N}) games", full)
@@ -12115,12 +12139,13 @@ def _vocab_singles_u_system(premises: list, question: str):
             fri = f(m.group(1))
             return _rs_ret(fri + f(m2.group(1)) + _scale(mk.group(1)) * fri - f(m3.group(1)))
     # 554 g20 wicks: 2*(spool_in / (6+12))  [splitter severs 'and']
-    m = re.search(rf"({N})-foot spool", full)
-    mi = re.findall(rf"({N})-inch", full)
-    if m and len(mi) >= 2 and "total number of wicks" in ql:
-        if dok({m.group(1), mi[0], mi[1]}):
-            inches = f(m.group(1)) * 12
-            return _rs_ret(2 * (inches / (f(mi[0]) + f(mi[1]))))
+    m = re.search(rf"({N})-{_W} spool", full)
+    pieces = [(v, u) for v, u in re.findall(rf"({N})-{_W}", full) if not m or u != m.group(2)] if m else []
+    conv = _conv(m.group(2), pieces[0][1]) if (m and pieces) else None
+    if m and conv and len(pieces) >= 2 and "total number of wicks" in ql:
+        if dok({m.group(1), pieces[0][0], pieces[1][0]}):
+            spool_len = f(m.group(1)) * conv                     # spool length in the wick unit
+            return _rs_ret(2 * (spool_len / (f(pieces[0][0]) + f(pieces[1][0]))))
     # 555 g27 kilowatts: (kw/8)*perday*days  ("eight hours" word)
     m = re.search(rf"consume ({N}) kilowatts", full)
     m2 = re.search(rf"({N}) hours a day for ({N}) days", full)
@@ -12631,12 +12656,13 @@ def _vocab_singles_s_system(premises: list, question: str):
         if dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret(f(m.group(1)) * f(m2.group(1)) / f(m3.group(1)))
     # 442 g326 blizzard: (billy*100 + pilot) - bald*100
-    m = re.search(rf"({N}) meters of snow last week", full)
-    m2 = re.search(rf"billy mountain received ({N}) meters", full)
-    m3 = re.search(rf"({N}) centimeters of snow", full)
-    if m and m2 and m3 and "how many more centimeters" in ql:
+    m = re.search(rf"({N}) {_W} of snow last week", full)
+    m2 = re.search(rf"billy mountain received ({N}) {_W}", full)
+    m3 = re.search(rf"mount pilot received ({N}) {_W}", full)
+    conv = _conv(m.group(2), m3.group(2)) if (m and m3) else None   # source unit -> target (pilot) unit
+    if m and m2 and m3 and conv is not None and "how many more" in ql:
         if dok({m.group(1), m2.group(1), m3.group(1)}):
-            return _rs_ret((f(m2.group(1)) * 100 + f(m3.group(1))) - f(m.group(1)) * 100)
+            return _rs_ret((f(m2.group(1)) * conv + f(m3.group(1))) - f(m.group(1)) * conv)
     # 443 g10 broke: (before-after)*mins
     m = re.search(rf"({N}) words per minute on his phone", full)
     m2 = re.search(rf"only type ({N}) words per minute", full)
