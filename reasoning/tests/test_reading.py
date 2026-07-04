@@ -8165,6 +8165,16 @@ class TestAnimalCategorySum(unittest.TestCase):
             "as many pigs as Safari National park, and 30 more goats than Safari National park. How "
             "many animals in total does Savanna National park have?"), 385)
 
+    def test_multiplier_coefficient_is_read_not_hardcoded(self):
+        # #266: the rockets branch reads its multiplier from the text (MULTIPLIERS) — "twice as high"
+        # was hardcoded 2; "triple as high" now works too
+        self.assertEqual(reading.solve(
+            "The first rocket can travel 500 ft in the air. The second rocket can travel twice as "
+            "high as the first rocket. What is the combined height of the two rockets?"), 1500)
+        self.assertEqual(reading.solve(
+            "The first rocket can travel 500 ft in the air. The second rocket can travel triple as "
+            "high as the first rocket. What is the combined height of the two rockets?"), 2000)
+
 
 if __name__ == "__main__":
     unittest.main()

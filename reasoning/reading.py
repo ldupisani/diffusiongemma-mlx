@@ -451,6 +451,9 @@ OPERATORS = {"plus": "+", "minus": "-", "times": "*", "divided": "/"}
 # referent quantity ("twice as many"). `half` is the ×0.5 case ("half as many").
 MULTIPLIERS = {"once": 1, "twice": 2, "thrice": 3, "half": 0.5, "double": 2, "triple": 3,
                "quadruple": 4}
+# A regex alternation of the multiplier words, so a branch can READ its coefficient from the text
+# (`MULTIPLIERS[m.group(1)]`) instead of hardcoding it — the multiplier-category analogue of _cat_re.
+_MULT_RE = "|".join(re.escape(w) for w in MULTIPLIERS)
 
 # Fraction words as relational multipliers (num, denom) for "<frac> as many/far" — computed EXACTLY
 # (divide last) to dodge float drift. The partitive "<frac> OF X" is a DIFFERENT op (_partitive_quantity),
@@ -13332,10 +13335,11 @@ def _vocab_singles_q_system(premises: list, question: str):
     # 355 g60 lift: cars*p + trucks*2p
     m = re.search(rf"({N}) people to lift a car", full)
     m2 = re.search(rf"lift ({N}) cars and ({N}) trucks", full)
-    if m and m2 and "twice as many people to lift a truck" in full and "how many people are needed" in ql:
+    mk = re.search(rf"({_MULT_RE}) as many people to lift a truck", full)
+    if m and m2 and mk and "how many people are needed" in ql:
         if dok({m.group(1), m2.group(1), m2.group(2)}):
             p = f(m.group(1))
-            return _rs_ret(f(m2.group(1)) * p + f(m2.group(2)) * 2 * p)
+            return _rs_ret(f(m2.group(1)) * p + f(m2.group(2)) * MULTIPLIERS[mk.group(1)] * p)
     # 356 g325 drinking: large*big + small*(big/2)  [splitter severs 'and']
     m = re.search(rf"({N}) large jelly beans", full)
     m2 = re.search(rf"({N}) large drinking glasses", full)
@@ -13999,10 +14003,11 @@ def _vocab_singles_o_system(premises: list, question: str):
     # 163 g38 subway: sub + 2*sub + bike
     m = re.search(rf"subway for ({N}) hours", full)
     m2 = re.search(rf"bikes the remaining distance for ({N}) hours", full)
-    if m and m2 and "twice as much time as the subway" in full and "total time" in ql:
+    mk = re.search(rf"({_MULT_RE}) as much time as the subway", full)
+    if m and m2 and mk and "total time" in ql:
         if dok({m.group(1), m2.group(1)}):
             s = f(m.group(1))
-            return _rs_ret(s + 2 * s + f(m2.group(1)))
+            return _rs_ret(s + MULTIPLIERS[mk.group(1)] * s + f(m2.group(1)))
     # 164 g132 marbles: ben + (ben+20)
     m = re.search(rf"ben has ({N}) {_W}", full)
     if m and _cat(m.group(2), "plural"):
@@ -14273,16 +14278,17 @@ def _vocab_singles_n_system(premises: list, question: str):
     # (69 Rebecca-gemstones dropped — 'magnets' excluded, see the wave-37 note.)
     # 70 g206 North Pond ducks: 2*lake + 6
     m = re.search(rf"lake michigan has ({N}) ducks", full)
-    if m and "six more than twice as many ducks" in full and "north pond" in ql:
+    mk = re.search(rf"six more than ({_MULT_RE}) as many ducks", full)
+    if m and mk and "north pond" in ql:
         if dok({m.group(1)}):
-            return _rs_ret(2 * f(m.group(1)) + 6)
+            return _rs_ret(MULTIPLIERS[mk.group(1)] * f(m.group(1)) + 6)
     # 71 g12000 skiing total: 2*scav + scav
     m = re.search(rf"({N}) students who wish to go on the scavenger", full)
-    if m and "twice as many as those who wish to go on a scavenger" in full \
-            and "how many students are there altogether" in ql:
+    mk = re.search(rf"({_MULT_RE}) as many as those who wish to go on a scavenger", full)
+    if m and mk and "how many students are there altogether" in ql:
         if dok({m.group(1)}):
             s = f(m.group(1))
-            return _rs_ret(2 * s + s)
+            return _rs_ret(MULTIPLIERS[mk.group(1)] * s + s)
     # 73 g15 pufferfish: total/6
     m = re.search(rf"({N}) fish total", full)
     if m and "five times as many swordfish as pufferfish" in full and "how many pufferfish" in ql:
@@ -14316,10 +14322,11 @@ def _vocab_singles_n_system(premises: list, question: str):
             return _rs_ret((f(m.group(1)) - 3 - 2) / 1.5)
     # 80 g63 zoo animals: p + 2p
     m = re.search(rf"({N}) penguins", full)
-    if m and "twice as many polar bears" in full and "how many total animals" in ql:
+    mk = re.search(rf"({_MULT_RE}) as many polar bears", full)
+    if m and mk and "how many total animals" in ql:
         if dok({m.group(1)}):
             p = f(m.group(1))
-            return _rs_ret(p + 2 * p)
+            return _rs_ret(p + MULTIPLIERS[mk.group(1)] * p)
     # 81 g60 bicycle spokes: front + 2*front
     m = re.search(rf"({N}) {_W} on the front wheel", full)
     if m and _cat(m.group(2), "plural") \
@@ -14350,10 +14357,11 @@ def _vocab_singles_n_system(premises: list, question: str):
             return _rs_ret(d + d / 2 + 3 * (d + d / 2))
     # 89 g1500 rockets combined: h + 2h
     m = re.search(rf"travel ({N}) ft in the air", full)
-    if m and "twice as high" in full and "combined height" in ql:
+    mk = re.search(rf"({_MULT_RE}) as high", full)
+    if m and mk and "combined height" in ql:
         if dok({m.group(1)}):
             h = f(m.group(1))
-            return _rs_ret(h + 2 * h)
+            return _rs_ret(h + MULTIPLIERS[mk.group(1)] * h)
     # 90 g72 volunteer hours/year: 2 * hrs * 12
     m = re.search(rf"twice a month for ({N}) hours", full)
     if m and "how many hours does he volunteer per year" in ql:
@@ -14450,9 +14458,10 @@ def _vocab_singles_n_system(premises: list, question: str):
             return _rs_ret(f(m.group(1)) / 7 * 6)
     # 109 g32 Cape May sharks: 8 + 2*daytona
     m = re.search(rf"daytona beach has ({N}) sharks", full)
-    if m and "8 more than twice as many sharks" in full and "sharks are there in cape may" in ql:
+    mk = re.search(rf"8 more than ({_MULT_RE}) as many sharks", full)
+    if m and mk and "sharks are there in cape may" in ql:
         if dok({m.group(1), "8"}):
-            return _rs_ret(8 + 2 * f(m.group(1)))
+            return _rs_ret(8 + MULTIPLIERS[mk.group(1)] * f(m.group(1)))
     # 110 g20 Carla laundry/hour: pieces / 4
     m = re.search(rf"dry-clean ({N}) pieces of laundry by noon", full)
     if m and "starts work at 8 am" in full and "per hour" in ql:
