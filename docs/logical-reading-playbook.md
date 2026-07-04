@@ -87,6 +87,44 @@ fragment forces a decline — naive+accounted composes to a safe decline, never 
 comma-awareness (`_RS_N`) in old solvers is a COVERAGE lever, not a precision bug; a sweep must
 change the capture AND the accounting probe together or they disagree and every comma case declines.
 
+### Categorical token matching — generalize the incidental noun (2026-07-04, #258)
+
+The `_vocab_singles_*` branches historically hard-code the *incidental* noun the mined problem
+happened to use (`re.search(rf"total of ({N}) campers", full)`). `campers` is arbitrary — the
+identical logic fits any plural noun, and a hard-coded branch **never fires on an unseen TEST problem
+of the same shape with a different noun**. The generalization move: match a word's **category** (its
+sense/type) instead of its literal string.
+
+The infra (near `_RS_N` in `reading.py`): a `_cat(word, category) -> bool` dispatcher over a
+`CATEGORY_PREDICATES` registry, plus a `_W` word-capture constant and a `catsearch(template, text)`
+sugar (`#N#` = number, `#cat#`/`#cat:name#` = a category-checked word; a repeated `#cat:name#` binds
+the SAME surface). Categories are **derived from data that already exists** — `noun`/`plural` from
+LEXICON senses + `PLURALS` (via `_senses_of`/`_singular_of`), `verb`/`operator`/`multiplier`/`measure`/
+`fraction` from the existing sense tags / `UNIT_NOUNS` / multiplier maps — so the whole sense/type
+space is covered, not just nouns. **Category data is NEVER merged into LEXICON values or
+`features["senses"]`** (several exact `==["noun"]`/`==["title"]` checks depend on that shape); the
+separate, initially-empty `WORD_CATEGORIES` map is the hook for future *semantic* categories
+(animal/food/…) the lexical senses can't express.
+
+The migration idiom (bind the noun ONCE, keep every other gate):
+```python
+m = re.search(rf"total of ({N}) {_W}", full)          # capture the noun generically
+if m and _cat(m.group(2), "plural"):                  # verify its category
+    nn = re.escape(m.group(2))                         # reuse the SAME surface downstream
+    m2 = re.search(rf"there were ({N}) {nn}", full)
+    ... and re.search(rf"how many {nn} were there last week", ql)   # ask stays noun-consistent
+    ... and dok({...})                                 # digit-accounting UNCHANGED
+```
+Rules: (1) only the *noun* becomes categorical — keep the `dok` accounting, the question-shape
+substrings, and any structural context word; (2) **bind the noun once** and require consistency across
+probes and the ask (`re.escape` reinsertion); (3) generalizing LOOSENS the tight noun-gate, so it can
+now over-match a different problem → validate exactly as always (`reading_diff` 0 BROKE / 0 DECL→WRONG,
+`collisions` 0-disagree) and re-tighten if it mis-fires, same discipline as a poison-drop. A pure
+refactor posts **NET 0** on the dev diff (behavior-preserving) — the generalization value is on unseen
+nouns, proven by a swapped-noun unit test (`campers`→`necklaces` still solves), not by the dev count.
+**Make categorical matching the default for new singles-batches** where the noun is incidental. GUARD 1
+still declines unknown words, so a truly-new noun needs a LEXICON entry — but no new *branch*.
+
 ### Process lessons — mining campaigns (2026-07-02)
 
 1. **CHECK FOUNDATIONAL TABLES FIRST.** Before any per-case mining, audit the foundational

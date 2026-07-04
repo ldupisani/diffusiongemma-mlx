@@ -10967,6 +10967,114 @@ def _rs_ret(v):
     return _gated_pos(_compute(f"{_num(v)}"))
 
 
+# ── Categorical token matching ──────────────────────────────────────────────────────────────────
+# The vocab_singles branches historically hard-code the INCIDENTAL noun a problem happened to use
+# ("total of N campers"); the identical logic fits any plural noun ("gorillas"/"necklaces"). These
+# helpers let a branch match a word's CATEGORY (its sense/type) instead of its literal string, so one
+# branch generalises across every word of that class — including on unseen TEST problems of the same
+# shape. Categories are DERIVED from data that already exists (LEXICON senses, PLURALS, UNIT_NOUNS,
+# the multiplier maps); they are NEVER merged into LEXICON values or features["senses"] (several exact
+# ==["noun"] / ==["title"] checks depend on that shape). WORD_CATEGORIES is a separate, initially-empty
+# hook for future curated SEMANTIC categories (animal/food/…), which the lexical senses can't express.
+WORD_CATEGORIES: dict = {}   # e.g. {"gorilla": {"animal", "primate"}}; seed only when a case needs it.
+
+
+def _senses_of(word: str) -> list:
+    """Sense tags for a surface: direct LEXICON lookup, then the singular fallback (so a plural
+    inherits its noun sense without being listed) — mirrors annotate_senses' resolution order."""
+    return LEXICON.get(_key(word)) or LEXICON.get(_singular_of(word) or "") or []
+
+
+def _is_plural_noun(word: str) -> bool:
+    """A KNOWN plural noun (never a guess — GUARD 1 already ensures the word is known): a registered
+    plural in PLURALS whose singular is a noun, or an -s surface directly tagged a noun."""
+    sing = _singular_of(word)
+    if sing is not None:
+        return "noun" in (LEXICON.get(sing) or [])
+    k = _key(word)
+    return k.endswith("s") and "noun" in (LEXICON.get(k) or [])
+
+
+# category name -> predicate(surface) -> bool. Adding a category = adding one predicate (or seeding
+# WORD_CATEGORIES). Most reuse existing lexical data, so verbs/operators/multipliers/measures/
+# fractions are supported out of the box alongside nouns.
+CATEGORY_PREDICATES = {
+    "noun": lambda w: "noun" in _senses_of(w),
+    "plural": _is_plural_noun,
+    "verb": lambda w: "verb" in _senses_of(w),
+    "adjective": lambda w: "adjective" in _senses_of(w),
+    "operator": lambda w: "operator" in _senses_of(w),
+    "multiplier": lambda w: _key(w) in MULTIPLIERS or "multiplier" in _senses_of(w),
+    "measure": lambda w: _key(w) in UNIT_NOUNS or (_singular_of(w) in UNIT_NOUNS),
+    "fraction": lambda w: _key(w) in FRACTION_MULTIPLIERS,
+}
+CATEGORY_PREDICATES["dimension"] = CATEGORY_PREDICATES["measure"]   # alias
+
+
+def _cat(word: str, category: str) -> bool:
+    """True if `word` belongs to `category` — first via the derived CATEGORY_PREDICATES registry
+    (senses/plurals/units/multipliers), then via the curated WORD_CATEGORIES semantic map."""
+    pred = CATEGORY_PREDICATES.get(category)
+    if pred is not None and pred(word):
+        return True
+    return category in WORD_CATEGORIES.get(_key(word), ())
+
+
+# A single lowercase word-token capture, for categorical probes over the period-joined `full`.
+_W = r"([a-z][a-z'’\-]*)"
+
+_CAT_TOKEN = re.compile(r"#(N|[a-z]+(?::[a-z0-9]+)?)#")
+_CAT_ALIASES = {"pl": "plural", "nn": "noun", "vb": "verb", "mult": "multiplier",
+                "dim": "dimension", "frac": "fraction", "op": "operator"}
+
+
+class _CatMatch:
+    """Result of catsearch: `.nums` = captured numbers (in order, strings), `.words` = captured
+    category words (in order), `.named` = {name: word} for `#cat:name#` bound tokens."""
+    __slots__ = ("nums", "words", "named")
+
+    def __init__(self, nums, words, named):
+        self.nums, self.words, self.named = nums, words, named
+
+
+def catsearch(template: str, text: str):
+    """Search `text` with a category template. `#N#` captures a number (_RS_N); `#cat#` or
+    `#cat:name#` captures ONE word that must satisfy category `cat` (aliases pl/nn/vb/mult/dim/frac/op);
+    a repeated `#cat:name#` must bind the SAME surface. Non-token text is matched verbatim (regex
+    fragments allowed). Returns the first occurrence whose category post-conditions all hold, else
+    None. This is the sugar; `_cat` + `_W` inline is the equivalent contract for hand-written probes."""
+    slots = []
+
+    def _sub(m):
+        tok = m.group(1)
+        if tok == "N":
+            slots.append(("N", None))
+            return f"({_RS_N})"
+        name = None
+        if ":" in tok:
+            tok, name = tok.split(":", 1)
+        slots.append((_CAT_ALIASES.get(tok, tok), name))
+        return _W
+
+    pattern = _CAT_TOKEN.sub(_sub, template)
+    for m in re.finditer(pattern, text):
+        nums, words, named, ok = [], [], {}, True
+        for (kind, name), val in zip(slots, m.groups()):
+            if kind == "N":
+                nums.append(val)
+                continue
+            if not _cat(val, kind):
+                ok = False
+                break
+            if name is not None and named.setdefault(name, val) != val:
+                ok = False
+                break
+            words.append(val)
+        if ok:
+            return _CatMatch(nums, words, named)
+    return None
+
+
 def _rate_singles_system(premises: list, question: str):
     """RATE/PRODUCT SINGLES (#226) — sixteen tightly-gated branches over the unit-rate bucket
     (pool+rate×days+literal; enumerated hours × wage; classes×per-class; two gold products;
@@ -11517,12 +11625,14 @@ def _vocab_singles_u_system(premises: list, question: str):
     if m and m2 and m3 and "two times" in full and "mileage for a typical week" in ql:
         if dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret(f(m.group(1)) * 2 * 2 * f(m3.group(1)) + f(m2.group(1)) * 2)
-    # 525 g177 neither: total - red - green
-    m = re.search(rf"({N}) sweets in the bowl", full)
-    m2 = re.search(rf"({N}) of the sweets are red", full)
-    m3 = re.search(rf"({N}) of the sweets are green", full)
-    if m and m2 and m3 and "neither red nor green" in ql:
-        if dok({m.group(1), m2.group(1), m3.group(1)}):
+    # 525 g177 neither: total - red - green  (noun CATEGORICAL — any plural, bound once via _cat)
+    m = re.search(rf"({N}) {_W} in the bowl", full)
+    if m and _cat(m.group(2), "plural"):
+        nn = re.escape(m.group(2))
+        m2 = re.search(rf"({N}) of the {nn} are red", full)
+        m3 = re.search(rf"({N}) of the {nn} are green", full)
+        if m2 and m3 and "neither red nor green" in ql \
+                and dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret(f(m.group(1)) - f(m2.group(1)) - f(m3.group(1)))
     # 526 g24 caravans: spaces - caravan*count
     m = re.search(rf"({N}) spaces for each vehicle", full)
@@ -11592,14 +11702,16 @@ def _vocab_singles_u_system(premises: list, question: str):
     if m and m2 and m3 and "how much will he weigh" in ql:
         if dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret(f(m.group(1)) - f(m3.group(1)) * f(m2.group(1)))
-    # 537 g80 campers: total - twoweeks - (twoweeks - 10)
-    m = re.search(rf"total of ({N}) campers", full)
-    m2 = re.search(rf"there were ({N}) campers", full)
+    # 537 g80 campers: total - twoweeks - (twoweeks - 10)  (noun CATEGORICAL via catsearch — the
+    # user's exemplar: "campers" is incidental, any plural noun of the same shape now solves)
+    cm = catsearch("total of #N# #pl:x#", full)
+    cm2 = catsearch("there were #N# #pl:x#", full)
     m3 = re.search(rf"({N}) more than the number", full)
-    if m and m2 and m3 and "how many campers were there last week" in ql:
-        if dok({m.group(1), m2.group(1), m3.group(1)}):
-            two = f(m2.group(1))
-            return _rs_ret(f(m.group(1)) - two - (two - f(m3.group(1))))
+    if cm and cm2 and m3 and cm.named["x"] == cm2.named["x"] \
+            and re.search(rf"how many {re.escape(cm.named['x'])} were there last week", ql):
+        if dok({cm.nums[0], cm2.nums[0], m3.group(1)}):
+            two = f(cm2.nums[0])
+            return _rs_ret(f(cm.nums[0]) - two - (two - f(m3.group(1))))
     # 538 g25 pyramid: sum of levels decreasing by step
     m = re.search(rf"({N})-level pyramid", full)
     m2 = re.search(rf"({N}) blocks", full)
@@ -11654,20 +11766,25 @@ def _vocab_singles_u_system(premises: list, question: str):
         if dok({m.group(1), m2.group(1), m3.group(1)}):
             r = f(m.group(1))
             return _rs_ret((r / 3) * f(m2.group(1)) + (r - r / 3) * f(m3.group(1)))
-    # 545 g35 snails: sum(first + step*i)
-    m = re.search(rf"ate ({N}) snails", full)
-    m2 = re.search(rf"({N}) more snails", full)
-    m3 = re.search(rf"for ({N}) days", full)
-    if m and m2 and m3 and "how many apple snails in all" in ql:
-        if dok({m.group(1), m2.group(1), m3.group(1)}):
+    # 545 g35 snails: sum(first + step*i)  (noun CATEGORICAL — any plural, bound once via _cat)
+    m = re.search(rf"ate ({N}) {_W}", full)
+    if m and _cat(m.group(2), "plural"):
+        nn = re.escape(m.group(2))
+        m2 = re.search(rf"({N}) more {nn}", full)
+        m3 = re.search(rf"for ({N}) days", full)
+        if m2 and m3 and re.search(rf"how many .*{nn} in all", ql) \
+                and dok({m.group(1), m2.group(1), m3.group(1)}):
             days = int(f(m3.group(1)))
             return _rs_ret(sum(f(m.group(1)) + f(m2.group(1)) * i for i in range(days)))
-    # 546 g2215 supplier: start - sold + delivered
-    m = re.search(rf"({N}) loaves of bread at the start", full)
-    m2 = re.search(rf"({N}) loaves are sold", full)
-    m3 = re.search(rf"({N}) loaves are delivered", full)
-    if m and m2 and m3 and "how many loaves of bread are there at the end" in ql:
-        if dok({m.group(1), m2.group(1), m3.group(1)}):
+    # 546 g2215 supplier: start - sold + delivered  (noun CATEGORICAL — the counted item is any
+    # plural, bound once; the start/sold/delivered inventory shape is what matters)
+    m = re.search(rf"({N}) {_W} of bread at the start", full)
+    if m and _cat(m.group(2), "plural"):
+        nn = re.escape(m.group(2))
+        m2 = re.search(rf"({N}) {nn} are sold", full)
+        m3 = re.search(rf"({N}) {nn} are delivered", full)
+        if m2 and m3 and f"how many {m.group(2)} of bread are there at the end" in ql \
+                and dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret(f(m.group(1)) - f(m2.group(1)) + f(m3.group(1)))
     # 547 g36000 unloaded: load*(1-.1)*(1-.2)
     m = re.search(rf"load of ({N}) pounds", full)
@@ -13097,12 +13214,14 @@ def _vocab_singles_q_system(premises: list, question: str):
     if m and m2 and m3 and "how much does it cost" in ql:
         if dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret(f(m.group(1)) * f(m2.group(1)) * f(m3.group(1)))
-    # 377 g83 soup: goal - w1 - w2
-    m = re.search(rf"({N}) cans during his first week", full)
-    m2 = re.search(rf"({N}) during the second week", full)
-    m3 = re.search(rf"goal is to collect ({N}) cans", full)
-    if m and m2 and m3 and "how many more cans" in ql:
-        if dok({m.group(1), m2.group(1), m3.group(1)}):
+    # 377 g83 soup: goal - w1 - w2  (noun CATEGORICAL — any plural, bound once via _cat)
+    m = re.search(rf"({N}) {_W} during his first week", full)
+    if m and _cat(m.group(2), "plural"):
+        nn = re.escape(m.group(2))
+        m2 = re.search(rf"({N}) during the second week", full)
+        m3 = re.search(rf"goal is to collect ({N}) {nn}", full)
+        if m2 and m3 and re.search(rf"how many more {nn}", ql) \
+                and dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret(f(m3.group(1)) - f(m.group(1)) - f(m2.group(1)))
     # 379 g50 workweek: (tv/rate) - wk*4
     m = re.search(rf"tv worth \$({N})", full)

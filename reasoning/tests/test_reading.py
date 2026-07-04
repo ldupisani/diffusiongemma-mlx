@@ -7969,5 +7969,68 @@ class TestIncrement239VocabSinglesF(unittest.TestCase):
             "How many students will Adam teach in 10 years?"), 500)
 
 
+class TestCategoricalMatching(unittest.TestCase):
+    """Categorical token matching (#258): vocab_singles branches match a word's CATEGORY (sense/type)
+    instead of its literal string, so one branch generalises across every word of that class. The
+    categories are DERIVED from existing data (LEXICON senses / PLURALS / UNIT_NOUNS / multipliers)
+    and NEVER merged into LEXICON values — so the exact ==["noun"] checks elsewhere stay intact."""
+
+    def test_cat_noun_and_plural(self):
+        self.assertTrue(reading._cat("student", "noun"))
+        self.assertTrue(reading._cat("students", "noun"))     # plural inherits its singular's sense
+        self.assertTrue(reading._cat("students", "plural"))
+        self.assertTrue(reading._cat("campers", "plural"))    # -s surface tagged a noun directly
+        self.assertFalse(reading._cat("student", "plural"))   # singular is not a plural noun
+        self.assertFalse(reading._cat("run", "noun"))         # a verb is not a noun
+
+    def test_cat_nonnoun_categories(self):
+        # the infra is general — verbs / multipliers / measures / fractions, not just nouns
+        self.assertTrue(reading._cat("run", "verb"))
+        self.assertTrue(reading._cat("twice", "multiplier"))
+        self.assertTrue(reading._cat("half", "multiplier"))
+        self.assertTrue(reading._cat("minute", "measure"))
+        self.assertTrue(reading._cat("minutes", "measure"))
+        self.assertTrue(reading._cat("one-third", "fraction"))
+        self.assertFalse(reading._cat("campers", "verb"))
+
+    def test_cat_unknown_word_rejected(self):
+        # an unknown word belongs to no category (GUARD 1 would decline it anyway)
+        self.assertFalse(reading._cat("gorillas", "plural"))
+
+    def test_catsearch_binds_same_surface(self):
+        m = reading.catsearch("total of #N# #pl:x# . there were #N# #pl:x#",
+                              "total of 150 campers . there were 40 campers")
+        self.assertIsNotNone(m)
+        self.assertEqual(m.nums, ["150", "40"])
+        self.assertEqual(m.named["x"], "campers")
+        # a repeated named token must bind the SAME surface
+        self.assertIsNone(reading.catsearch("total of #N# #pl:x# . there were #N# #pl:x#",
+                                            "total of 150 campers . there were 40 gorillas"))
+        # the second token here is a verb, not a plural noun → no match
+        self.assertIsNone(reading.catsearch("#N# #pl#", "5 run"))
+
+    def test_migrated_branches_still_solve(self):
+        # the five pilot branches keep their original answers
+        self.assertEqual(reading.solve(
+            "There are 285 sweets in the bowl. If 49 of the sweets are red and 59 of the "
+            "sweets are green, how many of the sweets are neither red nor green?"), 177)
+        self.assertEqual(reading.solve(
+            "A camping site recorded a total of 150 campers for the past three weeks. Two weeks "
+            "ago, there were 40 campers which was 10 more than the number of campers three weeks "
+            "ago. How many campers were there last week?"), 80)
+        self.assertEqual(reading.solve(
+            "A supermarket has 2355 loaves of bread at the start of the day. By afternoon, 629 "
+            "loaves are sold, and a further 489 loaves are delivered to the supermarket by their "
+            "supplier in the evening. How many loaves of bread are there at the end of the day?"), 2215)
+
+    def test_categorical_branch_generalises_to_a_swapped_noun(self):
+        # THE point: the campers branch now solves the SAME shape with a different known plural noun
+        # ("necklaces"), which the old hard-coded-"campers" branch would have declined.
+        self.assertEqual(reading.solve(
+            "A craft fair recorded a total of 150 necklaces for the past three weeks. Two weeks "
+            "ago, there were 40 necklaces which was 10 more than the number of necklaces three "
+            "weeks ago. How many necklaces were there last week?"), 80)
+
+
 if __name__ == "__main__":
     unittest.main()

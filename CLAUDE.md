@@ -108,7 +108,14 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   read off the text (never a calendar rank — days wrap). A **read–synthesize loop** (`synthesize` +
   the `SYNTHESIZERS` registry) derives implied facts to a fixpoint (first: transitive ordering),
   generalizing `solve()`'s fixpoint — new reasoning is REGISTERED, never special-cased. 0 model
-  calls; every step a reversible `Decision`, auditable via `--trace`. Strategy doc:
+  calls; every step a reversible `Decision`, auditable via `--trace`. **Categorical token matching**
+  (#258, near `_RS_N`): `_cat(word, category)` + `catsearch(template, text)` (+ the `_W` capture) let a
+  branch match a word's CATEGORY (`plural`/`noun`/`verb`/`multiplier`/`measure`/`fraction`, derived from
+  LEXICON senses + `PLURALS` + `UNIT_NOUNS`; a `WORD_CATEGORIES` hook holds future semantic categories)
+  instead of its literal string — so one branch generalizes across all words of that class (and onto
+  unseen TEST nouns) instead of hard-coding the incidental noun. Category data is kept OUT of LEXICON
+  values (exact `==["noun"]` checks depend on the shape). The default for new singles-batches; see the
+  playbook's "Categorical token matching" corollary. Strategy doc:
   `docs/logical-reading-playbook.md`; tests `reasoning/tests/test_reading.py` (curated/synthetic, never
   GSM8K). CLI: `python -m reasoning.reading "<text>" [--trace]`.
 - **`reasoning/reading_bench.py`** — INDEPENDENT GSM8K coverage harness for `reading.solve` (mirrors
