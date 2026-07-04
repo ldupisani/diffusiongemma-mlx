@@ -115,18 +115,20 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   `bench.py`'s firewall: DEV=train inspectable, TEST=test aggregate-only; never imported by the unit
   tests). Scores against the gold `#### N`, reports coverage / precision / a decline-blocker taxonomy
   (currency / percentage / unknown-word / structure) and the **most-frequent unknown words** (the
-  data-driven vocabulary worklist). State (2026-07-04, after campaigns #180–254): dev-train
-  **1304 correct / 0 wrong (~35.0% of dev-train)**, dev-holdout 147/2, TEST **42 correct / 5 wrong
-  (89.4% precision, hit-rate 13.6%; re-checked at #254 — +1 correct / 0 new wrongs vs #252's 41/5;
-  wrong count unchanged at 5, so the ~89 new vocab words of #253/#254 leaked NO fold-wrong onto TEST —
-  the proactive poison-drops held. All 5 wrongs remain pre-existing general-fold/percent_change
-  under-reads)**.
-  #253 added _vocab_singles_q (57 branches, wave 40, +57) and #254 _vocab_singles_r (33 branches,
-  wave 41, +33), both from the fresh blockersweep's cheapest oracle-clean tranche (slices 5–6,
-  tranche_m.pkl[298:420]). Each proactively skipped known holdout-poison words (shots/returned/
-  stationery/x/sheep/socks/fit) at draft time and posted 0 DECL→WRONG on the firewall diff — no
-  poison-drop was forced this time (contrast #251/#252, which each dropped a word). The
-  vocab-only harvest stays exhausted; the frontier is 2400+ structural cases needing coded
+  data-driven vocabulary worklist). State (2026-07-04, after campaigns #180–257): dev-train
+  **1408 correct / 0 wrong (~37.8% of dev-train)**, dev-holdout 149/2, TEST **42 correct / 5 wrong
+  (89.4% precision, hit-rate 12.8%; re-checked at #257 — unchanged from #254's 42/5; correct AND wrong
+  counts both stable across waves 40–44 (~319 new vocab words), so the singles-batch vein leaks NO
+  fold-wrong onto TEST when poison is skipped. All 5 wrongs remain pre-existing general-fold/
+  percent_change under-reads; fully-read rose 346→366 as new TEST problems became readable but they
+  decline safely)**.
+  #253–257 shipped five singles-batches (+194 dev-train, 1214→1408): _vocab_singles_q (wave 40, +57),
+  _r (wave 41, +33), _s (wave 42, +29), _t (wave 43, +27), _u (wave 44, +48), all from the fresh
+  blockersweep's cheapest oracle-clean tranche (tranche_m.pkl[298:560]). Each proactively skips known
+  holdout-poison (shots/returned/stationery/x/sheep/socks/fit/paper/climb/deposited) at draft time;
+  #255 was firewall-FORCED to also drop 'placed'/'smashed' (the diff caught a Susan-bouquet holdout
+  fold-wrong the known-list missed — the firewall working as designed). The
+  vocab-only harvest stays exhausted; the frontier is 2300+ structural cases needing coded
   branches (the singles-batch method: ~30–57 dev/batch from tranche_m.pkl). The
   #239–246 vocab-singles campaign crossed 1000 dev-train but the TEST checkpoint gained +1 correct /
   +1 wrong (a fold under-read on a 'carrots'-unlocked problem) — the vein is now ~TEST-neutral;
