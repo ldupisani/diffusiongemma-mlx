@@ -6558,11 +6558,44 @@ def _offset_sum_system(premises: list, question: str):
     return subj_v if asked == subj_e else std_v
 
 
+def _percent_relation(rp: "Reading"):
+    """A single PERCENTAGE-comparative relation in a clause → (subject, factor, standard), where
+    subject = factor × standard and factor = 1 ± (the percent). The sibling of `_ratio_relation` for the
+    one shape it rejects (a comparative, reading.py:6090): "Beth sees 50% MORE ants than Abe" → Beth =
+    1.5 × Abe; "…30% FEWER/LESS…" → 0.7 ×. The percent unit already carries the pre-divided fraction in
+    `features['value']` (0.50 for "50%"), so the factor is 1 ± value directly. TIGHTLY gated — exactly
+    two names, a percent unit, exactly ONE direction (more xor fewer/less), the subject BEFORE the verb,
+    and the standard immediately after "than". None otherwise, so it can only ADD coverage."""
+    names = [u for u in rp.units if "name" in u.features.get("senses", [])]
+    verbs = [u for u in rp.units if "verb" in u.features.get("senses", [])]
+    if len(names) != 2 or not verbs:
+        return None
+    pct = next((u for u in rp.units if "percent" in u.features.get("senses", [])), None)
+    if pct is None or "value" not in pct.features:
+        return None
+    more = any(_key(u.surface) == "more" for u in rp.units)
+    less = any(_key(u.surface) in ("fewer", "less") for u in rp.units)
+    if more == less:                              # need EXACTLY one direction (xor)
+        return None
+    k = 1 + pct.features["value"] if more else 1 - pct.features["value"]
+    vpos = rp.units.index(verbs[0])
+    subj = next((u for u in names if rp.units.index(u) < vpos), None)   # subject precedes the verb;
+    if subj is None:                                                   # the standard is the other name
+        return None
+    std = next(u for u in names if u is not subj)
+    si = rp.units.index(std)
+    prev = _key(rp.units[si - 1].surface) if si > 0 else ""
+    if prev != "than":                            # the standard must be the "than" comparand
+        return None
+    return _entity(subj), k, _entity(std)
+
+
 def _affine_relation(rp: "Reading"):
     """Any single AFFINE relation in a clause → (subject, factor, standard, offset) with subject = factor ×
-    standard + offset, unifying the three relation extractors: `_offset_ratio_relation` ("8 more than twice
-    Y" → k=2, c=8), `_ratio_relation` ("k× as many as Y" → c=0), `_pure_offset_relation` ("N more than Y" →
-    k=1). None if the clause holds no two-name relation."""
+    standard + offset, unifying the four relation extractors: `_offset_ratio_relation` ("8 more than twice
+    Y" → k=2, c=8), `_ratio_relation` ("k× as many as Y" → c=0), `_percent_relation` ("N% more/fewer than
+    Y" → k=1±N/100, c=0), `_pure_offset_relation` ("N more than Y" → k=1). None if the clause holds no
+    two-name relation."""
     orr = _offset_ratio_relation(rp)
     if orr is not None:
         subj, k, std, c = orr
@@ -6570,6 +6603,10 @@ def _affine_relation(rp: "Reading"):
     rr = _ratio_relation(rp)
     if rr is not None:
         subj, k, std = rr
+        return subj, k, std, 0.0
+    pr = _percent_relation(rp)
+    if pr is not None:
+        subj, k, std = pr
         return subj, k, std, 0.0
     por = _pure_offset_relation(rp)
     if por is not None:
@@ -11034,6 +11071,17 @@ def _rs_ret(v):
     return _gated_pos(_compute(f"{_num(v)}"))
 
 
+def _snap(v):
+    """Snap binary-float drift on a FINAL answer to a clean value ("100 × (1 − 0.8)" → 20, not
+    19.999999999999996); pass non-floats (ints, "undetermined", strings) straight through. Applied
+    uniformly to every system-solver result at dispatch, so a solver that computes through a percent or
+    fraction chain doesn't have to snap internally — mirrors the general fold's final-answer snap."""
+    if isinstance(v, float) and not isinstance(v, bool):
+        snapped = round(v, 9)
+        return int(snapped) if snapped == int(snapped) else snapped
+    return v
+
+
 # ── Categorical token matching ──────────────────────────────────────────────────────────────────
 # The vocab_singles branches historically hard-code the INCIDENTAL noun a problem happened to use
 # ("total of N campers"); the identical logic fits any plural noun ("gorillas"/"necklaces"). These
@@ -11360,6 +11408,18 @@ for _leg, _legwords in ((4, "dog cat cow horse pig goat sheep lamb bear tiger li
                         (8, "spider"), (6, "ant insect bee grasshopper"), (0, "snake fish frog snail")):
     for _m in _legwords.split():
         _tag_attr(_m, legs=_leg)
+
+# PERSON category, a subcategory of noun — child/kid/boy/girl/man/woman/student/… are all "people"
+# (the user's "child is a type of person"). Sourced from the existing GROUP_PERSON_NOUNS set (+ KINSHIP)
+# so the category and that set stay in agreement. The SINGULARS are already in LEXICON with a noun sense,
+# so `_cat("child","person")` works with no admissions; plural surfaces are tagged too (inert until they
+# resolve to a noun sense via PLURALS). Reusable infra — no consuming solver yet (the ants fix uses
+# NAMES); ready for a future "how many people" category-sum. No LEXICON additions ⇒ no poison-word risk.
+_register_category("person", "noun")
+for _p in ("person people child children kid kids boy boys girl girls man men woman women "
+           "student students friend friends teammate teammates sibling siblings worker workers "
+           "adult adults player players member members").split():
+    _tag_word(_p, "person")
 
 
 def _rate_singles_system(premises: list, question: str):
@@ -13772,15 +13832,10 @@ def _vocab_singles_p_system(premises: list, question: str):
         if dok({m.group(1), m2.group(1)}):
             w = f(m.group(1))
             return _rs_ret(2 * (w + (MULTIPLIERS[m2.group(2)] * w - f(m2.group(1)))))
-    # 232 g20 ants: a + a*(1+pct/100) + 2a + a/2
-    m = re.search(rf"finds ({N}) ants", full)
-    m2 = re.search(rf"({N})% more ants than abe", full)
-    ms = re.findall(rf"({_MULT_RE}) as many ants as abe", full)
-    if m and m2 and len(ms) == 2 and "how many ants do the four children find" in ql:
-        if dok({m.group(1), m2.group(1)}):
-            a = f(m.group(1))
-            return _rs_ret(a + a * (1 + f(m2.group(1)) / 100)
-                           + (MULTIPLIERS[ms[0]] + MULTIPLIERS[ms[1]]) * a)
+    # 232 g20 ants: SUBSUMED by the generic `_anchored_sum_system` once `_percent_relation` taught
+    # `_affine_relation` the "N% more/fewer than X" form — the anchored-sum family now reads the anchor
+    # (Abe=4) + the three relational others (Beth +50%, CeCe ×2, Duke ×½) and sums them for ANY noun and
+    # ANY names. Hardcoded branch DELETED.
     # 233 g750 reunion: adults + 2*adults ; adults = male + (male+more)
     m = re.search(rf"({N}) more female adults than male", full)
     m2 = re.search(rf"({N}) male adults", full)
@@ -23079,7 +23134,7 @@ def _solve_inner(text: str):
     for _label, _system in _EARLY_SYSTEMS:
         _r = _system(premises, question)
         if _r is not None:
-            return _r
+            return _snap(_r)
     # GUARD 8 — INVERSION / COUNTERFACTUAL: two shapes the forward fold structurally cannot solve, so it
     # would fold the literal numbers and commit garbage. Both are honest DECLINES (the safe "only-declines"
     # shape, like GUARD 7).
@@ -23159,7 +23214,7 @@ def _solve_inner(text: str):
     for _label, _system in _LATE_SYSTEMS:
         _r = _system(premises, question, context, _readings_prem)
         if _r is not None:
-            return _r
+            return _snap(_r)
     # GUARD 11 — PERIOD-BASIS MISMATCH: the question's ask span is a QUESTION-FINAL bare named
     # period ("… does he drink A WEEK?") while a premise states its quantity per a DIFFERENT
     # period ("1.5 gallons A DAY"). The Quantity fact drops the period, so the fold would commit

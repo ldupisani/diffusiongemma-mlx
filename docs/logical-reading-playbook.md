@@ -164,6 +164,36 @@ nouns, proven by a swapped-noun unit test (`campers`→`necklaces` still solves)
 **Make categorical matching the default for new singles-batches** where the noun is incidental. GUARD 1
 still declines unknown words, so a truly-new noun needs a LEXICON entry — but no new *branch*.
 
+### Hardcoded formula → shared-relation extractor (2026-07-04, #276)
+
+The dual of categorical-noun matching. A hard-coded whole-problem branch (`#232` ants:
+`re.search(rf"({N})% more ants than abe")` + a bespoke `a + a*(1+pct/100) + 2a + a/2` formula) encodes
+not just the incidental noun but the whole SHAPE — and a generic solver for that shape usually already
+exists. The ants problem is an *anchored sum* (one stated absolute + relational others, summed), which
+`_anchored_sum_system` already solves for ANY noun and ANY names. It only declined because its relation
+extractor `_affine_relation` lacked ONE clause form: the percentage comparative "N% more/fewer than X".
+
+The move: **add the missing form to the SHARED extractor, then delete the hardcode.** `_affine_relation`
+composes four sibling extractors (offset-ratio, ratio, percent, pure-offset), each returning
+`(subject, factor, standard[, offset])`; a percentage relation slots in as `(subj, 1±N/100, std, 0)`.
+`_percent_relation` is the exact sibling of `_ratio_relation` for the one shape it *rejects* — a
+`comparative` unit (reading.py:6090). Because the percent unit stores its value **pre-divided** (`0.50`
+for "50%", via `_as_percent`), the factor is `1 ± value` directly. Gate it tightly (exactly two names,
+one direction word, subject-before-verb, standard-after-"than") so it can only ADD coverage. One ~25-line
+extractor generalized the whole anchored/affine family (5 consumers) and deleted a hardcode.
+
+**The payoff is on the HOLDOUT, not dev-train.** Deleting a hardcode the generic path now covers is a
+dev-train wash (still correct, different solver); the value showed as a **+1 dev-HOLDOUT** gain (a
+"20% more legos than Bruce, who has 20 more than Kent" problem never coded for). Judge these
+generalizations by holdout/unseen movement, exactly like the categorical-noun refactors.
+
+**Emergent corollary — fix at the seam, not per-solver.** Broadening the extractor exposed that the
+system-solver family returned raw floats (`100×(1−0.8) → 19.999…996`) while only the general `answer()`
+fold snapped drift. Rather than snap inside each solver, add one `_snap()` at the `_EARLY_SYSTEMS`/
+`_LATE_SYSTEMS` dispatch return — every current and future system-solver inherits the clean-value snap
+for free. When a broadening change surfaces a latent gap shared by a whole family, patch the family's
+common seam.
+
 ### Process lessons — mining campaigns (2026-07-02)
 
 1. **CHECK FOUNDATIONAL TABLES FIRST.** Before any per-case mining, audit the foundational
