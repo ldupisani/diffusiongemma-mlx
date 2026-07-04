@@ -194,6 +194,20 @@ fold snapped drift. Rather than snap inside each solver, add one `_snap()` at th
 for free. When a broadening change surfaces a latent gap shared by a whole family, patch the family's
 common seam.
 
+**It's a FAMILY, not a one-off (#277, `_fraction_relation`).** The comparative-relation slot has room for
+several siblings, each a ~25-line extractor: `_percent_relation` ("50% more"), then `_fraction_relation`
+("2/5 times more" → `1±F`), and the survey flags a coordinate-NOUN fallback next (extend both to
+noun-pair problems like pines/redwoods, mirroring the not-two-names block the other three extractors
+already carry). Deleting **#437 crafts** needed BOTH the new extractor AND narrowing a shared guard:
+`_anchored_affine_coeffs` blanket-declined any "times more/less" premise (the ambiguous ×N-vs-×(N+1)
+idiom), which also killed the unambiguous *fraction* case. **Narrow a guard with the exact predicate
+that separates the safe case from the ambiguous one** — here `_fraction_parts(tok) is not None`: the
+whole "times more" ambiguity is an INTEGER phenomenon, so the same predicate that gates the new extractor
+also re-opens the guard, admitting no new ambiguity. Same firewall payoff as #276: NET +1 on a
+dev-HOLDOUT fraction-comparative problem ("1/4 times more books") never coded for; the deleted hardcode
+was a dev-train wash. Pick the FRACTION-only wedge deliberately — "2 times more" stays banned (gold flips
+×2 vs ×3), only `den>1` fractions pass.
+
 ### Process lessons — mining campaigns (2026-07-02)
 
 1. **CHECK FOUNDATIONAL TABLES FIRST.** Before any per-case mining, audit the foundational

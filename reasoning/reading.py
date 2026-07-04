@@ -6590,12 +6590,48 @@ def _percent_relation(rp: "Reading"):
     return _entity(subj), k, _entity(std)
 
 
+def _fraction_relation(rp: "Reading"):
+    """The FRACTION sibling of `_percent_relation` → (subject, factor, standard), subject = standard ×
+    (1 ± F). Handles "Y <F> [times] more/fewer <noun> than X" where F is a genuine FRACTION
+    ("2/5"/"two-fifths"/"half", via `_fraction_parts`) — "Aitana spent 2/5 times more money than Jayda"
+    → Aitana = 1.4 × Jayda. Deliberately fires ONLY on a fraction, never a bare integer: "2 times more"
+    is the ambiguous ×N-vs-×(N+1) idiom the offset/ratio machinery owns, but a fraction "more" is
+    unambiguously 1±F (you never say "2/5 more" to mean "0.4× as much"). Any "times" operator token
+    between the fraction and "more" is ignored. TIGHTLY gated exactly like `_percent_relation` — exactly
+    two names, one direction (more xor fewer/less), subject BEFORE the verb, standard immediately after
+    "than". None otherwise, so it can only ADD coverage."""
+    names = [u for u in rp.units if "name" in u.features.get("senses", [])]
+    verbs = [u for u in rp.units if "verb" in u.features.get("senses", [])]
+    if len(names) != 2 or not verbs:
+        return None
+    frac = next((u for u in rp.units if _fraction_parts(u.surface) is not None), None)
+    if frac is None:
+        return None
+    num, den = _fraction_parts(frac.surface)
+    f = num / den
+    more = any(_key(u.surface) == "more" for u in rp.units)
+    less = any(_key(u.surface) in ("fewer", "less") for u in rp.units)
+    if more == less:                              # need EXACTLY one direction (xor)
+        return None
+    k = 1 + f if more else 1 - f
+    vpos = rp.units.index(verbs[0])
+    subj = next((u for u in names if rp.units.index(u) < vpos), None)   # subject precedes the verb;
+    if subj is None:                                                   # the standard is the other name
+        return None
+    std = next(u for u in names if u is not subj)
+    si = rp.units.index(std)
+    prev = _key(rp.units[si - 1].surface) if si > 0 else ""
+    if prev != "than":                            # the standard must be the "than" comparand
+        return None
+    return _entity(subj), k, _entity(std)
+
+
 def _affine_relation(rp: "Reading"):
     """Any single AFFINE relation in a clause → (subject, factor, standard, offset) with subject = factor ×
-    standard + offset, unifying the four relation extractors: `_offset_ratio_relation` ("8 more than twice
+    standard + offset, unifying the five relation extractors: `_offset_ratio_relation` ("8 more than twice
     Y" → k=2, c=8), `_ratio_relation` ("k× as many as Y" → c=0), `_percent_relation` ("N% more/fewer than
-    Y" → k=1±N/100, c=0), `_pure_offset_relation` ("N more than Y" → k=1). None if the clause holds no
-    two-name relation."""
+    Y" → k=1±N/100, c=0), `_fraction_relation` ("F more/fewer than Y" → k=1±F, c=0), `_pure_offset_relation`
+    ("N more than Y" → k=1). None if the clause holds no two-name relation."""
     orr = _offset_ratio_relation(rp)
     if orr is not None:
         subj, k, std, c = orr
@@ -6607,6 +6643,10 @@ def _affine_relation(rp: "Reading"):
     pr = _percent_relation(rp)
     if pr is not None:
         subj, k, std = pr
+        return subj, k, std, 0.0
+    fr = _fraction_relation(rp)
+    if fr is not None:
+        subj, k, std = fr
         return subj, k, std, 0.0
     por = _pure_offset_relation(rp)
     if por is not None:
@@ -7168,8 +7208,12 @@ def _anchored_affine_coeffs(premises: list, question: str):
            for p in premises):
         return None
     for p in premises:
-        if re.search(r"\btimes (more|less|fewer)\b", p.lower()):
-            return None                                             # ambiguous ×N idiom → decline (GATE C)
+        tm = re.search(r"(\S+)\s+times (?:more|less|fewer)\b", p.lower())
+        if tm and _fraction_parts(tm.group(1)) is None:
+            return None                                             # ambiguous ×N idiom → decline (GATE C).
+            #                                                         A FRACTION "times more" ("2/5 times
+            #                                                         more") is UNAMBIGUOUS (= 1±F) and is
+            #                                                         read by `_fraction_relation` — allow it.
     rels, anchors, measures = {}, {}, set()
     rps = [analyze(p) for p in premises]
     cast_n = _cast_size(rps)               # for the SET-SIZE-cardinal skip below
@@ -12728,13 +12772,10 @@ def _vocab_singles_s_system(premises: list, question: str):
     if m and m2 and m3 and "how many fences would she have built in total" in ql:
         if dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret(f(m.group(1)) + f(m3.group(1)) * 60 / f(m2.group(1)))
-    # 437 g960 crafts: jayda + jayda*(1+2/5)
-    m = re.search(rf"jayda spent \$({N})", full)
-    mk = re.search(rf"({_SCALE_RE}) more money than jayda", full)
-    if m and mk and "total amount of money they spent together" in ql:
-        if dok({m.group(1), *re.findall(r"\d+", mk.group(1))}):
-            j = f(m.group(1))
-            return _rs_ret(j + j * (1 + _scale(mk.group(1))))
+    # 437 g960 crafts: SUBSUMED by the generic `_anchored_sum_system` once `_fraction_relation` taught
+    # `_affine_relation` the "F more/fewer than X" fraction-comparative form (and the "times more" guard
+    # was narrowed to allow a FRACTION, which is unambiguous). The anchored-sum family now reads Jayda as
+    # the anchor + Aitana = Jayda·(1+2/5) for ANY noun/names. Hardcoded branch DELETED.
     # 438 g130 vacuuming: v_min*v_days + d_min*d_days
     m = re.search(rf"({N}) minutes/day three times a week vacuuming", full)
     m2 = re.search(rf"({N}) minutes/day ({N}) days a week dusting", full)
