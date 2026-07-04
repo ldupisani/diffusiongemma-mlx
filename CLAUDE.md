@@ -115,12 +115,15 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   `bench.py`'s firewall: DEV=train inspectable, TEST=test aggregate-only; never imported by the unit
   tests). Scores against the gold `#### N`, reports coverage / precision / a decline-blocker taxonomy
   (currency / percentage / unknown-word / structure) and the **most-frequent unknown words** (the
-  data-driven vocabulary worklist). State (2026-07-03, after campaigns #180–250): dev-train
-  **1114 correct / 0 wrong (~29.9% of dev-train)**, dev-holdout 144/2, TEST **39 correct / 5 wrong
-  (88.6% precision, hit-rate 14.4%; TEST not re-checked since #246 — #247–250 are holdout-clean)**. #249
-  added _vocab_singles_m (48 branches, wave 36) and #250 _vocab_singles_n (45 branches, wave 37), both
-  from a fresh blockersweep's cheapest oracle-clean tranche (the vocab-only harvest is exhausted; the
-  frontier is 2600+ structural cases needing coded branches). The
+  data-driven vocabulary worklist). State (2026-07-04, after campaigns #180–252): dev-train
+  **1214 correct / 0 wrong (~32.6% of dev-train)**, dev-holdout 144/2, TEST **39 correct / 5 wrong
+  (88.6% precision, hit-rate 14.4%; TEST not re-checked since #246 — #247–252 are holdout-clean)**.
+  #251 added _vocab_singles_o (50 branches, wave 38, +50) and #252 _vocab_singles_p (50 branches,
+  wave 39, +50), both from the fresh blockersweep's cheapest oracle-clean tranche (slices 3–4). Each
+  batch firewall-forced a poison-word drop: #251 dropped 'fried' (two holdout fold-wrongs); #252
+  dropped 'drew' (verb↔"Drew"-name collision, broke a curated test) and 'climb' (holdout fold-wrong).
+  The vocab-only harvest stays exhausted; the frontier is 2500+ structural cases needing coded
+  branches (the singles-batch method: ~50 dev/batch from tranche_m.pkl). The
   #239–246 vocab-singles campaign crossed 1000 dev-train but the TEST checkpoint gained +1 correct /
   +1 wrong (a fold under-read on a 'carrots'-unlocked problem) — the vein is now ~TEST-neutral;
   general machinery is what moves TEST. #247/#248 kept widening the generic age-equations solver:
