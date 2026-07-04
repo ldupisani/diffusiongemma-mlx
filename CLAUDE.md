@@ -115,17 +115,19 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   `bench.py`'s firewall: DEV=train inspectable, TEST=test aggregate-only; never imported by the unit
   tests). Scores against the gold `#### N`, reports coverage / precision / a decline-blocker taxonomy
   (currency / percentage / unknown-word / structure) and the **most-frequent unknown words** (the
-  data-driven vocabulary worklist). State (2026-07-04, after campaigns #180–252): dev-train
-  **1214 correct / 0 wrong (~32.6% of dev-train)**, dev-holdout 144/2, TEST **41 correct / 5 wrong
-  (89.1% precision, hit-rate 13.6%; re-checked at #252 — +2 correct / 0 new wrongs vs #246's 39/5,
-  firewall-safe rule-attribution confirms all 5 wrongs are pre-existing general-fold/percent_change
-  under-reads, NONE from the #251/#252 vocab_singles solvers)**.
-  #251 added _vocab_singles_o (50 branches, wave 38, +50) and #252 _vocab_singles_p (50 branches,
-  wave 39, +50), both from the fresh blockersweep's cheapest oracle-clean tranche (slices 3–4). Each
-  batch firewall-forced a poison-word drop: #251 dropped 'fried' (two holdout fold-wrongs); #252
-  dropped 'drew' (verb↔"Drew"-name collision, broke a curated test) and 'climb' (holdout fold-wrong).
-  The vocab-only harvest stays exhausted; the frontier is 2500+ structural cases needing coded
-  branches (the singles-batch method: ~50 dev/batch from tranche_m.pkl). The
+  data-driven vocabulary worklist). State (2026-07-04, after campaigns #180–254): dev-train
+  **1304 correct / 0 wrong (~35.0% of dev-train)**, dev-holdout 147/2, TEST **42 correct / 5 wrong
+  (89.4% precision, hit-rate 13.6%; re-checked at #254 — +1 correct / 0 new wrongs vs #252's 41/5;
+  wrong count unchanged at 5, so the ~89 new vocab words of #253/#254 leaked NO fold-wrong onto TEST —
+  the proactive poison-drops held. All 5 wrongs remain pre-existing general-fold/percent_change
+  under-reads)**.
+  #253 added _vocab_singles_q (57 branches, wave 40, +57) and #254 _vocab_singles_r (33 branches,
+  wave 41, +33), both from the fresh blockersweep's cheapest oracle-clean tranche (slices 5–6,
+  tranche_m.pkl[298:420]). Each proactively skipped known holdout-poison words (shots/returned/
+  stationery/x/sheep/socks/fit) at draft time and posted 0 DECL→WRONG on the firewall diff — no
+  poison-drop was forced this time (contrast #251/#252, which each dropped a word). The
+  vocab-only harvest stays exhausted; the frontier is 2400+ structural cases needing coded
+  branches (the singles-batch method: ~30–57 dev/batch from tranche_m.pkl). The
   #239–246 vocab-singles campaign crossed 1000 dev-train but the TEST checkpoint gained +1 correct /
   +1 wrong (a fold under-read on a 'carrots'-unlocked problem) — the vein is now ~TEST-neutral;
   general machinery is what moves TEST. #247/#248 kept widening the generic age-equations solver:
