@@ -8175,6 +8175,27 @@ class TestAnimalCategorySum(unittest.TestCase):
             "The first rocket can travel 500 ft in the air. The second rocket can travel triple as "
             "high as the first rocket. What is the combined height of the two rockets?"), 2000)
 
+    def test_scale_reader_covers_word_and_n_times_forms(self):
+        # #271: _scale reads MULTIPLIERS words AND the '<n> times' form (digit / word-number / 1.5)
+        self.assertEqual(reading._scale("twice"), 2)
+        self.assertEqual(reading._scale("half"), 0.5)
+        self.assertEqual(reading._scale("three times"), 3)
+        self.assertEqual(reading._scale("10 times"), 10)
+        self.assertEqual(reading._scale("1.5 times"), 1.5)
+        self.assertEqual(reading._scale("one and a half times"), 1.5)
+        self.assertIsNone(reading._scale("half times"))
+
+    def test_n_times_coefficient_is_read(self):
+        # the hula branch hardcoded 'three times' as 3; 'four times' now reads 4
+        self.assertEqual(reading.solve(
+            "Nancy can do hula hoop for 10 minutes. Casey can do hula hoop 2 minutes less than Nancy. "
+            "Morgan can do the hula hoop three times as long as Casey. How long can Morgan do the hula "
+            "hoop?"), 24)
+        self.assertEqual(reading.solve(
+            "Nancy can do hula hoop for 10 minutes. Casey can do hula hoop 2 minutes less than Nancy. "
+            "Morgan can do the hula hoop four times as long as Casey. How long can Morgan do the hula "
+            "hoop?"), 32)
+
 
 if __name__ == "__main__":
     unittest.main()

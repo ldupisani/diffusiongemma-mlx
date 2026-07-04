@@ -883,6 +883,39 @@ NUMBERS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seve
 # Number-SCALE words: a bare scale is its value ("a dozen" → 12); "N scale" MULTIPLIES ("two dozen" → 24,
 # "three hundred" → 300), merged into one value unit by _merge_scales.
 SCALES = {"dozen": 12, "hundred": 100, "thousand": 1000, "million": 1000000, "billion": 1000000000}
+
+# ── Scale (multiplier) reading ──────────────────────────────────────────────────────────────────
+# A SCALE is a stated coefficient: a multiplier WORD ("twice"/"triple"/"half") OR an "<n> times" form
+# ("three times", "1.5 times", "one and a half times"). `_SCALE_RE` captures either; `_scale(token)`
+# returns its value. This is the "N times" analogue of the MULTIPLIERS-only `_MULT_RE`, so a branch can
+# read its coefficient from any of those forms instead of hardcoding it.
+_NUMWORD_RE = "|".join(re.escape(w) for w in sorted(NUMBERS, key=len, reverse=True))
+_NUM_PAT = r"\d+(?:,\d{3})*(?:\.\d+)?"
+_SCALE_RE = rf"(?:{_MULT_RE}|(?:one and a half|{_NUM_PAT}|{_NUMWORD_RE}) times)"
+
+
+def _num_word_value(w: str):
+    """Numeric value of a count token: a digit (comma/decimal ok), a NUMBERS word, or 'one and a half'."""
+    w = w.strip()
+    if w == "one and a half":
+        return 1.5
+    if w in NUMBERS:
+        return float(NUMBERS[w])
+    try:
+        return float(w.replace(",", ""))
+    except ValueError:
+        return None
+
+
+def _scale(token: str):
+    """The numeric value of a SCALE token — a MULTIPLIERS word or '<n> times' — or None."""
+    t = token.strip()
+    if t in MULTIPLIERS:
+        return MULTIPLIERS[t]
+    m = re.match(rf"(one and a half|{_NUM_PAT}|{_NUMWORD_RE}) times$", t)
+    return _num_word_value(m.group(1)) if m else None
+
+
 TIME_UNITS = {"second", "minute", "hour", "day", "week", "month", "year"}   # rate per_unit / duration query
 DAYPARTS = {"morning", "afternoon", "evening", "night", "noon"}   # sub-day recurrences → a DAILY cadence
 # Measurement UNITS — time + distance + weight + volume. A value quantifying one of these (or a money value)
@@ -11683,11 +11716,11 @@ def _vocab_singles_u_system(premises: list, question: str):
     if m and _cat(m.group(2), "plural"):
         nn = _number_re(m.group(2))
         m2 = re.search(rf"took ({N}) {nn}", full)
-        if m2 and re.search(rf"3 times as many {nn}", full) \
-                and re.search(rf"how many more {nn} does alix have than nick", ql) \
+        mk = re.search(rf"({_SCALE_RE}) as many {nn}", full)
+        if m2 and mk and re.search(rf"how many more {nn} does alix have than nick", ql) \
                 and dok({m.group(1), m2.group(1), "3"}):
             nk = f(m.group(1))
-            return _rs_ret((3 * nk - f(m2.group(1))) - nk)
+            return _rs_ret((_scale(mk.group(1)) * nk - f(m2.group(1))) - nk)
     # 508 g10400 tough: good_n*(tough*2) + tough_n*tough
     m = re.search(rf"worth \$({N})", full)
     m2 = re.search(rf"({N}) good weeks and ({N}) tough weeks", full)
@@ -11842,9 +11875,10 @@ def _vocab_singles_u_system(premises: list, question: str):
     if m and _cat(m.group(2), "plural"):
         nn = _number_re(m.group(2))
         m2 = re.search(rf"({N}) less than ({N})% of the number of cats", full)
-        if m2 and re.search(rf"three times as many {nn} as cats", full) and "what's" in ql \
+        mk = re.search(rf"({_SCALE_RE}) as many {nn} as cats", full)
+        if m2 and mk and "what's" in ql \
                 and dok({m.group(1), m2.group(1), m2.group(2)}):
-            cats = f(m.group(1)) / 3
+            cats = f(m.group(1)) / _scale(mk.group(1))
             return _rs_ret(cats * f(m2.group(2)) / 100 - f(m2.group(1)))
     # 528 g83200 hearts: 2*(cards*hearts)*price
     m = re.search(rf"deck of ({N}) playing cards", full)
@@ -12030,11 +12064,12 @@ def _vocab_singles_u_system(premises: list, question: str):
         nn = _number_re(m.group(2))
         m2 = re.search(rf"bought ({N}) more", full)
         m3 = re.search(rf"chewed up ({N})", full)
-        if m2 and m3 and "four times the number" in full \
+        mk = re.search(rf"({_SCALE_RE}) the number", full)
+        if m2 and m3 and mk \
                 and re.search(rf"how many {nn} does she have now", ql) \
                 and dok({m.group(1), m2.group(1), m3.group(1)}):
             fri = f(m.group(1))
-            return _rs_ret(fri + f(m2.group(1)) + 4 * fri - f(m3.group(1)))
+            return _rs_ret(fri + f(m2.group(1)) + _scale(mk.group(1)) * fri - f(m3.group(1)))
     # 554 g20 wicks: 2*(spool_in / (6+12))  [splitter severs 'and']
     m = re.search(rf"({N})-foot spool", full)
     mi = re.findall(rf"({N})-inch", full)
@@ -12472,9 +12507,10 @@ def _vocab_singles_s_system(premises: list, question: str):
     m = re.search(rf"current length of ({N}) miles", full)
     m2 = re.search(rf"up to ({N}) miles", full)
     m3 = re.search(rf"({N}) miles are built", full)
-    if m and m2 and m3 and "three times this amount" in full and "how many miles still need" in ql:
+    mk = re.search(rf"({_SCALE_RE}) this amount", full)
+    if m and m2 and m3 and mk and "how many miles still need" in ql:
         if dok({m.group(1), m2.group(1), m3.group(1)}):
-            return _rs_ret((f(m2.group(1)) - f(m.group(1))) - f(m3.group(1)) - 3 * f(m3.group(1)))
+            return _rs_ret((f(m2.group(1)) - f(m.group(1))) - f(m3.group(1)) - _scale(mk.group(1)) * f(m3.group(1)))
     # 431 g10200 secretary: salary*(1+pct/100)  (6 years red herring)
     m = re.search(rf"earns €({N}) a month", full)
     m2 = re.search(rf"increase of ({N})%", full)
@@ -13525,9 +13561,10 @@ def _vocab_singles_p_system(premises: list, question: str):
     # 214 g21 hula: 3*(nancy - less)
     m = re.search(rf"hula hoop for ({N}) minutes", full)
     m2 = re.search(rf"({N}) minutes less than nancy", full)
-    if m and m2 and "three times as long as casey" in full and "how long can morgan" in ql:
+    mk = re.search(rf"({_SCALE_RE}) as long as casey", full)
+    if m and m2 and mk and "how long can morgan" in ql:
         if dok({m.group(1), m2.group(1)}):
-            return _rs_ret(3 * (f(m.group(1)) - f(m2.group(1))))
+            return _rs_ret(_scale(mk.group(1)) * (f(m.group(1)) - f(m2.group(1))))
     # 215 g40 matches: total - drop - 2*drop
     m = re.search(rf"with ({N}) {_W}", full)
     if m and _cat(m.group(2), "plural"):
@@ -13662,11 +13699,11 @@ def _vocab_singles_p_system(premises: list, question: str):
     # 242 g1840 chickens: (total-died) + 10*died
     m = re.search(rf"({N}) chickens on her chicken farm", full)
     m2 = re.search(rf"({N})% of the chicken died", full)
-    if m and m2 and "ten times as many chickens as the number that died" in full \
-            and "how many chickens were there" in ql:
+    mk = re.search(rf"({_SCALE_RE}) as many chickens as the number that died", full)
+    if m and m2 and mk and "how many chickens were there" in ql:
         if dok({m.group(1), m2.group(1)}):
             died = f(m.group(1)) * f(m2.group(1)) / 100
-            return _rs_ret((f(m.group(1)) - died) + 10 * died)
+            return _rs_ret((f(m.group(1)) - died) + _scale(mk.group(1)) * died)
     # 244 g26 grounded: base + per*4  ("four grades" word)
     m = re.search(rf"grounded for ({N}) days", full)
     m2 = re.search(rf"({N}) extra days for each grade", full)
@@ -13849,10 +13886,11 @@ def _vocab_singles_p_system(premises: list, question: str):
             return _rs_ret((12 * f(m.group(1)) + f(m2.group(1))) / 12)
     # 298 g15 laps: 3*(yvonne/2)
     m = re.search(rf"swims ({N}) laps", full)
-    if m and "half as many laps as yvonne" in full and "three times the number of laps" in full \
-            and "how many laps can joel swim" in ql:
+    mk1 = re.search(rf"({_SCALE_RE}) as many laps as yvonne", full)
+    mk2 = re.search(rf"({_SCALE_RE}) the number of laps", full)
+    if m and mk1 and mk2 and "how many laps can joel swim" in ql:
         if dok({m.group(1), "5"}):  # '5 minutes' is a red-herring time given
-            return _rs_ret(3 * (f(m.group(1)) / 2))
+            return _rs_ret(_scale(mk2.group(1)) * (f(m.group(1)) * _scale(mk1.group(1))))
     return None
 
 
@@ -14074,10 +14112,11 @@ def _vocab_singles_o_system(premises: list, question: str):
             return _rs_ret((a + (a + f(m3.group(1)))) * 20)
     # 174 g2000 laptops: p + 3p
     m = re.search(rf"first laptop is \$({N})", full)
-    if m and "3 times as costly as the first" in full and "buy both" in full:
+    mk = re.search(rf"({_SCALE_RE}) as costly as the first", full)
+    if m and mk and "buy both" in full:
         if dok({m.group(1), "3"}):
             p = f(m.group(1))
-            return _rs_ret(p + 3 * p)
+            return _rs_ret(p + _scale(mk.group(1)) * p)
     # 175 g12 saved: allow - allow/3 - 8
     m = re.search(rf"allowance of \$({N})", full)
     m2 = re.search(rf"another \$({N}) on sweets", full)
@@ -14275,12 +14314,12 @@ def _vocab_singles_n_system(premises: list, question: str):
             a = f(m.group(1))
             return _rs_ret(6 * (a / 2) + a / 4)
     # 65 g32 Oliver Monster cards: (gremlins/3)*2
-    m = re.search(rf"largest at ({N}) {_W}, three times the size", full)
+    m = re.search(rf"largest at ({N}) {_W}, ({_SCALE_RE}) the size", full)
     if m and _cat(m.group(2), "plural"):
         nn = _number_re(m.group(2))
-        if re.search(rf"twice as many monster club {nn} as alien baseball", full) \
-                and re.search(rf"how many monster club {nn}", ql) and dok({m.group(1)}):
-            return _rs_ret((f(m.group(1)) / 3) * 2)
+        mk2 = re.search(rf"({_SCALE_RE}) as many monster club {nn} as alien baseball", full)
+        if mk2 and re.search(rf"how many monster club {nn}", ql) and dok({m.group(1)}):
+            return _rs_ret((f(m.group(1)) / _scale(m.group(3))) * _scale(mk2.group(1)))
     # 67 g30 Castor chess lost: players*(1 - 1/4)
     m = re.search(rf"there are ({N}) chess players", full)
     if m and "quarter of the island" in full and "never lost" in full \
@@ -14325,10 +14364,10 @@ def _vocab_singles_n_system(premises: list, question: str):
     m = re.search(rf"nearby island produced ({N}) {_W}", full)
     if m and _cat(m.group(2), "plural"):
         nn = _number_re(m.group(2))
-        if re.search(rf"ten times as many {nn}", full) \
-                and re.search(rf"total {nn} produce", ql) and dok({m.group(1)}):
+        mk = re.search(rf"({_SCALE_RE}) as many {nn}", full)
+        if mk and re.search(rf"total {nn} produce", ql) and dok({m.group(1)}):
             n = f(m.group(1))
-            return _rs_ret(n + 10 * n)
+            return _rs_ret(n + _scale(mk.group(1)) * n)
     # 78 g26 white crepe myrtle: total - total/3 - 2
     m = re.search(rf"there are ({N}) crepe myrtle trees", full)
     if m and "a third of them are pink" in full and "only two are red" in full \
@@ -14432,11 +14471,11 @@ def _vocab_singles_n_system(premises: list, question: str):
             return _rs_ret(rem - rem / 5)
     # 99 g840 stars: e + 6e
     m = re.search(rf"counts ({N}) {_W} to the east", full)
-    if m and _cat(m.group(2), "plural") and "six times that number to the west" in full \
-            and re.search(rf"how many {_number_re(m.group(2))}", ql):
-        if dok({m.group(1)}):
+    if m and _cat(m.group(2), "plural"):
+        mk = re.search(rf"({_SCALE_RE}) that number to the west", full)
+        if mk and re.search(rf"how many {_number_re(m.group(2))}", ql) and dok({m.group(1)}):
             e = f(m.group(1))
-            return _rs_ret(e + 6 * e)
+            return _rs_ret(e + _scale(mk.group(1)) * e)
     # 100 g378 tribes people: women=2*cann; men=2*women; women+men
     m = re.search(rf"there were ({N}) cannoneers", full)
     mk1 = re.search(rf"({_MULT_RE}) the number of cannoneers", full)
@@ -14546,10 +14585,11 @@ def _vocab_singles_n_system(premises: list, question: str):
             return _rs_ret(f(m.group(1)) - j - MULTIPLIERS[mk.group(1)] * j)
     # 122 g120 John grandparents: g + 3g
     m = re.search(rf"\$({N}) from his grandpa", full)
-    if m and "3 times that much from his grandma" in full and "from the two grandparents" in ql:
+    mk = re.search(rf"({_SCALE_RE}) that much from his grandma", full)
+    if m and mk and "from the two grandparents" in ql:
         if dok({m.group(1), "3"}):
             g = f(m.group(1))
-            return _rs_ret(g + 3 * g)
+            return _rs_ret(g + _scale(mk.group(1)) * g)
     # 123 g1500 log piece: (len/2) * per_ft
     m = re.search(rf"({N})-foot log", full)
     m2 = re.search(rf"({N}) pounds", full)

@@ -125,6 +125,10 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   `WORD_CATEGORIES`. The two-scenario category-sum solver (#514) takes the category from the QUESTION
   ("how many <cat> in total") and reads every coefficient from the text — nothing hardcoded — so it
   generalizes across categories and quantities (the hypernym facility the older solvers route around).
+  **Reading coefficients** (#266-271): `_MULT_RE` (multiplier words) and `_scale(token)`+`_SCALE_RE`
+  (multiplier words OR the `<n> times` form — digit/word-number/"one and a half") let a branch READ its
+  coefficient from the text (`_scale("triple")`=3, `_scale("four times")`=4) instead of hardcoding it;
+  ~54 vocab_singles branches migrated so a stated `twice`/`triple`/`N times` now generalizes.
   **Singular↔plural association** (#260):
   `_noun_lemma` (≠ the verb `_lemma`) canonicalises a noun's number-forms to one identity, `_number_re`
   matches either form, and `catsearch` binds noun-rooted tokens BY LEMMA — so a branch binds a plural in
