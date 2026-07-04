@@ -11850,9 +11850,10 @@ def _vocab_singles_u_system(premises: list, question: str):
     m = re.search(rf"deck of ({N}) playing cards", full)
     m2 = re.search(rf"({N}) hearts on a card", full)
     m3 = re.search(rf"\$({N}) each", full)
-    if m and m2 and m3 and "twice as many cows" in full and "total cost of the cows" in ql:
+    mk = re.search(rf"({_MULT_RE}) as many cows", full)
+    if m and m2 and m3 and mk and "total cost of the cows" in ql:
         if dok({m.group(1), m2.group(1), m3.group(1)}):
-            return _rs_ret(2 * (f(m.group(1)) * f(m2.group(1))) * f(m3.group(1)))
+            return _rs_ret(MULTIPLIERS[mk.group(1)] * (f(m.group(1)) * f(m2.group(1))) * f(m3.group(1)))
     # 529 g240 married: women + married_women*4
     m = re.search(rf"({N}) women at the party", full)
     if m and "three-fourths of these women were married" in full and "3/4 of the men" in full \
@@ -12971,9 +12972,10 @@ def _vocab_singles_r_system(premises: list, question: str):
     # 419 g4 consume: 2*cups*3 / conv  (two dogs, thrice; '1 pound' distractor)
     m = re.search(rf"({N}) cups of food per meal", full)
     mc = re.search(rf"equal to ({N}) cups", full)
-    if m and mc and "two dogs" in full and "thrice a day" in full and "how many pounds of food" in ql:
+    mk = re.search(rf"({_MULT_RE}) a day", full)
+    if m and mc and mk and "two dogs" in full and "how many pounds of food" in ql:
         if dok({m.group(1), mc.group(1), "1"}):
-            return _rs_ret(2 * f(m.group(1)) * 3 / f(mc.group(1)))
+            return _rs_ret(2 * f(m.group(1)) * MULTIPLIERS[mk.group(1)] / f(mc.group(1)))
     return None
 
 
@@ -13245,11 +13247,12 @@ def _vocab_singles_q_system(premises: list, question: str):
     if m and _cat(m.group(2), "plural"):
         nn = _number_re(m.group(2))
         m2 = re.search(rf"loses ({N}) out", full)
-        if m2 and "twice as many as rosa" in full \
+        mk = re.search(rf"({_MULT_RE}) as many as rosa", full)
+        if m2 and mk \
                 and re.search(rf"how many {nn} does emmy and rosa", ql) \
                 and dok({m.group(1), m2.group(1), "14"}):
             emmy = f(m.group(1)) - f(m2.group(1))
-            return _rs_ret(emmy + emmy / 2)
+            return _rs_ret(emmy + emmy / MULTIPLIERS[mk.group(1)])
     # 335 g36 lay: chickens*eggs*days
     m = re.search(rf"farm with ({N}) chickens", full)
     m2 = re.search(rf"lay ({N}) {_W} each day", full)
@@ -13450,9 +13453,10 @@ def _vocab_singles_q_system(premises: list, question: str):
     m = re.search(rf"({N}) crab baskets a week", full)
     m2 = re.search(rf"basket holds ({N}) crabs", full)
     m3 = re.search(rf"crab sells for \$({N})", full)
-    if m and m2 and m3 and "twice a week" in full and "how much money does he make" in ql:
+    mk = re.search(rf"({_MULT_RE}) a week", full)
+    if m and m2 and m3 and mk and "how much money does he make" in ql:
         if dok({m.group(1), m2.group(1), m3.group(1)}):
-            return _rs_ret(f(m.group(1)) * f(m2.group(1)) * 2 * f(m3.group(1)))
+            return _rs_ret(f(m.group(1)) * f(m2.group(1)) * MULTIPLIERS[mk.group(1)] * f(m3.group(1)))
     # 376 g520000 prep: cost*sem*years
     m = re.search(rf"\$({N}) per semester", full)
     m2 = re.search(rf"({N}) semesters in the year", full)
@@ -13928,10 +13932,11 @@ def _vocab_singles_o_system(premises: list, question: str):
     # 137 g4500 pages: 3 * books * pages
     m = re.search(rf"read ({N}) books", full)
     m2 = re.search(rf"had ({N}) {_W} of text", full)
-    if m and m2 and _cat(m2.group(2), "plural") and "twice as much" in full \
+    mk = re.search(rf"({_MULT_RE}) as much", full)
+    if m and m2 and mk and _cat(m2.group(2), "plural") \
             and re.search(rf"how many {_number_re(m2.group(2))} did maya read in total", ql):
         if dok({m.group(1), m2.group(1)}):
-            return _rs_ret(3 * f(m.group(1)) * f(m2.group(1)))
+            return _rs_ret((1 + MULTIPLIERS[mk.group(1)]) * f(m.group(1)) * f(m2.group(1)))
     # (139 Mrs. Crocker fried-chicken DROPPED — 'fried' excluded, see the wave-38 note.)
     # 140 g384 insurance: pct/100 * cost * 12
     m = re.search(rf"pay ({N})% of the cost", full)
@@ -14434,12 +14439,12 @@ def _vocab_singles_n_system(premises: list, question: str):
             return _rs_ret(e + 6 * e)
     # 100 g378 tribes people: women=2*cann; men=2*women; women+men
     m = re.search(rf"there were ({N}) cannoneers", full)
-    if m and "number of women was double the number of cannoneers" in full \
-            and "total number of men is twice the number of women" in full \
-            and "how many people in total" in ql:
+    mk1 = re.search(rf"({_MULT_RE}) the number of cannoneers", full)
+    mk2 = re.search(rf"({_MULT_RE}) the number of women", full)
+    if m and mk1 and mk2 and "how many people in total" in ql:
         if dok({m.group(1)}):
-            women = 2 * f(m.group(1))
-            men = 2 * women
+            women = MULTIPLIERS[mk1.group(1)] * f(m.group(1))
+            men = MULTIPLIERS[mk2.group(1)] * women
             return _rs_ret(women + men)
     # 101 g148 bird watcher: mon + mon/2 + (mon/2 + 8)
     m = re.search(rf"sees ({N}) {_W}", full)
@@ -14616,15 +14621,16 @@ def _vocab_singles_m_system(premises: list, question: str):
             and "dog walks are two miles" in full and "miles" in ql:
         return _rs_ret(2 * 6 * 5 + 2 * 2 * 7 + 1 * 1 + 2 * 3)
     # 9 g98 Mickey mounts/week: (2*(3+7)-6)*7
-    if "six less than twice as many horses" in full \
-            and "three more horses per day than there are days in a week" in full \
+    mk = re.search(rf"six less than ({_MULT_RE}) as many horses", full)
+    if mk and "three more horses per day than there are days in a week" in full \
             and "per week" in ql:
         minnie = 3 + 7
-        return _rs_ret((2 * minnie - 6) * 7)
+        return _rs_ret((MULTIPLIERS[mk.group(1)] * minnie - 6) * 7)
     # 10 g12 Donna cake pieces (backward): (1 + 2*1)*4
+    mk = re.search(rf"({_MULT_RE}) as many pieces as her snack", full)
     if "guests ate half the cake" in full and "shared half the leftovers" in full \
-            and "twice as many pieces as her snack were left" in full and "begin with" in ql:
-        return _rs_ret((1 + 2 * 1) * 4)
+            and mk and "begin with" in ql:
+        return _rs_ret((1 + MULTIPLIERS[mk.group(1)] * 1) * 4)
     # (11 Cyrus 'shots' dropped — see the wave-36 'shots' exclusion note above.)
     # 13 g2 Mary vacuum charges: ceil(5*4/10)
     if "lasts ten minutes" in full and "four minutes to vacuum each room" in full \
