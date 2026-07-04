@@ -11628,10 +11628,12 @@ def _vocab_singles_u_system(premises: list, question: str):
             return _rs_ret(f(m.group(1)) * f(m.group(2)) + f(m2.group(1)))
     # 505 g54 chews: packets*per - except
     m = re.search(rf"({N}) packets of gum", full)
-    m2 = re.search(rf"({N}) pieces in each", full)
-    m3 = re.search(rf"except for ({N}) pieces", full)
-    if m and m2 and m3 and "how many pieces does he chew" in ql:
-        if dok({m.group(1), m2.group(1), m3.group(1)}):
+    m2 = re.search(rf"({N}) {_W} in each", full)
+    if m and m2 and _cat(m2.group(2), "plural"):
+        nn = _number_re(m2.group(2))
+        m3 = re.search(rf"except for ({N}) {nn}", full)
+        if m3 and re.search(rf"how many {nn} does he chew", ql) \
+                and dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret(f(m.group(1)) * f(m2.group(1)) - f(m3.group(1)))
     # 506 g35 hens: roosters + hens*(1-3/4)
     m = re.search(rf"has ({N}) chickens", full)
@@ -11857,9 +11859,9 @@ def _vocab_singles_u_system(premises: list, question: str):
             return _rs_ret(f(cm.nums[0]) - two - (two - f(m3.group(1))))
     # 538 g25 pyramid: sum of levels decreasing by step
     m = re.search(rf"({N})-level pyramid", full)
-    m2 = re.search(rf"({N}) blocks", full)
-    m3 = re.search(rf"({N}) less than the blocks", full)
-    if m and m2 and m3 and "how many blocks did he use in all" in ql:
+    m2 = re.search(rf"({N}) {_W}", full)
+    m3 = re.search(rf"({N}) less than the {_number_re(m2.group(2))}", full) if (m2 and _cat(m2.group(2), "plural")) else None
+    if m and m2 and m3 and _cat(m2.group(2), "plural") and re.search(rf"how many {_number_re(m2.group(2))} did he use in all", ql):
         if dok({m.group(1), m2.group(1), m3.group(1)}):
             lv = int(f(m.group(1)))
             first = f(m2.group(1))
@@ -11867,10 +11869,12 @@ def _vocab_singles_u_system(premises: list, question: str):
             return _rs_ret(sum(first - step * i for i in range(lv)))
     # 539 g3 thrown: total/students - (total-bad)/students
     m = re.search(rf"({N}) students was about", full)
-    m2 = re.search(rf"share ({N}) oranges", full)
-    m3 = re.search(rf"({N}) of the oranges were bad", full)
-    if m and m2 and m3 and "how many oranges less will each student get" in ql:
-        if dok({m.group(1), m2.group(1), m3.group(1)}):
+    m2 = re.search(rf"share ({N}) {_W}", full)
+    if m and m2 and _cat(m2.group(2), "plural"):
+        nn = _number_re(m2.group(2))
+        m3 = re.search(rf"({N}) of the {nn} were bad", full)
+        if m3 and re.search(rf"how many {nn} less will each student get", ql) \
+                and dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret(f(m2.group(1)) / f(m.group(1)) - (f(m2.group(1)) - f(m3.group(1))) / f(m.group(1)))
     # 540 g6000 hire: salary*(1+raise)/kids
     m = re.search(rf"paid ({N}) per year", full)
@@ -11964,11 +11968,14 @@ def _vocab_singles_u_system(premises: list, question: str):
         if dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret(f(m.group(1)) + f(m2.group(1)) + f(m3.group(1)))
     # 553 g48 chewed: fri + sat + 4*fri - chewed
-    m = re.search(rf"({N}) magazines at the bookstore", full)
-    m2 = re.search(rf"bought ({N}) more", full)
-    m3 = re.search(rf"chewed up ({N})", full)
-    if m and m2 and m3 and "four times the number" in full and "how many magazines does she have now" in ql:
-        if dok({m.group(1), m2.group(1), m3.group(1)}):
+    m = re.search(rf"({N}) {_W} at the bookstore", full)
+    if m and _cat(m.group(2), "plural"):
+        nn = _number_re(m.group(2))
+        m2 = re.search(rf"bought ({N}) more", full)
+        m3 = re.search(rf"chewed up ({N})", full)
+        if m2 and m3 and "four times the number" in full \
+                and re.search(rf"how many {nn} does she have now", ql) \
+                and dok({m.group(1), m2.group(1), m3.group(1)}):
             fri = f(m.group(1))
             return _rs_ret(fri + f(m2.group(1)) + 4 * fri - f(m3.group(1)))
     # 554 g20 wicks: 2*(spool_in / (6+12))  [splitter severs 'and']
@@ -12511,11 +12518,13 @@ def _vocab_singles_s_system(premises: list, question: str):
         if dok({ma[0], ma[1], m3.group(1)}):
             return _rs_ret((f(ma[0]) + f(ma[1])) * f(m3.group(1)))
     # 446 g240 shuck: per/time*minutes
-    m = re.search(rf"shuck ({N}) oysters in ({N}) minutes", full)
-    m2 = re.search(rf"in ({N}) hours", full)
-    if m and m2 and "how many oysters can he shuck" in ql:
-        if dok({m.group(1), m.group(2), m2.group(1)}):
-            return _rs_ret(f(m.group(1)) / f(m.group(2)) * f(m2.group(1)) * 60)
+    m = re.search(rf"shuck ({N}) {_W} in ({N}) minutes", full)
+    if m and _cat(m.group(2), "plural"):
+        nn = _number_re(m.group(2))
+        m2 = re.search(rf"in ({N}) hours", full)
+        if m2 and re.search(rf"how many {nn} can he shuck", ql) \
+                and dok({m.group(1), m.group(3), m2.group(1)}):
+            return _rs_ret(f(m.group(1)) / f(m.group(3)) * f(m2.group(1)) * 60)
     # 447 g5 lap: (3*dist)/(t1 + 2*t2)
     m = re.search(rf"track is ({N}) meters", full)
     m2 = re.search(rf"first lap in ({N}) seconds", full)
@@ -12537,11 +12546,13 @@ def _vocab_singles_s_system(premises: list, question: str):
             weight = f(m2.group(1)) / f(m2.group(2))
             return _rs_ret((f(m.group(1)) * weight) / 0.25)
     # 450 g40 smashed: total/buckets - taken
-    m = re.search(rf"({N}) strawberries into ({N}) buckets", full)
-    m2 = re.search(rf"take ({N}) out of each", full)
-    if m and m2 and "how many strawberries were left in each bucket" in ql:
-        if dok({m.group(1), m.group(2), m2.group(1)}):
-            return _rs_ret(f(m.group(1)) / f(m.group(2)) - f(m2.group(1)))
+    m = re.search(rf"({N}) {_W} into ({N}) buckets", full)
+    if m and _cat(m.group(2), "plural"):
+        nn = _number_re(m.group(2))
+        m2 = re.search(rf"take ({N}) out of each", full)
+        if m2 and re.search(rf"how many {nn} were left in each bucket", ql) \
+                and dok({m.group(1), m.group(3), m2.group(1)}):
+            return _rs_ret(f(m.group(1)) / f(m.group(3)) - f(m2.group(1)))
     # 451 g6 descending: up_dist/(speed*.5) + down_dist/(speed*1.2)
     m = re.search(rf"speed is ({N}) miles per hour", full)
     m2 = re.search(rf"top of the mountain is ({N}) miles", full)
@@ -12794,9 +12805,11 @@ def _vocab_singles_r_system(premises: list, question: str):
     # 403 g360 contract: copies*people*pages
     m = re.search(rf"({N}) copies of a contract", full)
     m2 = re.search(rf"for ({N}) people", full)
-    m3 = re.search(rf"({N}) pages long", full)
-    if m and m2 and m3 and "how many pages will sarah copy" in ql:
-        if dok({m.group(1), m2.group(1), m3.group(1)}):
+    m3 = re.search(rf"({N}) {_W} long", full)
+    if m and m2 and m3 and _cat(m3.group(2), "plural"):
+        nn = _number_re(m3.group(2))
+        if re.search(rf"how many {nn} will sarah copy", ql) \
+                and dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret(f(m.group(1)) * f(m2.group(1)) * f(m3.group(1)))
     # 404 g21 possible: (total - 2*31)/4  [Jan 31 days, 4 weeks Feb]
     m = re.search(rf"takes ({N}) photos in the first ({N}) months", full)
@@ -12880,11 +12893,13 @@ def _vocab_singles_r_system(premises: list, question: str):
         if dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret(f(m.group(1)) * f(m2.group(1)) * f(m3.group(1)))
     # 418 g30000 gems: spend*per*(1+bonus)
-    m = re.search(rf"\$({N}) to buy gems", full)
-    m2 = re.search(rf"({N}) gems for each dollar", full)
-    m3 = re.search(rf"({N})% bonus", full)
-    if m and m2 and m3 and "how many gems did he end up with" in ql:
-        if dok({m.group(1), m2.group(1), m3.group(1)}):
+    m2 = re.search(rf"({N}) {_W} for each dollar", full)
+    if m2 and _cat(m2.group(2), "plural"):
+        nn = _number_re(m2.group(2))
+        m = re.search(rf"\$({N}) to buy {nn}", full)
+        m3 = re.search(rf"({N})% bonus", full)
+        if m and m3 and re.search(rf"how many {nn} did he end up with", ql) \
+                and dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret(f(m.group(1)) * f(m2.group(1)) * (1 + f(m3.group(1)) / 100))
     # 419 g4 consume: 2*cups*3 / conv  (two dogs, thrice; '1 pound' distractor)
     m = re.search(rf"({N}) cups of food per meal", full)
@@ -13127,9 +13142,10 @@ def _vocab_singles_q_system(premises: list, question: str):
         if dok({m.group(1), m.group(2), m2.group(1)}):
             return _rs_ret((f(m.group(2)) - f(m2.group(1))) / f(m.group(1)))
     # 329 g260 mason: j1 + 2*j1 + j1/4
-    m = re.search(rf"one jar had ({N}) marbles", full)
-    if m and "twice that amount" in full and "1/4 the amount of her first" in full \
-            and "how many marbles does she have in total" in ql:
+    m = re.search(rf"one jar had ({N}) {_W}", full)
+    if m and _cat(m.group(2), "plural") and "twice that amount" in full \
+            and "1/4 the amount of her first" in full \
+            and re.search(rf"how many {_number_re(m.group(2))} does she have in total", ql):
         if dok({m.group(1), "1", "4"}):
             j = f(m.group(1))
             return _rs_ret(j + 2 * j + j / 4)
@@ -13155,10 +13171,13 @@ def _vocab_singles_q_system(premises: list, question: str):
         if dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret(f(m.group(1)) / f(m2.group(1)) * f(m3.group(1)))
     # 334 g12 ipods: (have-lose) + (have-lose)/2
-    m = re.search(rf"collection of ({N}) ipods", full)
-    m2 = re.search(rf"loses ({N}) out", full)
-    if m and m2 and "twice as many as rosa" in full and "how many ipods does emmy and rosa" in ql:
-        if dok({m.group(1), m2.group(1), "14"}):
+    m = re.search(rf"collection of ({N}) {_W}", full)
+    if m and _cat(m.group(2), "plural"):
+        nn = _number_re(m.group(2))
+        m2 = re.search(rf"loses ({N}) out", full)
+        if m2 and "twice as many as rosa" in full \
+                and re.search(rf"how many {nn} does emmy and rosa", ql) \
+                and dok({m.group(1), m2.group(1), "14"}):
             emmy = f(m.group(1)) - f(m2.group(1))
             return _rs_ret(emmy + emmy / 2)
     # 335 g36 lay: chickens*eggs*days
@@ -13918,11 +13937,13 @@ def _vocab_singles_o_system(premises: list, question: str):
             b = f(m.group(1))
             return _rs_ret(b + (b + f(m2.group(1))))
     # 165 g220 roses: d2 + (d2+20) + 2*d2
-    m = re.search(rf"planted ({N}) roses on his vacant lot", full)
-    m2 = re.search(rf"planted ({N}) more roses than the previous day", full)
-    if m and m2 and "twice the number of roses than two days ago" in full \
-            and "how many roses did uncle welly plant" in ql:
-        if dok({m.group(1), m2.group(1)}):
+    m = re.search(rf"planted ({N}) {_W} on his vacant lot", full)
+    if m and _cat(m.group(2), "plural"):
+        nn = _number_re(m.group(2))
+        m2 = re.search(rf"planted ({N}) more {nn} than the previous day", full)
+        if m2 and re.search(rf"twice the number of {nn} than two days ago", full) \
+                and re.search(rf"how many {nn} did uncle welly plant", ql) \
+                and dok({m.group(1), m2.group(1)}):
             d2 = f(m.group(1))
             return _rs_ret(d2 + (d2 + f(m2.group(1))) + 2 * d2)
     # 166 g30 bills: (2*amt)/20
