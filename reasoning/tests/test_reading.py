@@ -8169,6 +8169,24 @@ class TestAnimalCategorySum(unittest.TestCase):
         self.assertEqual(reading.solve(
             "A garage has 30 sedans, 18 vans, and 12 trucks. How many vehicles are in the garage?"), 60)
 
+    def test_attribute_weighted_sum_coins_and_legs(self):
+        # #275: Σ(count × the member's semantic attribute) — coins have cent-values, animals have legs
+        self.assertEqual(reading._attr("quarters", "cents"), 25)
+        self.assertEqual(reading._attr("dog", "legs"), 4)
+        self.assertEqual(reading._attr("chickens", "legs"), 2)
+        # coins → dollars
+        self.assertEqual(reading.solve(
+            "Sam has 4 quarters, 2 dimes, and 3 pennies. How much money does Sam have?"), 1.23)
+        # legs — animals carry their leg-count; snakes contribute 0
+        self.assertEqual(reading.solve(
+            "At the pet shop, there were 2 dogs, 3 chickens, 4 snakes, and 5 cows. How many legs "
+            "were there in total?"), 34)
+
+    def test_legs_guard_still_declines_without_known_animals(self):
+        # GUARD 12 still fires when the world knowledge isn't available (a single relational count)
+        self.assertNotIsInstance(reading.solve(
+            "Camden has some dogs. What is the total number of legs his dogs have?"), (int, float))
+
     def test_category_count_sum_declines_when_not_a_pure_sum(self):
         # a non-member number present → not a pure category sum → decline (leave to another solver)
         self.assertNotIsInstance(reading.solve(

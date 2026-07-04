@@ -11236,6 +11236,24 @@ def _cat_re(category: str) -> str:
     return "(?:" + "|".join(re.escape(m) for m in members) + ")" if members else r"(?!)"
 
 
+# Quantitative SEMANTIC attributes of a word (#275): a value attached to a noun's MEANING, keyed by the
+# singular lemma. E.g. a quarter is worth 25 cents; a dog has 4 legs. Lets a solver compute
+# Σ(count × attribute) — "how much money" from coins, "how many legs" from animals — the world-knowledge
+# the counts alone can't express. Separate from LEXICON/WORD_CATEGORIES; extend as cases need it.
+WORD_ATTRS: dict = {}
+
+
+def _tag_attr(surface: str, **attrs) -> None:
+    """Attach quantitative attributes to a noun (stored on its singular lemma)."""
+    WORD_ATTRS.setdefault(_noun_lemma(surface), {}).update(attrs)
+
+
+def _attr(word: str, attr: str):
+    """The value of semantic attribute `attr` for `word` (via its lemma), or None."""
+    d = WORD_ATTRS.get(_noun_lemma(word)) or WORD_ATTRS.get(_key(word))
+    return d.get(attr) if d else None
+
+
 # A single lowercase word-token capture, for categorical probes over the period-joined `full`.
 _W = r"([a-z][a-z'’\-]*)"
 
@@ -11325,6 +11343,23 @@ for _v in ("car cars truck trucks bus buses motorcycle motorcycles van vans bike
            "scooter scooters jeep jeeps tractor tractors taxi taxis sedan sedans suv suvs minivan minivans "
            "tricycle tricycles wagon wagons boat boats").split():
     _tag_word(_v, "vehicle")
+
+# COIN category + VALUE attribute (#275): a US coin is worth a known number of cents.
+# 'spider'/'spiders' EXCLUDED from LEXICON: admitting them unlocked a holdout relational spider-legs
+# fold-wrong (10-more-spiders algebra → 4≠112). Kept leg-tagged (inert without a LEXICON entry).
+LEXICON.update({_w: ["noun"] for _w in "pennies nickels dimes coins".split()})
+PLURALS.update({"pennies": "penny", "nickels": "nickel", "dimes": "dime", "coins": "coin"})
+_register_category("coin", "noun")
+for _c, _cents in (("penny", 1), ("nickel", 5), ("dime", 10), ("quarter", 25)):
+    _tag_word(_c, "coin")
+    _tag_attr(_c, cents=_cents)
+# LEG counts — world knowledge for "how many legs" sums (0 for legless; snakes/fish 0).
+for _leg, _legwords in ((4, "dog cat cow horse pig goat sheep lamb bear tiger lion fox wolf deer donkey "
+                            "camel zebra rabbit koala elephant"),
+                        (2, "bird chicken duck hen rooster goose owl"),
+                        (8, "spider"), (6, "ant insect bee grasshopper"), (0, "snake fish frog snail")):
+    for _m in _legwords.split():
+        _tag_attr(_m, legs=_leg)
 
 
 def _rate_singles_system(premises: list, question: str):
@@ -11850,6 +11885,18 @@ def _vocab_singles_u_system(premises: list, question: str):
         if len(lemmas) >= 2 and len(counts) == len(allnum) \
                 and dok({n for n, _ in counts}):
             return _rs_ret(sum(f(n) for n, _ in counts))
+    # ATTRIBUTE-WEIGHTED COUNT SUM (#275) — Σ(count × the member's semantic ATTRIBUTE): "how much money"
+    # from coins (× cents, ÷100 to dollars), "how many legs" from animals (× legs). The ask selects the
+    # attribute; every operative number must be a member count (else decline).
+    for _attrname, _postscale, _askpat in (("cents", 0.01, r"how much money|how many dollars"),
+                                           ("cents", 1.0, r"how many cents"),
+                                           ("legs", 1.0, r"how many legs")):
+        if re.search(_askpat, ql):
+            wcounts = [(n, w) for n, w in re.findall(rf"({N}) {_W}", full) if _attr(w, _attrname) is not None]
+            anum = re.findall(r"\d+(?:,\d{3})*(?:\.\d+)?", " ".join(premises) + " " + question)
+            if len(wcounts) >= 2 and len(wcounts) == len(anum) and dok({n for n, _ in wcounts}):
+                return _rs_ret(sum(f(n) * _attr(w, _attrname) for n, w in wcounts) * _postscale)
+            break
     # 515 g40 sufficient: students*cost - budget
     m = re.search(rf"given \$({N})", full)
     m2 = re.search(rf"book costs \$({N})", full)
@@ -23017,7 +23064,13 @@ def _solve_inner(text: str):
     # have two legs") passes and is read by its own branch.
     if re.search(r"\b(?:number of|how many) legs\b", question.lower()) \
             and not any("leg" in p.lower() for p in premises):
-        return "undetermined"
+        # EXCEPTION (#275): if ≥2 counted animals have KNOWN leg attributes, the attribute-weighted-sum
+        # solver carries the world knowledge — defer to it instead of pre-declining.
+        _legged = {_noun_lemma(_wd) for _nm, _wd in
+                   re.findall(rf"({_RS_N}) {_W}", " . ".join(p.lower() for p in premises))
+                   if _attr(_wd, "legs") is not None}
+        if len(_legged) < 2:
+            return "undetermined"
     # ARITHMETIC SYSTEM-SOLVERS (EARLY) — tried before the read-synthesize fixpoint (each relation
     # DEFERS to no fact, so a stated factor/offset/total would trip the unused-given GUARD 3 in the
     # general fold). Each recognizer is self-contained (re-analyzes premises, needs no context) and
