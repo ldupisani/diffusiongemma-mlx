@@ -114,7 +114,12 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   LEXICON senses + `PLURALS` + `UNIT_NOUNS`; a `WORD_CATEGORIES` hook holds future semantic categories)
   instead of its literal string — so one branch generalizes across all words of that class (and onto
   unseen TEST nouns) instead of hard-coding the incidental noun. Category data is kept OUT of LEXICON
-  values (exact `==["noun"]` checks depend on the shape). The default for new singles-batches; see the
+  values (exact `==["noun"]` checks depend on the shape). Categories form a **hierarchy** (#259,
+  `CATEGORY_PARENTS`: `primate ⊂ animal ⊂ noun`) with three properties: NESTING/precedence (a narrow
+  tag satisfies broader ancestors; `_word_category` = deepest), SENSE-LINK (each category roots at one
+  sense; a word must HAVE that sense — so a noun+verb word's noun- and verb-hierarchies stay separate),
+  and BROADEN/NARROW (`_cat_ancestors`/`_cat_descendants` + `_register_category`/`_tag_word`) to tighten
+  a category as a guard when the broad one over-matches. The default for new singles-batches; see the
   playbook's "Categorical token matching" corollary. Strategy doc:
   `docs/logical-reading-playbook.md`; tests `reasoning/tests/test_reading.py` (curated/synthetic, never
   GSM8K). CLI: `python -m reasoning.reading "<text>" [--trace]`.

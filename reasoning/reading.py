@@ -10975,8 +10975,24 @@ def _rs_ret(v):
 # shape. Categories are DERIVED from data that already exists (LEXICON senses, PLURALS, UNIT_NOUNS,
 # the multiplier maps); they are NEVER merged into LEXICON values or features["senses"] (several exact
 # ==["noun"] / ==["title"] checks depend on that shape). WORD_CATEGORIES is a separate, initially-empty
-# hook for future curated SEMANTIC categories (animal/food/…), which the lexical senses can't express.
-WORD_CATEGORIES: dict = {}   # e.g. {"gorilla": {"animal", "primate"}}; seed only when a case needs it.
+# hook for curated SEMANTIC categories (animal/food/…) that the lexical senses can't express.
+#
+# Three structural properties (#259):
+#  • HIERARCHY / precedence: categories NEST via CATEGORY_PARENTS (primate ⊂ animal ⊂ noun). A word
+#    tagged with a narrow category satisfies every broader ancestor; "precedence" = specificity (the
+#    deepest matching category wins, via _word_category). This is what makes broaden/narrow meaningful.
+#  • SENSE-LINK: every category resolves (up its parent chain) to exactly ONE root SENSE, and a word
+#    satisfies a category ONLY when it HAS that root sense. So a noun+verb word ("rose") lives in a
+#    DIFFERENT hierarchy per sense — its noun-categories gate on the noun sense, its verb-categories on
+#    the verb sense — and the two never cross-contaminate.
+#  • BROADEN / NARROW: a branch names the granularity it needs. When a broad category ({noun}) over-
+#    matches and collides, NARROW to a child ({animal}); when a narrow one misses a valid case, BROADEN
+#    to a parent. _cat_ancestors/_cat_descendants navigate; the firewall (0 DECL→WRONG, 0-disagree)
+#    tells you which granularity is conflict-free.
+WORD_CATEGORIES: dict = {}      # surface -> set of its most-specific semantic categories; seed via _tag_word
+CATEGORY_PARENTS: dict = {      # child -> parent; roots (base senses) have no entry
+    "plural": "noun",           # an inflection refinement — every plural noun IS a noun
+}
 
 
 def _senses_of(word: str) -> list:
@@ -10995,9 +11011,10 @@ def _is_plural_noun(word: str) -> bool:
     return k.endswith("s") and "noun" in (LEXICON.get(k) or [])
 
 
-# category name -> predicate(surface) -> bool. Adding a category = adding one predicate (or seeding
-# WORD_CATEGORIES). Most reuse existing lexical data, so verbs/operators/multipliers/measures/
-# fractions are supported out of the box alongside nouns.
+# category name -> predicate(surface) -> bool, for the DERIVED base categories (rooted at a lexical
+# sense). Adding a derived category = adding one predicate; adding a SEMANTIC category = _register_category
+# + _tag_word. Most reuse existing lexical data, so verbs/operators/multipliers/measures/fractions are
+# supported out of the box alongside nouns.
 CATEGORY_PREDICATES = {
     "noun": lambda w: "noun" in _senses_of(w),
     "plural": _is_plural_noun,
@@ -11010,14 +11027,77 @@ CATEGORY_PREDICATES = {
 }
 CATEGORY_PREDICATES["dimension"] = CATEGORY_PREDICATES["measure"]   # alias
 
+_CAT_ANCESTOR_CACHE: dict = {}
+
+
+def _cat_ancestors(category: str) -> list:
+    """`[category, parent, …, root_sense]` — the broaden path. The last element is the root SENSE."""
+    out = _CAT_ANCESTOR_CACHE.get(category)
+    if out is None:
+        out, seen, c = [], set(), category
+        while c is not None and c not in seen:
+            out.append(c)
+            seen.add(c)
+            c = CATEGORY_PARENTS.get(c)
+        _CAT_ANCESTOR_CACHE[category] = out
+    return out
+
+
+def _cat_root_sense(category: str) -> str:
+    """The lexical sense a category ultimately specialises (walk to the top of the parent chain)."""
+    return _cat_ancestors(category)[-1]
+
+
+def _cat_descendants(category: str) -> set:
+    """`category` plus every registered category that has it as an ancestor — the narrow options."""
+    return {c for c in set(CATEGORY_PARENTS) | set(CATEGORY_PREDICATES) | {category}
+            if category in _cat_ancestors(c)}
+
+
+def _register_category(name: str, parent: str) -> None:
+    """Register a semantic category under `parent` (which chains up to a root sense). Idempotent;
+    clears the ancestor cache so the new nesting takes effect."""
+    CATEGORY_PARENTS[name] = parent
+    _CAT_ANCESTOR_CACHE.clear()
+
+
+def _tag_word(surface: str, *categories: str) -> None:
+    """Tag a surface with its most-specific semantic categories (their ancestors are inferred)."""
+    WORD_CATEGORIES.setdefault(_key(surface), set()).update(categories)
+
+
+def _has_root_sense(word: str, root: str) -> bool:
+    """Does `word` carry the sense that roots a category — the sense-link gate. Uses the base
+    predicate when the root is a derived category (so plurals inherit noun), else the raw senses."""
+    pred = CATEGORY_PREDICATES.get(root)
+    return pred(word) if pred is not None else root in _senses_of(word)
+
 
 def _cat(word: str, category: str) -> bool:
-    """True if `word` belongs to `category` — first via the derived CATEGORY_PREDICATES registry
-    (senses/plurals/units/multipliers), then via the curated WORD_CATEGORIES semantic map."""
+    """True if `word` belongs to `category`, honouring the hierarchy and the sense-link:
+      1) a DERIVED base predicate matches (noun/plural/verb/measure/…), or
+      2) the word carries `category` or one of its DESCENDANTS in WORD_CATEGORIES, AND the word has
+         `category`'s root sense (so a noun+verb word's noun- and verb-hierarchies stay separate)."""
     pred = CATEGORY_PREDICATES.get(category)
     if pred is not None and pred(word):
         return True
-    return category in WORD_CATEGORIES.get(_key(word), ())
+    if not _has_root_sense(word, _cat_root_sense(category)):
+        return False
+    assigned = WORD_CATEGORIES.get(_key(word), ())
+    return any(category in _cat_ancestors(tag) for tag in assigned)
+
+
+def _word_category(word: str, sense: str = None):
+    """The MOST-SPECIFIC (highest-precedence) semantic category assigned to `word`, optionally within
+    a given root `sense` — or None. Precedence = depth: a category with no assigned descendant wins."""
+    assigned = [t for t in WORD_CATEGORIES.get(_key(word), ())
+                if sense is None or _cat_root_sense(t) == sense]
+    best, best_depth = None, -1
+    for t in assigned:
+        depth = len(_cat_ancestors(t))
+        if depth > best_depth:
+            best, best_depth = t, depth
+    return best
 
 
 # A single lowercase word-token capture, for categorical probes over the period-joined `full`.

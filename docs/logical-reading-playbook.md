@@ -106,6 +106,23 @@ space is covered, not just nouns. **Category data is NEVER merged into LEXICON v
 separate, initially-empty `WORD_CATEGORIES` map is the hook for future *semantic* categories
 (animal/food/…) the lexical senses can't express.
 
+**The category taxonomy (#259)** gives three structural properties beyond a flat set:
+- **Hierarchy / precedence:** categories NEST via `CATEGORY_PARENTS` (`primate ⊂ animal ⊂ noun`);
+  a word tagged narrowly satisfies every broader ancestor (`_cat("gorilla","animal")` ← tagged
+  `primate`). Precedence = specificity: `_word_category(word[, sense])` returns the deepest match.
+- **Sense-link:** every category resolves up its parent chain to exactly ONE root SENSE, and a word
+  satisfies a category ONLY when it HAS that sense (`_has_root_sense`). So a noun+verb word ("rose")
+  lives in a DIFFERENT hierarchy per sense — flower/plant under `noun`, ascend/motion under `verb` —
+  and they never cross-contaminate; a noun-only word mis-asked for a verb-rooted category returns False.
+- **Broaden / narrow (the guard lever):** a branch names the granularity it needs. When a broad
+  category (`{noun}`) over-matches and collides, NARROW to a child (`{animal}`) so the conflicting
+  non-animal noun is excluded; when a narrow one misses a valid case, BROADEN to the parent.
+  `_cat_ancestors` / `_cat_descendants` navigate; the firewall (0 DECL→WRONG, 0-disagree) tells you
+  which granularity is conflict-free. Register with `_register_category(name, parent)`; tag words with
+  `_tag_word(surface, *cats)`. Base categories (noun/plural/verb/multiplier/measure/fraction) are
+  DERIVED predicates; SEMANTIC ones (animal/food/…) live in the separate `WORD_CATEGORIES` map (empty
+  until a case needs it — do not seed speculatively).
+
 The migration idiom (bind the noun ONCE, keep every other gate):
 ```python
 m = re.search(rf"total of ({N}) {_W}", full)          # capture the noun generically

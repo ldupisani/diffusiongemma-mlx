@@ -8032,5 +8032,70 @@ class TestCategoricalMatching(unittest.TestCase):
             "weeks ago. How many necklaces were there last week?"), 80)
 
 
+class TestCategoryHierarchy(unittest.TestCase):
+    """The category taxonomy (#259): nesting/precedence, sense-linkage, and broaden/narrow. Tests
+    register categories + tag words TEMPORARILY (restored on cleanup) so the module's WORD_CATEGORIES
+    stays empty and no solve() behaviour changes."""
+
+    def setUp(self):
+        # snapshot the mutable registries; restore exactly on teardown
+        self._parents = dict(reading.CATEGORY_PARENTS)
+        self._words = {k: set(v) for k, v in reading.WORD_CATEGORIES.items()}
+
+        def _restore():
+            reading.CATEGORY_PARENTS.clear()
+            reading.CATEGORY_PARENTS.update(self._parents)
+            reading.WORD_CATEGORIES.clear()
+            reading.WORD_CATEGORIES.update(self._words)
+            reading._CAT_ANCESTOR_CACHE.clear()
+        self.addCleanup(_restore)
+        reading._register_category("animal", "noun")
+        reading._register_category("primate", "animal")
+        reading._register_category("container", "noun")
+
+    def test_nesting_broadens_upward(self):
+        reading._tag_word("students", "primate")     # a known plural noun tagged narrowly
+        self.assertTrue(reading._cat("students", "primate"))   # exact
+        self.assertTrue(reading._cat("students", "animal"))    # BROADEN to parent
+        self.assertTrue(reading._cat("students", "noun"))      # broaden to the root sense
+        self.assertFalse(reading._cat("students", "container"))  # a sibling category
+
+    def test_narrowing_excludes_generic_members(self):
+        reading._tag_word("cats", "animal")           # tagged only at the broad level
+        self.assertTrue(reading._cat("cats", "animal"))
+        self.assertFalse(reading._cat("cats", "primate"))  # a generic animal is NOT a primate (guard)
+
+    def test_sense_link_gates_on_root_sense(self):
+        # "rose" is noun+verb; its noun- and verb-categories live in separate hierarchies
+        self.assertEqual(set(reading._senses_of("rose")), {"noun", "verb"})
+        reading._register_category("flower", "noun")
+        reading._register_category("ascend", "verb")
+        reading._tag_word("rose", "flower", "ascend")
+        self.assertTrue(reading._cat("rose", "flower"))    # rose HAS the noun sense
+        self.assertTrue(reading._cat("rose", "ascend"))    # rose HAS the verb sense
+        # a noun-only word mis-tagged with a verb-rooted category fails the sense-link gate
+        reading._tag_word("students", "ascend")
+        self.assertFalse(reading._cat("students", "ascend"))
+
+    def test_precedence_is_specificity(self):
+        reading._tag_word("students", "primate")
+        self.assertEqual(reading._word_category("students"), "primate")   # deepest wins
+        self.assertEqual(reading._word_category("students", sense="noun"), "primate")
+        self.assertIsNone(reading._word_category("students", sense="verb"))
+
+    def test_ancestors_and_descendants(self):
+        self.assertEqual(reading._cat_ancestors("primate"), ["primate", "animal", "noun"])
+        self.assertEqual(reading._cat_root_sense("primate"), "noun")
+        self.assertTrue({"animal", "primate"} <= reading._cat_descendants("noun"))
+
+    def test_unknown_word_never_satisfies_a_category(self):
+        reading._tag_word("zzzunknowns", "animal")    # not in LEXICON → no noun sense
+        self.assertFalse(reading._cat("zzzunknowns", "animal"))
+
+    def test_word_categories_module_state_stays_empty(self):
+        # the module ships with NO seeded semantic tags (the hook is empty until a case needs it)
+        self.assertEqual(reading.WORD_CATEGORIES, {})
+
+
 if __name__ == "__main__":
     unittest.main()
