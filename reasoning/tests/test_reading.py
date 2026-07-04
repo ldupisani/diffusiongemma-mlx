@@ -8204,7 +8204,18 @@ class TestAnimalCategorySum(unittest.TestCase):
         self.assertEqual(reading._scale("10 times"), 10)
         self.assertEqual(reading._scale("1.5 times"), 1.5)
         self.assertEqual(reading._scale("one and a half times"), 1.5)
+        self.assertEqual(reading._scale("2/5 times"), 0.4)      # #273: digit-fraction scale
+        self.assertEqual(reading._scale("1/4 times"), 0.25)
         self.assertIsNone(reading._scale("half times"))
+
+    def test_fraction_times_more_coefficient_is_read(self):
+        # #273: '2/5 times more' was hardcoded (1 + 2/5); the fraction is now read, so '3/5 times more'
+        # ((1 + 3/5) = 1.6) works too
+        base = ("Aitana and Jayda went to Silverlake Flea market to buy some handmade crafts. Aitana "
+                "spent {} times more money than Jayda at the market. If Jayda spent $400, calculate "
+                "the total amount of money they spent together.")
+        self.assertEqual(reading.solve(base.format("2/5")), 960)    # 400 + 400*1.4
+        self.assertEqual(reading.solve(base.format("3/5")), 1040)   # 400 + 400*1.6
 
     def test_n_times_coefficient_is_read(self):
         # the hula branch hardcoded 'three times' as 3; 'four times' now reads 4

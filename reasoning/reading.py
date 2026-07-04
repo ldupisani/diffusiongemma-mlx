@@ -891,14 +891,20 @@ SCALES = {"dozen": 12, "hundred": 100, "thousand": 1000, "million": 1000000, "bi
 # read its coefficient from any of those forms instead of hardcoding it.
 _NUMWORD_RE = "|".join(re.escape(w) for w in sorted(NUMBERS, key=len, reverse=True))
 _NUM_PAT = r"\d+(?:,\d{3})*(?:\.\d+)?"
-_SCALE_RE = rf"(?:{_MULT_RE}|(?:one and a half|{_NUM_PAT}|{_NUMWORD_RE}) times)"
+_FRAC_PAT = r"\d+/\d+"                      # a digit fraction, e.g. "2/5 times"
+_SCALE_NUM = rf"(?:one and a half|{_FRAC_PAT}|{_NUM_PAT}|{_NUMWORD_RE})"
+_SCALE_RE = rf"(?:{_MULT_RE}|{_SCALE_NUM} times)"
 
 
 def _num_word_value(w: str):
-    """Numeric value of a count token: a digit (comma/decimal ok), a NUMBERS word, or 'one and a half'."""
+    """Numeric value of a count token: a digit fraction (2/5), a digit (comma/decimal ok), a NUMBERS
+    word, or 'one and a half'."""
     w = w.strip()
     if w == "one and a half":
         return 1.5
+    if re.fullmatch(_FRAC_PAT, w):
+        a, b = w.split("/")
+        return float(a) / float(b)
     if w in NUMBERS:
         return float(NUMBERS[w])
     try:
@@ -908,11 +914,13 @@ def _num_word_value(w: str):
 
 
 def _scale(token: str):
-    """The numeric value of a SCALE token — a MULTIPLIERS word or '<n> times' — or None."""
+    """The numeric value of a SCALE token — a MULTIPLIERS word or '<n> times' (n = int/decimal/word/
+    fraction) — or None. This is the BARE scale; a branch applies direction: 'F times more' = 1+F,
+    'F times as many' = F, 'F times fewer' = 1-F."""
     t = token.strip()
     if t in MULTIPLIERS:
         return MULTIPLIERS[t]
-    m = re.match(rf"(one and a half|{_NUM_PAT}|{_NUMWORD_RE}) times$", t)
+    m = re.match(rf"({_SCALE_NUM}) times$", t)
     return _num_word_value(m.group(1)) if m else None
 
 
@@ -12590,10 +12598,11 @@ def _vocab_singles_s_system(premises: list, question: str):
             return _rs_ret(f(m.group(1)) + f(m3.group(1)) * 60 / f(m2.group(1)))
     # 437 g960 crafts: jayda + jayda*(1+2/5)
     m = re.search(rf"jayda spent \$({N})", full)
-    if m and "2/5 times more money than jayda" in full and "total amount of money they spent together" in ql:
-        if dok({m.group(1), "2", "5"}):
+    mk = re.search(rf"({_SCALE_RE}) more money than jayda", full)
+    if m and mk and "total amount of money they spent together" in ql:
+        if dok({m.group(1), *re.findall(r"\d+", mk.group(1))}):
             j = f(m.group(1))
-            return _rs_ret(j + j * (1 + 2 / 5))
+            return _rs_ret(j + j * (1 + _scale(mk.group(1))))
     # 438 g130 vacuuming: v_min*v_days + d_min*d_days
     m = re.search(rf"({N}) minutes/day three times a week vacuuming", full)
     m2 = re.search(rf"({N}) minutes/day ({N}) days a week dusting", full)
@@ -17342,11 +17351,11 @@ def _vocab_singles_e_system(premises: list, question: str):
             return _rs_ret(3 * w(l2.group(1)))
     # 11. 1/4-times-fewer bananas shared equally
     b1 = re.search(rf"has ({N}) bananas", full)
-    b2 = re.search(r"has 1/4 times fewer bananas", full)
+    b2 = re.search(rf"has ({_SCALE_RE}) fewer bananas", full)
     if b1 and b2 and "share them equally between themselves" in full and "how many bananas" in ql:
-        if dok({b1.group(1), "1", "4"}):
+        if dok({b1.group(1), *re.findall(r"\d+", b2.group(1))}):
             a = f(b1.group(1))
-            return _rs_ret((a + a * 3 / 4) / 2)
+            return _rs_ret((a + a * (1 - _scale(b2.group(1)))) / 2)
     # 12. quiz score needed for target average
     q1 = re.search(rf"taken ({N}) quizzes", full)
     q2 = re.search(rf"averaged a ({N})% score", full)
