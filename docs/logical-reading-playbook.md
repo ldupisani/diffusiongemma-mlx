@@ -122,6 +122,14 @@ separate, initially-empty `WORD_CATEGORIES` map is the hook for future *semantic
   `_tag_word(surface, *cats)`. Base categories (noun/plural/verb/multiplier/measure/fraction) are
   DERIVED predicates; SEMANTIC ones (animal/food/…) live in the separate `WORD_CATEGORIES` map (empty
   until a case needs it — do not seed speculatively).
+- **Singular↔plural association (#260):** a noun's two number-forms share ONE identity. `_noun_lemma`
+  (NB: distinct from the VERB lemmatizer `_lemma` — a name clash there was the one regression, caught by
+  the suite) gives the canonical singular key (`campers`/`camper`→`camper`, `loaves`/`loaf`→`loaf` via
+  the inverted PLURALS), `_plural_of` inverts PLURALS, and `_number_re(word)` builds a fragment matching
+  EITHER number (`(?:campers|camper)`). `catsearch` binds noun-rooted `#cat:name#` tokens **by lemma**,
+  so a branch can bind a plural in one probe and match the singular in another (`.named[name]` is the
+  lemma, `.words` the surfaces). Use `#nn#` (noun = any number, lemma-unified) vs `#pl#` (plural-only);
+  reinsert a bound noun form-agnostically with `_number_re`, not `re.escape` (which would pin the number).
 
 The migration idiom (bind the noun ONCE, keep every other gate):
 ```python

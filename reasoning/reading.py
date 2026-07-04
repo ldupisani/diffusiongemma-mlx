@@ -11011,6 +11011,57 @@ def _is_plural_noun(word: str) -> bool:
     return k.endswith("s") and "noun" in (LEXICON.get(k) or [])
 
 
+# Singular↔plural association, so a noun's two number-forms share ONE identity (gorilla/gorillas): a
+# categorical search can bind one form and match the other, and same-noun binding survives a number
+# change. _lemma is the canonical singular key; _number_re matches either form.
+_PLURAL_INVERSE: dict = {}      # singular -> plural, inverted from PLURALS (built lazily)
+
+
+def _plural_of(singular: str):
+    """The registered plural of a singular noun (the inverse of PLURALS / _singular_of), or None."""
+    if not _PLURAL_INVERSE:
+        for _pl, _sg in PLURALS.items():
+            _PLURAL_INVERSE.setdefault(_sg, _pl)
+    return _PLURAL_INVERSE.get(_key(singular))
+
+
+def _noun_lemma(word: str) -> str:
+    """The canonical SINGULAR key of a noun surface, so its singular and plural forms map to one
+    identity ('gorilla'/'gorillas' → 'gorilla'). A registered plural → its singular; a regular -s/-es
+    plural whose de-inflected form is a known noun → that form; else the surface key unchanged.
+    (Distinct from `_lemma`, which is the VERB lemmatizer.)"""
+    sing = _singular_of(word)
+    if sing:
+        return sing
+    k = _key(word)
+    if k.endswith("es") and "noun" in (LEXICON.get(k[:-2]) or []):
+        return k[:-2]
+    if k.endswith("s") and "noun" in (LEXICON.get(k[:-1]) or []):
+        return k[:-1]
+    return k
+
+
+def _number_variants(word: str) -> set:
+    """Both number forms (singular + plural surfaces) of a noun. Uses the registered irregular plural
+    when known, else a regular -s/-es rule — this MATCHES text, it never asserts a fact, so the light
+    rule is safe here even though annotate_number never guesses."""
+    lemma = _noun_lemma(word)
+    forms = {lemma, _key(word)}
+    plural = _plural_of(lemma)
+    if plural:
+        forms.add(plural)
+    elif not lemma.endswith("s"):     # regular rule; skip if we couldn't reduce a plural (avoids "gorillases")
+        forms.add(lemma + ("es" if lemma.endswith(("x", "z", "ch", "sh")) else "s"))
+    return forms
+
+
+def _number_re(word: str) -> str:
+    """A regex fragment matching `word` in EITHER number, e.g. '(?:gorillas|gorilla)'. Longest form
+    first so the plural is not shadowed by its singular prefix."""
+    forms = sorted(_number_variants(word), key=len, reverse=True)
+    return "(?:" + "|".join(re.escape(v) for v in forms) + ")"
+
+
 # category name -> predicate(surface) -> bool, for the DERIVED base categories (rooted at a lexical
 # sense). Adding a derived category = adding one predicate; adding a SEMANTIC category = _register_category
 # + _tag_word. Most reuse existing lexical data, so verbs/operators/multipliers/measures/fractions are
@@ -11146,9 +11197,13 @@ def catsearch(template: str, text: str):
             if not _cat(val, kind):
                 ok = False
                 break
-            if name is not None and named.setdefault(name, val) != val:
-                ok = False
-                break
+            # bind named tokens by LEMMA for noun-rooted categories, so a singular and its plural
+            # ("gorilla"/"gorillas") unify as the SAME token; by surface otherwise.
+            if name is not None:
+                bind = _noun_lemma(val) if _cat_root_sense(kind) == "noun" else val
+                if named.setdefault(name, bind) != bind:
+                    ok = False
+                    break
             words.append(val)
         if ok:
             return _CatMatch(nums, words, named)
@@ -11783,12 +11838,13 @@ def _vocab_singles_u_system(premises: list, question: str):
         if dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret(f(m.group(1)) - f(m3.group(1)) * f(m2.group(1)))
     # 537 g80 campers: total - twoweeks - (twoweeks - 10)  (noun CATEGORICAL via catsearch — the
-    # user's exemplar: "campers" is incidental, any plural noun of the same shape now solves)
+    # user's exemplar: "campers" is incidental, any plural noun of the same shape now solves. The bound
+    # token unifies by LEMMA, and the ask is matched in EITHER number via _number_re)
     cm = catsearch("total of #N# #pl:x#", full)
     cm2 = catsearch("there were #N# #pl:x#", full)
     m3 = re.search(rf"({N}) more than the number", full)
     if cm and cm2 and m3 and cm.named["x"] == cm2.named["x"] \
-            and re.search(rf"how many {re.escape(cm.named['x'])} were there last week", ql):
+            and re.search(rf"how many {_number_re(cm.named['x'])} were there last week", ql):
         if dok({cm.nums[0], cm2.nums[0], m3.group(1)}):
             two = f(cm2.nums[0])
             return _rs_ret(f(cm.nums[0]) - two - (two - f(m3.group(1))))

@@ -8002,8 +8002,9 @@ class TestCategoricalMatching(unittest.TestCase):
                               "total of 150 campers . there were 40 campers")
         self.assertIsNotNone(m)
         self.assertEqual(m.nums, ["150", "40"])
-        self.assertEqual(m.named["x"], "campers")
-        # a repeated named token must bind the SAME surface
+        self.assertEqual(m.named["x"], "camper")     # noun-rooted tokens bind by LEMMA (#260)
+        self.assertEqual(m.words, ["campers", "campers"])
+        # a repeated named token must bind the SAME lemma
         self.assertIsNone(reading.catsearch("total of #N# #pl:x# . there were #N# #pl:x#",
                                             "total of 150 campers . there were 40 gorillas"))
         # the second token here is a verb, not a plural noun → no match
@@ -8095,6 +8096,41 @@ class TestCategoryHierarchy(unittest.TestCase):
     def test_word_categories_module_state_stays_empty(self):
         # the module ships with NO seeded semantic tags (the hook is empty until a case needs it)
         self.assertEqual(reading.WORD_CATEGORIES, {})
+
+
+class TestNumberLemma(unittest.TestCase):
+    """Singular↔plural association (#260): a noun's two number-forms share ONE identity, so a
+    categorical search can bind one form and match the other."""
+
+    def test_lemma_unifies_number_forms(self):
+        for sing, plur in [("camper", "campers"), ("child", "children"),
+                           ("loaf", "loaves"), ("box", "boxes")]:
+            self.assertEqual(reading._noun_lemma(sing), reading._noun_lemma(plur))
+            self.assertEqual(reading._noun_lemma(plur), sing)
+
+    def test_plural_of_inverts_plurals(self):
+        self.assertEqual(reading._plural_of("child"), "children")
+        self.assertEqual(reading._plural_of("loaf"), "loaves")
+
+    def test_number_re_matches_either_form(self):
+        self.assertRegex("one camper left", reading._number_re("campers"))   # bound plural, text singular
+        self.assertRegex("five campers left", reading._number_re("camper"))  # bound singular, text plural
+        # an unreducible plural does not spawn a bogus double plural
+        self.assertNotIn("gorillases", reading._number_re("gorillas"))
+
+    def test_catsearch_binds_singular_and_plural_as_one_lemma(self):
+        m = reading.catsearch("#N# #nn:x# and one #nn:x#", "5 campers and one camper")
+        self.assertIsNotNone(m)
+        self.assertEqual(m.named["x"], "camper")            # unified by lemma
+        self.assertEqual(m.words, ["campers", "camper"])    # the actual surfaces kept
+        # two DIFFERENT nouns still do not unify
+        self.assertIsNone(reading.catsearch("#N# #nn:x# and one #nn:x#", "5 campers and one gorilla"))
+
+    def test_campers_branch_still_solves(self):
+        self.assertEqual(reading.solve(
+            "A camping site recorded a total of 150 campers for the past three weeks. Two weeks ago, "
+            "there were 40 campers which was 10 more than the number of campers three weeks ago. How "
+            "many campers were there last week?"), 80)
 
 
 if __name__ == "__main__":

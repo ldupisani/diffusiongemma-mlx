@@ -119,8 +119,11 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   tag satisfies broader ancestors; `_word_category` = deepest), SENSE-LINK (each category roots at one
   sense; a word must HAVE that sense — so a noun+verb word's noun- and verb-hierarchies stay separate),
   and BROADEN/NARROW (`_cat_ancestors`/`_cat_descendants` + `_register_category`/`_tag_word`) to tighten
-  a category as a guard when the broad one over-matches. The default for new singles-batches; see the
-  playbook's "Categorical token matching" corollary. Strategy doc:
+  a category as a guard when the broad one over-matches. **Singular↔plural association** (#260):
+  `_noun_lemma` (≠ the verb `_lemma`) canonicalises a noun's number-forms to one identity, `_number_re`
+  matches either form, and `catsearch` binds noun-rooted tokens BY LEMMA — so a branch binds a plural in
+  one probe and matches the singular in another (`#nn#` = any number, `#pl#` = plural-only). The default
+  for new singles-batches; see the playbook's "Categorical token matching" corollary. Strategy doc:
   `docs/logical-reading-playbook.md`; tests `reasoning/tests/test_reading.py` (curated/synthetic, never
   GSM8K). CLI: `python -m reasoning.reading "<text>" [--trace]`.
 - **`reasoning/reading_bench.py`** — INDEPENDENT GSM8K coverage harness for `reading.solve` (mirrors
