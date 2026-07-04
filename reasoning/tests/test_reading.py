@@ -8093,9 +8093,22 @@ class TestCategoryHierarchy(unittest.TestCase):
         reading._tag_word("zzzunknowns", "animal")    # not in LEXICON → no noun sense
         self.assertFalse(reading._cat("zzzunknowns", "animal"))
 
-    def test_word_categories_module_state_stays_empty(self):
-        # the module ships with NO seeded semantic tags (the hook is empty until a case needs it)
-        self.assertEqual(reading.WORD_CATEGORIES, {})
+    def test_cat_re_masks_including_subcategories(self):
+        # a category MASK matches only its members, and a member of a SUBCATEGORY counts
+        reading._tag_word("cats", "animal")
+        reading._tag_word("gorillas", "primate")      # primate ⊂ animal (registered in setUp)
+        mask = reading._cat_re("animal")
+        self.assertRegex("five cats ran", mask)
+        self.assertRegex("two gorillas", mask)         # subcategory member matches the broad mask
+        self.assertNotRegex("three tables", mask)
+        self.assertEqual(reading._cat_re("nosuchcategory"), r"(?!)")   # empty → never matches
+
+    def test_animal_category_seeded(self):
+        # #265 seeds the first SEMANTIC category — animals (subcategory of noun)
+        self.assertTrue(reading._cat("lions", "animal"))
+        self.assertTrue(reading._cat("giraffes", "animal"))
+        self.assertTrue(reading._cat("lions", "noun"))        # broadens to its root sense
+        self.assertFalse(reading._cat("tables", "animal"))
 
 
 class TestNumberLemma(unittest.TestCase):
@@ -8131,6 +8144,26 @@ class TestNumberLemma(unittest.TestCase):
             "A camping site recorded a total of 150 campers for the past three weeks. Two weeks ago, "
             "there were 40 campers which was 10 more than the number of campers three weeks ago. How "
             "many campers were there last week?"), 80)
+
+
+class TestAnimalCategorySum(unittest.TestCase):
+    """#265: the two-scenario animal-category sum — the first solver driven by the classification
+    system. The animal members and every coefficient are read from the text, so it generalises."""
+
+    def test_original(self):
+        self.assertEqual(reading.solve(
+            "Safari National park has 100 lions, half as many snakes, and 10 fewer giraffes than "
+            "snakes. On the other hand, Savanna National park has double as many lions as Safari "
+            "National park, triple as many snakes as Safari National park, and 20 more giraffes than "
+            "Safari National park. How many animals in total does Savanna National park have?"), 410)
+
+    def test_generalises_over_animals_and_coefficients(self):
+        # different animals (cows/pigs/goats) AND different coefficients (triple/double/5/30)
+        self.assertEqual(reading.solve(
+            "Safari National park has 80 cows, half as many pigs, and 5 fewer goats than pigs. On the "
+            "other hand, Savanna National park has triple as many cows as Safari National park, double "
+            "as many pigs as Safari National park, and 30 more goats than Safari National park. How "
+            "many animals in total does Savanna National park have?"), 385)
 
 
 if __name__ == "__main__":

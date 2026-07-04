@@ -130,6 +130,20 @@ separate, initially-empty `WORD_CATEGORIES` map is the hook for future *semantic
   so a branch can bind a plural in one probe and match the singular in another (`.named[name]` is the
   lemma, `.words` the surfaces). Use `#nn#` (noun = any number, lemma-unified) vs `#pl#` (plural-only);
   reinsert a bound noun form-agnostically with `_number_re`, not `re.escape` (which would pin the number).
+- **Masked category matching + the first semantic category (#265):** `_cat_re(category)` builds a regex
+  fragment that MATCHES ONLY that category's members (and its subcategories) — a category MASK, e.g.
+  `_cat_re("animal") → "(?:giraffes|…|lion)"`. Prefer masking (`rf"has ({N}) ({_cat_re(cat)})"`) over
+  capture-then-`_cat`-check: the regex can then only bind a category member, and subcategory members
+  match the broad mask automatically. `_category_members(cat)` is the enumerable membership (semantic
+  categories only — `noun`/`verb` aren't enumerable). The `animal` category is seeded in
+  `WORD_CATEGORIES` (lions/snakes/giraffes/cows/… — tagging is orthogonal to LEXICON, so tagging an
+  excluded/absent word is harmless). **Do NOT hardcode the category in a solver — take it from the
+  QUESTION:** the two-scenario category-sum solver (#514) does `cat = _noun_lemma(<"how many X in
+  total">)`, then masks with `_cat_re(cat)` and READS every coefficient (half/double/triple/N-fewer/
+  N-more) from the text — so one solver handles any category with tagged subcategories and any of those
+  quantities (lions/snakes/giraffes → cows/pigs/goats both solve). An unregistered/empty category makes
+  `_cat_re` return `(?!)` (never-matches → safe decline). This is the hypernym facility the older
+  solvers explicitly route around (`reading.py` `_noun_affine_system`), now built.
 
 The migration idiom (bind the noun ONCE, keep every other gate):
 ```python

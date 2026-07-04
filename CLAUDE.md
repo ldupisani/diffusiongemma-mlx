@@ -119,7 +119,13 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   tag satisfies broader ancestors; `_word_category` = deepest), SENSE-LINK (each category roots at one
   sense; a word must HAVE that sense — so a noun+verb word's noun- and verb-hierarchies stay separate),
   and BROADEN/NARROW (`_cat_ancestors`/`_cat_descendants` + `_register_category`/`_tag_word`) to tighten
-  a category as a guard when the broad one over-matches. **Singular↔plural association** (#260):
+  a category as a guard when the broad one over-matches. **Masked category matching** (#265):
+  `_cat_re(category)` builds a regex that matches ONLY that category's members + subcategories (a mask),
+  `_category_members` its enumerable membership; the first SEMANTIC category `animal` is seeded in
+  `WORD_CATEGORIES`. The two-scenario category-sum solver (#514) takes the category from the QUESTION
+  ("how many <cat> in total") and reads every coefficient from the text — nothing hardcoded — so it
+  generalizes across categories and quantities (the hypernym facility the older solvers route around).
+  **Singular↔plural association** (#260):
   `_noun_lemma` (≠ the verb `_lemma`) canonicalises a noun's number-forms to one identity, `_number_re`
   matches either form, and `catsearch` binds noun-rooted tokens BY LEMMA — so a branch binds a plural in
   one probe and matches the singular in another (`#nn#` = any number, `#pl#` = plural-only). The default

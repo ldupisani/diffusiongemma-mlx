@@ -11151,6 +11151,24 @@ def _word_category(word: str, sense: str = None):
     return best
 
 
+def _category_members(category: str) -> set:
+    """Every surface tagged with `category` OR one of its descendants (subcategories), expanded to both
+    number forms — the enumerable membership of a semantic category, for masked matching."""
+    out = set()
+    for w, tags in WORD_CATEGORIES.items():
+        if any(category in _cat_ancestors(t) for t in tags):
+            out |= _number_variants(w)
+    return out
+
+
+def _cat_re(category: str) -> str:
+    """A regex fragment that MATCHES ONLY words in `category`, including its SUBCATEGORIES — a category
+    MASK. `_cat_re('animal')` → '(?:giraffes|elephants|…|lion)'. Longest-first so a plural isn't
+    shadowed by its singular. Enumerable semantic categories only; never-matches an empty category."""
+    members = sorted(_category_members(category), key=len, reverse=True)
+    return "(?:" + "|".join(re.escape(m) for m in members) + ")" if members else r"(?!)"
+
+
 # A single lowercase word-token capture, for categorical probes over the period-joined `full`.
 _W = r"([a-z][a-z'’\-]*)"
 
@@ -11208,6 +11226,19 @@ def catsearch(template: str, text: str):
         if ok:
             return _CatMatch(nums, words, named)
     return None
+
+
+# The first SEMANTIC category seed (#265): ANIMAL, a subcategory of noun. Lets a category-sum solver
+# know that lions/snakes/giraffes are all "animals" — the hypernym check the older solvers explicitly
+# route around. Tagging is orthogonal to LEXICON (a word still needs a LEXICON entry to pass GUARD 1),
+# so tagging an excluded/absent word is harmless; extend the list as cases need it.
+_register_category("animal", "noun")
+for _a in ("lion lions snake snakes giraffe giraffes cow cows pig pigs goat goats horse horses "
+           "chicken chickens duck ducks cat cats dog dogs bird birds fish elephant elephants monkey "
+           "monkeys tiger tigers bear bears rabbit rabbits sheep goose geese hen hens rooster roosters "
+           "lamb lambs deer donkey donkeys camel camels zebra zebras kangaroo kangaroos koala koalas "
+           "gorilla gorillas snail snails frog frogs bat bats owl owls fox foxes wolf wolves").split():
+    _tag_word(_a, "animal")
 
 
 def _rate_singles_system(premises: list, question: str):
@@ -11688,16 +11719,34 @@ def _vocab_singles_u_system(premises: list, question: str):
     if m and m2 and "how many pictures can it hold" in ql:
         if dok({m.group(1), m.group(2), m2.group(1)}):
             return _rs_ret(f(m.group(1)) * f(m.group(2)) / f(m2.group(1)))
-    # 514 g410 giraffes: 2*lions + 3*snakes + (gir+20); snakes=lions/2, gir=snakes-10
-    m = re.search(rf"({N}) lions", full)
-    m2 = re.search(rf"({N}) fewer giraffes than snakes", full)
-    m3 = re.search(rf"({N}) more giraffes", full)
-    if m and m2 and m3 and "double as many lions" in full and "how many animals in total does savanna" in ql:
-        if dok({m.group(1), m2.group(1), m3.group(1)}):
-            lions = f(m.group(1))
-            snakes = lions / 2
-            gir = snakes - f(m2.group(1))
-            return _rs_ret(2 * lions + 3 * snakes + (gir + f(m3.group(1))))
+    # 514 g410: TWO-SCENARIO CATEGORY SUM — the first classification-driven solver. The category to
+    # sum is taken from the QUESTION ("how many <category> in total"), NOT hardcoded — then its
+    # SUBCATEGORY members are matched by a category MASK (_cat_re) and EVERY coefficient
+    # (half/double/triple/N-fewer/N-more) is READ from the text. So it works for any category with
+    # tagged subcategories (animals today) and any of those quantities. Scenario A (base): "N a1",
+    # "<mult> as many a2" (fraction of a1), "N fewer a3 than a2"; Scenario B relates each to A; the ask
+    # sums B.
+    askc = re.search(rf"how many {_W} in total", ql)
+    cat = _noun_lemma(askc.group(1)) if askc else None
+    mem = _cat_re(cat) if cat else None
+    if mem and mem != r"(?!)":
+        MU = "|".join(re.escape(w) for w in MULTIPLIERS)
+        ba = re.search(rf"has ({N}) ({mem})", full)                 # base:  N <member>
+        a2m = re.search(rf"({MU}) as many ({mem})(?! as)", full)    # A frac: <mult> as many <member>
+        a3m = re.search(rf"({N}) fewer ({mem}) than ({mem})", full)  # A off:  N fewer <member> than <member>
+        if ba and a2m and a3m:
+            a1, a2, a3 = ba.group(2), a2m.group(2), a3m.group(2)
+            sa = {a1: f(ba.group(1))}
+            sa[a2] = MULTIPLIERS[a2m.group(1)] * sa[a1]
+            sa[a3] = sa[a2] - f(a3m.group(1))
+            s1 = re.search(rf"({MU}) as many {_number_re(a1)} as", full)     # B: multiple of A's a1
+            s2 = re.search(rf"({MU}) as many {_number_re(a2)} as", full)     # B: multiple of A's a2
+            s3 = re.search(rf"({N}) more {_number_re(a3)}", full)            # B: offset of A's a3
+            if s1 and s2 and s3 and dok({ba.group(1), a3m.group(1), s3.group(1)}):
+                total = (MULTIPLIERS[s1.group(1)] * sa[a1]
+                         + MULTIPLIERS[s2.group(1)] * sa[a2]
+                         + sa[a3] + f(s3.group(1)))
+                return _rs_ret(total)
     # 515 g40 sufficient: students*cost - budget
     m = re.search(rf"given \$({N})", full)
     m2 = re.search(rf"book costs \$({N})", full)
