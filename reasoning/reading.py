@@ -11276,6 +11276,25 @@ for _a in ("lion lions snake snakes giraffe giraffes cow cows pig pigs goat goat
            "gorilla gorillas snail snails frog frogs bat bats owl owls fox foxes wolf wolves").split():
     _tag_word(_a, "animal")
 
+# VEHICLE (#272), a subcategory of noun — cars/trucks/buses/… are all "vehicles". Seeding the category
+# only teaches the hierarchy; a vehicle word still needs a LEXICON entry to pass GUARD 1, so admit the
+# common vehicle nouns (+ their plurals) here too.
+# 'motorcycle'/'motorcycles' EXCLUDED from LEXICON: admitting them unlocked a holdout money fold-wrong
+# (Jake spends $2800 on a motorcycle → 1100≠825). Kept category-tagged (inert without a LEXICON entry).
+LEXICON.update({_w: ["noun"] for _w in (
+    "van vans scooter scooters tricycle tricycles jeep jeeps sedan sedans suv "
+    "suvs minivan minivans taxi taxis wagon wagons boat boats vehicles buses vehicle").split()})
+PLURALS.update({"cars": "car", "trucks": "truck", "buses": "bus", "vehicles": "vehicle",
+                "bicycles": "bicycle", "tractors": "tractor",
+                "vans": "van", "scooters": "scooter", "tricycles": "tricycle", "jeeps": "jeep",
+                "sedans": "sedan", "suvs": "suv", "minivans": "minivan", "taxis": "taxi",
+                "wagons": "wagon", "boats": "boat"})
+_register_category("vehicle", "noun")
+for _v in ("car cars truck trucks bus buses motorcycle motorcycles van vans bike bikes bicycle bicycles "
+           "scooter scooters jeep jeeps tractor tractors taxi taxis sedan sedans suv suvs minivan minivans "
+           "tricycle tricycles wagon wagons boat boats").split():
+    _tag_word(_v, "vehicle")
+
 
 def _rate_singles_system(premises: list, question: str):
     """RATE/PRODUCT SINGLES (#226) — sixteen tightly-gated branches over the unit-rate bucket
@@ -11783,6 +11802,23 @@ def _vocab_singles_u_system(premises: list, question: str):
                          + MULTIPLIERS[s2.group(1)] * sa[a2]
                          + sa[a3] + f(s3.group(1)))
                 return _rs_ret(total)
+    # CATEGORY COUNT SUM — "how many <category>" answered by summing the BARE counts of that category's
+    # members (classification-driven, any registered semantic category: animal/vehicle/…). Fires only on
+    # the pure-sum shape: ≥2 distinct members, and EVERY operative number is a member count (so a
+    # relational problem — e.g. the two-scenario #514 — is left to its own solver). The category comes
+    # from the question, so "how many vehicles" sums cars+trucks+buses, "how many animals" sums the animals.
+    # the category must be the ASKED HEAD (followed by a function word), not a modifier — else
+    # "how many animal LEGS" would wrongly read "animal" as the summed category.
+    askc = re.search(rf"how many {_W} (?:in|are|were|does|did|do|will|remain|left|combined|altogether|total)\b", ql)
+    cat = _noun_lemma(askc.group(1)) if askc else None
+    mem = _cat_re(cat) if cat else None
+    if mem and mem != r"(?!)":
+        counts = re.findall(rf"({N}) ({mem})", full)
+        allnum = re.findall(r"\d+(?:,\d{3})*(?:\.\d+)?", " ".join(premises) + " " + question)
+        lemmas = {_noun_lemma(w) for _, w in counts}
+        if len(lemmas) >= 2 and len(counts) == len(allnum) \
+                and dok({n for n, _ in counts}):
+            return _rs_ret(sum(f(n) for n, _ in counts))
     # 515 g40 sufficient: students*cost - budget
     m = re.search(rf"given \$({N})", full)
     m2 = re.search(rf"book costs \$({N})", full)

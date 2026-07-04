@@ -8157,6 +8157,27 @@ class TestAnimalCategorySum(unittest.TestCase):
             "National park, triple as many snakes as Safari National park, and 20 more giraffes than "
             "Safari National park. How many animals in total does Savanna National park have?"), 410)
 
+    def test_category_count_sum_animals_and_vehicles(self):
+        # #272: "how many <category>" sums the bare counts of that category's members. The category
+        # comes from the question, so ONE solver handles animals AND the newly-seeded vehicles.
+        self.assertEqual(reading.solve(
+            "On the farm there are 8 cows, 15 chickens, and 4 horses. How many animals are on the "
+            "farm?"), 27)
+        self.assertEqual(reading.solve(
+            "In a parking lot there are 12 cars, 7 trucks, and 5 vans. How many vehicles are "
+            "in the parking lot?"), 24)
+        self.assertEqual(reading.solve(
+            "A garage has 30 sedans, 18 vans, and 12 trucks. How many vehicles are in the garage?"), 60)
+
+    def test_category_count_sum_declines_when_not_a_pure_sum(self):
+        # a non-member number present → not a pure category sum → decline (leave to another solver)
+        self.assertNotIsInstance(reading.solve(
+            "There are 12 cars and 7 trucks in a lot that is 100 meters long. How many vehicles are "
+            "there?"), (int, float))
+        # only one member type → decline
+        self.assertNotIsInstance(reading.solve(
+            "There are 12 cars in the lot. How many vehicles are there?"), (int, float))
+
     def test_generalises_over_animals_and_coefficients(self):
         # different animals (cows/pigs/goats) AND different coefficients (triple/double/5/30)
         self.assertEqual(reading.solve(
