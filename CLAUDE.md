@@ -116,8 +116,10 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   tests). Scores against the gold `#### N`, reports coverage / precision / a decline-blocker taxonomy
   (currency / percentage / unknown-word / structure) and the **most-frequent unknown words** (the
   data-driven vocabulary worklist). State (2026-07-04, after campaigns #180–252): dev-train
-  **1214 correct / 0 wrong (~32.6% of dev-train)**, dev-holdout 144/2, TEST **39 correct / 5 wrong
-  (88.6% precision, hit-rate 14.4%; TEST not re-checked since #246 — #247–252 are holdout-clean)**.
+  **1214 correct / 0 wrong (~32.6% of dev-train)**, dev-holdout 144/2, TEST **41 correct / 5 wrong
+  (89.1% precision, hit-rate 13.6%; re-checked at #252 — +2 correct / 0 new wrongs vs #246's 39/5,
+  firewall-safe rule-attribution confirms all 5 wrongs are pre-existing general-fold/percent_change
+  under-reads, NONE from the #251/#252 vocab_singles solvers)**.
   #251 added _vocab_singles_o (50 branches, wave 38, +50) and #252 _vocab_singles_p (50 branches,
   wave 39, +50), both from the fresh blockersweep's cheapest oracle-clean tranche (slices 3–4). Each
   batch firewall-forced a poison-word drop: #251 dropped 'fried' (two holdout fold-wrongs); #252
