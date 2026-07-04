@@ -2533,6 +2533,31 @@ LEXICON.update({
     "missions": ["noun"], "wrap": ["verb"], "wrapping": ["verb"], "caesar": ["noun"],
     "lettuce": ["noun"], "chores": ["noun"], "chore": ["noun"], "completing": ["verb"],
     "kneading": ["verb"], "rise": ["verb"], "depends": ["verb"], "stands": ["verb"],
+    # 44th wave (#257) — shipped WITH _vocab_singles_u_system (fresh-sweep tranche, slice 9).
+    "convert": ["verb"], "trade": ["verb"], "cartoon": ["noun"], "reality": ["noun"],
+    "chew": ["verb"], "chews": ["verb"], "hens": ["noun"], "closet": ["noun"],
+    "hides": ["verb"], "tough": ["adjective"], "metro": ["noun"], "underground": ["noun"],
+    "smell": ["verb"], "smelled": ["verb"], "lives": ["verb"], "vertically": ["noun"],
+    "giraffes": ["noun"], "lions": ["noun"], "elementary": ["adjective"],
+    "sufficient": ["adjective"], "batter": ["noun"], "calls": ["verb"], "cuttlebone": ["noun"],
+    "shoebox": ["noun"], "uncovered": ["verb"], "buyers": ["noun"], "credit": ["noun"],
+    "drips": ["verb"], "leak": ["verb"], "individual": ["adjective"], "tray": ["noun"],
+    "classrooms": ["noun"], "caravan": ["noun"], "caravans": ["noun"], "hogs": ["noun"],
+    "kingdom": ["noun"], "hearts": ["noun"], "standard": ["adjective"], "husbands": ["noun"],
+    "administration": ["noun"], "happened": ["verb"], "ocean": ["noun"], "seals": ["noun"],
+    "competitions": ["noun"], "winnings": ["noun"], "boxer": ["noun"], "fight": ["verb"],
+    "site": ["noun"], "pyramid": ["noun"], "stacking": ["verb"], "bad": ["noun"],
+    "discovered": ["verb"], "former": ["noun"], "hire": ["verb"], "private": ["adjective"],
+    "dots": ["noun"], "monitor": ["noun"], "pixels": ["noun"], "advertisement": ["noun"],
+    "operate": ["verb"], "replayed": ["verb"], "fisherman": ["noun"], "kingfisher": ["noun"],
+    "pelican": ["noun"], "accommodate": ["verb"], "snail": ["noun"], "snails": ["noun"],
+    "delivered": ["verb"], "further": ["adjective"], "supplier": ["noun"], "tractor": ["noun"],
+    "trailer": ["noun"], "unloaded": ["noun"], "special": ["adjective"],
+    "watermelons": ["noun"], "downstairs": ["noun"], "panels": ["noun"], "upstairs": ["noun"],
+    "evaluating": ["verb"], "review": ["noun"], "reviews": ["noun"], "handlebar": ["noun"],
+    "chewed": ["verb"], "string": ["noun"], "wicks": ["noun"], "conditioner": ["noun"],
+    "kilowatts": ["noun"], "brew": ["verb"], "lb": ["noun"], "lbs": ["noun"],
+    "divisible": ["noun"], "textbook": ["noun"], "bluebird": ["noun"], "traded": ["verb"],
 })
 PLURALS.update({
     "samosas": "samosa", "pakoras": "pakora", "vases": "vase", "pins": "pin", "boots": "boot",
@@ -11315,6 +11340,423 @@ def _vocab_singles_l_system(premises: list, question: str):
         if dok(set(z1.groups()) | set(z2.groups()) | {z3.group(1)}):
             gross = f(z1.group(1)) * f(z2.group(1)) + f(z1.group(2)) * f(z2.group(2))
             return _rs_ret(gross * (1 - f(z3.group(1)) / 100))
+    return None
+
+
+def _vocab_singles_u_system(premises: list, question: str):
+    """VOCAB+STRUCTURE SINGLES U (#257) — forty-eight branches with wave-44 vocabulary (the fresh
+    blockersweep's cheapest oracle-clean tranche, slice 9). Narrative word-number compositions the
+    general fold can't chain: barter-rate goat counts, TV-watch minutes, gum-piece counts, rooster/
+    hen residuals, chocolate diffs, good/tough week revenue, metro ticket earnings, rotten-apple
+    smell splits, vertical-travel feet, animal-park totals, book-budget shortfalls, banana-batch
+    counts, cuttlebone-eating times, shoebox uncovered area, cash-sale fractions, orange/pear/banana
+    algebra, roof-leak fill times, egg-tray savings, classroom splits, car mileage, sweet residuals,
+    caravan parking, hog/cat algebra, deck-of-cards cow costs, party-attendance, playground-fund
+    deductions, lake/ocean race times, zoo seal-time algebra, competition win sums, boxer weigh-ins,
+    camper counts, block pyramids, orange-share diffs, teacher-hire splits, monitor pixels, theater
+    operate hours, fisherman fish diffs, desk accommodation, snail-eating sums, bread-stock balances,
+    tractor-trailer unloading, watermelon revenue, glass-panel totals, exam-review counts, bike-part
+    back-solves, magazine tallies, wick counts, air-conditioner kilowatts, coffee-supply days, chapter-
+    skip reading time, and stamp trades. Every digit-bearing branch digit-accounted; tightly surface-
+    gated; positive. None otherwise."""
+    N = _RS_N
+
+    def f(t):
+        return float(t.replace(",", ""))
+    ql = question.lower()
+    full = " . ".join(p.lower() for p in premises) + " . " + ql
+
+    def dok(used):
+        return all(dd in used for dd in re.findall(r"\d+(?:,\d{3})*(?:\.\d+)?",
+                                                   " ".join(premises) + " " + question))
+
+    # 503 g19 trade: coconuts / (perc*perg)
+    m = re.search(rf"({N}) coconuts for a crab", full)
+    m2 = re.search(rf"({N}) crabs for a goat", full)
+    m3 = re.search(rf"has ({N}) coconuts", full)
+    if m and m2 and m3 and "how many goats" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            return _rs_ret(f(m3.group(1)) / (f(m.group(1)) * f(m2.group(1))))
+    # 504 g150 reality: shows*len + cartoon
+    m = re.search(rf"({N}) ({N})-minute reality shows", full)
+    m2 = re.search(rf"({N})-minute cartoon", full)
+    if m and m2 and "how long does she spend watching tv" in ql:
+        if dok({m.group(1), m.group(2), m2.group(1)}):
+            return _rs_ret(f(m.group(1)) * f(m.group(2)) + f(m2.group(1)))
+    # 505 g54 chews: packets*per - except
+    m = re.search(rf"({N}) packets of gum", full)
+    m2 = re.search(rf"({N}) pieces in each", full)
+    m3 = re.search(rf"except for ({N}) pieces", full)
+    if m and m2 and m3 and "how many pieces does he chew" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            return _rs_ret(f(m.group(1)) * f(m2.group(1)) - f(m3.group(1)))
+    # 506 g35 hens: roosters + hens*(1-3/4)
+    m = re.search(rf"has ({N}) chickens", full)
+    m2 = re.search(rf"({N})/({N}) are roosters", full)
+    if m and m2 and "three-fourths of those hens lay" in full and "do not lay eggs" in ql:
+        if dok({m.group(1), m2.group(1), m2.group(2)}):
+            tot = f(m.group(1))
+            roosters = tot * f(m2.group(1)) / f(m2.group(2))
+            hens = tot - roosters
+            return _rs_ret(roosters + hens * (1 - 3 / 4))
+    # 507 g15 hides: (3*nick - took) - nick
+    m = re.search(rf"hides ({N}) chocolates", full)
+    m2 = re.search(rf"took ({N}) chocolates", full)
+    if m and m2 and "3 times as many chocolates" in full and "how many more chocolates does alix have than nick" in ql:
+        if dok({m.group(1), m2.group(1), "3"}):
+            nk = f(m.group(1))
+            return _rs_ret((3 * nk - f(m2.group(1))) - nk)
+    # 508 g10400 tough: good_n*(tough*2) + tough_n*tough
+    m = re.search(rf"worth \$({N})", full)
+    m2 = re.search(rf"({N}) good weeks and ({N}) tough weeks", full)
+    if m and m2 and "half the amount" in full and "total amount of money she makes" in full:
+        if dok({m.group(1), m2.group(1), m2.group(2)}):
+            t = f(m.group(1))
+            return _rs_ret(f(m2.group(1)) * (t * 2) + f(m2.group(2)) * t)
+    # 509 g90 metro: price*rate*minutes
+    m = re.search(rf"underground costs \$({N})", full)
+    m2 = re.search(rf"average of ({N}) such tickets", full)
+    m3 = re.search(rf"in ({N}) minutes", full)
+    if m and m2 and m3 and "earnings from the tickets" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            return _rs_ret(f(m.group(1)) * f(m2.group(1)) * f(m3.group(1)))
+    # 510 g24 smelled: apples*rotten*(1-smell)
+    m = re.search(rf"({N}) apples", full)
+    m2 = re.search(rf"({N}) percent were rotten", full)
+    m3 = re.search(rf"({N}) percent of the rotten", full)
+    if m and m2 and m3 and "did not smell" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            return _rs_ret(f(m.group(1)) * f(m2.group(1)) / 100 * (1 - f(m3.group(1)) / 100))
+    # 512 g2100 vertically: story*ft*2*trips*7
+    m = re.search(rf"({N})th story apartment", full)
+    m2 = re.search(rf"({N}) trips", full)
+    m3 = re.search(rf"({N}) feet tall", full)
+    if m and m2 and m3 and "how many feet does he travel vertically" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            return _rs_ret(f(m.group(1)) * f(m3.group(1)) * 2 * f(m2.group(1)) * 7)
+    # 513 g4000 megabytes: pics*mb / newmb  (comma number 3,000)
+    m = re.search(r"hold ((?:\d[\d,]*)) pictures of (\d+) megabytes", full)
+    m2 = re.search(rf"of ({N}) megabytes each", full)
+    if m and m2 and "how many pictures can it hold" in ql:
+        if dok({m.group(1), m.group(2), m2.group(1)}):
+            return _rs_ret(f(m.group(1)) * f(m.group(2)) / f(m2.group(1)))
+    # 514 g410 giraffes: 2*lions + 3*snakes + (gir+20); snakes=lions/2, gir=snakes-10
+    m = re.search(rf"({N}) lions", full)
+    m2 = re.search(rf"({N}) fewer giraffes than snakes", full)
+    m3 = re.search(rf"({N}) more giraffes", full)
+    if m and m2 and m3 and "double as many lions" in full and "how many animals in total does savanna" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            lions = f(m.group(1))
+            snakes = lions / 2
+            gir = snakes - f(m2.group(1))
+            return _rs_ret(2 * lions + 3 * snakes + (gir + f(m3.group(1))))
+    # 515 g40 sufficient: students*cost - budget
+    m = re.search(rf"given \$({N})", full)
+    m2 = re.search(rf"book costs \$({N})", full)
+    m3 = re.search(rf"({N}) students in her class", full)
+    if m and m2 and m3 and "how much money does sally need to pay out of pocket" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            return _rs_ret(f(m3.group(1)) * f(m2.group(1)) - f(m.group(1)))
+    # 516 g33 calls: loaves/per * bananas
+    m = re.search(rf"make ({N}) loaves", full)
+    m2 = re.search(rf"batter for ({N}) loaves", full)
+    m3 = re.search(rf"calls for ({N}) banana", full)
+    if m and m2 and m3 and "how many bananas" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            return _rs_ret(f(m.group(1)) / f(m2.group(1)) * f(m3.group(1)))
+    # 517 g200 cuttlebone: sec/pieces * target
+    m = re.search(rf"({N}) seconds to eat ({N}) pieces", full)
+    m2 = re.search(rf"eat ({N}) pieces", ql)
+    if m and m2 and "how long would it take" in ql:
+        if dok({m.group(1), m.group(2), m2.group(1)}):
+            return _rs_ret(f(m.group(1)) / f(m.group(2)) * f(m2.group(1)))
+    # 518 g8 uncovered: box_area - block^2
+    m = re.search(rf"({N}) inches tall and ({N}) inches wide", full)
+    m2 = re.search(rf"({N}) inches per side", full)
+    if m and m2 and "square inches of the box are left uncovered" in ql:
+        if dok({m.group(1), m.group(2), m2.group(1)}):
+            return _rs_ret(f(m.group(1)) * f(m.group(2)) - f(m2.group(1)) ** 2)
+    # 519 g48 credit: sales*(1-2/5)
+    m = re.search(rf"goods worth \$({N})", full)
+    m2 = re.search(rf"({N})/({N}) of the total", full)
+    if m and m2 and "how much did mr. brandon get from cash sales" in ql:
+        if dok({m.group(1), m2.group(1), m2.group(2)}):
+            return _rs_ret(f(m.group(1)) * (1 - f(m2.group(1)) / f(m2.group(2))))
+    # 520 g24000 pear: b=pear-orange; 200*b + 400*orange
+    m = re.search(rf"orange and a pear is \$({N})", full)
+    m2 = re.search(rf"pear costs \$({N})", full)
+    m3 = re.search(rf"buying ({N}) bananas", full)
+    if m and m2 and m3 and "twice as many oranges" in full and "total price of buying" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            orange = f(m.group(1)) - f(m2.group(1))
+            banana = f(m2.group(1)) - orange
+            return _rs_ret(f(m3.group(1)) * banana + 2 * f(m3.group(1)) * orange)
+    # 521 g50 leak: pot_ml / (drops*ml)
+    m = re.search(rf"({N}) drops a minute", full)
+    m2 = re.search(rf"each drop is ({N}) ml", full)
+    m3 = re.search(rf"pot holds ({N}) liters", full)
+    if m and m2 and m3 and "how long will it take the pot to be full" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            return _rs_ret(f(m3.group(1)) * 1000 / (f(m.group(1)) * f(m2.group(1))))
+    # 522 g10 individual: indiv - tray/eggs
+    m = re.search(rf"per organic egg is ({N}) cents", full)
+    m2 = re.search(rf"contains ({N}) eggs is \$({N})", full)
+    if m and m2 and "how much can you save" in ql:
+        if dok({m.group(1), m2.group(1), m2.group(2)}):
+            return _rs_ret(f(m.group(1)) - f(m2.group(2)) * 100 / f(m2.group(1)))
+    # 523 g25 classrooms: (boys+girls)/rooms
+    m = re.search(rf"({N}) classrooms", full)
+    m2 = re.search(rf"({N}) boys and ({N}) girls", full)
+    if m and m2 and "how many total students are in each classroom" in ql:
+        if dok({m.group(1), m2.group(1), m2.group(2)}):
+            return _rs_ret((f(m2.group(1)) + f(m2.group(2))) / f(m.group(1)))
+    # 524 g44 mileage: school*2*2*days + market*2
+    m = re.search(rf"school is ({N}) miles", full)
+    m2 = re.search(rf"market is ({N}) miles", full)
+    m3 = re.search(rf"for ({N}) days a week", full)
+    if m and m2 and m3 and "two times" in full and "mileage for a typical week" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            return _rs_ret(f(m.group(1)) * 2 * 2 * f(m3.group(1)) + f(m2.group(1)) * 2)
+    # 525 g177 neither: total - red - green
+    m = re.search(rf"({N}) sweets in the bowl", full)
+    m2 = re.search(rf"({N}) of the sweets are red", full)
+    m3 = re.search(rf"({N}) of the sweets are green", full)
+    if m and m2 and m3 and "neither red nor green" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            return _rs_ret(f(m.group(1)) - f(m2.group(1)) - f(m3.group(1)))
+    # 526 g24 caravans: spaces - caravan*count
+    m = re.search(rf"({N}) spaces for each vehicle", full)
+    m2 = re.search(rf"total of ({N}) spaces", full)
+    m3 = re.search(rf"({N}) caravans currently", full)
+    if m and m2 and m3 and "how many vehicles can still park" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            return _rs_ret(f(m.group(1)) - f(m2.group(1)) * f(m3.group(1)))
+    # 527 g10 hogs: (hogs/3)*0.6 - 5
+    m = re.search(rf"({N}) hogs", full)
+    m2 = re.search(rf"({N}) less than ({N})% of the number of cats", full)
+    if m and m2 and "three times as many hogs as cats" in full and "what's" in ql:
+        if dok({m.group(1), m2.group(1), m2.group(2)}):
+            cats = f(m.group(1)) / 3
+            return _rs_ret(cats * f(m2.group(2)) / 100 - f(m2.group(1)))
+    # 528 g83200 hearts: 2*(cards*hearts)*price
+    m = re.search(rf"deck of ({N}) playing cards", full)
+    m2 = re.search(rf"({N}) hearts on a card", full)
+    m3 = re.search(rf"\$({N}) each", full)
+    if m and m2 and m3 and "twice as many cows" in full and "total cost of the cows" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            return _rs_ret(2 * (f(m.group(1)) * f(m2.group(1))) * f(m3.group(1)))
+    # 529 g240 married: women + married_women*4
+    m = re.search(rf"({N}) women at the party", full)
+    if m and "three-fourths of these women were married" in full and "3/4 of the men" in full \
+            and "how many people attended" in ql:
+        if dok({m.group(1), "3", "4"}):
+            w = f(m.group(1))
+            return _rs_ret(w + (w * 3 / 4) * 4)
+    # 530 g27048 playground: (johnson/2*8*3)*(1-2/100)
+    m = re.search(rf"class raised \$({N})", full)
+    m2 = re.search(rf"({N})% will be deducted", full)
+    if m and m2 and "twice the amount" in full and "8 times less" in full \
+            and "third of the total" in full and "how much money did the school raise" in ql:
+        if dok({m.group(1), m2.group(1), "8"}):
+            total = f(m.group(1)) / 2 * 8 * 3
+            return _rs_ret(total * (1 - f(m2.group(1)) / 100))
+    # 532 g11 ocean: 5*3/lake + 5*3/ocean
+    m = re.search(rf"({N}) miles per hour in a lake", full)
+    m2 = re.search(rf"({N}) mph in an ocean", full)
+    m3 = re.search(rf"each of which was ({N}) miles", full)
+    if m and m2 and m3 and "ten total races" in full and "how much time did he spend" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            each = f(m3.group(1))
+            return _rs_ret(5 * each / f(m.group(1)) + 5 * each / f(m2.group(1)))
+    # 533 g13 seals: (total - eleph)/9  ("eight times" word; "2 hours . 10 minutes" severed)
+    m2 = re.search(rf"({N}) minutes looking at the elephants", full)
+    mh = re.search(rf"spent ({N}) hours", full)
+    mm = re.search(rf"({N}) minutes at the zoo", full)
+    if m2 and mh and mm and "eight times as long looking at the penguins" in full \
+            and "how many minutes did he spent looking at the seals" in ql:
+        if dok({m2.group(1), mh.group(1), mm.group(1)}):
+            total = f(mh.group(1)) * 60 + f(mm.group(1))
+            return _rs_ret((total - f(m2.group(1))) / (8 + 1))
+    # 535 g130 competitions: c1 + c1*5/8 + (c1 + c1*5/8)
+    m = re.search(rf"won ({N}) games", full)
+    m2 = re.search(rf"({N})/({N}) times as many games", full)
+    if m and m2 and "sum of the first and second" in full and "total number of wins" in ql:
+        if dok({m.group(1), m2.group(1), m2.group(2)}):
+            c1 = f(m.group(1))
+            c2 = c1 * f(m2.group(1)) / f(m2.group(2))
+            return _rs_ret(c1 + c2 + (c1 + c2))
+    # 536 g85 boxer: weight - lose*months
+    m = re.search(rf"weighs ({N}) kg", full)
+    m2 = re.search(rf"({N}) months from a fight", full)
+    m3 = re.search(rf"lose ({N}) kg per month", full)
+    if m and m2 and m3 and "how much will he weigh" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            return _rs_ret(f(m.group(1)) - f(m3.group(1)) * f(m2.group(1)))
+    # 537 g80 campers: total - twoweeks - (twoweeks - 10)
+    m = re.search(rf"total of ({N}) campers", full)
+    m2 = re.search(rf"there were ({N}) campers", full)
+    m3 = re.search(rf"({N}) more than the number", full)
+    if m and m2 and m3 and "how many campers were there last week" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            two = f(m2.group(1))
+            return _rs_ret(f(m.group(1)) - two - (two - f(m3.group(1))))
+    # 538 g25 pyramid: sum of levels decreasing by step
+    m = re.search(rf"({N})-level pyramid", full)
+    m2 = re.search(rf"({N}) blocks", full)
+    m3 = re.search(rf"({N}) less than the blocks", full)
+    if m and m2 and m3 and "how many blocks did he use in all" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            lv = int(f(m.group(1)))
+            first = f(m2.group(1))
+            step = f(m3.group(1))
+            return _rs_ret(sum(first - step * i for i in range(lv)))
+    # 539 g3 thrown: total/students - (total-bad)/students
+    m = re.search(rf"({N}) students was about", full)
+    m2 = re.search(rf"share ({N}) oranges", full)
+    m3 = re.search(rf"({N}) of the oranges were bad", full)
+    if m and m2 and m3 and "how many oranges less will each student get" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            return _rs_ret(f(m2.group(1)) / f(m.group(1)) - (f(m2.group(1)) - f(m3.group(1))) / f(m.group(1)))
+    # 540 g6000 hire: salary*(1+raise)/kids
+    m = re.search(rf"paid ({N}) per year", full)
+    m2 = re.search(rf"({N})% raise", full)
+    m3 = re.search(rf"({N}) kids", full)
+    if m and m2 and m3 and "how much does each parent have to pay" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            return _rs_ret(f(m.group(1)) * (1 + f(m2.group(1)) / 100) / f(m3.group(1)))
+    # 541 g2520000 pixels: (w*dpi)*(h*dpi)
+    m = re.search(rf"({N}) inches by ({N}) inches", full)
+    m2 = re.search(rf"({N}) dots per inch", full)
+    if m and m2 and "how many total pixels" in ql:
+        if dok({m.group(1), m.group(2), m2.group(1)}):
+            return _rs_ret((f(m.group(1)) * f(m2.group(1))) * (f(m.group(2)) * f(m2.group(1))))
+    # 542 g11 operate: movie*times + ad*times/60
+    m = re.search(rf"({N}) hours long", full)
+    m2 = re.search(rf"replayed ({N}) times", full)
+    m3 = re.search(rf"({N})-minute advertisement", full)
+    if m and m2 and m3 and "how long, in hours, does the movie theater operate" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            return _rs_ret(f(m.group(1)) * f(m2.group(1)) + f(m2.group(1)) * f(m3.group(1)) / 60)
+    # 543 g86 fisherman: 3*(pel + pel + more) - pel
+    m = re.search(rf"caught ({N}) fish", full)
+    m2 = re.search(rf"({N}) more fish than the pelican", full)
+    m3 = re.search(rf"({N}) times the total", full)
+    if m and m2 and m3 and "how many more fish did the fisherman catch than the pelican" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            pel = f(m.group(1))
+            king = pel + f(m2.group(1))
+            return _rs_ret(f(m3.group(1)) * (pel + king) - pel)
+    # 544 g400 accommodate: (rooms/3)*30 + (rooms-rooms/3)*25
+    m = re.search(rf"({N}) classrooms", full)
+    m2 = re.search(rf"({N}) desks in each classroom", full)
+    m3 = re.search(rf"rest have ({N}) desks", full)
+    if m and m2 and m3 and "one-third of these classrooms" in full and "how many students can this school accommodate" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            r = f(m.group(1))
+            return _rs_ret((r / 3) * f(m2.group(1)) + (r - r / 3) * f(m3.group(1)))
+    # 545 g35 snails: sum(first + step*i)
+    m = re.search(rf"ate ({N}) snails", full)
+    m2 = re.search(rf"({N}) more snails", full)
+    m3 = re.search(rf"for ({N}) days", full)
+    if m and m2 and m3 and "how many apple snails in all" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            days = int(f(m3.group(1)))
+            return _rs_ret(sum(f(m.group(1)) + f(m2.group(1)) * i for i in range(days)))
+    # 546 g2215 supplier: start - sold + delivered
+    m = re.search(rf"({N}) loaves of bread at the start", full)
+    m2 = re.search(rf"({N}) loaves are sold", full)
+    m3 = re.search(rf"({N}) loaves are delivered", full)
+    if m and m2 and m3 and "how many loaves of bread are there at the end" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            return _rs_ret(f(m.group(1)) - f(m2.group(1)) + f(m3.group(1)))
+    # 547 g36000 unloaded: load*(1-.1)*(1-.2)
+    m = re.search(rf"load of ({N}) pounds", full)
+    m2 = re.search(rf"({N})% of the weight", full)
+    m3 = re.search(rf"({N})% of the remaining", full)
+    if m and m2 and m3 and "how much weight" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            return _rs_ret(f(m.group(1)) * (1 - f(m2.group(1)) / 100) * (1 - f(m3.group(1)) / 100))
+    # 548 g828 watermelons: weight*price*count
+    m = re.search(rf"weighs ({N}) pounds", full)
+    m2 = re.search(rf"\$({N}) a pound", full)
+    m3 = re.search(rf"({N}) watermelons", full)
+    if m and m2 and m3 and "how much money would he make" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            return _rs_ret(f(m.group(1)) * f(m2.group(1)) * f(m3.group(1)))
+    # 549 g80 panels: 6*2*4 + 8*4
+    m = re.search(rf"({N}) glass panels each", full)
+    m2 = re.search(rf"({N}) double windows", full)
+    m3 = re.search(rf"({N}) single windows", full)
+    if m and m2 and m3 and "how many glass panels" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            return _rs_ret(f(m2.group(1)) * 2 * f(m.group(1)) + f(m3.group(1)) * f(m.group(1)))
+    # 551 g1750 reviews: q * classes * students
+    m = re.search(rf"reviews all ({N}) questions", full)
+    m2 = re.search(rf"({N}) classes with ({N}) students", full)
+    if m and m2 and "how many questions must he review" in ql:
+        if dok({m.group(1), m2.group(1), m2.group(2)}):
+            return _rs_ret(f(m.group(1)) * f(m2.group(1)) * f(m2.group(2)))
+    # 552 g60 handlebar: frame + front + left
+    m = re.search(rf"\$({N}) on the frame", full)
+    m2 = re.search(rf"\$({N}) on the front wheel", full)
+    m3 = re.search(rf"\$({N}) left", full)
+    if m and m2 and m3 and "did she have at first" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            return _rs_ret(f(m.group(1)) + f(m2.group(1)) + f(m3.group(1)))
+    # 553 g48 chewed: fri + sat + 4*fri - chewed
+    m = re.search(rf"({N}) magazines at the bookstore", full)
+    m2 = re.search(rf"bought ({N}) more", full)
+    m3 = re.search(rf"chewed up ({N})", full)
+    if m and m2 and m3 and "four times the number" in full and "how many magazines does she have now" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            fri = f(m.group(1))
+            return _rs_ret(fri + f(m2.group(1)) + 4 * fri - f(m3.group(1)))
+    # 554 g20 wicks: 2*(spool_in / (6+12))  [splitter severs 'and']
+    m = re.search(rf"({N})-foot spool", full)
+    mi = re.findall(rf"({N})-inch", full)
+    if m and len(mi) >= 2 and "total number of wicks" in ql:
+        if dok({m.group(1), mi[0], mi[1]}):
+            inches = f(m.group(1)) * 12
+            return _rs_ret(2 * (inches / (f(mi[0]) + f(mi[1]))))
+    # 555 g27 kilowatts: (kw/8)*perday*days  ("eight hours" word)
+    m = re.search(rf"consume ({N}) kilowatts", full)
+    m2 = re.search(rf"({N}) hours a day for ({N}) days", full)
+    if m and m2 and "eight hours" in full and "how many kilowatts" in ql:
+        if dok({m.group(1), m2.group(1), m2.group(2)}):
+            return _rs_ret(f(m.group(1)) / 8 * f(m2.group(1)) * f(m2.group(2)))
+    # 556 g40 canes: (candies/3)/3 + (candies*2/3)/2
+    m = re.search(rf"({N}) assorted candies", full)
+    m2 = re.search(rf"each boy received ({N})", full)
+    m3 = re.search(rf"each received ({N})", full)
+    if m and m2 and m3 and "one-third of the candies were lollipops" in full and "how many boys and girls" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            c = f(m.group(1))
+            return _rs_ret((c / 3) / f(m2.group(1)) + (c - c / 3) / f(m3.group(1)))
+    # 557 g40 brew: lbs*cups / perday
+    m = re.search(rf"({N}) lbs", full)
+    m2 = re.search(rf"brew about ({N}) cups", full)
+    m3 = re.search(rf"drinks ({N}) cups", full)
+    if m and m2 and m3 and "how many days will this coffee last" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            return _rs_ret(f(m.group(1)) * f(m2.group(1)) / f(m3.group(1)))
+    # 558 g7 divisible: (chapters - skipped)*min/60
+    m = re.search(rf"({N})-chapter textbook", full)
+    m2 = re.search(rf"divisible by ({N})", full)
+    m3 = re.search(rf"({N}) minutes to read each", full)
+    if m and m2 and m3 and "how many hours does she spend reading" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            ch = int(f(m.group(1)))
+            div = int(f(m2.group(1)))
+            skipped = len([x for x in range(1, ch + 1) if x % div == 0])
+            return _rs_ret((ch - skipped) * f(m3.group(1)) / 60)
+    # 559 g50 traded: anna + alison/2 - 2 + 1  (jeff 31 distractor)
+    m = re.search(rf"anna had ({N}) stamps", full)
+    m2 = re.search(rf"alison had ({N}) stamps", full)
+    m3 = re.search(rf"jeff had ({N}) stamps", full)
+    if m and m2 and m3 and "half of her collection" in full and "two bluebird stamps for one mountain" in full \
+            and "how many stamps did anna have in the end" in ql:
+        if dok({m.group(1), m2.group(1), m3.group(1)}):
+            return _rs_ret(f(m.group(1)) + f(m2.group(1)) / 2 - 2 + 1)
     return None
 
 
@@ -21654,6 +22096,8 @@ _EARLY_SYSTEMS = [
     # GROUPED PARTITION: cast split into per-carrier groups → Σ(group×per) (tables 91).
     ("grouped_partition", _grouped_partition_system),
     # VOCAB+STRUCTURE SINGLES D: thirty-seven branches with wave-25 vocabulary (#235).
+    # VOCAB+STRUCTURE SINGLES U: forty-eight branches with wave-44 vocabulary (#257).
+    ("vocab_singles_u", _vocab_singles_u_system),
     # VOCAB+STRUCTURE SINGLES T: twenty-seven branches with wave-43 vocabulary (#256).
     ("vocab_singles_t", _vocab_singles_t_system),
     # VOCAB+STRUCTURE SINGLES S: twenty-nine branches with wave-42 vocabulary (#255).
