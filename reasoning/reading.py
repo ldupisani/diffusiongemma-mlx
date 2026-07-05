@@ -18972,6 +18972,22 @@ def _cat_singles_a_system(premises: list, question: str):
             and dok({mp.group(1), mc.group(1)}):
         return _rs_ret(f(mc.group(1)) / (1 + f(mp.group(1)) / 100))
 
+    # 26. PARENT + OFFSPRING SUM: "N <animal> had A <adj> <young> and B <adj> <young> … how many
+    #     <animal> in total?" → N + A + B (the young count as the animal). "2 cats, 3 female + 2 male
+    #     kittens" → 7 (generalizes: 3 dogs, 4 + 2 puppies → 9).
+    m = re.search(rf"({N}) {_W} had ({N}) \w+ \w+ and ({N}) \w+ \w+", full)
+    if m and _cat(m.group(2), "noun") \
+            and re.search(rf"how many {_number_re(m.group(2))}.*total", ql) \
+            and dok({m.group(1), m.group(3), m.group(4)}):
+        return _rs_ret(f(m.group(1)) + f(m.group(3)) + f(m.group(4)))
+
+    # 27. TIME-PER-COUNT RATE: "takes T minutes … N1 times … how long to <verb> N2 times?" → T·N2/N1.
+    #     "20 minutes for 8 times, 6 times" → 15." (Scales a duration by the count ratio.)
+    mg = re.search(rf"takes ({N}) minutes.*?({N}) times", full)
+    ma = re.search(rf"({N}) times", ql)
+    if mg and ma and "how long" in ql and dok({mg.group(1), mg.group(2), ma.group(1)}):
+        return _rs_ret(f(mg.group(1)) * f(ma.group(1)) / f(mg.group(2)))
+
     return None
 
 
