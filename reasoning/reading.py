@@ -18731,6 +18731,29 @@ def _cat_singles_a_system(premises: list, question: str):
                 and dok({m.group(1), m2.group(1)}):
             return _rs_ret(f(m2.group(1)) + f(m.group(1)) * 4)
 
+    # 15. HAD, GOT MORE, LOST → NOW: "had N ITEM; ordered/got K more; lost/gave M → N + K − M." "10
+    #     notebooks, ordered 6 more, lost 2 → 14."
+    m = re.search(rf"had ({N}) {_W}", full)
+    if m and _cat(m.group(2), "noun"):
+        nn = _number_re(m.group(2))
+        mk = re.search(rf"(?:ordered|bought|got|received|added) ({N}) more", full)
+        ml = re.search(rf"(?:lost|gave away|used|broke|threw away) ({N})", full)
+        if mk and ml and re.search(rf"how many {nn}.*(?:now|left|have)", ql) \
+                and dok({m.group(1), mk.group(1), ml.group(1)}):
+            return _rs_ret(f(m.group(1)) + f(mk.group(1)) - f(ml.group(1)))
+
+    # 16. FRACTION-OF-A-WHOLE (complement): "has N ITEM; F/D are <adjA>; how many <adjB> ITEM?" →
+    #     N·(F/D) if asked adj == stated, else N·(1 − F/D). "45 fish, 2/3 male, how many female?" → 15.
+    m = re.search(rf"has ({N}) {_W}", full)
+    if m and _cat(m.group(2), "noun"):
+        nn = _number_re(m.group(2))
+        mf = re.search(rf"({N})/({N}) (?:of (?:them|the {nn}) )?are (\w+)", full)
+        ma = re.search(rf"how many (\w+) {nn}", ql)
+        if mf and ma and dok({m.group(1), mf.group(1), mf.group(2)}):
+            frac = f(mf.group(1)) / f(mf.group(2))
+            same = _key(ma.group(1)) == _key(mf.group(3))
+            return _rs_ret(f(m.group(1)) * (frac if same else 1 - frac))
+
     return None
 
 
