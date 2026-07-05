@@ -20633,13 +20633,15 @@ def _rate_hours_days_system(premises: list, question: str):
 
 
 def _multi_item_price_system(premises: list, question: str):
-    """Σ COUNT × UNIT-PRICE — a plain multi-item total: "sold 220 chocolate cookies at $1 per cookie and
-    70 vanilla cookies at $2 per cookie; how much did you make?" → 220·1 + 70·2 = 360. TWO or more
-    ADJACENT (quantity, unit-price) pairs — "N <item> at/for $P each|apiece|per <unit>" — summed.
-    Deliberately NARROW: fires only on a bare total-spend/earn/cost question (NEVER a change/left/more/
-    profit/half/goal WRAPPER, each of which needs a budget or cost-basis this solver doesn't read), and
-    only when EVERY digit in the problem is inside a pair (a stray budget/goal/other number ⇒ decline,
-    so a "$50 given … how much to RETURN" or a lone distractor can't be mis-summed). Positive."""
+    """Σ COUNT × UNIT-PRICE — a plain multi-item total, in TWO surface forms. ADJACENT: "sold 220
+    chocolate cookies at $1 per cookie and 70 vanilla cookies at $2 per cookie; how much did you make?"
+    → 220·1 + 70·2 = 360 (count and price in one clause). SPLIT: "a pencil costs $0.5 each and a folder
+    costs $0.9 each. An office needs two dozen pencils and 20 pieces of folders. How much does it cost?"
+    → 24·0.5 + 20·0.9 = 30 (item→price and item→count in separate clauses, linked by the item NOUN, its
+    counts summed across occurrences; "two dozen"→24, "N pieces/boxes/pairs of X"→N). Deliberately
+    NARROW: fires only on a bare total spend/earn/cost question (NEVER a change/left/more/profit/half/
+    goal WRAPPER — those need a budget or cost-basis this solver doesn't read), and only when EVERY digit
+    is a counted quantity or a price (a stray budget/goal/other number ⇒ decline). Positive."""
     ql = question.lower()
     full = " . ".join(p.lower() for p in premises) + " . " + ql
     if not re.search(r"how much (?:money )?(?:did (?:you|they|i|\w+) (?:make|earn|spend|pay)|"
@@ -20647,27 +20649,58 @@ def _multi_item_price_system(premises: list, question: str):
             and "total cost" not in ql:
         return None
     if any(w in ql for w in ("left", "change", "return", "remaining", "the rest", " more ", "profit",
-                             "half", "save", "reach", "goal", "discount", " off", "instead", "each")):
+                             "half", "save", "reach", "goal", "instead", "each")):
         return None                                   # a WRAPPER (or a per-unit ask) — not a plain Σ total
-    # adjacent (count … $price per-each) pairs; [^.$] keeps each match inside ONE clause and off another price
-    pairs = re.findall(rf"({_GP_NUMW})\b[^.$]{{0,30}}?\$([\d.]+)\s*(?:each|apiece|/|per\b|a\b)", full)
-    if len(pairs) < 2:
-        return None
-    used = {c for c, _p in pairs if c.isdigit()} | {p for _c, p in pairs}
-    alldig = re.findall(r"\d+(?:\.\d+)?", " ".join(premises) + " " + question)
-    if any(d not in used for d in alldig):            # every digit must be a counted quantity or a price
-        return None
+    if "%" in full or "percent" in full or "discount" in full or re.search(r"\boff\b", full):
+        return None                                   # a discount/markup this pure-Σ solver can't apply
+        #                                               (\boff\b matches the discount "off", NOT "office")
 
     def _wn(tok):
         t = tok.lower()
         return float(t) if t.replace(".", "", 1).isdigit() else float(NUMBERS.get(t, 0) or 0)
 
-    terms = []
-    for c, p in pairs:
-        cv = _wn(c)
-        if not cv:
+    alldig = re.findall(r"\d+(?:\.\d+)?", " ".join(premises) + " " + question)
+    # PATH 1 — ADJACENT: "N <item> at/for $P each"; [^.$] keeps each match in ONE clause, off another price
+    pairs = re.findall(rf"({_GP_NUMW})\b[^.$]{{0,30}}?\$([\d.]+)\s*(?:each|apiece|/|per\b|a\b)", full)
+    if len(pairs) >= 2:
+        used = {c for c, _p in pairs if c.isdigit()} | {p for _c, p in pairs}
+        if any(d not in used for d in alldig):        # every digit must be a counted quantity or a price
             return None
-        terms.append(f"{_num(cv)} * {_num(float(p))}")
+        terms = []
+        for c, p in pairs:
+            cv = _wn(c)
+            if not cv:
+                return None
+            terms.append(f"{_num(cv)} * {_num(float(p))}")
+        return _gated_pos(_compute(" + ".join(terms)))
+
+    # PATH 2 — SPLIT: item→unit-price ("a pencil costs $0.5 each") and item→count ("two dozen pencils")
+    # in separate clauses, linked by the item NOUN (lemma). Requires an each/apiece marker so a lump-sum
+    # price ("the meal costs $63") is never read as a unit price.
+    price = {}                                        # item lemma → price string
+    for m in re.finditer(rf"(?:each )?(?:a |an |the )?{_W} costs? \$([\d.]+)(?: each| apiece)?", full):
+        if "each" not in m.group(0) and "apiece" not in m.group(0):
+            continue
+        price.setdefault(_noun_lemma(m.group(1)), m.group(2))
+    if len(price) < 2:
+        return None
+    used, terms = set(price.values()), []
+    for item, ps in price.items():
+        cnt = 0.0
+        for cm in re.finditer(rf"({_GP_NUMW})(\s+dozen)?\s+(?:\w+ of )?{_number_re(item)}\b", full):
+            v = _wn(cm.group(1))
+            if not v:
+                continue
+            if cm.group(2):
+                v *= 12                               # "two DOZEN pencils" → 24
+            cnt += v
+            if cm.group(1).isdigit():
+                used.add(cm.group(1))
+        if not cnt:
+            return None                               # a priced item with no readable count → decline
+        terms.append(f"{_num(cnt)} * {_num(float(ps))}")
+    if any(d not in used for d in alldig):
+        return None
     return _gated_pos(_compute(" + ".join(terms)))
 
 
