@@ -18532,6 +18532,39 @@ def _cat_singles_a_system(premises: list, question: str):
         if re.search(rf"how many {nn}.*(?:in all|in total|altogether)", ql) and dok({m.group(1)}):
             return _rs_ret(f(m.group(1)) * (1 + _scale(m.group(3))))
 
+    # 4. COUNT DIFFERENCE across two items, one possibly a DOZEN-count — the ask names both:
+    #    "how many more ITEM_A than ITEM_B?" with ITEM_A = "M dozen" (→ M·12) and ITEM_B = "N" → M·12 − N.
+    #    "14 APPLES … 2 dozen ORANGES … how many more oranges than apples?" → 24 − 14 = 10. (Either item may
+    #    be the dozen; the clause split severs the "and", so read each item's count independently.)
+    am = re.search(rf"how many more {_W} .*than {_W}", ql)
+    if am and _cat(am.group(1), "noun") and _cat(am.group(2), "noun"):
+        def _cnt(itemre):
+            md = re.search(rf"({N}) dozens? {itemre}", full)
+            if md:
+                return f(md.group(1)) * 12, md.group(1)
+            nc = re.search(rf"({N}) {itemre}", full)
+            return (f(nc.group(1)), nc.group(1)) if nc else (None, None)
+        hi, hs = _cnt(_number_re(am.group(1)))
+        lo, ls = _cnt(_number_re(am.group(2)))
+        if hi is not None and lo is not None and hs != ls and dok({hs, ls}):
+            return _rs_ret(hi - lo)
+
+    # 5. CONTAINER PARTITION: "N CONTAINERs … K have A ITEM, rest have B ITEM … how many ITEM?" →
+    #    K·A + (N−K)·B. "13 hotel ROOMs … eight have two BEDS, rest have three beds … how many beds?" → 31.
+    m = re.search(rf"(?:are|has|were) ({N}) \w+ {_W}", full)
+    if m and _cat(m.group(2), "noun"):
+        cont = _number_re(m.group(2))
+        m2 = re.search(rf"({_GP_NUMW}) of the {cont} have ({_GP_NUMW}) {_W}", full)
+        m3 = re.search(rf"rest have ({_GP_NUMW}) {_W}", full)
+        if m2 and m3 and _cat(m2.group(3), "noun") \
+                and _noun_lemma(m2.group(3)) == _noun_lemma(m3.group(2)):
+            item = _number_re(m2.group(3))
+            usedd = {d for d in (m.group(1), m2.group(1), m2.group(2), m3.group(1)) if d.isdigit()}
+            if re.search(rf"how many {item}", ql) and dok(usedd):
+                tot, k, a, b = f(m.group(1)), f(m2.group(1)), f(m2.group(2)), f(m3.group(1))
+                if k <= tot:
+                    return _rs_ret(k * a + (tot - k) * b)
+
     return None
 
 
