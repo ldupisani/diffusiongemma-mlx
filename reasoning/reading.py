@@ -18484,6 +18484,57 @@ def _vocab_singles_c_system(premises: list, question: str):
     return None
 
 
+def _cat_singles_a_system(premises: list, question: str):
+    """CATEGORICAL SINGLES A (#284) — long-tail single-problem solvers written WORD-AGNOSTICALLY: the
+    incidental item noun is captured with `_W` + verified with `_cat(…, "noun")` and reused BY LEMMA via
+    `_number_re`, and any coefficient is READ from the text with `_scale`, so each branch generalizes to
+    unseen nouns of the same shape instead of hard-coding the noun the mined example happened to use
+    (contrast the `_vocab_singles_*` branches, which pin the literal noun). Every digit-bearing branch
+    digit-accounted; tightly surface-gated; positive. None otherwise."""
+    N = _RS_N
+    ql = question.lower()
+    full = " . ".join(p.lower() for p in premises) + " . " + ql
+
+    def f(t):
+        t = t.lower().replace(",", "")
+        return float(t) if t.replace(".", "", 1).isdigit() else float(NUMBERS.get(t, 0) or 0)
+
+    def dok(used):
+        return all(dd in used for dd in re.findall(r"\d+(?:,\d{3})*(?:\.\d+)?",
+                                                   " ".join(premises) + " " + question))
+
+    # 1. RECIPIENT COUNT: a dozen-count of ITEM distributed, K per recipient → total/K recipients.
+    #    "three dozen PEBBLES … each friend got 4 pebbles … how many friends received pebbles?" → 36/4.
+    m = re.search(rf"({_GP_NUMW}) dozens? of {_W}", full)
+    if m and _cat(m.group(2), "noun"):
+        nn = _number_re(m.group(2))
+        m2 = re.search(rf"(?:each|every).{{0,30}}?got ({N}) {nn}", full)
+        if m2 and re.search(rf"how many \w+ (?:received|got|get) {nn}", ql) and f(m2.group(1)):
+            if dok({m2.group(1)}):
+                return _rs_ret(f(m.group(1)) * 12 / f(m2.group(1)))
+
+    # 2. GROUPED-PURCHASE SUM: Σ over "(N) buyers bought (M) ITEM each" → total ITEMs (one item, in groups).
+    #    "first two students bought 2 pencils each … six bought three … two bought one → how many sold?"
+    buys = re.findall(rf"({_GP_NUMW}) \w+ (?:only )?bought ({_GP_NUMW}) {_W} each", full)
+    if len(buys) >= 2 and all(_cat(it, "noun") for _b, _p, it in buys) \
+            and len({_noun_lemma(it) for _b, _p, it in buys}) == 1:
+        nn = _number_re(buys[0][2])
+        if re.search(rf"how many {nn} .*\b(?:sold|bought)", ql):
+            dig = {b for b, _p, _it in buys if b.isdigit()} | {p for _b, p, _it in buys if p.isdigit()}
+            if dok(dig):
+                return _rs_ret(sum(f(b) * f(p) for b, p, _it in buys))
+
+    # 3. SUBTYPE-SUM WITH SCALE: "N <adj> ITEM and <scale> as many <adj> ITEM … in all?" → N·(1+scale).
+    #    "20 white PEBBLES and half as many red pebbles … how many pebbles in all?" → 20 + 10 = 30.
+    m = re.search(rf"({N}) \w+ {_W} and ({_SCALE_RE}) as many", full)
+    if m and _cat(m.group(2), "noun"):
+        nn = _number_re(m.group(2))
+        if re.search(rf"how many {nn}.*(?:in all|in total|altogether)", ql) and dok({m.group(1)}):
+            return _rs_ret(f(m.group(1)) * (1 + _scale(m.group(3))))
+
+    return None
+
+
 def _vocab_singles_b_system(premises: list, question: str):
     """VOCAB+STRUCTURE SINGLES B (#233) — thirty branches with wave-23 vocabulary: debt
     settlements, paint coverage, lending sums, telethon tiers, grandkid cards, juice cups,
@@ -22928,6 +22979,8 @@ _EARLY_SYSTEMS = [
     ("vocab_singles_c", _vocab_singles_c_system),
     # VOCAB+STRUCTURE SINGLES B: thirty branches with wave-23 vocabulary (#233).
     ("vocab_singles_b", _vocab_singles_b_system),
+    # CATEGORICAL SINGLES: word-agnostic long-tail branches (item noun via _W/_cat, coeff via _scale).
+    ("cat_singles_a", _cat_singles_a_system),
     # VOCAB+STRUCTURE SINGLES: twenty-eight branches with wave-22 vocabulary (#232).
     ("vocab_singles", _vocab_singles_system),
     # MIXED SINGLES C: thirty-nine residual branches (#231).
