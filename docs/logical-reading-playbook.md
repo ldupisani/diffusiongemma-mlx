@@ -191,6 +191,20 @@ so the two layers agree. (2) An opposite-polarity *pair inside one branch by des
 two framings of one question, not a signed sum) is NOT an antonym-sum; don't split it. Multi-word loss forms
 ("gave away", "threw out") = the single verb in the category + an optional particle the regex supplies.
 
+**Corollary — DERIVE the fold's polarity set from the antonym category (#301).** Once a `lose` verb
+category exists, the semantic fold's hand-maintained `LOSS_VERBS` set (feeding `_verb_sign` + solver gates)
+is a DUPLICATE that will drift. Collapse it: `LOSS_VERBS = frozenset(w for w,tags in WORD_CATEGORIES.items()
+if any("lose" in _cat_ancestors(t) for t in tags))`, defined right after the category registration — a loss
+verb is then declared in ONE place and both the regex branches and the fold agree by construction. Two
+gotchas: (1) derive BASE forms AND inflections — the fold lemmatizes REGULAR verbs (spent→spend) but leaves
+IRREGULARS as surfaces (`_lemma("threw")=="threw"`), so tag+derive both or the irregular won't sign; (2)
+`_verb_sign` is defined far ABOVE the category, but it reads `LOSS_VERBS` only at call time, so a
+forward-declared "defined below" set is fine — just leave a breadcrumb comment. Reconcile membership before
+shipping (the old set and the category had drifted: set had "drink", category had throw/break/donate) and
+firewall the delta — new fold-losses are usually a latent-bug fix but a high-blast-radius change (TEST
+checkpoint required). NOT every parallel loss list should merge: a regex-surface tuple with DIFFERENT
+membership (`_LOSS_VERBS` ~8514 has take/eaten/given) serves a different consumer — leave it.
+
 ### Hardcoded formula → shared-relation extractor (2026-07-04, #276)
 
 The dual of categorical-noun matching. A hard-coded whole-problem branch (`#232` ants:
