@@ -18956,6 +18956,22 @@ def _cat_singles_a_system(premises: list, question: str):
                 and dok({mh.group(2), mm.group(1)}):
             return _rs_ret((f(mh.group(2)) + f(mm.group(1))) * (f(mh.group(1)) / f(mh.group(2))))
 
+    # 24. RATIO-VALUE DIFFERENCE: "A is K times the size of B, at V <unit> … how many <unit> taller/more
+    #     is A than B?" → V − V/K (A = V is the larger; B = V/K). "Grace 8× Clyde at 40 inches" → 35.
+    mr = re.search(rf"({N}) times the size", full)
+    mv = re.search(rf"at ({N}) (?:inches|inch|feet|foot|meters?|metres?|cm|centimeters?|centimetres?|yards?)", full)
+    if mr and mv and re.search(r"how many \w+ (?:taller|more|bigger|longer|higher|larger)", ql) \
+            and f(mr.group(1)) and dok({mr.group(1), mv.group(1)}):
+        return _rs_ret(f(mv.group(1)) - f(mv.group(1)) / f(mr.group(1)))
+
+    # 25. REVERSE PERCENT-INCREASE: "increased by P% this year … this year is C … how many last
+    #     year?" → C/(1 + P/100). "increased 20%, now 960 → 800." (Unwinds the growth to the prior value.)
+    mp = re.search(rf"increased by ({N})%", full)
+    mc = re.search(rf"this year is ({N})", full)
+    if mp and mc and re.search(r"how many \w+ (?:were|was|are|did)\b.*last year", ql) \
+            and dok({mp.group(1), mc.group(1)}):
+        return _rs_ret(f(mc.group(1)) / (1 + f(mp.group(1)) / 100))
+
     return None
 
 
