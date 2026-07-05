@@ -18988,6 +18988,33 @@ def _cat_singles_a_system(premises: list, question: str):
     if mg and ma and "how long" in ql and dok({mg.group(1), mg.group(2), ma.group(1)}):
         return _rs_ret(f(mg.group(1)) * f(ma.group(1)) / f(mg.group(2)))
 
+    # 28. SCALED WAGE PRODUCT: "A earns <scale> what B does … B earns $R per hour … how much does A
+    #     earn in D days working H hours a day?" → R·scale·D·H. "thrice, $6/hr, 5 days, 8 hrs" → 720.
+    msc = re.search(rf"earns? (\w+) what", full)
+    mr = re.search(rf"\$({N}) per hour", full)
+    md = re.search(rf"({N}) days", full)
+    mhh = re.search(rf"({N}) hours", full)
+    if msc and mr and md and mhh and _scale(msc.group(1)) \
+            and re.search(r"how much does \w+ earn", ql) \
+            and dok({mr.group(1), md.group(1), mhh.group(1)}):
+        return _rs_ret(f(mr.group(1)) * _scale(msc.group(1)) * f(md.group(1)) * f(mhh.group(1)))
+
+    # 29. FRACTION-OF-THAT ADD: "spends N <unit> on X and F/D that amount on Y … how long/much total?"
+    #     → N·(1 + F/D). "80 minutes, 1/4 that amount" → 80 + 20 = 100.
+    mba = re.search(rf"({N}) (?:minutes|hours|dollars|pounds)", full)
+    mfr = re.search(rf"({N})/({N}) that amount", full)
+    if mba and mfr and re.search(r"how (?:long|much)[^?]*total", ql) \
+            and dok({mba.group(1), mfr.group(1), mfr.group(2)}):
+        return _rs_ret(f(mba.group(1)) * (1 + f(mfr.group(1)) / f(mfr.group(2))))
+
+    # 30. TWO-BATCH UNIT-WEIGHT SUM: "sold A bags … sold B bags … each bag weighs W <unit> … how many
+    #     <unit>?" → (A + B)·W. "29 + 17 bags, 7 kg each" → 322." (Σ counts × per-unit measure.)
+    mbg = re.findall(rf"({N}) bags", full)
+    mwt = re.search(rf"weighs ({N})\s*(?:kg|kilograms?|g|grams?|lbs?|pounds?|ounces?)", full)
+    if len(mbg) == 2 and mwt and re.search(r"how many (?:kilograms?|grams?|pounds?|ounces?)", ql) \
+            and dok(set(mbg) | {mwt.group(1)}):
+        return _rs_ret((f(mbg[0]) + f(mbg[1])) * f(mwt.group(1)))
+
     return None
 
 
