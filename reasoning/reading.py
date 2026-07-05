@@ -2935,8 +2935,11 @@ def _resolve_references(reading: Reading, discourse: list) -> None:
 # solvers, which don't consult this set. (Definition: search `LOSS_VERBS = frozenset` below.)
 
 # A comparative's arithmetic direction: −1 lowers the referent ("10 years YOUNGER" → −10), +1 raises it.
-COMPARATIVE_SIGN = {"less": -1, "fewer": -1, "younger": -1, "shorter": -1, "lighter": -1,
-                    "slower": -1, "cheaper": -1, "smaller": -1, "lower": -1, "poorer": -1}
+# DERIVED from the `lower` adjective category further down (#304) — the comparative analog of the lose/acquire
+# antonym pair, so the −1 direction is declared in ONE place; consumers read it via `.get(word, 1)` at call
+# time (so the later definition is fine). Like the verb polarity: only the −1 side is enumerated (`lower`);
+# +1 is the default (`higher` comparatives more/older/… and any unrecognised word). (Search `COMPARATIVE_SIGN
+# = {` below.)
 
 # POSSESSION verbs a ratio's STANDARD can sit before, in lieu of an elided "that"/"which" ("as much money
 # DARWIN HAS" = "...as Darwin has") — deliberately narrow (NOT any verb) so a mistagged common noun ("CDs")
@@ -11546,6 +11549,18 @@ for _lv in ("lose loses lost give gives gave spend spends spent pay pays paid us
             "throw throws threw break breaks broke donate donates donated").split():
     _tag_word(_lv, "lose")
 
+# COMPARATIVE direction as an ADJECTIVE antonym pair (#304) — the last polarity system brought into the
+# category framework. `lower` comparatives point an offset DOWN ("10 years YOUNGER" → −10); their `higher`
+# antonyms point UP ("older" → +10). Mirrors the lose/acquire verb pair exactly: only the −1 side is
+# ENUMERATED (COMPARATIVE_SIGN derives from `lower`), +1 is the DEFAULT (a `higher` word or any other).
+# `higher` is enumerated only to document the pairs and enforce the antonym-disjointness invariant.
+_register_category("lower", "adjective")
+for _lo in "less fewer younger shorter lighter slower cheaper smaller lower poorer".split():
+    _tag_word(_lo, "lower")
+_register_category("higher", "adjective")
+for _hi in "more older taller longer heavier faster costlier bigger larger higher richer".split():
+    _tag_word(_hi, "higher")
+
 # LOSS polarity for the semantic fold, DERIVED from the `lose` category (#301) — the single source of truth
 # unifying `_verb_sign` (declared far above, reads this at call time) with the regex branches. Every surface
 # tagged `lose` or a descendant, base forms AND inflections: the fold lemmatizes REGULAR verbs (spent→spend,
@@ -11581,12 +11596,26 @@ assert GAIN_VERBS.isdisjoint(LOSS_VERBS), \
 # category, −N for its antonym. One mechanism for gain/loss (acquire/lose) and, as they land, earn/spend
 # and more/fewer. Bidirectional; `_antonym(cat)` is the accessor. Complements the semantic-fold polarity
 # (`_verb_sign`/`LOSS_VERBS`) at the regex-branch layer where the category machinery lives.
-CATEGORY_ANTONYMS: dict = {"acquire": "lose", "lose": "acquire"}
+CATEGORY_ANTONYMS: dict = {"acquire": "lose", "lose": "acquire",
+                           "lower": "higher", "higher": "lower"}   # comparative direction (#304)
 
 
 def _antonym(category: str):
     """The antonym category of `category` (the opposite-polarity cluster), or None."""
     return CATEGORY_ANTONYMS.get(category)
+
+
+# COMPARATIVE_SIGN — DERIVED from the `lower` adjective category (#304), forward-declared far above. Each
+# `lower` comparative maps to −1 (the direction that LOWERS the referent); a `higher` word or anything else
+# defaults to +1 via `.get(word, 1)`. Same shape as the verb polarity: only the −1 side is enumerated.
+COMPARATIVE_SIGN = {_wc: -1 for _wc, _tagsc in WORD_CATEGORIES.items()
+                    if any("lower" in _cat_ancestors(_tc) for _tc in _tagsc)}
+# Antonym invariant: lower and higher are opposite directions, so no word may carry both (a double-tag would
+# make its comparative sign ambiguous). Mirrors the acquire/lose disjointness check.
+_HIGHER_WORDS = {_wh for _wh, _tagsh in WORD_CATEGORIES.items()
+                 if any("higher" in _cat_ancestors(_th) for _th in _tagsh)}
+assert set(COMPARATIVE_SIGN).isdisjoint(_HIGHER_WORDS), \
+    f"lower ∩ higher must be empty (comparative antonyms): {set(COMPARATIVE_SIGN) & _HIGHER_WORDS}"
 
 
 # ── Context-based SYNONYM GROUPS, GATED BY A GOVERNING CATEGORY (#288) ────────────────────────────────
