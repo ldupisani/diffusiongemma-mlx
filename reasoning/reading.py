@@ -20644,7 +20644,7 @@ def _multi_item_price_system(premises: list, question: str):
     is a counted quantity or a price (a stray budget/goal/other number ⇒ decline). Positive."""
     ql = question.lower()
     full = " . ".join(p.lower() for p in premises) + " . " + ql
-    if not re.search(r"how much (?:money )?(?:did (?:you|they|i|\w+) (?:make|earn|spend|pay)|"
+    if not re.search(r"how much (?:money )?(?:did (?:[\w']+ ){1,3}?(?:make|earn|spend|pay)|"
                      r"does (?:it|that) cost|will (?:it|that) cost|to buy|is the total)", ql) \
             and "total cost" not in ql:
         return None
@@ -20661,7 +20661,7 @@ def _multi_item_price_system(premises: list, question: str):
 
     alldig = re.findall(r"\d+(?:\.\d+)?", " ".join(premises) + " " + question)
     # PATH 1 — ADJACENT: "N <item> at/for $P each"; [^.$] keeps each match in ONE clause, off another price
-    pairs = re.findall(rf"({_GP_NUMW})\b[^.$]{{0,30}}?\$([\d.]+)\s*(?:each|apiece|/|per\b|a\b)", full)
+    pairs = re.findall(rf"({_GP_NUMW})\b[^.$]{{0,30}}?\$(\d+(?:\.\d+)?)\s*(?:each|apiece|/|per\b|a\b)", full)
     if len(pairs) >= 2:
         used = {c for c, _p in pairs if c.isdigit()} | {p for _c, p in pairs}
         if any(d not in used for d in alldig):        # every digit must be a counted quantity or a price
@@ -20674,14 +20674,31 @@ def _multi_item_price_system(premises: list, question: str):
             terms.append(f"{_num(cv)} * {_num(float(p))}")
         return _gated_pos(_compute(" + ".join(terms)))
 
-    # PATH 2 — SPLIT: item→unit-price ("a pencil costs $0.5 each") and item→count ("two dozen pencils")
-    # in separate clauses, linked by the item NOUN (lemma). Requires an each/apiece marker so a lump-sum
-    # price ("the meal costs $63") is never read as a unit price.
+    # PATH 2 — SPLIT: item→unit-price and item→count in separate clauses, linked by the item NOUN (lemma).
+    # Two link forms: DIRECT ("a pencil costs $0.5 each" ↔ "two dozen pencils") — requires an each/apiece
+    # marker so a lump-sum ("the meal costs $63") is never a unit price; and QUALIFIER-linked ("child
+    # tickets cost $3, adult tickets cost $4" ↔ "7 children", "5 adults") — the ≥2 price clauses SHARE one
+    # head noun ("ticket") with distinct qualifiers, so key on the QUALIFIER (which carries the count),
+    # not the shared head. A repeated head is itself the per-unit signal (nobody says "the child ticket
+    # costs $3" as a lump sum), so 'each' isn't required there.
+    def _has_count(lemma):
+        return re.search(rf"({_GP_NUMW})(?:\s+dozen)?\s+(?:\w+ of )?{_number_re(lemma)}\b", full) is not None
+    clauses = []                                      # (qualifier | None, head, price_str, has_each)
+    for m in re.finditer(rf"(?:each )?(?:a |an |the )?(?:([a-z'’\-]+) )?([a-z'’\-]+) costs? "
+                         rf"\$(\d+(?:\.\d+)?)(?: each| apiece)?", full):
+        clauses.append((m.group(1), m.group(2), m.group(3),
+                        "each" in m.group(0) or "apiece" in m.group(0)))
+    repeated_head = len(clauses) >= 2 and len({c[1] for c in clauses}) == 1 and all(c[0] for c in clauses)
     price = {}                                        # item lemma → price string
-    for m in re.finditer(rf"(?:each )?(?:a |an |the )?{_W} costs? \$([\d.]+)(?: each| apiece)?", full):
-        if "each" not in m.group(0) and "apiece" not in m.group(0):
-            continue
-        price.setdefault(_noun_lemma(m.group(1)), m.group(2))
+    for qual, head, ps, has_each in clauses:
+        if repeated_head:
+            key = _noun_lemma(qual)                   # "child tickets"/"adult tickets" → child / adult
+        elif has_each:
+            key = next((_noun_lemma(w) for w in (head, qual) if w and _has_count(_noun_lemma(w))),
+                       _noun_lemma(head))
+        else:
+            continue                                  # a lump-sum price (no 'each', not the shared-head form)
+        price.setdefault(key, ps)
     if len(price) < 2:
         return None
     used, terms = set(price.values()), []
