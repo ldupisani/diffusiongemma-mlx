@@ -18565,6 +18565,30 @@ def _cat_singles_a_system(premises: list, question: str):
                 if k <= tot:
                     return _rs_ret(k * a + (tot - k) * b)
 
+    # 6. LEGS/FEET SUM: "N ANIMAL1 and M ANIMAL2 … how many feet/legs?" → Σ count·legs(animal), from the
+    #    per-animal leg world-knowledge (`_attr(…, "legs")`). "6 DOGS and 2 DUCKS … how many feet?" → 28.
+    if re.search(r"how many (?:feet|legs)\b", ql):
+        terms, usedd = [], set()
+        for mm in re.finditer(rf"({N}) {_W}", full):
+            legs = _attr(_noun_lemma(mm.group(2)), "legs")
+            if legs is not None:
+                terms.append(f"{_num(f(mm.group(1)))} * {legs}")
+                if mm.group(1).isdigit():
+                    usedd.add(mm.group(1))
+        if len(terms) >= 2 and dok(usedd):
+            return _rs_ret(_compute(" + ".join(terms)))
+
+    # 7. NESTED CONTAINER PRODUCT: "N floors … K UNIT (on|per) each floor … each UNIT houses M ITEM" →
+    #    N·K·M. "25 story building … 4 apartments on each floor … each apartment houses two people" → 200.
+    m = re.search(rf"({N}) (?:story|storey|stories|storeys|floors?)\b", full)
+    m2 = re.search(rf"({_GP_NUMW}) {_W} (?:on |per |in )?each (?:floor|story|storey)", full)
+    m3 = re.search(rf"each {_W} (?:houses?|holds?|has|contains?) ({_GP_NUMW}) {_W}", full)
+    if m and m2 and m3 and _noun_lemma(m2.group(2)) == _noun_lemma(m3.group(1)) \
+            and _cat(m3.group(3), "noun"):
+        usedd = {d for d in (m.group(1), m2.group(1), m3.group(2)) if d.isdigit()}
+        if re.search(rf"how many {_number_re(m3.group(3))}", ql) and dok(usedd):
+            return _rs_ret(f(m.group(1)) * f(m2.group(1)) * f(m3.group(2)))
+
     return None
 
 
