@@ -18589,6 +18589,27 @@ def _cat_singles_a_system(premises: list, question: str):
         if re.search(rf"how many {_number_re(m3.group(3))}", ql) and dok(usedd):
             return _rs_ret(f(m.group(1)) * f(m2.group(1)) * f(m3.group(2)))
 
+    # 8. WEEKDAY/WEEKEND RATE SUM: "N UNIT each day during weekdays and M UNIT during weekends" → N·5 + M·2.
+    #    "sleeps 7 hours weekdays and 8 hours weekends … how many hours in a week?" → 7·5 + 8·2 = 51.
+    wd = re.search(rf"({N}) {_W} (?:each day |a day )?(?:during |on )?weekdays?", full)
+    we = re.search(rf"({N}) {_W} (?:each day |a day )?(?:during |on )?(?:weekends?|the weekend)", full)
+    if wd and we and _noun_lemma(wd.group(2)) == _noun_lemma(we.group(2)):
+        nn = _number_re(wd.group(2))
+        if re.search(rf"how many {nn}.*(?:in a week|per week|a week|each week)", ql) \
+                and dok({wd.group(1), we.group(1)}):
+            return _rs_ret(f(wd.group(1)) * 5 + f(we.group(1)) * 2)
+
+    # 9. SUBTYPE OFFSET SUM (compound-noun tolerant): "N <c1> ITEM. K more <c2> ITEM than <c1>. total?" →
+    #    N + (N+K). "30 red bowling BALLS … 6 more green bowling balls than red … how many balls?" → 66.
+    am = re.search(rf"how many (?:\w+ )*?{_W} (?:are there )?(?:in all|in total|altogether)", ql)
+    if am and _cat(am.group(1), "noun"):
+        nn = _number_re(am.group(1))
+        m1 = re.search(rf"({N}) \w+ (?:\w+ )?{nn}\b", full)
+        m2 = re.search(rf"({N}) more \w+ (?:\w+ )?{nn} than", full)
+        if m1 and m2 and dok({m1.group(1), m2.group(1)}):
+            base = f(m1.group(1))
+            return _rs_ret(base + (base + f(m2.group(1))))
+
     return None
 
 
