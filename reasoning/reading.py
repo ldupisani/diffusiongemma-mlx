@@ -20632,6 +20632,45 @@ def _rate_hours_days_system(premises: list, question: str):
         f"{_num(rate)} * ({_num(dur)} * {_num(tconv)}) * {_num(days)} * {_num(dconv)}"))
 
 
+def _multi_item_price_system(premises: list, question: str):
+    """Σ COUNT × UNIT-PRICE — a plain multi-item total: "sold 220 chocolate cookies at $1 per cookie and
+    70 vanilla cookies at $2 per cookie; how much did you make?" → 220·1 + 70·2 = 360. TWO or more
+    ADJACENT (quantity, unit-price) pairs — "N <item> at/for $P each|apiece|per <unit>" — summed.
+    Deliberately NARROW: fires only on a bare total-spend/earn/cost question (NEVER a change/left/more/
+    profit/half/goal WRAPPER, each of which needs a budget or cost-basis this solver doesn't read), and
+    only when EVERY digit in the problem is inside a pair (a stray budget/goal/other number ⇒ decline,
+    so a "$50 given … how much to RETURN" or a lone distractor can't be mis-summed). Positive."""
+    ql = question.lower()
+    full = " . ".join(p.lower() for p in premises) + " . " + ql
+    if not re.search(r"how much (?:money )?(?:did (?:you|they|i|\w+) (?:make|earn|spend|pay)|"
+                     r"does (?:it|that) cost|will (?:it|that) cost|to buy|is the total)", ql) \
+            and "total cost" not in ql:
+        return None
+    if any(w in ql for w in ("left", "change", "return", "remaining", "the rest", " more ", "profit",
+                             "half", "save", "reach", "goal", "discount", " off", "instead", "each")):
+        return None                                   # a WRAPPER (or a per-unit ask) — not a plain Σ total
+    # adjacent (count … $price per-each) pairs; [^.$] keeps each match inside ONE clause and off another price
+    pairs = re.findall(rf"({_GP_NUMW})\b[^.$]{{0,30}}?\$([\d.]+)\s*(?:each|apiece|/|per\b|a\b)", full)
+    if len(pairs) < 2:
+        return None
+    used = {c for c, _p in pairs if c.isdigit()} | {p for _c, p in pairs}
+    alldig = re.findall(r"\d+(?:\.\d+)?", " ".join(premises) + " " + question)
+    if any(d not in used for d in alldig):            # every digit must be a counted quantity or a price
+        return None
+
+    def _wn(tok):
+        t = tok.lower()
+        return float(t) if t.replace(".", "", 1).isdigit() else float(NUMBERS.get(t, 0) or 0)
+
+    terms = []
+    for c, p in pairs:
+        cv = _wn(c)
+        if not cv:
+            return None
+        terms.append(f"{_num(cv)} * {_num(float(p))}")
+    return _gated_pos(_compute(" + ".join(terms)))
+
+
 def _calendar_age_system(premises: list, question: str):
     """CALENDAR-AGE chains (#222) — ages anchored to LITERAL YEARS, the one age shape the
     relational temporal model deliberately doesn't cover (years are absolute, not wrapping):
@@ -22865,6 +22904,8 @@ _EARLY_SYSTEMS = [
     ("target_purchase_gap", _target_purchase_gap_system),
     # PRODUCT-SUM SPLIT (two-name cast): "6 pairs $3 each + 18 shirts $2; each earns?" → 27.
     ("product_sum_split", _product_sum_split_system),
+    # PRODUCT-SUM plain total (no wrapper): "220 cookies at $1 + 70 at $2; how much made?" → 360.
+    ("multi_item_price", _multi_item_price_system),
     # RAISE DIFFERENCE (shared base, two raises): "$30k; 10% vs 15%; how much more?" → 1500.
     ("raise_difference", _raise_difference_system),
     # ASSET VALUE ± P%: "car at $4000 3 years ago; value reduced 30%; current?" → 2800.
