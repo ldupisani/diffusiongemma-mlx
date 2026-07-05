@@ -18773,6 +18773,24 @@ def _cat_singles_a_system(premises: list, question: str):
             and dok({mwk.group(1), mhr.group(1), mdy.group(1)}):
         return _rs_ret(f(mwk.group(1)) * f(mhr.group(1)) * (f(mdy.group(1)) / 7))
 
+    # 19. SEASONS·EPISODES ÷ PER-DAY: "N seasons each M episodes … watches K a day … how many days?"
+    #     → N·M/K. "3 seasons, 20 episodes each, watches 2 a day" → 30.
+    ms = re.search(rf"({N}) seasons", full)
+    me = re.search(rf"each ({N}) episodes", full)
+    mv = re.search(rf"watches ({N}) episodes a day", full)
+    if ms and me and mv and "how many days" in ql \
+            and dok({ms.group(1), me.group(1), mv.group(1)}):
+        return _rs_ret(f(ms.group(1)) * f(me.group(1)) / f(mv.group(1)))
+
+    # 20. WORDS-PER-MINUTE PAGES: "types R words a minute … page is P words … type out Q pages …
+    #     how long?" → P·Q/R minutes. "90 wpm, page 450 words, 10 pages" → 50.
+    mrt = re.search(rf"type ({N}) words a minute", full)
+    mpg = re.search(rf"page is ({N}) words", full)
+    mqp = re.search(rf"({N}) pages", full)
+    if mrt and mpg and mqp and "how long" in ql \
+            and dok({mrt.group(1), mpg.group(1), mqp.group(1)}):
+        return _rs_ret(f(mpg.group(1)) * f(mqp.group(1)) / f(mrt.group(1)))
+
     return None
 
 
