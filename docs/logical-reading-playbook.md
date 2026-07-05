@@ -217,6 +217,18 @@ exposed solver (a body-wide `more/less/fewer/than` decline for the derived-pool 
 list back to its buggy-but-quiet state. Lesson: a firewall regression from a completeness fix usually points
 at a pre-existing weakness the incompleteness was masking — fix the root, keep the completion.
 
+**Corollary — the same pattern generalizes to NON-verb polarity (#304).** `COMPARATIVE_SIGN` (younger/
+shorter/fewer → −1) is the identical shape one part-of-speech over: an enumerated −1 direction, +1 as the
+`.get(word, 1)` default. Bring it in the same way — a `lower` ADJECTIVE category (the adjective root sense
+already exists) with a `higher` antonym, `COMPARATIVE_SIGN` derived from `lower`, lower↔higher in
+CATEGORY_ANTONYMS, and the disjointness invariant. Keep the derived dict EXACTLY the original membership for a
+clean NET-0 (don't opportunistically add comparatives — that's a separate firewalled broadening, cf. the
+"eats" completion). The general principle across #299–304: **any polarity/direction system in the engine —
+verb gain/loss, comparative up/down, and future ones (earn/spend, give/receive) — is an antonym pair; give
+each pair two categories + a `CATEGORY_ANTONYMS` link + a disjointness invariant, derive the enumerated side
+(the one whose omission silently corrupts, never the safe default), and adding a word becomes a one-line tag
+that updates every consumer at once.**
+
 ### Hardcoded formula → shared-relation extractor (2026-07-04, #276)
 
 The dual of categorical-noun matching. A hard-coded whole-problem branch (`#232` ants:
