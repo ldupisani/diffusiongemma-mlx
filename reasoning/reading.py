@@ -18754,6 +18754,25 @@ def _cat_singles_a_system(premises: list, question: str):
             same = _key(ma.group(1)) == _key(mf.group(3))
             return _rs_ret(f(m.group(1)) * (frac if same else 1 - frac))
 
+    # 17. ROOMS × FAMILY × PER-PERSON: "N rooms … each holds a family of M … each person K ITEM …
+    #     how many ITEM?" → N·M·K (item categorical). "10 rooms, family of 3, each 2 towels" → 60.
+    mr = re.search(rf"({N}) rooms", full)
+    mfam = re.search(rf"family of ({N})", full)
+    mpp = re.search(rf"each person (?:receives|gets|has|needs|is given) ({N}) {_W}", full)
+    if mr and mfam and mpp and _cat(mpp.group(2), "noun") \
+            and re.search(rf"how many {_number_re(mpp.group(2))}", ql) \
+            and dok({mr.group(1), mfam.group(1), mpp.group(1)}):
+        return _rs_ret(f(mr.group(1)) * f(mfam.group(1)) * f(mpp.group(1)))
+
+    # 18. WEEKLY-RATE OVER DAYS: "N <act> a week, each M hours, in D days how many hours?" →
+    #     N·M·(D/7). "3 naps a week, each 2 hours, in 70 days" → 3·2·10 = 60.
+    mwk = re.search(rf"({N}) \w+ a week", full)
+    mhr = re.search(rf"each \w+ is ({N}) hours", full)
+    mdy = re.search(rf"in ({N}) days", full)
+    if mwk and mhr and mdy and "how many hours" in ql \
+            and dok({mwk.group(1), mhr.group(1), mdy.group(1)}):
+        return _rs_ret(f(mwk.group(1)) * f(mhr.group(1)) * (f(mdy.group(1)) / 7))
+
     return None
 
 
