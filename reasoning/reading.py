@@ -11452,6 +11452,12 @@ for _leg, _legwords in ((4, "dog cat cow horse pig goat sheep lamb bear tiger li
                         (8, "spider"), (6, "ant insect bee grasshopper"), (0, "snake fish frog snail")):
     for _m in _legwords.split():
         _tag_attr(_m, legs=_leg)
+# WHEEL counts — the vehicle analog of legs: "how many wheels" sums count × wheels-per-vehicle.
+for _wh, _whwords in ((4, "car truck van jeep sedan suv minivan bus wagon taxi"),
+                      (2, "bike bicycle motorcycle scooter"), (3, "tricycle"), (1, "unicycle"),
+                      (0, "boat")):
+    for _m in _whwords.split():
+        _tag_attr(_m, wheels=_wh)
 
 # PERSON category, a subcategory of noun — child/kid/boy/girl/man/woman/student/… are all "people"
 # (the user's "child is a type of person"). Sourced from the existing GROUP_PERSON_NOUNS set (+ KINSHIP)
@@ -11488,7 +11494,17 @@ CONTEXT_SYNONYMS: dict = {
     # concept : (governing category, interchangeable surface forms valid in that category's context)
     "storey":    ("building", "story storey stories storeys floor floors level levels".split()),
     "appendage": ("animal",   "leg legs foot feet hand hands arm arms tentacle tentacles".split()),
+    "wheels":    ("vehicle",  "wheel wheels tyre tyres tire tires".split()),
     "contains":  ("building", "house houses holds hold has have contain contains".split()),
+}
+
+# PART-COUNT families: "how many <PART>?" → Σ(count × per-item world-knowledge attribute), for items of a
+# governing category. The SAME generic shape as legs/animals, extended to wheels/vehicles with zero new
+# branch logic — each concept names its category-gated question synonyms (CONTEXT_SYNONYMS) and the noun
+# attribute (`_attr`) that gives the per-item part count.
+PART_COUNTS: dict = {   # context-synonym concept : attribute key on the item noun
+    "appendage": "legs",
+    "wheels":    "wheels",
 }
 
 
@@ -17366,11 +17382,8 @@ def _vocab_singles_f_system(premises: list, question: str):
     if ua and ub and uc and "how many pencils" in ql:
         if dok({ua.group(1)}):
             return _rs_ret((f(ua.group(1)) - 1) / 3)
-    # 31. garage wheels (#33)
-    va = re.search(rf"({N}) bicycles and ({N}) cars in the garage", full)
-    if va and "how many wheels" in ql:
-        if dok(set(va.groups())):
-            return _rs_ret(f(va.group(1)) * 2 + f(va.group(2)) * 4)
+    # 31. garage wheels (#33) — SUBSUMED by the generic category-gated PART-COUNT family in
+    #     `_cat_singles_a_system` (Σ count·wheels(vehicle) for ANY vehicles, not just bicycles+cars). DELETED.
     # 32. how-likely percent (#34)
     wa = re.search(rf"({N}) green candies, ({N}) blue candies, and ({N}) red candies", full)
     if wa and "how likely" in ql and "blue" in ql:
@@ -18601,19 +18614,22 @@ def _cat_singles_a_system(premises: list, question: str):
                 if k <= tot:
                     return _rs_ret(k * a + (tot - k) * b)
 
-    # 6. APPENDAGE SUM: "N ANIMAL1 and M ANIMAL2 … how many feet/legs?" → Σ count·legs(animal), from the
-    #    per-animal leg world-knowledge (`_attr(…, "legs")`). "6 DOGS and 2 DUCKS … how many feet?" → 28.
-    #    "feet"/"legs" are one concept (the `appendage` synonyms) — valid ONLY because ANIMALs are present.
-    if re.search(rf"how many {_ctx_syn('appendage', full)}\b", ql):
-        terms, usedd = [], set()
-        for mm in re.finditer(rf"({N}) {_W}", full):
-            legs = _attr(_noun_lemma(mm.group(2)), "legs")
-            if legs is not None:
-                terms.append(f"{_num(f(mm.group(1)))} * {legs}")
-                if mm.group(1).isdigit():
-                    usedd.add(mm.group(1))
-        if len(terms) >= 2 and dok(usedd):
-            return _rs_ret(_compute(" + ".join(terms)))
+    # 6. PART-COUNT SUM (generic): "how many <PART>?" → Σ count·attr(item), where <PART> is a CATEGORY-GATED
+    #    synonym concept mapping to a per-item world-knowledge attribute — legs/feet for ANIMALs, wheels for
+    #    VEHICLEs — one loop, no per-part casing. "6 DOGS and 2 DUCKS … how many feet?" → 6·4+2·2 = 28;
+    #    "9 BICYCLES and 16 CARS … how many wheels?" → 9·2+16·4 = 82. A stated per-item count ("each bike
+    #    has 2 wheels") leaves that digit unaccounted → declines (only WORLD-KNOWLEDGE sums are claimed).
+    for _concept, _attrkey in PART_COUNTS.items():
+        if re.search(rf"how many {_ctx_syn(_concept, full)}\b", ql):
+            terms, usedd = [], set()
+            for mm in re.finditer(rf"({N}) {_W}", full):
+                val = _attr(_noun_lemma(mm.group(2)), _attrkey)
+                if val is not None:
+                    terms.append(f"{_num(f(mm.group(1)))} * {val}")
+                    if mm.group(1).isdigit():
+                        usedd.add(mm.group(1))
+            if len(terms) >= 2 and dok(usedd):
+                return _rs_ret(_compute(" + ".join(terms)))
 
     # 7. NESTED CONTAINER PRODUCT: "N STOREYs … K UNIT (on|per) each STOREY … each UNIT CONTAINS M ITEM" →
     #    N·K·M. "25 story building … 4 apartments on each floor … each apartment houses two people" → 200.
