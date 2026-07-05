@@ -11468,8 +11468,18 @@ for _wh, _whwords in ((4, "car truck van jeep sedan suv minivan bus wagon taxi")
 _register_category("person", "noun")
 for _p in ("person people child children kid kids boy boys girl girls man men woman women "
            "student students friend friends teammate teammates sibling siblings worker workers "
-           "adult adults player players member members").split():
+           "adult adults player players member members guest guests visitor visitors "
+           "passenger passengers resident residents camper campers attendee attendees").split():
     _tag_word(_p, "person")
+
+# PERSON-GROUP category (a subcategory of noun) — a COLLECTIVE of persons: "a family of 3" = 3 people,
+# "a party of 4" = 4 people. The group→member relation for the nested container→group→per-person product
+# (a room holds a family; each person then gets an item). Singulars carry a noun sense already, so no
+# LEXICON additions ⇒ no poison-word risk; ready for any "<group> of N" = N-people reading.
+_register_category("persongroup", "noun")
+for _pg in ("family families household households group groups party parties team teams "
+            "couple couples crew crews").split():
+    _tag_word(_pg, "persongroup")
 
 
 # BUILDING category (a subcategory of noun) — the governing context for the "storey"/"contains" synonyms
@@ -11487,6 +11497,17 @@ _register_category("motion", "verb")
 for _mv in ("walk walks walked run runs ran drive drives drove ride rides rode jog jogs jogged bike bikes "
             "biked swim swims swam travel travels traveled row rows rowed sprint sprints sprinted").split():
     _tag_word(_mv, "motion")
+
+# RECEIVE verb category (#297) — distribution/receipt verbs: "each person RECEIVES 2 towels" ≡ "each guest
+# GETS 2 towels" ≡ "each camper IS GIVEN 2 towels" ≡ "each child HAS 2 towels". A verb category (like
+# motion) so a branch reads the distribution relation between a person and a per-person quantity
+# CATEGORICALLY, not via a hardcoded (?:receives|gets|has|needs|is given) alternation. Inflections tagged
+# explicitly (verbs don't pluralize via _number_variants). Only consumed inside tight "each <person> <recv>
+# N ITEM" branch regexes, so the common members (has/have/need) can't over-match outside that structure.
+_register_category("receive", "verb")
+for _rv in ("receive receives received get gets got given has have had "
+            "need needs needed").split():
+    _tag_word(_rv, "receive")
 
 
 # ── Context-based SYNONYM GROUPS, GATED BY A GOVERNING CATEGORY (#288) ────────────────────────────────
@@ -18754,15 +18775,21 @@ def _cat_singles_a_system(premises: list, question: str):
             same = _key(ma.group(1)) == _key(mf.group(3))
             return _rs_ret(f(m.group(1)) * (frac if same else 1 - frac))
 
-    # 17. ROOMS × FAMILY × PER-PERSON: "N rooms … each holds a family of M … each person K ITEM …
-    #     how many ITEM?" → N·M·K (item categorical). "10 rooms, family of 3, each 2 towels" → 60.
-    mr = re.search(rf"({N}) rooms", full)
-    mfam = re.search(rf"family of ({N})", full)
-    mpp = re.search(rf"each person (?:receives|gets|has|needs|is given) ({N}) {_W}", full)
-    if mr and mfam and mpp and _cat(mpp.group(2), "noun") \
-            and re.search(rf"how many {_number_re(mpp.group(2))}", ql) \
-            and dok({mr.group(1), mfam.group(1), mpp.group(1)}):
-        return _rs_ret(f(mr.group(1)) * f(mfam.group(1)) * f(mpp.group(1)))
+    # 17. CONTAINER → PERSON-GROUP → PER-PERSON ITEM (nested product): "N <container> … each <container>
+    #     holds a <group> of M … each <person> <receives> K ITEM … how many ITEM?" → N·M·K. Every word
+    #     that used to be hardcoded is now a CATEGORY: the group ("family"/"party"/"team", persongroup),
+    #     the recipient ("person"/"guest"/"child", person), and the distribution verb (receive/get/be
+    #     given/have, receive) — so "8 tents, each holds a party of 4, each camper is given 3 snacks" → 96
+    #     with no new words. The container is a free noun bound by the distinctive "holds a <group> of M"
+    #     phrasing (not a bare "N X, M per X" product), which keeps the shape tight. Item categorical.
+    mg = re.search(rf"each {_W} (?:holds?|seats?|contains?|has|have) (?:a |an )?{_cat_re('persongroup')} of ({N})", full)
+    if mg:
+        mr = re.search(rf"({N}) {_number_re(mg.group(1))}\b", full)
+        mpp = re.search(rf"each {_cat_re('person')} (?:is |are |was |were )?{_cat_re('receive')} ({N}) {_W}", full)
+        if mr and mpp and _cat(mpp.group(2), "noun") \
+                and re.search(rf"how many {_number_re(mpp.group(2))}", ql) \
+                and dok({mr.group(1), mg.group(2), mpp.group(1)}):
+            return _rs_ret(f(mr.group(1)) * f(mg.group(2)) * f(mpp.group(1)))
 
     # 18. WEEKLY-RATE OVER DAYS: "N <act> a week, each M hours, in D days how many hours?" →
     #     N·M·(D/7). "3 naps a week, each 2 hours, in 70 days" → 3·2·10 = 60.
