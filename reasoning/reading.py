@@ -11509,6 +11509,19 @@ for _rv in ("receive receives received get gets got given has have had "
             "need needs needed").split():
     _tag_word(_rv, "receive")
 
+# ACQUIRE verb category (#298) — the "come to have MORE of something" gain-synonym cluster: get/receive/
+# buy/order/purchase/find/collect/gather/add/grab + inflections. Recurs across accumulation branches
+# ("ordered N more", "found N", "how many did each get") that each spelled out their own subset of these
+# as a literal alternation. Like `receive` but for active acquisition (buy/find/collect), so a branch reads
+# the gain relation categorically; overlapping members (get/got/receive/received) are tagged in both (a word
+# can belong to several categories). Only consumed inside tightly-gated, digit-accounted accumulation
+# regexes, so broadening the verb set can't over-match outside the branch structure.
+_register_category("acquire", "verb")
+for _av in ("get gets got getting receive receives received buy buys bought purchase purchases purchased "
+            "order orders ordered find finds found collect collects collected gather gathers gathered "
+            "add adds added grab grabs grabbed").split():
+    _tag_word(_av, "acquire")
+
 
 # ── Context-based SYNONYM GROUPS, GATED BY A GOVERNING CATEGORY (#288) ────────────────────────────────
 # A "context synonym" is an equivalence that holds ONLY inside a category's domain: floors/storeys/levels
@@ -18599,7 +18612,7 @@ def _cat_singles_a_system(premises: list, question: str):
     if m and _cat(m.group(2), "noun"):
         nn = _number_re(m.group(2))
         m2 = re.search(rf"(?:each|every).{{0,30}}?got ({N}) {nn}", full)
-        if m2 and re.search(rf"how many \w+ (?:received|got|get) {nn}", ql) and f(m2.group(1)):
+        if m2 and re.search(rf"how many \w+ {_cat_re('acquire')} {nn}", ql) and f(m2.group(1)):
             if dok({m2.group(1)}):
                 return _rs_ret(f(m.group(1)) * 12 / f(m2.group(1)))
 
@@ -18757,7 +18770,7 @@ def _cat_singles_a_system(premises: list, question: str):
     m = re.search(rf"had ({N}) {_W}", full)
     if m and _cat(m.group(2), "noun"):
         nn = _number_re(m.group(2))
-        mk = re.search(rf"(?:ordered|bought|got|received|added) ({N}) more", full)
+        mk = re.search(rf"{_cat_re('acquire')} ({N}) more", full)
         ml = re.search(rf"(?:lost|gave away|used|broke|threw away) ({N})", full)
         if mk and ml and re.search(rf"how many {nn}.*(?:now|left|have)", ql) \
                 and dok({m.group(1), mk.group(1), ml.group(1)}):
@@ -21821,15 +21834,16 @@ def _first_days_double_total_system(premises: list, question: str):
     if not re.search(r"twice the number [^.]*first two days", body):
         return None
     lits = []
+    _acq = _cat_re("acquire")           # gain-synonym cluster (found/got/collected/…), categorical
     for p in premises:
         pl = p.lower()
         if "twice the number" in pl:
             if _has_digit(p):
                 return None
             continue
-        for m in re.finditer(r"(?:found|got|collected) (?:another )?(\d+)\b", pl):
+        for m in re.finditer(rf"{_acq} (?:another )?(\d+)\b", pl):
             lits.append(float(m.group(1)))
-        if _has_digit(p) and not re.search(r"(?:found|got|collected) (?:another )?\d+", pl):
+        if _has_digit(p) and not re.search(rf"{_acq} (?:another )?\d+", pl):
             return None
     if len(lits) != 2:
         return None
