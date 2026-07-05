@@ -19015,6 +19015,49 @@ def _cat_singles_a_system(premises: list, question: str):
             and dok(set(mbg) | {mwt.group(1)}):
         return _rs_ret((f(mbg[0]) + f(mbg[1])) * f(mwt.group(1)))
 
+    # A "there are N <item> in a <container>" clause is recorded as a stated conversion and DROPPED from
+    # the premises (so it can't trip the fold — see `_parse_problem`). The counting solvers below read
+    # that dropped per-container count back from `_STATED_CONV` (keyed by the COUNTED noun), so the parse
+    # stays untouched (Nora/Rita unit-remainders unaffected) while nested-container / half-split / keep-
+    # distribute problems become solvable (#309).
+    def stated(item_lemma):
+        for (big, small), cnt in _STATED_CONV.items():
+            if small == item_lemma and cnt >= 1:
+                return cnt, big
+        return None, None
+
+    # 31. NESTED 3-LEVEL CONTAINER PRODUCT: "N C1 … each C1 contains M C2 … [K C3 in each C2] … how many
+    #     C3?" → N·M·K. "5 boxes, 8 bags each, 12 balloons/bag" → 480 (the 12 read from the stated count).
+    m1 = re.search(rf"({N}) {_W}", full)
+    mq = re.search(r"how many (\w+)", ql)
+    if m1 and mq and _cat(m1.group(2), "noun"):
+        m2 = re.search(rf"each {_number_re(m1.group(2))} (?:contains?|holds?|hold|has|have) ({N}) {_W}", full)
+        if m2 and _cat(m2.group(2), "noun"):
+            n3, big3 = stated(_noun_lemma(mq.group(1)))
+            if n3 and big3 == _noun_lemma(m2.group(2)) and dok({m1.group(1), m2.group(1)}):
+                return _rs_ret(f(m1.group(1)) * f(m2.group(1)) * n3)
+
+    # 32. HALF-AND-HALF PER-CAPITA SUM: "[there are N <people>] … half have A <item> each … other half
+    #     have B <item> each … how many <item>?" → (N/2)·A + (N/2)·B. "28 students, half 5, half 3" → 112.
+    ma = re.search(rf"half .*?have ({N}) {_W} each", full)
+    mb2 = re.search(rf"other half have ({N})", full)
+    if ma and mb2 and _cat(ma.group(2), "noun") \
+            and re.search(rf"how many {_number_re(ma.group(2))}.*total", ql):
+        people = next((c for (big, small), c in _STATED_CONV.items() if _cat(small, "person")), None)
+        if people and dok({ma.group(1), mb2.group(1)}):
+            return _rs_ret((people / 2) * f(ma.group(1)) + (people / 2) * f(mb2.group(1)))
+
+    # 33. KEEP-EACH, DISTRIBUTE-REST (one per recipient): "P1 packs … P2 packs … [K <item> in each pack]
+    #     … keep J each … one per friend … how many friends?" → (ΣP)·K − n·J, n = number of owners.
+    #     "4+2 packs, 3/pack, keep 2 each (2 owners)" → 18 − 4 = 14 (the 3/pack from the stated count).
+    mpk = re.findall(rf"({N}) packs", full)
+    mkeep = re.search(rf"keep ({_GP_NUMW}) {_W} each", full)
+    if len(mpk) >= 2 and mkeep and _cat(mkeep.group(2), "noun") \
+            and re.search(r"how many (?:friends|people|children|classmates)", ql) and f(mkeep.group(1)):
+        perpack, _ = stated(_noun_lemma(mkeep.group(2)))
+        if perpack and dok(set(mpk)):
+            return _rs_ret(sum(f(x) for x in mpk) * perpack - len(mpk) * f(mkeep.group(1)))
+
     return None
 
 
