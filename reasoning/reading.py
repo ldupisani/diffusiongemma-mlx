@@ -2928,10 +2928,11 @@ def _resolve_references(reading: Reading, discourse: list) -> None:
 
 
 # A quantity verb's arithmetic polarity: a LOSS verb subtracts, everything else (gains + the "have"
-# baseline) adds. Keyed by lemma; grown deliberately like the other dictionaries. "pay" is a spend/loss
-# verb (#300) — "earned 40, PAID 15 → 25", not 55; its absence made the fold ADD payments. (The income
-# sense "is paid $X" folds through the rate/product solvers, which don't consult this set.)
-LOSS_VERBS = {"lose", "sell", "give", "spend", "eat", "use", "drop", "drink", "pay"}
+# baseline) adds. `LOSS_VERBS` is DERIVED from the `lose` verb category further down (#301) — ONE source of
+# truth shared with the regex branches — so a loss verb is declared in exactly one place. `_verb_sign` (and
+# the two solver gates that read the set) resolve it only at CALL time, well after import completes, so the
+# later definition is fine. "pay" is a loss (#300); the income sense "is paid $X" folds via the rate/product
+# solvers, which don't consult this set. (Definition: search `LOSS_VERBS = frozenset` below.)
 
 # A comparative's arithmetic direction: −1 lowers the referent ("10 years YOUNGER" → −10), +1 raises it.
 COMPARATIVE_SIGN = {"less": -1, "fewer": -1, "younger": -1, "shorter": -1, "lighter": -1,
@@ -11530,9 +11531,17 @@ for _av in ("get gets got getting receive receives received buy buys bought purc
 # are the single verb + an optional particle the consuming regex supplies.
 _register_category("lose", "verb")
 for _lv in ("lose loses lost give gives gave spend spends spent pay pays paid use uses used "
-            "drop drops dropped sell sells sold eat eats ate throw throws threw break breaks broke "
-            "donate donates donated").split():
+            "drop drops dropped sell sells sold eat eats ate drink drinks drank "
+            "throw throws threw break breaks broke donate donates donated").split():
     _tag_word(_lv, "lose")
+
+# LOSS polarity for the semantic fold, DERIVED from the `lose` category (#301) — the single source of truth
+# unifying `_verb_sign` (declared far above, reads this at call time) with the regex branches. Every surface
+# tagged `lose` or a descendant, base forms AND inflections: the fold lemmatizes REGULAR verbs (spent→spend,
+# paid→pay) but leaves IRREGULARS as surfaces (threw, broke), so both must be present to sign either. Add a
+# loss verb to the category above and `_verb_sign` picks it up automatically — no second list to maintain.
+LOSS_VERBS = frozenset(_w0 for _w0, _tags in WORD_CATEGORIES.items()
+                       if any("lose" in _cat_ancestors(_t0) for _t0 in _tags))
 
 # ANTONYM-LINKED category pairs (#299): a +polarity synonym category and its −polarity opposite, so a
 # signed-accumulation branch reads the SIGN from WHICH category matched — +N for a member of the positive
