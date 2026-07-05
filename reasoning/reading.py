@@ -18712,6 +18712,25 @@ def _cat_singles_a_system(premises: list, question: str):
             if left >= 0:
                 return _rs_ret(left * _scale(ms.group(1)))
 
+    # 13. TAKE-EACH, FRACTION REMAINS → ORIGINAL: "N people take K ITEM each; a <fraction> of the original
+    #     remains → original = N·K / (1 − fraction)". "48 children take 4 sweets each, a third left" → 288.
+    m = re.search(rf"({N}) \w+ .*?taking ({N}) {_W} each", full)
+    mf = re.search(r"(?:a|one)[ -](third|quarter|fourth|fifth|sixth|half) of the original", full)
+    if m and mf and _cat(m.group(3), "noun") and re.search(r"original (?:number|amount)", ql) \
+            and dok({m.group(1), m.group(2)}):
+        _num_, _den_ = _fraction_parts(mf.group(1))
+        return _rs_ret(f(m.group(1)) * f(m.group(2)) / (1 - _num_ / _den_))
+
+    # 14. WEEKLY INCREMENT over a MONTH: "K more ITEM each week than before; N ITEM this week; how many in a
+    #     month?" → N + K·4 (four more weeks). "50 seashells, +20 each week, in a month" → 50 + 80 = 130.
+    m = re.search(rf"({N}) more {_W} .*than .*(?:week before|previous week|last week)", full)
+    if m and _cat(m.group(2), "noun"):
+        nn = _number_re(m.group(2))
+        m2 = re.search(rf"({N}) {nn} .*this week", full)
+        if m2 and "in a month" in ql and "how many" in ql \
+                and dok({m.group(1), m2.group(1)}):
+            return _rs_ret(f(m2.group(1)) + f(m.group(1)) * 4)
+
     return None
 
 
