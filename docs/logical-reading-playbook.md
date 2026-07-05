@@ -164,6 +164,21 @@ nouns, proven by a swapped-noun unit test (`campers`→`necklaces` still solves)
 **Make categorical matching the default for new singles-batches** where the noun is incidental. GUARD 1
 still declines unknown words, so a truly-new noun needs a LEXICON entry — but no new *branch*.
 
+**Corollary — a hardcoded VERB alternation is the verb-category smell (#297).** The same discipline
+applies to a literal `(?:receives|gets|has|needs|is given)` inside a branch: those are verb SYNONYMS, so
+register a VERB category (like `motion` #291 or `receive` #297 — `_register_category("receive","verb")` +
+`_tag_word` each inflection, verbs don't pluralize) and mask with `_cat_re("receive")`. Then "each person
+receives K" ≡ "each guest is given K" ≡ "each child has K" all read through one categorical probe. The
+same move de-hardcodes the OTHER incidental words in the branch: "family" → a `persongroup` category
+("a <group> of M" = M people), "person" → the `person` category (the recipient noun the verb attaches to
+— the user's framing: "matching verb synonyms to a noun of person"). Keep ONE structural anchor tight so
+the shape stays recognizable — in #297 the container stays a free `{_W}` noun BOUND by the distinctive
+"holds a <group> of M" phrasing (not a bare N·M product, which would over-match). Common verb members
+(has/have/need) are safe *because* they're only consumed inside that tight "each <person> <recv> N ITEM"
+regex — a verb category is not license to match the verb anywhere. Verify the branch fires by calling the
+system function DIRECTLY (`_cat_singles_a_system(prem,q)`) — a swapped-word `solve()` can return
+`undetermined` merely because an earlier `_EARLY_SYSTEMS` solver shadows that synthetic variant.
+
 ### Hardcoded formula → shared-relation extractor (2026-07-04, #276)
 
 The dual of categorical-noun matching. A hard-coded whole-problem branch (`#232` ants:
