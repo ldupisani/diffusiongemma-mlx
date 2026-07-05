@@ -11480,6 +11480,14 @@ for _b in ("building buildings house houses apartment apartments condo condos to
            "mansion mansions skyscraper skyscrapers").split():
     _tag_word(_b, "building")
 
+# MOTION verb category (#290) — the FIRST verb-rooted context category, governing the "distance" synonym
+# below: miles/blocks/laps are a DISTANCE only when something MOVES (a travel verb), so a toy "block" or a
+# swimmer's "lap" of a person never counts. Roots at "verb", so `_ctx_syn` requires a member used AS a verb.
+_register_category("motion", "verb")
+for _mv in ("walk walks walked run runs ran drive drives drove ride rides rode jog jogs jogged bike bikes "
+            "biked swim swims swam travel travels traveled row rows rowed sprint sprints sprinted").split():
+    _tag_word(_mv, "motion")
+
 
 # ── Context-based SYNONYM GROUPS, GATED BY A GOVERNING CATEGORY (#288) ────────────────────────────────
 # A "context synonym" is an equivalence that holds ONLY inside a category's domain: floors/storeys/levels
@@ -11496,6 +11504,9 @@ CONTEXT_SYNONYMS: dict = {
     "appendage": ("animal",   "leg legs foot feet hand hands arm arms tentacle tentacles".split()),
     "wheels":    ("vehicle",  "wheel wheels tyre tyres tire tires".split()),
     "contains":  ("building", "house houses holds hold has have contain contains".split()),
+    "distance":  ("motion",   "mile miles kilometer kilometers km meter meters "     # VERB-gated (motion):
+                              "block blocks lap laps yard yards".split()),           # a distance only if moving
+    "pedestrian": ("motion",  "block blocks lap laps".split()),                      # journey-count units
 }
 
 # PART-COUNT families: "how many <PART>?" → Σ(count × per-item world-knowledge attribute), for items of a
@@ -18674,6 +18685,19 @@ def _cat_singles_a_system(premises: list, question: str):
         if m1 and m2 and dok({m1.group(1), m2.group(1)}):
             base = f(m1.group(1))
             return _rs_ret(base + (base + f(m2.group(1))))
+
+    # 10. ROUND-TRIP JOURNEY SUM (VERB-GATED): "walked A blocks … rode B blocks … came home the same way …
+    #     how many blocks?" → (A+B)·2. Restricted to the PEDESTRIAN units (blocks/laps) — miles/km journeys
+    #     are usually rate/relational, not simple sums, so a broad "distance" sum wrong-answered 9 of them.
+    #     "blocks"/"laps" count as a journey unit ONLY because a MOTION verb is present (the `pedestrian`
+    #     concept is gated on the `motion` VERB category via `_ctx_syn`) — a toy "block" never mis-fires.
+    #     The first consumer of a verb-rooted context gate (#290). Requires an explicit round-trip cue.
+    _pu = _ctx_syn("pedestrian", full)
+    if _pu != "(?!)" and re.search(rf"how many {_pu}\b", ql) \
+            and re.search(r"same (?:way|route)|round[- ]trip|there and back", full):
+        segs = re.findall(rf"({N}) {_pu}\b", full)
+        if len(segs) >= 2 and dok(set(segs)):
+            return _rs_ret(sum(f(s) for s in segs) * 2)   # round trip doubles the one-way distance
 
     return None
 
