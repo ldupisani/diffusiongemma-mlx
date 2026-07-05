@@ -19058,6 +19058,16 @@ def _cat_singles_a_system(premises: list, question: str):
         if perpack and dok(set(mpk)):
             return _rs_ret(sum(f(x) for x in mpk) * perpack - len(mpk) * f(mkeep.group(1)))
 
+    # 34. SERVING COUNT (pounds→ounces): "N of them … each wants P pound(s) … <item> are W ounces each
+    #     … how many?" → N·P·(oz/lb)/W. "5 people, 1 lb each, 20 oz steaks" → 5·16/20 = 4. Unit factor
+    #     from the built-in pound↔ounce conversion, not a literal.
+    mn = re.search(rf"({N}) of them", full)
+    mpp = re.search(rf"each \w+ wants ({_GP_NUMW}) pounds?", full)
+    mw = re.search(rf"({N}) ounces each", full)
+    if mn and mpp and mw and f(mpp.group(1)) and f(mw.group(1)) and "how many" in ql \
+            and dok({mn.group(1), mw.group(1)}):
+        return _rs_ret(f(mn.group(1)) * f(mpp.group(1)) * _conv("pound", "ounce") / f(mw.group(1)))
+
     return None
 
 
