@@ -11466,6 +11466,42 @@ for _p in ("person people child children kid kids boy boys girl girls man men wo
     _tag_word(_p, "person")
 
 
+# BUILDING category (a subcategory of noun) — the governing context for the "storey"/"contains" synonyms
+# below (floors/levels are storeys only about a BUILDING). Seeded like animal/vehicle; a word still needs
+# a LEXICON entry to pass GUARD 1, so tagging an absent word is inert.
+_register_category("building", "noun")
+for _b in ("building buildings house houses apartment apartments condo condos tower towers hotel hotels "
+           "mansion mansions skyscraper skyscrapers").split():
+    _tag_word(_b, "building")
+
+
+# ── Context-based SYNONYM GROUPS, GATED BY A GOVERNING CATEGORY (#288) ────────────────────────────────
+# A "context synonym" is an equivalence that holds ONLY inside a category's domain: floors/storeys/levels
+# mean the same thing ONLY about a BUILDING; legs/feet ONLY about an ANIMAL. Each CONCEPT names (its
+# governing category, its interchangeable surface forms). `_ctx_syn(concept, text)` returns a regex
+# alternation for the concept, but ONLY when a member of its category actually appears in `text` (else a
+# never-match `(?!)`). So the SAME generic mechanism serves both — no per-concept special-casing — AND a
+# synonym can never fire in the wrong context ("how many FEET of rope" isn't animal appendages; a
+# warehouse "FLOOR" isn't a building storey). Complements the enumerable noun-category machinery
+# (`_cat_re`) by adding cross-part-of-speech, inflected synonym groups whose validity is CATEGORY-scoped.
+CONTEXT_SYNONYMS: dict = {
+    # concept : (governing category, interchangeable surface forms valid in that category's context)
+    "storey":    ("building", "story storey stories storeys floor floors level levels".split()),
+    "appendage": ("animal",   "leg legs foot feet hand hands arm arms tentacle tentacles".split()),
+    "contains":  ("building", "house houses holds hold has have contain contains".split()),
+}
+
+
+def _ctx_syn(concept: str, text: str) -> str:
+    """A regex alternation `(?:…)` for a context-synonym CONCEPT — valid ONLY when a member of its
+    governing category appears in `text` (else `(?!)`, never-match). floors≡storeys only about a building,
+    legs≡feet only about an animal: one generic, category-gated mechanism, no per-concept casing."""
+    cat, syns = CONTEXT_SYNONYMS[concept]
+    if not re.search(rf"\b{_cat_re(cat)}\b", text):     # \b so "wareHOUSE" doesn't count as a building
+        return r"(?!)"
+    return "(?:" + "|".join(sorted(map(re.escape, syns), key=len, reverse=True)) + ")"
+
+
 def _rate_singles_system(premises: list, question: str):
     """RATE/PRODUCT SINGLES (#226) — sixteen tightly-gated branches over the unit-rate bucket
     (pool+rate×days+literal; enumerated hours × wage; classes×per-class; two gold products;
@@ -18565,9 +18601,10 @@ def _cat_singles_a_system(premises: list, question: str):
                 if k <= tot:
                     return _rs_ret(k * a + (tot - k) * b)
 
-    # 6. LEGS/FEET SUM: "N ANIMAL1 and M ANIMAL2 … how many feet/legs?" → Σ count·legs(animal), from the
+    # 6. APPENDAGE SUM: "N ANIMAL1 and M ANIMAL2 … how many feet/legs?" → Σ count·legs(animal), from the
     #    per-animal leg world-knowledge (`_attr(…, "legs")`). "6 DOGS and 2 DUCKS … how many feet?" → 28.
-    if re.search(r"how many (?:feet|legs)\b", ql):
+    #    "feet"/"legs" are one concept (the `appendage` synonyms) — valid ONLY because ANIMALs are present.
+    if re.search(rf"how many {_ctx_syn('appendage', full)}\b", ql):
         terms, usedd = [], set()
         for mm in re.finditer(rf"({N}) {_W}", full):
             legs = _attr(_noun_lemma(mm.group(2)), "legs")
@@ -18578,11 +18615,14 @@ def _cat_singles_a_system(premises: list, question: str):
         if len(terms) >= 2 and dok(usedd):
             return _rs_ret(_compute(" + ".join(terms)))
 
-    # 7. NESTED CONTAINER PRODUCT: "N floors … K UNIT (on|per) each floor … each UNIT houses M ITEM" →
+    # 7. NESTED CONTAINER PRODUCT: "N STOREYs … K UNIT (on|per) each STOREY … each UNIT CONTAINS M ITEM" →
     #    N·K·M. "25 story building … 4 apartments on each floor … each apartment houses two people" → 200.
-    m = re.search(rf"({N}) (?:story|storey|stories|storeys|floors?)\b", full)
-    m2 = re.search(rf"({_GP_NUMW}) {_W} (?:on |per |in )?each (?:floor|story|storey)", full)
-    m3 = re.search(rf"each {_W} (?:houses?|holds?|has|contains?) ({_GP_NUMW}) {_W}", full)
+    #    The building-level noun (`storey` group) and the containment verb (`contains` group) are context-
+    #    synonyms VALID ONLY BECAUSE a building is present, so the branch generalizes to "10-LEVEL
+    #    building … each room HOLDS 3 chairs" but a warehouse "floor" (no building) never mis-fires.
+    m = re.search(rf"({N}) {_ctx_syn('storey', full)}\b", full)
+    m2 = re.search(rf"({_GP_NUMW}) {_W} (?:on |in )?(?:each|per|every|a) {_ctx_syn('storey', full)}", full)
+    m3 = re.search(rf"each {_W} {_ctx_syn('contains', full)} ({_GP_NUMW}) {_W}", full)
     if m and m2 and m3 and _noun_lemma(m2.group(2)) == _noun_lemma(m3.group(1)) \
             and _cat(m3.group(3), "noun"):
         usedd = {d for d in (m.group(1), m2.group(1), m3.group(2)) if d.isdigit()}
