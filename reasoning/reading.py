@@ -18699,6 +18699,19 @@ def _cat_singles_a_system(premises: list, question: str):
         if len(segs) >= 2 and dok(set(segs)):
             return _rs_ret(sum(f(s) for s in segs) * 2)   # round trip doubles the one-way distance
 
+    # 12. GIVE-AWAY then SCALE THE REMAINDER: "N ITEM … gave K recipients M ITEM each … <scale> times the
+    #     number of ITEM left/remaining?" → (N − K·M)·scale. "500 marbles, gave 4 friends 80 each, 4× the
+    #     number remaining?" → (500 − 320)·4 = 720. Item noun categorical; K and scale read from the text.
+    m = re.search(rf"({N}) {_W} that", full)
+    if m and _cat(m.group(2), "noun") and re.search(r"\b(?:left|remaining|remains)\b", ql):
+        nn = _number_re(m.group(2))
+        mg = re.search(rf"gave (?:her |him |them )?({_GP_NUMW}) \w+ ({N}) {nn} each", full)
+        ms = re.search(rf"({_SCALE_RE}) the number of {nn}", ql)
+        if mg and ms and dok({m.group(1), mg.group(2)}):
+            left = f(m.group(1)) - f(mg.group(1)) * f(mg.group(2))
+            if left >= 0:
+                return _rs_ret(left * _scale(ms.group(1)))
+
     return None
 
 
