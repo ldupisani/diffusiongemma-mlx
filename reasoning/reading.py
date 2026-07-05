@@ -18926,6 +18926,36 @@ def _cat_singles_a_system(premises: list, question: str):
             and dok({mrt.group(1), mpg.group(1), mqp.group(1)}):
         return _rs_ret(f(mpg.group(1)) * f(mqp.group(1)) / f(mrt.group(1)))
 
+    # 21. FENCED-SIDES SPACING: "<item> around K sides … each side is L <unit> … each <item>
+    #     fills/takes M <unit> … how many <item>?" → K·L/M. "3 sides, 16 ft, 4 ft/bush" → 12.
+    _len = r"(?:feet|foot|meters?|metres?|yards?|inches|inch)"
+    ms = re.search(rf"({_GP_NUMW}) sides", full)
+    msl = re.search(rf"each side is ({N}) {_len}", full)
+    mbf = re.search(rf"each {_W} (?:fills|takes|covers|needs|occupies) ({N}) {_len}", full)
+    if ms and msl and mbf and _cat(mbf.group(1), "noun") \
+            and re.search(rf"how many {_number_re(mbf.group(1))}", ql) \
+            and f(ms.group(1)) and dok({msl.group(1), mbf.group(2)}):
+        return _rs_ret(f(ms.group(1)) * f(msl.group(1)) / f(mbf.group(2)))
+
+    # 22. PERCENT-COMPLEMENT REMAINING: "has N ITEM … break after P% … how many ITEM after the
+    #     break?" → N·(1 − P/100). "30 pages, break after 70%" → 9 (the un-done remainder).
+    m = re.search(rf"({N}) {_W}", full)
+    if m and _cat(m.group(2), "noun"):
+        nn = _number_re(m.group(2))
+        mp = re.search(rf"({N})%", full)
+        if mp and "break" in full and re.search(rf"how many {nn}.*(?:after|remain|left|still)", ql) \
+                and dok({m.group(1), mp.group(1)}):
+            return _rs_ret(f(m.group(1)) * (1 - f(mp.group(1)) / 100))
+
+    # 23. RATE-TO-FINISH-ALL: "T hours to <verb> N ITEM … total time … if <verb> M more ITEM?" →
+    #     (N + M)·(T/N). "6 hours to paint 12 paintings, 20 more" → 16.
+    mh = re.search(rf"({_GP_NUMW}) hours to \w+ ({N}) {_W}", full)
+    if mh and _cat(mh.group(3), "noun"):
+        mm = re.search(rf"({N}) more", full)
+        if mm and "total time" in ql and f(mh.group(1)) and f(mh.group(2)) \
+                and dok({mh.group(2), mm.group(1)}):
+            return _rs_ret((f(mh.group(2)) + f(mm.group(1))) * (f(mh.group(1)) / f(mh.group(2))))
+
     return None
 
 
