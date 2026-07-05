@@ -8512,9 +8512,10 @@ _FRAC_WORDS = {"half": 0.5, "a third": 1 / 3, "a quarter": 0.25, "a fourth": 0.2
                "one half": 0.5, "one third": 1 / 3, "one quarter": 0.25, "one fourth": 0.25,
                "one fifth": 0.2, "one sixth": 1 / 6, "two thirds": 2 / 3, "three fourths": 0.75,
                "three quarters": 0.75, "two fifths": 0.4, "three fifths": 0.6}
-_LOSS_VERBS = ("ate", "eat", "eaten", "gave", "give", "gives", "given", "spent", "spend", "took", "take",
-               "taken", "used", "use", "removed", "remove", "scared", "scare", "lost", "lose", "sold",
-               "sell", "drank", "drink", "threw", "throw")
+# `_LOSS_VERBS` — the surface-form loss detector for the regex remainder-solvers — is DERIVED from the
+# fold's `LOSS_VERBS` (itself the `lose` category, #301) plus a small regex-only tail; defined just after
+# that derivation below (#302). Its consumers read it only at call time, so the later definition is fine.
+# (Definition: search `_LOSS_VERBS = tuple(LOSS_VERBS)` below.)
 
 
 def _fraction_value(s: str):
@@ -8556,6 +8557,11 @@ def _fraction_remainder_system(premises: list, question: str):
         #                subtype twin's shape (_subtype_fraction_remainder_system); grabbing the FIRST pool
         #                as the single base would commit half·pool₁ against the wrong total (deferral, so
         #                the two family members never both claim — the collisions discipline)
+    if re.search(r"\b(?:more|less|fewer|than)\b", low):
+        return None    # a relative / DERIVED pool ("Cristian has 50 MORE black cookies THAN white") — the
+        #                single literal base n is then the WRONG total (80 white ≠ the 130 black pool → ½·80
+        #                = 40, gold 85). The per-loss-clause "more/than" guard below misses this because the
+        #                comparison sits in a non-loss ("has") premise it skips; catch it body-wide here.
     mb = re.search(rf"\b(?:there\s+(?:were|are|was)|had|has|made|baked|grew)\s+(\d+)\s+(?:\w+\s+)?{item}s?\b", low)
     if mb is None:
         return None
@@ -11542,6 +11548,15 @@ for _lv in ("lose loses lost give gives gave spend spends spent pay pays paid us
 # loss verb to the category above and `_verb_sign` picks it up automatically — no second list to maintain.
 LOSS_VERBS = frozenset(_w0 for _w0, _tags in WORD_CATEGORIES.items()
                        if any("lose" in _cat_ancestors(_t0) for _t0 in _tags))
+
+# Surface-form loss detector for the regex remainder-solvers (#302), forward-declared at the top of the
+# module. The shared CORE is the fold's `LOSS_VERBS` (the `lose` category) — so a fold-safe loss verb is
+# declared in ONE place and reaches both layers. The TAIL is regex-only: past participles the fold never
+# sees because it lemmatizes ("given"→give, "eaten"→eat), and reduction verbs that are fold-AMBIGUOUS —
+# "take" can be a GAIN ("he took 3 cookies") — so they must NOT enter the polarity category, but they DO
+# signal a reduction in these solvers' narrow context.
+_LOSS_VERBS = tuple(LOSS_VERBS) + ("given", "eaten", "take", "took", "taken",
+                                   "remove", "removed", "scare", "scared")
 
 # ANTONYM-LINKED category pairs (#299): a +polarity synonym category and its −polarity opposite, so a
 # signed-accumulation branch reads the SIGN from WHICH category matched — +N for a member of the positive
