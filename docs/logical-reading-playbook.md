@@ -202,8 +202,20 @@ IRREGULARS as surfaces (`_lemma("threw")=="threw"`), so tag+derive both or the i
 forward-declared "defined below" set is fine — just leave a breadcrumb comment. Reconcile membership before
 shipping (the old set and the category had drifted: set had "drink", category had throw/break/donate) and
 firewall the delta — new fold-losses are usually a latent-bug fix but a high-blast-radius change (TEST
-checkpoint required). NOT every parallel loss list should merge: a regex-surface tuple with DIFFERENT
-membership (`_LOSS_VERBS` ~8514 has take/eaten/given) serves a different consumer — leave it.
+checkpoint required). When a parallel loss list has DIFFERENT membership
+(`_LOSS_VERBS` ~8515 has take/eaten/given), don't just merge it — derive its shared CORE from the category
+and keep an explicit regex-only TAIL for the members that must NOT enter the fold's polarity: past
+participles the fold never sees (it lemmatizes given→give) and fold-AMBIGUOUS verbs ("take" can be a gain).
+
+**Corollary — unifying a list COMPLETES it, which can expose a latent downstream bug (#302).** A
+hand-maintained list almost always has silent GAPS (the old `_LOSS_VERBS` tuple had `eat`/`ate` but not the
+3rd-person `eats`). Deriving from the category fills them — and a newly-detected verb can trigger a
+downstream solver that was only ever "correct" because the gap hid that input from it. Here completing
+`eats` made `_fraction_remainder_system` fire on a TWO-pool problem ("eats half the black cookies and 3/4 the
+white") it can't handle → a holdout DECL→WRONG the firewall caught on the first pass. The fix is to GUARD the
+exposed solver (a body-wide `more/less/fewer/than` decline for the derived-pool case), NOT to re-cripple the
+list back to its buggy-but-quiet state. Lesson: a firewall regression from a completeness fix usually points
+at a pre-existing weakness the incompleteness was masking — fix the root, keep the completion.
 
 ### Hardcoded formula → shared-relation extractor (2026-07-04, #276)
 
