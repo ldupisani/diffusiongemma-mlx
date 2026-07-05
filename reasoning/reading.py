@@ -2928,8 +2928,10 @@ def _resolve_references(reading: Reading, discourse: list) -> None:
 
 
 # A quantity verb's arithmetic polarity: a LOSS verb subtracts, everything else (gains + the "have"
-# baseline) adds. Keyed by lemma; grown deliberately like the other dictionaries.
-LOSS_VERBS = {"lose", "sell", "give", "spend", "eat", "use", "drop", "drink"}
+# baseline) adds. Keyed by lemma; grown deliberately like the other dictionaries. "pay" is a spend/loss
+# verb (#300) — "earned 40, PAID 15 → 25", not 55; its absence made the fold ADD payments. (The income
+# sense "is paid $X" folds through the rate/product solvers, which don't consult this set.)
+LOSS_VERBS = {"lose", "sell", "give", "spend", "eat", "use", "drop", "drink", "pay"}
 
 # A comparative's arithmetic direction: −1 lowers the referent ("10 years YOUNGER" → −10), +1 raises it.
 COMPARATIVE_SIGN = {"less": -1, "fewer": -1, "younger": -1, "shorter": -1, "lighter": -1,
@@ -11527,8 +11529,9 @@ for _av in ("get gets got getting receive receives received buy buys bought purc
 # semantic-fold's polarity set — keep the two in agreement). Multi-word forms ("gave away", "threw out")
 # are the single verb + an optional particle the consuming regex supplies.
 _register_category("lose", "verb")
-for _lv in ("lose loses lost give gives gave spend spends spent use uses used drop drops dropped "
-            "sell sells sold eat eats ate throw throws threw break breaks broke donate donates donated").split():
+for _lv in ("lose loses lost give gives gave spend spends spent pay pays paid use uses used "
+            "drop drops dropped sell sells sold eat eats ate throw throws threw break breaks broke "
+            "donate donates donated").split():
     _tag_word(_lv, "lose")
 
 # ANTONYM-LINKED category pairs (#299): a +polarity synonym category and its −polarity opposite, so a
