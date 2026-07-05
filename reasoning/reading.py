@@ -11522,6 +11522,27 @@ for _av in ("get gets got getting receive receives received buy buys bought purc
             "add adds added grab grabs grabbed").split():
     _tag_word(_av, "acquire")
 
+# LOSE verb category (#299) — the ANTONYM cluster of `acquire`: "come to have LESS of something" —
+# lose/give/spend/use/drop/sell/eat/throw/break/donate + inflections (aligned with LOSS_VERBS, the
+# semantic-fold's polarity set — keep the two in agreement). Multi-word forms ("gave away", "threw out")
+# are the single verb + an optional particle the consuming regex supplies.
+_register_category("lose", "verb")
+for _lv in ("lose loses lost give gives gave spend spends spent use uses used drop drops dropped "
+            "sell sells sold eat eats ate throw throws threw break breaks broke donate donates donated").split():
+    _tag_word(_lv, "lose")
+
+# ANTONYM-LINKED category pairs (#299): a +polarity synonym category and its −polarity opposite, so a
+# signed-accumulation branch reads the SIGN from WHICH category matched — +N for a member of the positive
+# category, −N for its antonym. One mechanism for gain/loss (acquire/lose) and, as they land, earn/spend
+# and more/fewer. Bidirectional; `_antonym(cat)` is the accessor. Complements the semantic-fold polarity
+# (`_verb_sign`/`LOSS_VERBS`) at the regex-branch layer where the category machinery lives.
+CATEGORY_ANTONYMS: dict = {"acquire": "lose", "lose": "acquire"}
+
+
+def _antonym(category: str):
+    """The antonym category of `category` (the opposite-polarity cluster), or None."""
+    return CATEGORY_ANTONYMS.get(category)
+
 
 # ── Context-based SYNONYM GROUPS, GATED BY A GOVERNING CATEGORY (#288) ────────────────────────────────
 # A "context synonym" is an equivalence that holds ONLY inside a category's domain: floors/storeys/levels
@@ -18771,7 +18792,7 @@ def _cat_singles_a_system(premises: list, question: str):
     if m and _cat(m.group(2), "noun"):
         nn = _number_re(m.group(2))
         mk = re.search(rf"{_cat_re('acquire')} ({N}) more", full)
-        ml = re.search(rf"(?:lost|gave away|used|broke|threw away) ({N})", full)
+        ml = re.search(rf"{_cat_re(_antonym('acquire'))}(?: away| out)? ({N})", full)
         if mk and ml and re.search(rf"how many {nn}.*(?:now|left|have)", ql) \
                 and dok({m.group(1), mk.group(1), ml.group(1)}):
             return _rs_ret(f(m.group(1)) + f(mk.group(1)) - f(ml.group(1)))
