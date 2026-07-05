@@ -179,6 +179,18 @@ regex — a verb category is not license to match the verb anywhere. Verify the 
 system function DIRECTLY (`_cat_singles_a_system(prem,q)`) — a swapped-word `solve()` can return
 `undetermined` merely because an earlier `_EARLY_SYSTEMS` solver shadows that synthetic variant.
 
+**Corollary — ANTONYM clusters linked to synonym clusters (#299).** A synonym verb-category often has a
+natural −polarity opposite: `acquire`↔`lose`, `earn`↔`spend`, more↔fewer. Register the opposite as its own
+category and LINK them (`CATEGORY_ANTONYMS = {"acquire":"lose","lose":"acquire"}` + `_antonym(cat)`), then a
+signed-accumulation branch reads the SIGN from *which* category matched — `+N` for a positive-category verb,
+`−N` for its antonym. Make the link load-bearing: a loss-side regex should be `_cat_re(_antonym('acquire'))`,
+not a fresh literal — otherwise the registry is a dead dict. Two guardrails: (1) this is the regex-branch
+twin of the pre-existing SEMANTIC-FOLD polarity (`_verb_sign`/`LOSS_VERBS`, `COMPARATIVE_SIGN` — one-sided
+"not-loss = +1" lists that feed `_holdings`); keep the `lose` category's members ALIGNED with `LOSS_VERBS`
+so the two layers agree. (2) An opposite-polarity *pair inside one branch by design* (`(?:sold|bought)` —
+two framings of one question, not a signed sum) is NOT an antonym-sum; don't split it. Multi-word loss forms
+("gave away", "threw out") = the single verb in the category + an optional particle the regex supplies.
+
 ### Hardcoded formula → shared-relation extractor (2026-07-04, #276)
 
 The dual of categorical-noun matching. A hard-coded whole-problem branch (`#232` ants:
