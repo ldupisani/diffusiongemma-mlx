@@ -11510,10 +11510,19 @@ PART_COUNTS: dict = {   # context-synonym concept : attribute key on the item no
 
 def _ctx_syn(concept: str, text: str) -> str:
     """A regex alternation `(?:…)` for a context-synonym CONCEPT — valid ONLY when a member of its
-    governing category appears in `text` (else `(?!)`, never-match). floors≡storeys only about a building,
-    legs≡feet only about an animal: one generic, category-gated mechanism, no per-concept casing."""
+    governing category appears in `text` WITH that category's ROOT SENSE. The sense is DERIVED from the
+    category (every category roots at exactly one sense — building/vehicle/animal at NOUN, a motion/
+    travel category at VERB), so the SAME mechanism gates noun-based AND verb-based sentence structures:
+    floors≡storeys only about a building NOUN; a distance unit could be a distance only about a travel
+    VERB. A NOUN-rooted category uses the cheap surface test; a VERB-rooted category ADDITIONALLY requires
+    a member used AS a verb in context, so a noun homograph ("she HOUSES guests") can't satisfy a verb
+    gate. Never-match `(?!)` when absent."""
     cat, syns = CONTEXT_SYNONYMS[concept]
     if not re.search(rf"\b{_cat_re(cat)}\b", text):     # \b so "wareHOUSE" doesn't count as a building
+        return r"(?!)"
+    if _cat_root_sense(cat) == "verb" and not any(      # a VERB gate needs a member used AS a verb here
+            "verb" in u.features.get("senses", []) and _cat(u.surface, cat)
+            for u in analyze(text).units):
         return r"(?!)"
     return "(?:" + "|".join(sorted(map(re.escape, syns), key=len, reverse=True)) + ")"
 
