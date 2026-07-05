@@ -2951,7 +2951,12 @@ POSSESSION_VERBS = {"has", "had", "have", "owns", "owned", "gets", "got", "recei
 
 
 def _verb_sign(lemma: str) -> int:
-    """+1 for a gain or the 'have' baseline, -1 for a loss verb — how this quantity folds."""
+    """A quantity verb's fold polarity, read from the ANTONYM verb categories (#303): -1 for a `lose`
+    verb, +1 for its `acquire` (GAIN_VERBS) antonym. A possession/state baseline (have/own/hold) and any
+    unrecognised verb ALSO fold +1 — the timeless fold's assume-gain default — so loss is the only sign
+    that must be enumerated: defaulting an unknown to +1 is safe, to -1 would silently swallow holdings.
+    (LOSS_VERBS/GAIN_VERBS both DERIVE from the lose/acquire categories, kept disjoint by the invariant
+    at their definition.)"""
     return -1 if lemma in LOSS_VERBS else 1
 
 
@@ -11557,6 +11562,19 @@ LOSS_VERBS = frozenset(_w0 for _w0, _tags in WORD_CATEGORIES.items()
 # signal a reduction in these solvers' narrow context.
 _LOSS_VERBS = tuple(LOSS_VERBS) + ("given", "eaten", "take", "took", "taken",
                                    "remove", "removed", "scare", "scared")
+
+# GAIN polarity — DERIVED from the `acquire` category (#303), the antonym twin of LOSS_VERBS, so the gain
+# side of `_verb_sign` is category-sourced and SYMMETRIC with the loss side (declare a gain verb in one
+# place). Note the asymmetry the fold intends: -1 must be ENUMERATED (a missed loss silently swallows
+# holdings), whereas +1 is the DEFAULT — a recognised gain (GAIN_VERBS), a possession/state baseline
+# (POSSESSION_VERBS: have/own/hold), and an unrecognised verb all fold +1 ("assume gain"). GAIN_VERBS is
+# thus the explicit positive case, not an exhaustive +1 list.
+GAIN_VERBS = frozenset(_w1 for _w1, _tags1 in WORD_CATEGORIES.items()
+                       if any("acquire" in _cat_ancestors(_t1) for _t1 in _tags1))
+# Antonym invariant: acquire and lose are opposites, so no verb may carry BOTH tags — a double-tag would
+# make the fold polarity ill-defined (is it +1 or -1?). Enforced once at import; catches a tagging slip loudly.
+assert GAIN_VERBS.isdisjoint(LOSS_VERBS), \
+    f"acquire ∩ lose must be empty (antonym categories): {GAIN_VERBS & LOSS_VERBS}"
 
 # ANTONYM-LINKED category pairs (#299): a +polarity synonym category and its −polarity opposite, so a
 # signed-accumulation branch reads the SIGN from WHICH category matched — +N for a member of the positive
