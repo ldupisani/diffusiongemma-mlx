@@ -229,6 +229,26 @@ each pair two categories + a `CATEGORY_ANTONYMS` link + a disjointness invariant
 (the one whose omission silently corrupts, never the safe default), and adding a word becomes a one-line tag
 that updates every consumer at once.**
 
+### A clause that is BOTH meta and data — read the recorded meta, don't fight the parse (#309)
+
+`_parse_problem` recognizes "there are N X in a Y" as a stated unit conversion (`_stated_conversion`),
+records the factor in `_STATED_CONV`, and DROPS the clause so it can't materialize a stray Quantity or trip
+the fold. This is correct for real UNIT conversions ("128 ounces in a gallon") — but the SAME surface also
+covers COUNTABLE containment ("3 pens in each pack", "28 students in a classroom", "12 balloons in each
+bag"), where the count is a load-bearing DATUM a counting solver needs. Dropping it *parse-blocks* an entire
+family (nested-container products, half-splits, keep-distribute): the operand is gone before any solver runs,
+so no branch can ever match it — the tell is a regex that keeps failing against premises that provably don't
+contain the number. **Do NOT "fix" this by keeping the clause as a premise** — the clause is genuinely BOTH
+meta and data, and which one matters depends on the *problem*, not the clause (Kendra needs the datum; Nora's
+"50 cards in a pack" needs the factor to convert 3 packs→150, and keeping the clause breaks Nora's remainder
+solver). Fighting the parse trades one family's block for another's regression. Instead, **leave the parse
+untouched and read the recorded meta from the solver**: `_STATED_CONV` is a live per-solve global (keyed by
+`(container_lemma, item_lemma)`), so a counting branch looks up the dropped per-container count by the counted
+noun. Zero blast radius on every existing problem (the parse is byte-identical), pure coverage gain. General
+principle: when a datum has been squirreled away into a side table (conversions, `_STATED_CONV`, stated
+factors), a new solver should CONSULT that table rather than trying to reconstruct the datum from text the
+parse already consumed.
+
 ### Hardcoded formula → shared-relation extractor (2026-07-04, #276)
 
 The dual of categorical-noun matching. A hard-coded whole-problem branch (`#232` ants:
