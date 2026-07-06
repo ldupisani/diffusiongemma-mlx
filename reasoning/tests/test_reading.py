@@ -8306,6 +8306,22 @@ class TestRemainderThenSplit(unittest.TestCase):
             "How many apples are in each box?"), 8)
 
 
+class TestAverageOfValueList(unittest.TestCase):
+    """#324 — an explicit list of same-measure values averaged → Σ / count. Word-agnostic (synthetic)."""
+
+    def test_average_of_list(self):
+        self.assertEqual(reading.solve(
+            "In game one she scored 4 points. In game two she scored 6 points. In game three she "
+            "scored 8 points. What is the average number of points she scored per game?"), 6)
+
+    def test_distractor_number_forces_decline(self):
+        # a number of another measure ("5 teammates") leaves a digit unused (dok) → decline, not a guess
+        self.assertEqual(reading.solve(
+            "She has 5 teammates. In game one she scored 4 points. In game two she scored 6 points. "
+            "In game three she scored 8 points. What is the average number of points per game?"),
+            "undetermined")
+
+
 class TestQuestionRequirementsCorpus(unittest.TestCase):
     """The QUESTION_REQUIREMENTS corpus — question shapes answerable GIVEN certain facts. An unsatisfied
     entry NAMES the world-knowledge to fetch; the corpus must generalize past a single shape."""

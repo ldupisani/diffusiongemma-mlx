@@ -19185,6 +19185,19 @@ def _cat_singles_a_system(premises: list, question: str):
                 and dok({init.group(1), rem.group(1), m.group(1)}):
             return _rs_ret((f(init.group(1)) - f(rem.group(1))) / p)
 
+    # 20. AVERAGE OF A VALUE-LIST: an EXPLICIT list of same-measure values (each stated as "<n> <measure>"),
+    #     averaged → Σ values / (number of values). "Mon 8 hours, Tue 7, Wed 8, Thu 10, Fri 7 … average
+    #     number of hours … in one night?" → (8+7+8+10+7)/5 = 8. The divisor is the COUNT of listed values
+    #     (not a stated number). dok (every digit consumed) is the guard: any number of another measure —
+    #     an "each"-group count or a distractor — leaves a digit unused → decline (so Colin/Janele, which
+    #     need "each" expansion, safely fall through). Tight: needs ≥3 values and a per-unit avg question.
+    qm = re.search(rf"average\s+(?:number of\s+)?{_W}\b.*\b(?:per|in one|in a|each)\b", ql)
+    if qm:
+        meas = _number_re(qm.group(1))
+        vals = re.findall(rf"({N})\s+{meas}\b", full)
+        if len(vals) >= 3 and all(f(v) or v == "0" for v in vals) and dok(set(vals)):
+            return _rs_ret(sum(f(v) for v in vals) / len(vals))
+
     return None
 
 
