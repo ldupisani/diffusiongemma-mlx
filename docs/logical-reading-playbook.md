@@ -248,6 +248,29 @@ N·(1−f1)·(f2 or 1−f2)) is the template. Two lessons specific to multi-step
   because dev-train shows a count of 1 — build it word-agnostically (fractions via `_fraction_value`, groups
   via `_W`+`_cat`, total via the stated count) so it covers the shape, not the instance.
 
+### Facts + saturation + question-obligation — the general shape of a multi-step solver (#312)
+
+The reader's real job (see the greater-goal memory) is to extract FACTS and formulate the QUESTION, not to
+pattern-match an answer. #312 is the template, reformulating the fraction chain that #311 did as a fixed
+formula:
+1. **Extract tight FACTS.** `_read_partitions` reads the text into GROUP facts — a universe split into
+   disjoint parts, each part a FRACTION of its parent or the COMPLEMENT of a sibling. The extraction is
+   tightly gated (person universe, "of those" bridge, action-verb part label) *because word fractions give no
+   `dok` anchor* — but the facts it produces are inspectable and reusable, not a buried expression.
+2. **SATURATE — generality lives here.** `_saturate_partitions` fills each part's count to a fixpoint
+   (fraction·parent, or parent−sibling), so the chain composes to ANY depth and ANY noun pair for free. This
+   is the payoff over a fixed formula: N·(1−f1)·(1−f2) hard-codes two stages and a boys/girls complement; the
+   fixpoint handles three stages and men/women with no new code.
+3. **Resolve the question as an OBLIGATION.** "How many Y" isn't a dispatch key — it can name an *unstated*
+   group the question itself implies (girls = the complement of the stated boys within went). Deriving that
+   is the "formulate the question" step.
+**The load-bearing lesson:** a general fact model does NOT relax the need for tight EXTRACTION. The firewall
+caught an over-match on pass 1 (a "1/3 of them ARE boys … rest have no pets" problem mis-read as a partition)
+precisely because the admit-the-facts pattern was too loose. Put the generality in the *derivation*
+(saturation), keep the *extraction* as tight as any single-branch — the two are separate concerns. Future
+multi-step families (ratio partition, backward $-remainder) should REUSE this model: a ratio is two
+fractional parts; a backward chain is saturation solving for the universe given a known part.
+
 ### A clause that is BOTH meta and data — read the recorded meta, don't fight the parse (#309)
 
 `_parse_problem` recognizes "there are N X in a Y" as a stated unit conversion (`_stated_conversion`),
