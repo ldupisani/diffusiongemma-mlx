@@ -1613,6 +1613,36 @@ A **collection descriptor** = `(head noun, set of atomic attribute predicates)`.
 head, attribute-superset; a sub-group's count = instances whose attributes ⊇ the query's. We store
 the shape now (free); aggregation/counting is *derived later* when a question's obligation needs it.
 
+## The epistemic surface — articulate deficiency, expose facts, corpus of requirements (#318)
+
+The reader's true north is a **false-positive-free bridge** to the greater engine: prefer generalized
+structures, and **query the user rather than assume** (see the `reader-greater-goal` memory). A silent
+"undetermined" from `solve` throws away the reader's most valuable output — WHAT it knows and WHAT it
+still needs. Four read-only functions (near `solve`) expose that, all ADDITIVE (they never change a
+`solve` answer, so they are firewall-trivial — a new *articulation* surface is strictly safer than a new
+*extraction* branch):
+
+- **`diagnose(text)`** — when `solve` declines, classify WHY into a `Deficiency`: `unknown-word`,
+  `ambiguous-base` (an unanchored "F of his/her/the X" after a prior change — the of-CURRENT-vs-of-ORIGINAL
+  ambiguity of Sabrina/Leo, which is *genuinely undetermined by the text*, so the correct output is a
+  QUESTION back, not a guess), `missing-knowledge` (from the corpus), `insufficient` fallback. `None` when
+  solvable → can only add information.
+- **`known_facts(text)`** — the POSITIVE complement ("here are the things we DO know"): premise facts
+  threaded across sentences then CLOSED under `synthesize`. Makes cross-sentence synthesis visible — a
+  self-contained sentence's fact discharging another sentence's obligation ("twice as many as Tom" resolves
+  against `tom=3` → `mary=6`).
+- **`QUESTION_REQUIREMENTS` corpus + `requirements(text)`** — a corpus of *questions answerable given certain
+  facts*: each entry maps a question SHAPE to the world-knowledge it needs and a `supplied` test. A
+  matched-but-unsupplied entry NAMES exactly the fact to fetch (the hook for a future world-knowledge
+  lookup). `diagnose`'s missing-knowledge branch is data-driven off this — never hardcode a legs regex again;
+  add a corpus entry.
+- **`report(text)`** — bundles {answer, known, requirements, deficiency}.
+
+**Pattern:** when you'd otherwise hardcode "problem needs fact X," add a `QUESTION_REQUIREMENTS` entry
+(shape → needs → supplied?) instead. When you'd otherwise decline silently, make sure `diagnose` can name
+the deficiency. The corpus and the synthesizers are the two growth surfaces; grow them from concrete
+examples (example-driven-deferral), not speculatively.
+
 ## Open threads / next
 
 - **GSM8K via this parser (replace the LLM translator)** — kept as an INDEPENDENT eval (a `bench`-style

@@ -24151,6 +24151,122 @@ def solve(text: str):
         CONVERSIONS.update(saved)
 
 
+def known_facts(text: str) -> list:
+    """HERE ARE THE THINGS WE KNOW about a question: the facts the reader extracted from the premises —
+    threaded across sentences (coreference + a growing context, exactly as `solve` does) and then CLOSED
+    UNDER SYNTHESIS, so a self-contained sentence's DERIVED fact ("…and half that much white fiber" → the
+    white amount) appears here even when the whole question can't yet be answered. This is the POSITIVE
+    complement of `diagnose`: together they let the reader say "this is what I know, this is what I'm
+    missing" instead of a silent decline. Read-only — it only observes, never changes `solve`'s answer.
+
+    The synthesis is run against BOTH the premise and question readings, so a fact a later sentence's
+    obligation needs (the cross-sentence case) is derived and surfaced here — the mechanism by which a
+    self-contained sentence discharges another sentence's obligation."""
+    parsed = _parse_problem(text)
+    if parsed is None:
+        return []
+    premises, question = parsed
+    disc, ctx = [], []
+    for p in premises:                                   # accumulate premise facts across sentences, the
+        for f in (learn(p, disc, ctx) or []):            # SAME discourse+context threading `solve` uses
+            ctx.append(f)
+    readings = [analyze(p) for p in premises + [question]]
+    return synthesize(ctx, readings)                     # close under the synthesizers to a fixpoint
+
+
+def _req_part_count(ql: str, joined: str):
+    """A part-count question ("how many legs/wheels/feet …") is ANSWERABLE GIVEN one world-knowledge fact:
+    the per-item count ("a dog has 4 legs"). Returns (needs, satisfied) if the question matches this shape,
+    else None. `satisfied` is True once that count is stated in the text."""
+    m = re.search(r"\b(?:number of|how many)\s+(legs|wheels|feet)\b", ql)
+    if not m:
+        return None
+    part, sing = m.group(1), m.group(1)[:-1]
+    supplied = bool(re.search(rf"\d+\s+{part}\b", joined) or re.search(rf"\d+\s+{sing}\b", joined))
+    return (f"how many {part} each item has (e.g. 'a dog has 4 legs')", supplied)
+
+
+# CORPUS of question-shapes that are answerable GIVEN certain facts. Each entry maps a question shape to
+# the world-knowledge fact(s) it requires and a test for whether the text supplies them — so a matched-but-
+# unsupplied entry names EXACTLY the fact to fetch (the hook for a future world-knowledge lookup), and a
+# matched-and-supplied one is a positive "yes, answerable". Grow it as new required-fact shapes appear.
+QUESTION_REQUIREMENTS = {"part-count": _req_part_count}
+
+
+def requirements(text: str) -> list:
+    """Consult the QUESTION_REQUIREMENTS corpus: which registered question-shapes does this question match,
+    and for each, is the world-knowledge it REQUIRES present in the text? Returns a list of
+    (name, needs, satisfied). An unsatisfied entry is the reader saying "I could answer this IF I knew
+    <needs>" — the bridge to fetching world knowledge. Read-only."""
+    parsed = _parse_problem(text)
+    if parsed is None:
+        return []
+    premises, question = parsed
+    joined = " . ".join(p.lower() for p in premises)
+    ql = question.lower()
+    out = []
+    for name, fn in QUESTION_REQUIREMENTS.items():
+        res = fn(ql, joined)
+        if res is not None:
+            needs, satisfied = res
+            out.append((name, needs, satisfied))
+    return out
+
+
+def diagnose(text: str):
+    """FORMULATE THE QUESTION the reader can't yet answer: when `solve` declines, articulate the specific
+    DEFICIENCY — what's MISSING or AMBIGUOUS — instead of a silent "undetermined". This is the "query
+    rather than assume" posture: the reader names what it needs from a user/upstream engine so the gap can
+    be filled, never guessing. Returns None when the problem is solvable, else a `Deficiency`. Read-only —
+    it NEVER changes `solve`'s answer, so it can only add information, never a false positive."""
+    if solve(text) != "undetermined":
+        return None                                      # solvable — no deficiency to report
+    parsed = _parse_problem(text)
+    if parsed is None:
+        return Deficiency("no-question", None, "I couldn't find a question in the text to answer.")
+    premises, question = parsed
+    joined = " . ".join(p.lower() for p in premises)
+    ql = question.lower()
+    # 1. UNKNOWN WORD — a clause-level gap elevated to the problem level (why GUARD 1 declined).
+    for r in [analyze(c) for c in premises + [question]]:
+        for d in deficiencies(r):
+            if d.kind == "unknown-word":
+                return Deficiency("unknown-word", d.unit,
+                                  f"I don't recognise the word {d.unit.surface!r}, so I can't be sure I "
+                                  f"read the whole problem — tell me what it means.")
+    # 2. AMBIGUOUS BASE — an UNANCHORED "F of his/her/the X" AFTER a prior change: of the CURRENT amount
+    #    or of the ORIGINAL? Both occur in real problems, so the reader must ASK, not guess (Sabrina, Leo).
+    ambig = re.search(r"\b(half|a third|a quarter|a fifth|two-thirds|one-third|three-\w+|\d+/\d+)\s+"
+                      r"of (?:his|her|their|the)\s+(\w+)", joined)
+    prior = re.search(r"\b(gave|spent|bought|used|ate|lost|received|got|earned|added)\b", joined)
+    if ambig and prior and not re.search(r"\b(rest|remaining|remainder|left)\b", ambig.group(0)):
+        return Deficiency("ambiguous-base", None,
+                          f"'{ambig.group(0)}' is ambiguous after the earlier changes: do you mean "
+                          f"{ambig.group(1)} of the CURRENT {ambig.group(2)}, or of the ORIGINAL amount? "
+                          f"I need that to answer.")
+    # 3. MISSING WORLD KNOWLEDGE — consult the QUESTION_REQUIREMENTS corpus: a matched question-shape whose
+    #    required world-knowledge fact is absent names EXACTLY what to fetch (data-driven, not hardcoded).
+    for name, needs, satisfied in requirements(text):
+        if not satisfied:
+            return Deficiency("missing-knowledge", None,
+                              f"To answer this I need to know {needs} — state it and I can total them.")
+    # 4. FALLBACK — a quantity or relation the question depends on is missing or unread.
+    return Deficiency("insufficient", None,
+                      "I couldn't derive the answer from the stated facts — a quantity or relation the "
+                      "question depends on is either not given or I couldn't read it.")
+
+
+def report(text: str) -> dict:
+    """The full BRIDGE surface for a question in one call: what we KNOW (extracted + synthesized facts),
+    which corpus REQUIREMENTS it triggers (world-knowledge it needs, and whether the text supplies it), the
+    `solve` ANSWER, and — when we still can't answer — the articulated DEFICIENCY. Gives an upstream engine
+    or a user everything the reader can honestly say about a question without guessing. Read-only."""
+    return {"answer": solve(text),
+            "known": known_facts(text),
+            "requirements": requirements(text),
+            "deficiency": diagnose(text)}
+
+
 def _solve_inner(text: str):
     """Read a whole word-problem paragraph (premises + a trailing question) and answer the question —
     threading coreference (`discourse`) and the growing `context` across the premises (split into
