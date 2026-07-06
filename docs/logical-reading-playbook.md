@@ -229,6 +229,25 @@ each pair two categories + a `CATEGORY_ANTONYMS` link + a disjointness invariant
 (the one whose omission silently corrupts, never the safe default), and adding a word becomes a one-line tag
 that updates every consumer at once.**
 
+### Multi-step STAGED solvers — the successor to single-shape branches (#311)
+
+When the single-branch vein thins out (the residual decliners need composition, not one arithmetic
+expression), the next tool is a STAGED solver: extract an intermediate quantity, then operate on it. Branch
+35 (two-stage fraction chain: "N people, f1 do A / the rest do B, of those f2 are X, how many Y" →
+N·(1−f1)·(f2 or 1−f2)) is the template. Two lessons specific to multi-step:
+- **No digit-accounting safety net.** Singles lean on `dok()` (every digit consumed) to prevent over-match.
+  A fraction chain often has NO digits — the total was dropped to `_STATED_CONV` (#309) and the fractions are
+  words ("one-fourth"). So `dok` is vacuous. Replace it with STRUCTURAL gates: require every stage's cue
+  (a "the rest" bridge AND an "of those" stage-2), require the right TYPE at each slot (`_cat(group,"person")`
+  for a people-split), and require exactly the fractions the skeleton expects. The gate count goes up because
+  the digit anchor is gone.
+- **Judge by holdout/TEST generalization, not dev-train count.** Multi-step families are DIVERSE and each
+  sub-skeleton is near-singleton in dev-train (forward chain, backward $-remainder, sequential holdings, ratio
+  partition — often one dev case each). That's fine: a well-built staged solver earns its keep on unseen
+  twins, which is exactly the reading engine's advantage over per-problem singles. Don't skip building one
+  because dev-train shows a count of 1 — build it word-agnostically (fractions via `_fraction_value`, groups
+  via `_W`+`_cat`, total via the stated count) so it covers the shape, not the instance.
+
 ### A clause that is BOTH meta and data — read the recorded meta, don't fight the parse (#309)
 
 `_parse_problem` recognizes "there are N X in a Y" as a stated unit conversion (`_stated_conversion`),
