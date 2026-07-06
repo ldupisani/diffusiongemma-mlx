@@ -19247,6 +19247,57 @@ def _money_remainder_system(premises: list, question: str):
     return _rs_ret(whole) if whole is not None else None
 
 
+def _read_ratio_partition(full: str):
+    """A RATIO partition as partition GROUP facts (#314): "[N <items>] … K of which are <A> … the
+    remainder split into <X> and <Y> in the ratio a:b" → A is a known part (count K), the remainder is
+    the complement of A, and X/Y are fractional parts a/(a+b), b/(a+b) OF the remainder. A ratio is just
+    two fractional parts of the same parent — the saturation already knows what to do with those."""
+    mr = re.search(r"split into (?:(\w+) \w+|(\w+)) and (?:(\w+) \w+|(\w+)) "
+                   r"in (?:the |a )?ratio (?:of )?(\d+)\s*:\s*(\d+)", full)
+    if not mr:
+        return None
+    x, y = _key(mr.group(1) or mr.group(2)), _key(mr.group(3) or mr.group(4))
+    a, b = float(mr.group(5)), float(mr.group(6))
+    if a + b == 0:
+        return None
+    total = next((c for (big, small), c in _STATED_CONV.items() if c >= 1 and _cat(small, "noun")), None)
+    if total is None:
+        m = re.search(rf"there (?:are|were) ({_RS_N}) {_W}", full)
+        if m:
+            total = float(m.group(1))
+    if total is None:
+        return None
+    groups = {"__u__": {"count": float(total)}}
+    mk = re.search(rf"({_RS_N}) of (?:which|them) (?:are|is) (\w+)", full)   # "5 of which are yellow"
+    if mk:                                                # the known part; the ratio splits the REMAINDER
+        k = _key(mk.group(2))
+        groups[k] = {"of": "__u__", "count": float(mk.group(1))}
+        groups["__rem__"] = {"of": "__u__", "complement_of": k}
+        parent = "__rem__"
+    else:
+        parent = "__u__"                                 # the ratio splits the whole directly
+    groups[x] = {"of": parent, "fraction": a / (a + b)}
+    groups[y] = {"of": parent, "fraction": b / (a + b)}
+    return groups
+
+
+def _ratio_partition_system(premises: list, question: str):
+    """Answer a ratio-partition question over the saturated groups. "How many more <X> than <Y>" is a
+    DIFFERENCE obligation → X.count − Y.count (marbles: red − yellow = 8 − 5 = 3)."""
+    ql = question.lower()
+    full = " . ".join(p.lower() for p in premises) + " . " + ql
+    groups = _read_ratio_partition(full)
+    if not groups:
+        return None
+    _saturate_partitions(groups)
+    md = re.search(r"how (?:many|much) more (\w+) .*? than (\w+)", ql)
+    if md:
+        gx, gy = groups.get(_key(md.group(1))), groups.get(_key(md.group(2)))
+        if gx and gy and gx.get("count") is not None and gy.get("count") is not None:
+            return _rs_ret(gx["count"] - gy["count"])
+    return None
+
+
 def _vocab_singles_b_system(premises: list, question: str):
     """VOCAB+STRUCTURE SINGLES B (#233) — thirty branches with wave-23 vocabulary: debt
     settlements, paint coverage, lending sums, telethon tiers, grandkid cards, juice cups,
@@ -23698,6 +23749,9 @@ _EARLY_SYSTEMS = [
     # BACKWARD $-REMAINDER: the SAME partition saturation run in reverse (#313) — a known leaf ("left with
     # $300") solves for the unknown whole ("how much was the prize money?" → 1000).
     ("money_remainder", _money_remainder_system),
+    # RATIO PARTITION: a ratio a:b is two fractional parts a/(a+b), b/(a+b) of the same parent (#314) — same
+    # partition substrate; "19 marbles, 5 yellow, remainder split 3:4 blue:red, how many more red than yellow" → 3.
+    ("ratio_partition", _ratio_partition_system),
     # CATEGORICAL SINGLES: word-agnostic long-tail branches (item noun via _W/_cat, coeff via _scale).
     ("cat_singles_a", _cat_singles_a_system),
     # VOCAB+STRUCTURE SINGLES: twenty-eight branches with wave-22 vocabulary (#232).
