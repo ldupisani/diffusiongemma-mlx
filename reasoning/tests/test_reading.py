@@ -8365,6 +8365,21 @@ class TestAttributePartitionSum(unittest.TestCase):
             "There are 12 apples and twice as many oranges. How many fruits are there?"), 36)
 
 
+class TestMoreThanTheRest(unittest.TestCase):
+    """#328 — several people each with a stated count; "how many more <item> did X <verb> than the
+    other(s)" → X's count − Σ(the others). Word-agnostic (synthetic names/items/verbs)."""
+
+    def test_more_than_the_other_three(self):
+        self.assertEqual(reading.solve(
+            "During the hunt, Amy found 4 shells, Ben found 10 shells, Cara found 6 and Dan found 40. "
+            "How many more shells did Dan find than the other three children found?"), 20)
+
+    def test_generalizes_verb_and_item(self):
+        self.assertEqual(reading.solve(
+            "Amy caught 4 fish, Ben caught 10 fish, Cara caught 6 and Dan caught 40. How many more "
+            "fish did Dan catch than the other three friends caught?"), 20)
+
+
 class TestScaleOfASum(unittest.TestCase):
     """#327 — a quantity defined as "<scale> the sum of" two stated values → scale·(A+B). Synthetic."""
 

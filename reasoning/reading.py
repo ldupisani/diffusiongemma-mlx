@@ -19313,6 +19313,20 @@ def _cat_singles_a_system(premises: list, question: str):
         if dok(used):
             return _rs_ret(_scale(sm.group(1)) * (f(vm.group(1)) + f(vm.group(2))))
 
+    # 24. MORE-THAN-THE-REST: several people each with a stated count; "how many more <item> did X <verb>
+    #     than the other(s)" → X's count − Σ(the others). "Kevin 5, Bonnie 13, George 9, Cheryl 56 … how many
+    #     more did Cheryl find than the other three?" → 56 − (5+13+9) = 29. Broad "<subj> <verb> <n>" capture
+    #     is safe here: gated by the specific "more … than the other" ask + dok (every count consumed).
+    qm = re.search(rf"how many more (?:{_W} )?did (\w+) \w+ than the (?:other|rest)\b", ql)
+    if qm:
+        who = qm.group(2)
+        pairs = re.findall(rf"(\w+) \w+ ({N})\b", full)
+        counts = {}
+        for nm, n in pairs:
+            counts.setdefault(nm, f(n))
+        if who in counts and len(counts) >= 3 and dok({n for _nm, n in pairs}):
+            return _rs_ret(counts[who] - sum(v for k, v in counts.items() if k != who))
+
     return None
 
 
