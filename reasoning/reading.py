@@ -12972,14 +12972,6 @@ def _vocab_singles_s_system(premises: list, question: str):
     if len(ma) >= 2 and m3 and "how many total skips" in ql:
         if dok({ma[0], ma[1], m3.group(1)}):
             return _rs_ret((f(ma[0]) + f(ma[1])) * f(m3.group(1)))
-    # 446 g240 shuck: per/time*minutes
-    m = re.search(rf"shuck ({N}) {_W} in ({N}) minutes", full)
-    if m and _cat(m.group(2), "plural"):
-        nn = _number_re(m.group(2))
-        m2 = re.search(rf"in ({N}) hours", full)
-        if m2 and re.search(rf"how many {nn} can he shuck", ql) \
-                and dok({m.group(1), m.group(3), m2.group(1)}):
-            return _rs_ret(f(m.group(1)) / f(m.group(3)) * f(m2.group(1)) * 60)
     # 449 g80 melts: (per_oz * weight) / quarter_value
     m = re.search(rf"\$({N}) per ounce", full)
     m2 = re.search(rf"({N})/({N}) of an ounce", full)
@@ -16056,14 +16048,6 @@ def _vocab_singles_i_system(premises: list, question: str):
         if dok(set(m1.groups()) | {m2.group(1)}
                | ({m3.group(1)} if m3 else set())):
             return _rs_ret((f(m1.group(1)) + f(m1.group(2))) * f(m2.group(1)))
-    # 13. model cars + paint + brushes (#147)
-    n1 = re.search(rf"bought ({N}) model cars that cost \$({N}) each", full)
-    n2 = re.search(rf"({N}) bottles of paint that cost \$({N}) each", full)
-    n3 = re.search(rf"({N}) paintbrushes that cost \$({N}) each", full)
-    if n1 and n2 and n3 and "in total" in ql:
-        if dok(set(n1.groups()) | set(n2.groups()) | set(n3.groups())):
-            return _rs_ret(f(n1.group(1)) * f(n1.group(2)) + f(n2.group(1)) * f(n2.group(2))
-                     + f(n3.group(1)) * f(n3.group(2)))
     # 14. gum give-out remainder (#148)
     o1 = re.search(rf"has ({N}) pieces of gum", full)
     o2 = re.search(rf"get ({N}) more pieces of gum", full)
@@ -18134,16 +18118,6 @@ def _vocab_singles_c_system(premises: list, question: str):
         if hun and dok({cc1[0].group(1), cc1[1].group(1), hun.group(1)}):
             per = f(cc1[0].group(1)) / f(cc1[1].group(1))
             return _rs_ret(per * (f(hun.group(1)) - f(cc1[1].group(1))))
-    # 5. Josh films: a films + b books + c CDs at $x, $y, $z
-    jf1 = re.search(rf"bought ({N}) films and ({N}) books", full)
-    jf2 = re.search(rf"bought ({N}) cds", full)
-    jf3 = re.search(rf"each film cost \$({N})", full)
-    jf4 = re.search(rf"each book cost \$({N})", full)
-    jf5 = re.search(rf"each cd cost \$({N})", full)
-    if jf1 and jf2 and jf3 and jf4 and jf5 and "in all" in ql:
-        if dok({jf1.group(1), jf1.group(2), jf2.group(1), jf3.group(1), jf4.group(1), jf5.group(1)}):
-            return _rs_ret(f(jf1.group(1)) * f(jf3.group(1)) + f(jf1.group(2)) * f(jf4.group(1))
-                           + f(jf2.group(1)) * f(jf5.group(1)))
     # 6. fair tickets: fair = 2×b + 6; fair = n → b
     ft1 = re.search(rf"sold ({N}) more than two times the number of fair tickets", full)
     ft2 = re.search(rf"({N}) fair tickets were sold", full)
@@ -19378,14 +19352,6 @@ def _vocab_singles_b_system(premises: list, question: str):
             monthly = f(hp3.group(3)) * f(hc[0].group(1)) + f(hp3.group(2)) * f(hc[1].group(1)) \
                 + f(hp3.group(1)) * f(hc[2].group(1))
             return _rs_ret(monthly * 12)
-    # 21. engineering: a% men; b women → men
-    en1a = re.search(rf"({N})% of the students are men", full)
-    en1b = re.search(rf"({N}) are women", full)
-    en1 = (en1a, en1b) if en1a and en1b else None
-    if en1 and "how many men" in ql:
-        if dok({en1[0].group(1), en1[1].group(1)}):
-            p_ = f(en1[0].group(1))
-            return _rs_ret(f(en1[1].group(1)) / (1 - p_ / 100) * p_ / 100)
     # 22. ranch: A has n; B = 3n + 2 → together
     ra1 = re.search(rf"has ({N}) cows", full)
     ra2 = re.search(rf"has (\w+|{N}) more than (\w+|{N}) times the number of cows", full)
@@ -19566,13 +19532,6 @@ def _vocab_singles_system(premises: list, question: str):
         toks = {rc2.group(1), rc3.group(1)} | ({rc1.group(1)} if rc1 else set())
         if dok(toks):
             return _rs_ret((f(rc2.group(1)) - f(rc3.group(1))) * rc1_v)
-    # 16. Carl types: v wpm × 60 × h/day × d days
-    cl1 = re.search(rf"speed of ({N}) words per minute", full)
-    cl2 = re.search(rf"({N}) hours per day", full)
-    cl3 = re.search(rf"in ({N}) days", ql)
-    if cl1 and cl2 and cl3 and "how many words" in ql:
-        if dok({cl1.group(1), cl2.group(1), cl3.group(1)}):
-            return _rs_ret(f(cl1.group(1)) * 60 * f(cl2.group(1)) * f(cl3.group(1)))
     # 17. Austin robots: k friends × $p + tax t + change c → start
     au1 = re.search(rf"his (\w+|{N}) friends each a robot", full)
     au2 = re.search(rf"costs \$({N})", full)
