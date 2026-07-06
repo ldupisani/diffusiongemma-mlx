@@ -8322,6 +8322,21 @@ class TestAverageOfValueList(unittest.TestCase):
             "undetermined")
 
 
+class TestUniversalRatePartSum(unittest.TestCase):
+    """#325 — "all the <type> have <r> <part>" (a stated per-type rate) × the type's count, summed across
+    types → Σ count·rate. Word-agnostic (synthetic; rates may differ per type)."""
+
+    def test_uniform_rate(self):
+        self.assertEqual(reading.solve(
+            "All the dogs have 4 legs and all the cats have 4 legs. If he saw 5 dogs and 6 cats, "
+            "how many legs did he see?"), 44)
+
+    def test_differing_rates_per_type(self):
+        self.assertEqual(reading.solve(
+            "All the dogs have 4 legs and all the birds have 2 legs. If he saw 5 dogs and 6 birds, "
+            "how many legs did he see?"), 32)
+
+
 class TestQuestionRequirementsCorpus(unittest.TestCase):
     """The QUESTION_REQUIREMENTS corpus — question shapes answerable GIVEN certain facts. An unsatisfied
     entry NAMES the world-knowledge to fetch; the corpus must generalize past a single shape."""

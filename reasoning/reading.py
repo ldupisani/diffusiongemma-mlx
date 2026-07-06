@@ -19198,6 +19198,25 @@ def _cat_singles_a_system(premises: list, question: str):
         if len(vals) >= 3 and all(f(v) or v == "0" for v in vals) and dok(set(vals)):
             return _rs_ret(sum(f(v) for v in vals) / len(vals))
 
+    # 21. UNIVERSAL-RATE PART-SUM: "all the <TYPE> have <r> <part>" states a per-type rate; multiply by the
+    #     stated count of that type and sum across types. "all trucks have 4 wheels, all cars have 4 wheels;
+    #     12 trucks, 13 cars … how many wheels?" → 12·4 + 13·4 = 100. Rate is STATED (not world-knowledge).
+    qp = re.search(rf"how many {_W}\b", ql)
+    rate_ms = re.findall(rf"all (?:the |of the )?{_W}[^.]*?\bhave\s+({N})\s+{_W}", full)
+    if qp and rate_ms and len({_noun_lemma(part) for _t, _r, part in rate_ms}) == 1 \
+            and _noun_lemma(rate_ms[0][2]) == _noun_lemma(qp.group(1)):
+        terms, used = [], set()
+        ok = True
+        for typ, rate, _part in rate_ms:
+            cnt = re.search(rf"({N})\s+{_number_re(_singular_of(typ) or typ)}\b", full)
+            if not cnt or not f(rate):
+                ok = False
+                break
+            terms.append(f(cnt.group(1)) * f(rate))
+            used |= {rate, cnt.group(1)}
+        if ok and terms and dok(used):
+            return _rs_ret(sum(terms))
+
     return None
 
 
