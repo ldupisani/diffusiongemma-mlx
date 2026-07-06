@@ -24186,11 +24186,34 @@ def _req_part_count(ql: str, joined: str):
     return (f"how many {part} each item has (e.g. 'a dog has 4 legs')", supplied)
 
 
+def _req_unit_conversion(ql: str, joined: str):
+    """A unit-conversion question ("how many <A> are in <B>?", "convert N <B> to <A>") is ANSWERABLE GIVEN
+    the conversion factor between the two units — a world-knowledge fact. Returns (needs, satisfied) if the
+    question matches this shape (both words are known measure units), else None. `satisfied` is True once
+    the factor is KNOWN (`_conv`, the built-in CONVERSIONS table) or STATED in the text (a "N A … B" clause).
+    Since `_conv` is a DIRECT lookup, even a pair of known units absent from the table (seconds↔day) reads
+    as unsatisfied — exactly the fact to fetch."""
+    m = re.search(r"how many (\w+)\s+(?:are\s+)?(?:there\s+)?in\s+(?:a |an |one |\d+ )?(\w+)", ql)
+    if m:
+        tgt, src = m.group(1), m.group(2)
+    else:
+        m = re.search(r"convert\s+(?:\d+\s+)?(\w+)\s+(?:in)?to\s+(\w+)", ql)
+        if not m:
+            return None
+        src, tgt = m.group(1), m.group(2)
+    a, b = _unit_canon(tgt), _unit_canon(src)
+    if a not in UNIT_NOUNS or b not in UNIT_NOUNS or a == b:
+        return None
+    known = _conv(a, b) is not None or _conv(b, a) is not None
+    stated = bool(re.search(rf"\d+\s+{a}s?\b.*\b{b}s?\b|\d+\s+{b}s?\b.*\b{a}s?\b", joined))
+    return (f"the conversion factor between {a} and {b} (how many {a} in one {b})", known or stated)
+
+
 # CORPUS of question-shapes that are answerable GIVEN certain facts. Each entry maps a question shape to
 # the world-knowledge fact(s) it requires and a test for whether the text supplies them — so a matched-but-
 # unsupplied entry names EXACTLY the fact to fetch (the hook for a future world-knowledge lookup), and a
 # matched-and-supplied one is a positive "yes, answerable". Grow it as new required-fact shapes appear.
-QUESTION_REQUIREMENTS = {"part-count": _req_part_count}
+QUESTION_REQUIREMENTS = {"part-count": _req_part_count, "unit-conversion": _req_unit_conversion}
 
 
 def requirements(text: str) -> list:
@@ -24199,9 +24222,10 @@ def requirements(text: str) -> list:
     (name, needs, satisfied). An unsatisfied entry is the reader saying "I could answer this IF I knew
     <needs>" — the bridge to fetching world knowledge. Read-only."""
     parsed = _parse_problem(text)
-    if parsed is None:
-        return []
-    premises, question = parsed
+    if parsed is None:                                   # no trailing question (e.g. a bare imperative
+        premises, question = [], text                    # "Convert 5 lb to g") → treat the whole text
+    else:                                                # as the question so the corpus can still match
+        premises, question = parsed
     joined = " . ".join(p.lower() for p in premises)
     ql = question.lower()
     out = []
@@ -24249,7 +24273,7 @@ def diagnose(text: str):
     for name, needs, satisfied in requirements(text):
         if not satisfied:
             return Deficiency("missing-knowledge", None,
-                              f"To answer this I need to know {needs} — state it and I can total them.")
+                              f"To answer this I need to know {needs} — supply it and I can answer.")
     # 4. FALLBACK — a quantity or relation the question depends on is missing or unread.
     return Deficiency("insufficient", None,
                       "I couldn't derive the answer from the stated facts — a quantity or relation the "

@@ -1643,6 +1643,17 @@ still needs. Four read-only functions (near `solve`) expose that, all ADDITIVE (
 the deficiency. The corpus and the synthesizers are the two growth surfaces; grow them from concrete
 examples (example-driven-deferral), not speculatively.
 
+**A corpus entry, by example (`_req_unit_conversion`):** a conversion question ("how many <A> in <B>",
+"convert N <B> to <A>") is answerable GIVEN the factor between the units. The entry (a) extracts the two
+units and requires both in `UNIT_NOUNS` (so "how many students in the class" is rejected), then (b) tests
+`satisfied` against EXISTING machinery — `_conv` (the built-in CONVERSIONS table) OR a stated "N A … B"
+clause. Because `_conv` is a DIRECT lookup, a pair of known units absent from the table (second↔hour) reads
+as *unsatisfied* and names exactly the factor to fetch. Two lessons: (1) reuse the reader's own knowledge
+(`_conv`, `CONVERSIONS`) as the `satisfied` test rather than re-encoding facts; (2) `requirements()` falls
+back to "whole text as the question" when `_parse_problem` finds no trailing question, so imperative forms
+("Convert 5 lb to g") still match — the corpus is a question-SHAPE index, not tied to the solve pipeline's
+premise/question split.
+
 ## Open threads / next
 
 - **GSM8K via this parser (replace the LLM translator)** — kept as an INDEPENDENT eval (a `bench`-style

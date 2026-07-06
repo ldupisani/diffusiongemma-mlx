@@ -8264,5 +8264,40 @@ class TestAnimalCategorySum(unittest.TestCase):
             "hoop?"), 32)
 
 
+class TestQuestionRequirementsCorpus(unittest.TestCase):
+    """The QUESTION_REQUIREMENTS corpus — question shapes answerable GIVEN certain facts. An unsatisfied
+    entry NAMES the world-knowledge to fetch; the corpus must generalize past a single shape."""
+
+    def test_part_count_needs_per_item_count(self):
+        reqs = reading.requirements("What is the total number of legs that Camden's 3 dogs have?")
+        self.assertEqual(reqs[0][0], "part-count")
+        self.assertFalse(reqs[0][2])                     # per-item count not stated → unsatisfied
+
+    def test_unit_conversion_known_pair_is_satisfied(self):
+        reqs = reading.requirements("How many inches are in a foot?")
+        self.assertEqual(reqs[0][0], "unit-conversion")
+        self.assertTrue(reqs[0][2])                      # inch↔foot is a known conversion
+
+    def test_unit_conversion_unknown_pair_names_the_factor(self):
+        # both are known units but the pair is absent from the direct CONVERSIONS table → name the fact
+        reqs = reading.requirements("How many seconds are in an hour?")
+        self.assertEqual(reqs[0][0], "unit-conversion")
+        self.assertFalse(reqs[0][2])
+        self.assertIn("conversion factor", reqs[0][1])
+
+    def test_unit_conversion_imperative_form_still_matches(self):
+        # a bare imperative (no trailing question) falls back to the whole text as the question
+        reqs = reading.requirements("Convert 5 pounds to grams.")
+        self.assertEqual(reqs[0][0], "unit-conversion")
+
+    def test_non_unit_how_many_in_does_not_match(self):
+        self.assertEqual(reading.requirements("How many students are in the class?"), [])
+
+    def test_diagnose_surfaces_a_conversion_deficiency(self):
+        d = reading.diagnose("How many seconds are in an hour?")
+        self.assertEqual(d.kind, "missing-knowledge")
+        self.assertIn("second", d.message)
+
+
 if __name__ == "__main__":
     unittest.main()
