@@ -6637,12 +6637,32 @@ def _fraction_relation(rp: "Reading"):
     return _entity(subj), k, _entity(std)
 
 
+def _equality_relation(rp: "Reading"):
+    """An EQUALITY relation — "X and Y <verb> the SAME <measure>" → X = Y (subject = 1×standard + 0), the
+    degenerate affine relation that lets an anchored sum carry an equal-value sibling ("Rick and Jose eat
+    lunch of the same price" → Rick = Jose, so a Jose anchor resolves Rick). The two names are usually a
+    COORDINATED single unit ("Rick and Jose") and "same" merges into a noun ("same price"), so both are read
+    off the words/surface. Gated: a "same" quantifier and exactly two name words. None otherwise (ADD-only)."""
+    if not re.search(r"\bsame\b", " ".join(u.surface for u in rp.units).lower()):
+        return None
+    # the two names MUST be a SINGLE coordinated unit "X and Y" (a symmetric equality) — NOT two separate
+    # names in a comparative frame ("Loris needs 3 more to have the same AS Lamont" is Loris+3=Lamont, and
+    # would wrongly read as Loris=Lamont if any two "same"-clause names counted).
+    for u in rp.units:
+        if "name" not in u.features.get("senses", []):
+            continue
+        ns = [w for w in u.words if _key(w.surface) != "and"]
+        if len(ns) == 2 and any(_key(w.surface) == "and" for w in u.words):
+            return _key(ns[0].surface), 1.0, _key(ns[1].surface), 0.0
+    return None
+
+
 def _affine_relation(rp: "Reading"):
     """Any single AFFINE relation in a clause → (subject, factor, standard, offset) with subject = factor ×
-    standard + offset, unifying the five relation extractors: `_offset_ratio_relation` ("8 more than twice
-    Y" → k=2, c=8), `_ratio_relation` ("k× as many as Y" → c=0), `_percent_relation` ("N% more/fewer than
-    Y" → k=1±N/100, c=0), `_fraction_relation` ("F more/fewer than Y" → k=1±F, c=0), `_pure_offset_relation`
-    ("N more than Y" → k=1). None if the clause holds no two-name relation."""
+    standard + offset, unifying the extractors: `_offset_ratio_relation` ("8 more than twice Y" → k=2, c=8),
+    `_ratio_relation` ("k× as many as Y" → c=0), `_percent_relation` ("N% more/fewer than Y" → k=1±N/100,
+    c=0), `_fraction_relation` ("F more/fewer than Y" → k=1±F, c=0), `_pure_offset_relation` ("N more than Y"
+    → k=1), `_equality_relation` ("X and Y … the same Z" → k=1, c=0). None if no two-name relation."""
     orr = _offset_ratio_relation(rp)
     if orr is not None:
         subj, k, std, c = orr
@@ -6663,6 +6683,9 @@ def _affine_relation(rp: "Reading"):
     if por is not None:
         subj, std, c = por
         return subj, 1.0, std, c
+    eq = _equality_relation(rp)
+    if eq is not None:
+        return eq
     return None
 
 
@@ -7231,12 +7254,22 @@ def _anchored_affine_coeffs(premises: list, question: str):
     last_entity = None                     # nearest antecedent for the elided-standard ratio
     for p, rp in zip(premises, rps):
         two_names = _name_count(rp) == 2
+        # SCENE-SETTING TEMPORAL ADJUNCT (#315): a premise with NO entity and whose only number is a
+        # DURATION with no money ("After working out for 3 hours, …") cannot be part of a money/count value
+        # system — skip the distractor instead of declining on it (the unused-given firewall is for values
+        # that COULD be part of the system; a lone duration in a nameless adjunct provably can't).
+        if _name_count(rp) == 0 and len(re.findall(r"\d+", p)) == 1 \
+                and re.search(r"\b\d+\s*(?:hours?|minutes?|mins?|days?|weeks?|months?|years?)\b", p.lower()) \
+                and not re.search(r"\$|\bdollars?\b|\bcents?\b", p.lower()):
+            continue
         if not any(s in u.features.get("senses", []) for u in rp.units
                    for s in ("value", "multiplier", "comparative", "interrogative", "aggregator")) \
                 and not any(_fraction_parts(u.surface) is not None for u in rp.units) \
                 and not p.rstrip().endswith("?") \
-                and not (two_names and re.search(r"\b(as|than)\b", p.lower())):
-            continue                       # a purely DECLARATIVE premise with NO number/factor/comparative
+                and not (two_names and re.search(r"\b(as|than)\b", p.lower())) \
+                and _equality_relation(rp) is None:    # an EQUALITY relation ("X and Y … the same Z")
+            continue                       # carries no number/factor but IS a real relation — don't skip it
+            #                                a purely DECLARATIVE premise with NO number/factor/comparative
             #                                 at all, and NOT itself a question fragment, can't hide any
             #                                 dropped quantity ("Stacy and Emily also buy chips for the
             #                                 party" just introduces entities) — skip it, don't decline.
@@ -7258,6 +7291,8 @@ def _anchored_affine_coeffs(premises: list, question: str):
             #                                 dropped quantity; see `_set_size_cardinal`
         nc = _name_count(rp)
         rel = _affine_relation(rp) if nc == 2 else None      # exactly 2 names — else this may be the
+        if rel is None and nc == 1:                          # a COORDINATED "Rick and Jose … same price" is
+            rel = _equality_relation(rp)                     # ONE name unit but a 2-entity equality relation
         anc = _anchor_fact(rp) if (rel is None and nc == 1) else None   # coordinate-noun fallback firing,
         if rel is None and anc is None and nc == 2:
             rel = _needs_inverse_relation(p)             # "needs 12 more to have twice as many as K"
@@ -7358,11 +7393,12 @@ def _anchored_sum_system(premises: list, question: str):
     with `_anchored_single_system`); adds its OWN sum-cue gate and a "dozen"-measure decline (the anchor's
     "6 dozen" already converts to raw units internally, so a "how many DOZEN" question needs a ÷12 we don't
     do)."""
-    if not any(w in question.lower() for w in ("altogether", "in all", " total", "combined", "in total",
-                                               " together")):        # " together" (#207): "own together?" —
+    if not (any(w in question.lower() for w in ("altogether", "in all", " total", "combined", "in total",
+                                                " together"))
+            or re.search(r"\bfor all\b|\ball (?:two|three|four|five|of them)\b", question.lower())):
         return None                                                  # not a SUM question — not this shape
-        #                                                              kept in sync with the single twin's
-        #                                                              decline list (else it intercepts)
+        #   ("for all three" / "for all N" is a sum-of-every-entity cue too — kept in sync with the single
+        #    twin's decline list below (else it intercepts))
     # DEFER to `_chain_count_price` (dispatched before us): a money-spend total WITH a per-item price is a
     # count×price problem — folding only the counts would drop the price (Dorothy 22≠33). It re-invokes us
     # with a plain count question ("how many in total?") to get the count, so this gate never blocks that call.
@@ -7406,7 +7442,8 @@ def _anchored_single_system(premises: list, question: str):
     Bert−Peggy, not Bert's raw value; naively grabbing the first name in the question gave a confident-wrong,
     900 vs gold 825), and requires the asked entity to be a NAME reachable from the anchor."""
     if any(w in question.lower() for w in ("altogether", "in all", " total", "combined", "in total",
-                                           " together")):            # " together" in sync with the sum twin
+                                           " together")) \
+            or re.search(r"\bfor all\b|\ball (?:two|three|four|five|of them)\b", question.lower()):
         return None                                                  # a sum question is the other twin's shape
     if re.search(r"\bneeds?\b", question.lower()):
         return None
@@ -21215,13 +21252,8 @@ def _money_singles_system(premises: list, question: str):
         if dok({gm3.group(1)}):
             m_ = f(gm3.group(1))
             return 2 * m_ + 5 * m_
-    # 22. lunch thirds: Adam ⅔ of Rick; Rick = Jose; Jose $J → J(1 + 1 + 2/3)
-    lj = re.search(rf"ate lunch worth \$({N})", full)
-    lw = re.search(rf"working out for ({N}) hours", full)
-    if lj and "two-thirds as much" in full and "same price" in full \
-            and "cost of lunch for all three" in ql:
-        if dok({lj.group(1)} | ({lw.group(1)} if lw else set())):
-            return _rs_ret(f(lj.group(1)) * (2 + 2 / 3))
+    # 22. lunch thirds — DELETED (#315): now the generic `_anchored_sum_system` claims it, via the shared
+    #     `_equality_relation` ("Rick and Jose … the same price" → Rick = Jose) + the "for all three" sum cue.
     # 23. Daphney potatoes: buys a kg; b kg costs $c → a·c/b
     dp = re.search(rf"buys ({N}) kg of \w+", full)
     dc = re.search(rf"({N}) kg of \w+ costs \$({N})", full)
