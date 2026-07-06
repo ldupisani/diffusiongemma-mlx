@@ -8365,6 +8365,25 @@ class TestAttributePartitionSum(unittest.TestCase):
             "There are 12 apples and twice as many oranges. How many fruits are there?"), 36)
 
 
+class TestSumAndDifference(unittest.TestCase):
+    """#329 — two entities, the asked one is D less/more than the other, their total is S → (S∓D)/2.
+    Word-agnostic (synthetic names/measures/comparison words)."""
+
+    def test_less_form(self):
+        self.assertEqual(reading.solve(
+            "Tom is 4 shorter than Bob. Combined their heights are 20. How tall is Tom?"), 8)
+
+    def test_more_form_with_unit_word(self):
+        self.assertEqual(reading.solve(
+            "Ana is 6 years older than her sister. Together their ages total 30 years. "
+            "How old is Ana?"), 18)
+
+    def test_distractor_digit_declines(self):
+        self.assertEqual(reading.solve(
+            "Kirill is 14 less than his brother. He also has 3 pets. Together their heights equal 112. "
+            "How tall is Kirill?"), "undetermined")
+
+
 class TestMoreThanTheRest(unittest.TestCase):
     """#328 — several people each with a stated count; "how many more <item> did X <verb> than the
     other(s)" → X's count − Σ(the others). Word-agnostic (synthetic names/items/verbs)."""

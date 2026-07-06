@@ -19327,6 +19327,20 @@ def _cat_singles_a_system(premises: list, question: str):
         if who in counts and len(counts) >= 3 and dok({n for _nm, n in pairs}):
             return _rs_ret(counts[who] - sum(v for k, v in counts.items() if k != who))
 
+    # 25. SUM-AND-DIFFERENCE: two entities, the asked one is D less/more than the other, their total is S →
+    #     asked = (S ∓ D)/2. "Kirill is 14 less than his brother; together their heights = 112 → (112−14)/2
+    #     = 49." Gated: the diff-clause SUBJECT is the asked entity (named in the question); only D and S
+    #     are digits (dok). sign −1 for less/younger/shorter, +1 for more/older/taller → asked = (S+sign·D)/2.
+    dm = re.search(rf"(\w+) (?:is|are|was|were) ({N}) (?:\w+ )?"     # optional unit ("6 YEARS older")
+                   rf"(less|fewer|younger|shorter|more|older|taller|greater|bigger)\b", full)
+    sm = re.search(rf"(?:together|combined|sum of|total of|sum|total)[^.]*?({N})", full)
+    if dm and sm and dm.group(1) in ql and re.search(r"how (?:tall|old|much|many|long|far|heavy|big|wide)", ql):
+        tail = full[dm.end():].split(".")[0]             # the rest of the difference clause ("than …")
+        scaled = re.search(r"\b(?:double|twice|triple|quadruple|half|times|as many|as much)\b", tail)
+        sign = -1 if dm.group(3) in ("less", "fewer", "younger", "shorter") else 1
+        if not scaled and dok({dm.group(2), sm.group(1)}):   # a MULTIPLIER ("6 more than DOUBLE Sara")
+            return _rs_ret((f(sm.group(1)) + sign * f(dm.group(2))) / 2)   # is a scaled system, not (S∓D)/2
+
     return None
 
 
