@@ -19131,26 +19131,57 @@ def _read_partitions(full: str):
     return groups
 
 
+def _partition_effective_fraction(label: str, groups: dict, seen=None):
+    """The fraction of `label` within its parent — its own `fraction`, or (1 − sibling's effective
+    fraction) for a complement ("the rest" of a ⅕ part is ⅘ of the parent). None when not yet
+    determinable (a complement whose sibling is known only by count, not fraction)."""
+    seen = seen or set()
+    if label in seen:
+        return None
+    seen.add(label)
+    g = groups.get(label)
+    if g is None:
+        return None
+    if g.get("fraction") is not None:
+        return g["fraction"]
+    if g.get("complement_of"):
+        efs = _partition_effective_fraction(g["complement_of"], groups, seen)
+        if efs is not None:
+            return 1 - efs
+    return None
+
+
 def _saturate_partitions(groups: dict) -> None:
-    """Fill each group's `count` to a FIXPOINT: a fractional part = fraction·parent; a complement part =
-    parent − sibling. Repeats until nothing new resolves, so a chain of any depth composes. In place."""
+    """Fill each group's `count` to a FIXPOINT, propagating BOTH directions along `child = ef·parent`:
+    FORWARD (parent known → child = ef·parent) and BACKWARD (child known → parent = child ÷ ef), plus the
+    count-only complement (child = parent − sibling, or parent = child + sibling). Backward is what lets a
+    known leaf ("left with $300") solve for the unknown whole — the same model, run in reverse. In place."""
     changed = True
     while changed:
         changed = False
-        for g in groups.values():
-            if g.get("count") is not None:
-                continue
+        for label, g in groups.items():
             parent = groups.get(g.get("of"))
-            pc = parent.get("count") if parent else None
-            if pc is None:
+            if parent is None:
                 continue
-            if g.get("fraction") is not None:
-                g["count"] = pc * g["fraction"]
-                changed = True
-            elif g.get("complement_of"):
+            pc, gc = parent.get("count"), g.get("count")
+            ef = _partition_effective_fraction(label, groups)
+            if ef is not None:
+                if gc is None and pc is not None:
+                    g["count"] = pc * ef
+                    changed = True
+                    continue
+                if pc is None and gc is not None and ef:
+                    parent["count"] = gc / ef
+                    changed = True
+                    continue
+            if g.get("complement_of"):                       # count-only complement (sibling has no fraction)
                 sib = groups.get(g["complement_of"])
-                if sib and sib.get("count") is not None:
-                    g["count"] = pc - sib["count"]
+                sc = sib.get("count") if sib else None
+                if sc is not None and gc is None and pc is not None:
+                    g["count"] = pc - sc
+                    changed = True
+                elif sc is not None and pc is None and gc is not None:
+                    parent["count"] = gc + sc
                     changed = True
 
 
@@ -19178,6 +19209,42 @@ def _partition_chain_system(premises: list, question: str):
                 if parent and parent.get("count") is not None:
                     return _rs_ret(parent["count"] - g["count"])
     return None
+
+
+def _read_money_remainder(full: str):
+    """The BACKWARD $-remainder chain as partition GROUP facts (#313): "got F1 of the <whole> … spent F2
+    of it … left with $X" → share = F1 of the (unknown) whole, spent = F2 of share, left = the complement
+    of spent and is KNOWN ($X). Saturation then runs BACKWARD from the known leaf to the whole. None unless
+    both fractions and the leaf amount are present."""
+    m1 = re.search(rf"(?:got|received|win|won|earned|receives?) ({_PC_FR}) of\b", full)
+    m2 = re.search(rf"(?:spent|used|gave|paid|donated) ({_PC_FR}) of it\b", full)
+    ml = re.search(r"left with \$?(\d+(?:,\d{3})*(?:\.\d+)?)", full)
+    if not (m1 and m2 and ml):
+        return None
+    f1, f2 = _fraction_value(m1.group(1)), _fraction_value(m2.group(1))
+    if not (f1 and f2):
+        return None
+    amt = float(ml.group(1).replace(",", ""))
+    return {"__u__": {"count": None},
+            "share": {"of": "__u__", "fraction": f1},
+            "spent": {"of": "share", "fraction": f2},
+            "left":  {"of": "share", "complement_of": "spent", "count": amt}}
+
+
+def _money_remainder_system(premises: list, question: str):
+    """Solve for the WHOLE behind a backward $-remainder chain: "how much was the prize money?" given
+    "got 3/8 … spent 1/5 of it … left with $300" → 300 ÷ (⅘ · ⅜) = 1000. Reuses the partition saturation
+    (run backward). Gated to an original-whole ask ("how much WAS/WERE …") so it can't grab a forward total."""
+    ql = question.lower()
+    if not re.search(r"how much (?:was|were)\b", ql):
+        return None
+    full = " . ".join(p.lower() for p in premises) + " . " + ql
+    groups = _read_money_remainder(full)
+    if not groups:
+        return None
+    _saturate_partitions(groups)
+    whole = groups["__u__"].get("count")
+    return _rs_ret(whole) if whole is not None else None
 
 
 def _vocab_singles_b_system(premises: list, question: str):
@@ -23628,6 +23695,9 @@ _EARLY_SYSTEMS = [
     # PARTITION CHAIN: a group split into disjoint parts, resolved by fact SATURATION (#312) — the general
     # reformulation of the two-stage fraction chain (facts + fixpoint + question-obligation, not a formula).
     ("partition_chain", _partition_chain_system),
+    # BACKWARD $-REMAINDER: the SAME partition saturation run in reverse (#313) — a known leaf ("left with
+    # $300") solves for the unknown whole ("how much was the prize money?" → 1000).
+    ("money_remainder", _money_remainder_system),
     # CATEGORICAL SINGLES: word-agnostic long-tail branches (item noun via _W/_cat, coeff via _scale).
     ("cat_singles_a", _cat_singles_a_system),
     # VOCAB+STRUCTURE SINGLES: twenty-eight branches with wave-22 vocabulary (#232).
