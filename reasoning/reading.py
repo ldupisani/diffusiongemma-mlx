@@ -19068,6 +19068,24 @@ def _cat_singles_a_system(premises: list, question: str):
             and dok({mn.group(1), mw.group(1)}):
         return _rs_ret(f(mn.group(1)) * f(mpp.group(1)) * _conv("pound", "ounce") / f(mw.group(1)))
 
+    # 35. TWO-STAGE FRACTION CHAIN (the multi-step successor to the singles): "[N people in a Y] … f1 of
+    #     them do A / the REST do B … OF THOSE [B], f2 are X … how many <group>?" → N·(1−f1)·(f2 if the
+    #     asked group == X else 1−f2). "20 students, 1/4 stayed / rest went, 1/3 boys → girls" =
+    #     20·(3/4)·(2/3) = 10. Total from the dropped stated count (#309); the second stage operates on
+    #     the (1−f1) "rest". Tightly gated (person total, a "the rest" bridge, an "of those" stage-2, two
+    #     real fractions, a PERSON stage-2 group) because the digits are gone (dropped total, word fractions).
+    _FR = r"(half|a third|a fourth|a quarter|a fifth|a sixth|one-\w+|two-\w+|three-\w+|\d+/\d+)"
+    total = next((c for (big, small), c in _STATED_CONV.items() if _cat(small, "person")), None)
+    mf1 = re.search(rf"{_FR} of (?:the|them)", full)
+    mf2 = re.search(rf"{_FR} (?:of (?:those|them|the \w+) )?are {_W}", full)
+    mask = re.search(r"how many (\w+)", ql)
+    if total and mf1 and mf2 and mask and "the rest" in full and "of those" in full \
+            and _cat(mf2.group(2), "person"):
+        v1, v2 = _fraction_value(mf1.group(1)), _fraction_value(mf2.group(1))
+        if v1 and v2:
+            same = _key(mask.group(1)) == _key(mf2.group(2))
+            return _rs_ret(total * (1 - v1) * (v2 if same else 1 - v2))
+
     return None
 
 
