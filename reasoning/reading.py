@@ -4172,14 +4172,27 @@ def _dative_transfer(reading: Reading):
     return out or None
 
 
+def _prep_object(units: list, i: int) -> bool:
+    """units[i] sits in the OBJECT slot of "ON" — governed by "on" to its left, optionally through an
+    article/adjective ("spent $400 ON A bike", "ON exercise", "ON a workout"). What you spend/buy ON is
+    the OBJECT, never a main verb, whatever its lexical class — the grammar wins over the lexicon. Scoped
+    to "on" only: "to" governs an INFINITIVE action ("eggs TO split") and "with" a real verb ("share
+    WITH …") — those ARE the main verb, so a broad any-preposition rule wrongly dropped them (firewall-caught)."""
+    j = i - 1
+    while j >= 0 and any(s in units[j].features.get("senses", []) for s in ("article", "adjective")):
+        j -= 1
+    return j >= 0 and _key(units[j].surface) == "on" and "preposition" in units[j].features.get("senses", [])
+
+
 def _quantity(reading: Reading):
     """The quantities a "<entity> <verb>s <amount> …" statement asserts — ONE per value: a
     self-measuring money value ("earns $12") or a value quantifying a noun ("buys 2 apples"). A list,
     so a CONJOINED object yields several ("has 3 apples and 2 oranges" → two). The verb lemma carries
     the polarity. [] if there's no single verb with a subject."""
-    verbs = [u for u in reading.units if "verb" in u.features.get("senses", [])   # a trailing GERUND
-             and not (_key(u.surface).endswith("ing") and _follow(u, "subject") is None)]   # adjunct
-    if len(verbs) != 1:                                  # ("spends 40 years TEACHING") is not a 2nd verb
+    verbs = [u for k, u in enumerate(reading.units) if "verb" in u.features.get("senses", [])   # a trailing
+             and not (_key(u.surface).endswith("ing") and _follow(u, "subject") is None)        # GERUND adjunct
+             and not _prep_object(reading.units, k)]     # or a PREP OBJECT ("spent $400 ON A BIKE") — neither
+    if len(verbs) != 1:                                  # is a 2nd main verb ("spends 40 years TEACHING" too)
         return []
     subject = _follow(verbs[0], "subject")
     if subject is None:
