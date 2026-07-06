@@ -19303,6 +19303,16 @@ def _cat_singles_a_system(premises: list, question: str):
     if aps is not None:
         return _rs_ret(aps)
 
+    # 23. SCALE-OF-A-SUM: a quantity defined as "<scale> the sum of" two stated values → scale·(A+B).
+    #     "cats weigh 7 and 10 … dog's weight is twice the sum of her two cats' weights" → 2·(7+10)=34.
+    #     Tight: the ONLY two digits are the summed pair (dok), a scale-of-sum phrase, a wh-value ask.
+    sm = re.search(rf"({_SCALE_RE}) (?:the )?sum of", full)
+    vm = re.search(rf"({N}) and ({N})\b", full)
+    if sm and vm and _scale(sm.group(1)) and re.search(r"(?:what is|how (?:much|many|heavy|old|long|tall))", ql):
+        used = {vm.group(1), vm.group(2)} | set(re.findall(r"\d+", sm.group(1)))  # incl. a "N times" scale
+        if dok(used):
+            return _rs_ret(_scale(sm.group(1)) * (f(vm.group(1)) + f(vm.group(2))))
+
     return None
 
 

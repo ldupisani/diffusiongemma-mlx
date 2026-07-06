@@ -8365,6 +8365,20 @@ class TestAttributePartitionSum(unittest.TestCase):
             "There are 12 apples and twice as many oranges. How many fruits are there?"), 36)
 
 
+class TestScaleOfASum(unittest.TestCase):
+    """#327 — a quantity defined as "<scale> the sum of" two stated values → scale·(A+B). Synthetic."""
+
+    def test_twice_the_sum(self):
+        self.assertEqual(reading.solve(
+            "The weights of the two cats are 7 and 10 pounds. What is the dog's weight if its weight "
+            "is twice the sum of the two cats' weights?"), 34)
+
+    def test_triple_the_sum_generalizes(self):
+        self.assertEqual(reading.solve(
+            "The weights of the two dogs are 5 and 8 pounds. What is the horse's weight if its weight "
+            "is triple the sum of the two dogs' weights?"), 39)
+
+
 class TestQuestionRequirementsCorpus(unittest.TestCase):
     """The QUESTION_REQUIREMENTS corpus — question shapes answerable GIVEN certain facts. An unsatisfied
     entry NAMES the world-knowledge to fetch; the corpus must generalize past a single shape."""
