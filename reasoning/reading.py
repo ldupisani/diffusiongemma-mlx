@@ -19341,6 +19341,22 @@ def _cat_singles_a_system(premises: list, question: str):
         if not scaled and dok({dm.group(2), sm.group(1)}):   # a MULTIPLIER ("6 more than DOUBLE Sara")
             return _rs_ret((f(sm.group(1)) + sign * f(dm.group(2))) / 2)   # is a scaled system, not (S∓D)/2
 
+    # 26. MIXED-UNIT MEASURE COMPARISON: two "<A> <BIG> <B> <SMALL>" measures with a known BIG→SMALL
+    #     conversion (feet+inches, pounds+ounces, hours+minutes, …) → convert each to the SMALL unit and
+    #     take the difference. The units are READ from the text and the factor comes from the conversion
+    #     table (`_conv`) — nothing unit-specific is hardcoded. "Mark 5 feet 3 in, Mike 6 feet 1 in … how
+    #     much taller in inches?" → (6·12+1)−(5·12+3) = 10. A stated "1 <big> = <factor> <small>" is dok'd.
+    measures, mdig, fac = [], set(), None
+    for m in re.finditer(rf"({N}) (\w+) (?:and )?({N}) (\w+)", full):
+        n1, u1, n2, u2 = m.groups()
+        c = _conv(u1, u2)                                # None unless u1→u2 is a real big→small conversion
+        if c and c > 1 and _unit_canon(u1) in UNIT_NOUNS and _unit_canon(u2) in UNIT_NOUNS:
+            measures.append(f(n1) * c + f(n2)); mdig |= {n1, n2}; fac = c
+    if len(measures) == 2 and fac \
+            and re.search(r"how much (?:taller|shorter|longer|higher|heavier|more|less|bigger)", ql):
+        if dok(mdig | {str(int(fac)), "1"}):            # incl. a stated "1 <big> = <fac> <small>" clause
+            return _rs_ret(abs(measures[0] - measures[1]))
+
     return None
 
 

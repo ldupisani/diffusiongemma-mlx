@@ -8365,6 +8365,27 @@ class TestAttributePartitionSum(unittest.TestCase):
             "There are 12 apples and twice as many oranges. How many fruits are there?"), 36)
 
 
+class TestMixedUnitComparison(unittest.TestCase):
+    """#330 — two "<A> <BIG> <B> <SMALL>" measures → convert each to the SMALL unit (factor from the
+    conversion table, units read from the text — NOT unit-specific) and take the difference. Synthetic."""
+
+    def test_feet_inches(self):
+        self.assertEqual(reading.solve(
+            "Anna is 4 feet 8 inches tall and Bella is 5 feet 2 inches tall. How much taller is Bella "
+            "than Anna in inches if 1 foot is equal to 12 inches?"), 6)
+
+    def test_generic_other_unit_pair(self):
+        # a DIFFERENT unit pair proves the code is not feet/inch-specific: pounds+ounces (factor 16)
+        self.assertEqual(reading.solve(
+            "The cat weighs 4 pounds 5 ounces and the dog weighs 6 pounds 2 ounces. How much heavier is "
+            "the dog than the cat in ounces if 1 pound is equal to 16 ounces?"), 29)
+
+    def test_distractor_digit_declines(self):
+        self.assertNotEqual(reading.solve(
+            "Mark is 5 feet 3 inches tall and Mike is 6 feet 1 inch tall. Mark has 9 hats. How much "
+            "taller is Mike than Mark in inches if 1 foot is 12 inches?"), 10)
+
+
 class TestSumAndDifference(unittest.TestCase):
     """#329 — two entities, the asked one is D less/more than the other, their total is S → (S∓D)/2.
     Word-agnostic (synthetic names/measures/comparison words)."""
