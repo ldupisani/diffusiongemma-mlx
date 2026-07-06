@@ -5,7 +5,11 @@ dataset, and reference capabilities as MCP tools over stdio. It answers from COD
 tool here runs at 0 model calls and never contacts the sidecar/teacher — so the service is
 self-contained: `ask` routes to a model-free orchestrator (or a 0-call compound split) and
 reports the domain and call count; a query that would need the LLM is reported as such rather
-than silently invoking it.
+than silently invoking it. When nothing coded matches a word problem, `ask` also asks the
+model-free READER what it would need and surfaces that as a `deficiency` (query rather than
+assume); the `diagnose` tool exposes the reader's full epistemic read — the answer if the text
+determines it, the facts it knows, the world-knowledge a question requires, and the specific
+gap when it can't answer.
 
 Run:        python -m reasoning.mcp_server
 Register:   point an MCP client at the command above (stdio transport).
@@ -132,13 +136,84 @@ def ask(query: str, translate: bool | None = None) -> dict:
         translated = _translate_fallback(query)
         if translated is not None:
             return translated
+    # No coded answer (either an LLM-needing fallback type, or nothing matched at all). Rather than
+    # assume, ask the model-free READER what it would NEED and attach it — this keeps `ask`'s precision
+    # contract (we never return the reader's own answer here) but turns a dead end into a well-formed
+    # clarifying question the caller can act on. `diagnose(query)` gives the full read (incl. any answer).
     if m:  # matched a type that needs the LLM (e.g. a fallback) — reported, never invoked
-        return {"matched": True, "domain": m.orchestrator.id, "answer": None,
-                "note": "this query type needs the LLM backend; enable the translator fallback "
-                        "(translate=True or DIFG_TRANSLATE_FALLBACK=1) to answer it"}
-    return {"matched": False, "answer": None,
-            "hint": "No coded domain matched. Call capabilities() or search_capabilities(term), "
-                    "or enable the translator fallback (translate=True) for word problems."}
+        out = {"matched": True, "domain": m.orchestrator.id, "answer": None,
+               "note": "this query type needs the LLM backend; enable the translator fallback "
+                       "(translate=True or DIFG_TRANSLATE_FALLBACK=1) to answer it"}
+    else:
+        out = {"matched": False, "answer": None,
+               "hint": "No coded domain matched. Call capabilities() or search_capabilities(term), "
+                       "or enable the translator fallback (translate=True) for word problems."}
+    return _with_reader_deficiency(query, out)
+
+
+def _with_reader_deficiency(query: str, out: dict) -> dict:
+    """Attach the model-free reader's DEFICIENCY (what it would need to answer, phrased as a question) to
+    an otherwise-unanswered `ask` response. Best-effort: never let the reader break `ask`."""
+    try:
+        from .reading import diagnose as _reading_diagnose
+        d = _reading_diagnose(query)
+    except Exception:
+        d = None
+    if d is not None:
+        out["deficiency"] = {"kind": d.kind, "question": d.message}
+        out["hint"] = ("No coded domain answered this. The model-free reader identified what it would "
+                       "need — see `deficiency`. Call diagnose(query) for the full read (known facts + "
+                       "requirements + any reader answer), or enable translate=True.")
+    return out
+
+
+def _fact_str(f) -> str:
+    """A compact, JSON-safe rendering of a reading fact (Quantity/Relation/Predication/…) for a
+    consumer. Handles the common shapes explicitly; falls back to repr for the rest."""
+    name = type(f).__name__
+    if name == "Quantity":
+        meas = f.measure[0] if isinstance(getattr(f, "measure", None), tuple) else getattr(f, "measure", "")
+        amt = getattr(f, "amount", None)
+        if isinstance(amt, float) and amt.is_integer():
+            amt = int(amt)
+        tag = " (derived)" if getattr(f, "derived", False) else ""
+        return f"{f.entity} {f.verb} {amt} {meas}{tag}".strip()
+    if name == "Relation":
+        return f"{f.subject} {f.relation} {f.object}"
+    if name in ("Predication", "Membership", "Subset"):
+        return " ".join(str(v) for v in vars(f).values())
+    return repr(f)
+
+
+def diagnose(query: str) -> dict:
+    """The model-free READER's epistemic read of a word problem (0 model calls) — the bridge surface for
+    the greater engine to consume. Unlike `ask` (high-precision coded orchestrators only), this reports
+    everything the reader can honestly say WITHOUT guessing:
+
+    - `answer` — the value IF the text determines it (else null; the reader declines rather than guess);
+    - `known` — the facts it extracted, threaded across sentences and closed under synthesis
+      ("here are the things we do know about the question");
+    - `requirements` — question-shapes it recognises and whether the world-knowledge they need is present
+      (an unsatisfied one names exactly the fact to supply);
+    - `deficiency` — when it can't answer, the specific gap phrased as a QUESTION to answer
+      (unknown-word / ambiguous-base / missing-knowledge / insufficient).
+
+    Use this when `ask` returns matched=False on a word problem, or whenever you want the facts + the
+    missing piece rather than just a final number. Its precision is the reading engine's (~90% on held-out
+    GSM8K), so treat its `answer` as a reader estimate, not a coded-orchestrator guarantee."""
+    from .reading import report
+    rep = report(query)
+    ans = rep["answer"]
+    solved = ans not in (None, "undetermined")
+    out = {"query": query, "solved": bool(solved), "model_calls": 0,
+           "answer": (ans if solved else None),
+           "known": [_fact_str(f) for f in rep["known"]],
+           "requirements": [{"shape": n, "needs": needs, "satisfied": bool(sat)}
+                            for (n, needs, sat) in rep["requirements"]]}
+    d = rep["deficiency"]
+    if d is not None:
+        out["deficiency"] = {"kind": d.kind, "question": d.message}
+    return out
 
 
 def capabilities() -> dict:
@@ -218,7 +293,7 @@ def query_dataset(sql: str) -> str:
 
 # Register every tool, wrapped so it picks up engine edits without a reconnect (the module-level
 # functions stay unwrapped and directly callable — for tests and reuse).
-for _fn in (ask, capabilities, describe_domain, search_capabilities, list_generators,
+for _fn in (ask, diagnose, capabilities, describe_domain, search_capabilities, list_generators,
             generate_dataset, list_datasets, dataset_info, query_dataset):
     mcp.tool()(_live(_fn))
 

@@ -80,6 +80,44 @@ class TestMCPServer(unittest.TestCase):
         self.assertFalse(r["matched"])
         self.assertIn("capabilities", r["hint"])
 
+    def test_diagnose_solved_word_problem(self):
+        # the model-free reader solves a cross-sentence problem at 0 calls and reports its facts
+        r = self.M.diagnose("Tom has 3 apples. Mary has twice as many apples as Tom. "
+                            "How many apples do they have together?")
+        self.assertEqual((r["solved"], r["answer"], r["model_calls"]), (True, 9, 0))
+        self.assertTrue(any("mary" in f for f in r["known"]))
+        self.assertNotIn("deficiency", r)
+
+    def test_diagnose_names_missing_world_knowledge(self):
+        # a part-count question the corpus recognises → an unsatisfied requirement + a missing-knowledge
+        # deficiency phrased as a question (query rather than assume)
+        r = self.M.diagnose("What is the total number of legs that Camden's 3 dogs and 2 cats have?")
+        self.assertFalse(r["solved"])
+        self.assertIsNone(r["answer"])
+        self.assertEqual(r["requirements"][0]["shape"], "part-count")
+        self.assertFalse(r["requirements"][0]["satisfied"])
+        self.assertEqual(r["deficiency"]["kind"], "missing-knowledge")
+
+    def test_diagnose_names_ambiguity(self):
+        r = self.M.diagnose("Sabrina gave 10 cookies to her brother. Then Sabrina gave two-thirds of "
+                            "her cookies to her sister. If Sabrina had 20 cookies at the start, how "
+                            "many cookies are left?")
+        self.assertFalse(r["solved"])
+        self.assertEqual(r["deficiency"]["kind"], "ambiguous-base")
+
+    def test_ask_attaches_reader_deficiency_when_uncoded(self):
+        # an un-coded word problem: ask keeps its precision contract (no reader answer) but surfaces the
+        # reader's deficiency so the caller gets a clarifying question, not a bare miss
+        r = self.M.ask("What is the total number of legs that Camden's 3 dogs and 2 cats have?")
+        self.assertIsNone(r["answer"])
+        self.assertEqual(r.get("deficiency", {}).get("kind"), "missing-knowledge")
+
+    def test_ask_coded_query_has_no_deficiency(self):
+        # the enrichment must never touch a successfully-coded answer
+        r = self.M.ask("What is the area of a circle with radius 5?")
+        self.assertEqual(r["answer"], "78.54")
+        self.assertNotIn("deficiency", r)
+
     def test_capabilities_and_describe(self):
         self.assertGreater(self.M.capabilities()["summary"]["domains"], 50)
         self.assertTrue(self.M.describe_domain("geometry")["examples"])

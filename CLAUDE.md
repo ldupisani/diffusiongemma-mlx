@@ -197,7 +197,14 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   reported, never invoked — UNLESS the opt-in **translator fallback** is on: `ask(query,
   translate=True)` or env `DIFG_TRANSLATE_FALLBACK=1` routes an otherwise-unanswered word problem
   through `translate.solve` (1 model call, `domain="translate"`, the audited `program` returned;
-  default OFF so `ask` stays 0-call) plus introspection
+  default OFF so `ask` stays 0-call). When nothing coded answers a word problem, `ask` also attaches
+  the model-free reader's **`deficiency`** (what it would need, phrased as a question — "query rather
+  than assume") without returning the reader's own answer, so `ask`'s coded-precision contract is
+  intact. The **`diagnose`** tool exposes the reader's full epistemic read (`reading.report`): the
+  `answer` if the text determines it, the `known` facts (extracted + synthesized), the question
+  `requirements` (world-knowledge a shape needs + whether supplied), and the `deficiency` when it
+  can't answer — 0 calls, the bridge surface for the greater engine (reader precision, not the
+  coded-orchestrator guarantee). Plus introspection
   (`capabilities`/`describe_domain`/`search_capabilities`)
   and dataset/reference tools (`list_generators`/`generate_dataset`/`list_datasets`/`dataset_info`/
   `query_dataset`). Also exposes user-invokable **prompts** (slash commands in clients):
