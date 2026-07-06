@@ -4189,6 +4189,12 @@ def _quantity(reading: Reading):
     self-measuring money value ("earns $12") or a value quantifying a noun ("buys 2 apples"). A list,
     so a CONJOINED object yields several ("has 3 apples and 2 oranges" → two). The verb lemma carries
     the polarity. [] if there's no single verb with a subject."""
+    # A COMPOUND WAGE clause ("works for $R an hour and H hours a week") states RATE components, NOT fixed
+    # holdings — `_synth_wage_income` materializes the earned income from the rate; suppress the stray
+    # component quantities ($R, H hours) here so they don't double-count or trip the unused-given guard (#317).
+    if re.search(r"for \$\d+(?:\.\d+)? an hour and \d+ hours a week",
+                 " ".join(u.surface for u in reading.units).lower()):
+        return []
     verbs = [u for k, u in enumerate(reading.units) if "verb" in u.features.get("senses", [])   # a trailing
              and not (_key(u.surface).endswith("ing") and _follow(u, "subject") is None)        # GERUND adjunct
              and not _prep_object(reading.units, k)]     # or a PREP OBJECT ("spent $400 ON A BIKE") — neither
@@ -5439,6 +5445,38 @@ def _synth_rate_duration(facts: list, readings: list, agenda: set) -> list:
     return out
 
 
+def _synth_wage_income(facts: list, readings: list, agenda: set) -> list:
+    """Materialize a COMPOUND WAGE as an income Quantity so the holdings fold can net it against spends
+    (#317): "works for $R an hour and H hours a week … [a month / N weeks / N months]" → Quantity(entity,
+    money, R·H·weeks, "earn"). The single-rate `_rate` extractor captures only the $R/hour half (the
+    hours/week half is lost), so this reads the compound + the period directly and feeds ONE income fact.
+    a month = 4 weeks; N months = 4N. Idempotent."""
+    if not readings:
+        return []
+    wage = next((r for r in facts if isinstance(r, Rate) and r.measure[0] == "money"
+                 and r.per_unit == "hour" and r.verb in ("work", "earn")), None)
+    if wage is None:
+        return []
+    if any(isinstance(q, Quantity) and q.entity == wage.entity and q.measure[0] == "money"
+           and q.verb == "earn" and q.derived for q in facts):
+        return []                                        # already materialized
+    text = " ".join(u.surface for r in readings for u in r.units).lower()
+    mh = re.search(rf"({_RS_N}) hours a week", text)
+    if mh is None:
+        return []
+    weeks = 4.0 if re.search(r"\ba month\b", text) else None
+    mw = re.search(rf"({_RS_N}) weeks?\b", text)
+    mm = re.search(rf"({_RS_N}) months?\b", text)
+    if weeks is None and mw:
+        weeks = float(mw.group(1))
+    elif weeks is None and mm:
+        weeks = float(mm.group(1)) * 4
+    if weeks is None:
+        return []
+    total = _compute(f"{_num(wage.amount)} * {mh.group(1)} * {_num(weeks)}")
+    return [Quantity(wage.entity, ("money", frozenset()), total, "earn", derived=True)]
+
+
 def _synth_rate_chain(facts: list, readings: list, agenda: set) -> list:
     """Two same-entity rates that share a unit COMPOSE into one: "3 hours per DAY" × "5 pages per HOUR"
     → 15 pages per day (the HOUR cancels). Fires when r1.measure == r2.per_unit; the product carries r2's
@@ -5489,7 +5527,7 @@ def _synth_rate_relation(facts: list, readings: list, agenda: set) -> list:
 SYNTHESIZERS = {"orders": _synth_transitive_order, "narrative": _synth_narrative_order,
                 "distribution": _synth_distribution, "equal_split": _synth_equal_split,
                 "rate_duration": _synth_rate_duration, "rate_chain": _synth_rate_chain,
-                "rate_relation": _synth_rate_relation}
+                "rate_relation": _synth_rate_relation, "wage_income": _synth_wage_income}
 
 
 def _outstanding(readings: list) -> set:
@@ -24282,7 +24320,11 @@ def _solve_inner(text: str):
         # won't appear verbatim — exempt when the premise has two AM/PM meridiems and produced a Rate.
         time_range = len([u for u in rp.units if _key(u.surface) in ("am", "pm")]) == 2 \
             and any(isinstance(f, Rate) for f in facts_i)
-        if comp_consumed or time_range \
+        # a COMPOUND WAGE clause ("$R an hour and H hours a week") consumes BOTH values into the derived
+        # income (R·H·weeks, via `_synth_wage_income`), so neither appears verbatim — exempt (#317, GAP C).
+        wage_clause = re.search(r"for \$\d+(?:\.\d+)? an hour and \d+ hours a week",
+                                " ".join(u.surface for u in rp.units).lower()) is not None
+        if comp_consumed or time_range or wage_clause \
                 or any(_key(u.surface) == "each" for u in rp.units) \
                 or any(isinstance(f, Distribution) for f in facts_i) \
                 or _relational_age_factor(rp) is not None \
