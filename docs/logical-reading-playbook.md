@@ -1654,6 +1654,29 @@ back to "whole text as the question" when `_parse_problem` finds no trailing que
 ("Convert 5 lb to g") still match — the corpus is a question-SHAPE index, not tied to the solve pipeline's
 premise/question split.
 
+## Property-agnostic partitioning — categorize by ANY property, not a hardcoded class (#326)
+
+`_attr_partition_sum` sums a noun subdivided into subtypes by some PROPERTY (colour / size / material /
+kind). The instinct is to hardcode the property's values ("yellow|blue|green"); DON'T. The code never names
+or enumerates the property — a subtype is keyed by its opaque MODIFIER word (`_aps_is_mod`: a known adjective
+OR a known noun used attributively, that is NOT the counted head noun). So the SAME solver handles colours
+(Olga's fish, Mark's flowers), sizes (small/medium/large), and known-word materials, and generalises to
+properties never seen — the [[reader-greater-goal]] "generalized structures always preferred" applied to
+categorisation itself.
+
+Two lessons this crystallised:
+- **The categorising property is emergent from the grammar, not a lexicon.** "12 yellow ones" and "8 small
+  marbles" have the same SHAPE (count + modifier + shared head noun); the modifier's semantic class (colour
+  vs size) is irrelevant to the arithmetic. Requiring the modifier to be an *adjective* was too strict — it
+  excluded materials (metal/plastic are nouns used attributively). The real safety is the **shared-head-noun
+  binding** (subtypes modify the *same* counted noun / "ones"/"those"), which is what rejects "12 apples +
+  twice as many oranges → how many fruits" (apples ≠ fruits) — not the part-of-speech of the modifier.
+- **An unknown modifier must make the whole thing DECLINE, not silently drop a subtype.** When a subtype's
+  relation fails to parse (its modifier is an unknown word), its stated digit goes unconsumed and `dok` (every
+  digit used, except a "<K> different <property>" universe-cardinality distractor) forces a decline — never a
+  wrong partial sum. This is why a broad sum-solver stayed firewall-clean (NET +2, 0 BROKE, 0 DECL→WRONG,
+  collisions 0-disagree): the digit-accounting is the backstop that a loose structural match can't defeat.
+
 ## Open threads / next
 
 - **GSM8K via this parser (replace the LLM translator)** — kept as an INDEPENDENT eval (a `bench`-style

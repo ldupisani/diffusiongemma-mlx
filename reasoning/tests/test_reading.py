@@ -8337,6 +8337,34 @@ class TestUniversalRatePartSum(unittest.TestCase):
             "how many legs did he see?"), 32)
 
 
+class TestAttributePartitionSum(unittest.TestCase):
+    """#326 — a noun subdivided by a PROPERTY (colour/size/…) into subtypes, each stated or relational,
+    totalled → Σ. Property-AGNOSTIC: the code never names the property. Synthetic (never the GSM8K source)."""
+
+    def test_multiplier_relations_size_property(self):
+        # SIZE, not colour — proves the property-agnostic design (base + "half/twice as many … as …")
+        self.assertEqual(reading.solve(
+            "There are 8 small marbles, half as many medium marbles, and twice as many large marbles "
+            "as small marbles. How many marbles are there?"), 28)
+
+    def test_percent_relations_chain(self):
+        # a base, a "% more" of the base, and a "% as many … as A and B" of the sum — resolved to fixpoint
+        self.assertEqual(reading.solve(
+            "There are 10 tall trees, and there are 50% more of those in short. There are only 25% as "
+            "many old trees as there are tall and short trees. How many trees are there?"), 31.25)
+
+    def test_subsequent_event_forces_decline(self):
+        # a partition followed by an event ("sold 3") leaves a digit unused (dok) → decline, not a bad sum
+        self.assertEqual(reading.solve(
+            "There are 5 red cars and twice as many blue cars. He sold 3 cars. "
+            "How many cars does he have?"), "undetermined")
+
+    def test_not_a_shared_noun_partition(self):
+        # apples/oranges are not subtypes of "fruits" → the shared-noun binding rejects it
+        self.assertNotEqual(reading.solve(
+            "There are 12 apples and twice as many oranges. How many fruits are there?"), 36)
+
+
 class TestQuestionRequirementsCorpus(unittest.TestCase):
     """The QUESTION_REQUIREMENTS corpus — question shapes answerable GIVEN certain facts. An unsatisfied
     entry NAMES the world-knowledge to fetch; the corpus must generalize past a single shape."""

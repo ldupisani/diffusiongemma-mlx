@@ -18770,6 +18770,86 @@ def _vocab_singles_c_system(premises: list, question: str):
     return None
 
 
+def _aps_is_mod(word: str, noun: str) -> bool:
+    """A subtype MODIFIER in an attribute partition: a known adjective (color/size — "yellow", "small") OR a
+    known noun used attributively (material/kind — "glass", "oak") that is NOT the counted head noun itself.
+    PROPERTY-AGNOSTIC by design: the categorising property is never named or enumerated — any known modifier
+    that subdivides the shared head noun qualifies (an unknown word is excluded, so such a problem declines
+    as unknown-word rather than mis-firing)."""
+    u = analyze(word).units
+    if not u:
+        return False
+    s = u[0].features.get("senses", [])
+    return ("adjective" in s or "noun" in s) and _noun_lemma(word) != _noun_lemma(noun)
+
+
+def _attr_partition_sum(premises: list, question: str):
+    """ATTRIBUTE-PARTITION SUM (#326) — a universe of one NOUN subdivided into subtypes by some PROPERTY
+    (colour, size, material, kind — the code is agnostic to which), each subtype a count that is either
+    STATED (a base) or RELATIONAL to another subtype (or a sum of subtypes); the question asks the TOTAL →
+    Σ over subtypes. Subtypes are keyed by their opaque modifier word (`_aps_is_mod`), resolved to a fixpoint
+    (a relation fires once its referents are known), so the chain composes to any depth. Relational forms:
+    "<scale> as many <mod> [as <mod2> [and <mod3>]]", "<N>% more [of those] in <mod>", "<N>% as many <mod>
+    … as <mod2> and <mod3>". Elided referents default to the first stated subtype. Tightly gated: needs a
+    "how many <noun>" TOTAL question, ≥1 stated base, ≥1 relation, ≥2 subtypes total; every stated digit must
+    be consumed (dok) EXCEPT a "<K> different <property>" universe-cardinality distractor. None otherwise."""
+    ql = question.lower()
+    full = " . ".join(p.lower() for p in premises) + " . " + ql
+    NW = _GP_NUMW
+
+    def f(t):
+        t = t.lower().replace(",", "")
+        return float(t) if t.replace(".", "", 1).isdigit() else float(NUMBERS.get(t, 0) or 0)
+
+    qn = re.search(rf"how many {_W}\b", ql)
+    if not qn:
+        return None
+    noun = qn.group(1)
+    nre = _number_re(noun)
+    subtypes, order, usedig = {}, [], set()
+    # STATED bases: "there are (N) (MOD) (ones|<noun>)"  |  "(N) of them are (MOD)"
+    for m in re.finditer(rf"there (?:are|is) ({NW}) {_W} (?:ones|{nre})", full):
+        if _aps_is_mod(m.group(2), noun):
+            subtypes[m.group(2)] = f(m.group(1)); order.append(m.group(2)); usedig.add(m.group(1))
+    for m in re.finditer(rf"({NW}) of (?:them|which) are {_W}\b", full):
+        if _aps_is_mod(m.group(2), noun):
+            subtypes[m.group(2)] = f(m.group(1)); order.append(m.group(2)); usedig.add(m.group(1))
+    base = order[0] if order else None
+    relations = []          # (mod, coeff, referent_mods or None → default base)
+    for m in re.finditer(rf"({_SCALE_RE}) as many {_W}(?: ones| {nre})?"
+                         rf"(?:\s+as\s+(?:there are\s+)?{_W}(?: ones| {nre})?(?:\s+and\s+{_W})?)?", full):
+        if not _aps_is_mod(m.group(2), noun):
+            continue
+        refs = [g for g in (m.group(3), m.group(4)) if g and _aps_is_mod(g, noun)] or None
+        relations.append((m.group(2), _scale(m.group(1)), refs))
+    for m in re.finditer(rf"({NW})% more (?:of those )?in {_W}\b", full):
+        if _aps_is_mod(m.group(2), noun):
+            relations.append((m.group(2), 1 + f(m.group(1)) / 100, None)); usedig.add(m.group(1))
+    for m in re.finditer(rf"({NW})% as many {_W}(?: \w+)? as (?:there are\s+)?{_W}(?: \w+)? and {_W}\b", full):
+        if _aps_is_mod(m.group(2), noun):
+            relations.append((m.group(2), f(m.group(1)) / 100,
+                              [g for g in (m.group(3), m.group(4)) if _aps_is_mod(g, noun)]))
+            usedig.add(m.group(1))
+    if not subtypes or not relations or len(subtypes) + len(relations) < 2:
+        return None
+    changed = True
+    while changed:                                       # saturate: a relation fires once its refs are known
+        changed = False
+        for mod, coeff, refs in relations:
+            if mod in subtypes:
+                continue
+            rlist = refs or ([base] if base else [])
+            if rlist and all(r in subtypes for r in rlist):
+                subtypes[mod] = coeff * sum(subtypes[r] for r in rlist); changed = True
+    if any(mod not in subtypes for mod, _, _ in relations):
+        return None                                      # an unresolved relation → decline, never guess
+    exempt = set(re.findall(rf"({NW}) different", full))  # a "<K> different colours" universe count is a
+    digs = re.findall(r"\d+(?:,\d{3})*(?:\.\d+)?", " ".join(premises) + " " + question)   # stated distractor
+    if not all(d in usedig or d in exempt for d in digs):
+        return None
+    return _snap(sum(subtypes.values()))
+
+
 def _cat_singles_a_system(premises: list, question: str):
     """CATEGORICAL SINGLES A (#284) — long-tail single-problem solvers written WORD-AGNOSTICALLY: the
     incidental item noun is captured with `_W` + verified with `_cat(…, "noun")` and reused BY LEMMA via
@@ -19216,6 +19296,12 @@ def _cat_singles_a_system(premises: list, question: str):
             used |= {rate, cnt.group(1)}
         if ok and terms and dok(used):
             return _rs_ret(sum(terms))
+
+    # 22. ATTRIBUTE-PARTITION SUM: a noun subdivided by a PROPERTY (colour/size/material — agnostic) into
+    #     subtypes, each a stated base or relational to another, totalled. See _attr_partition_sum.
+    aps = _attr_partition_sum(premises, question)
+    if aps is not None:
+        return _rs_ret(aps)
 
     return None
 
