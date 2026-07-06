@@ -8365,6 +8365,21 @@ class TestAttributePartitionSum(unittest.TestCase):
             "There are 12 apples and twice as many oranges. How many fruits are there?"), 36)
 
 
+class TestDayPricedOuting(unittest.TestCase):
+    """#331 — a base price on one weekday, relative prices on others, a subset of days visited → Σ visited.
+    Days, scales, AND the item are read from the text (nothing hardcoded). Synthetic (non-movie item/days)."""
+
+    def test_relative_prices_two_visited(self):
+        self.assertEqual(reading.solve(
+            "Passes cost $3 each on a Tuesday, triple as much on a Thursday, and four times as much as "
+            "Tuesday on a Sunday. If Maria goes on Thursday and Sunday, how much does she spend?"), 21)
+
+    def test_base_day_is_counted(self):
+        self.assertEqual(reading.solve(
+            "Entry costs $4 each on a Friday and twice as much on a Sunday. If Sam goes on Friday and "
+            "Sunday, how much does he spend?"), 12)
+
+
 class TestMixedUnitComparison(unittest.TestCase):
     """#330 — two "<A> <BIG> <B> <SMALL>" measures → convert each to the SMALL unit (factor from the
     conversion table, units read from the text — NOT unit-specific) and take the difference. Synthetic."""

@@ -21498,12 +21498,31 @@ def _money_singles_system(premises: list, question: str):
         if dok({ch.group(1), ct.group(1), cn.group(1), "1"}):
             t = f(ct.group(1))
             return _rs_ret(t + f(cn.group(1)) * t / f(ch.group(1)))
-    # 21. Glenn movies: Monday $m; Wed 2×; Sat 5×Monday; goes Wed+Sat
-    gm3 = re.search(rf"cost \$({N}) each on a monday ?,? twice as much on a wednesday ?,? and five times as much", full)
-    if gm3 and "wednesday" in full and "saturday" in full and "how much does he spend" in ql:
-        if dok({gm3.group(1)}):
-            m_ = f(gm3.group(1))
-            return 2 * m_ + 5 * m_
+    # 21. DAY-PRICED OUTING SUM (generic — days, scales, AND the item are READ from the text, none hardcoded):
+    #     a base price stated for one weekday, prices on other days given RELATIVE to it (<scale> as much
+    #     [as <day>]), and a subset of days VISITED (named in the question) → Σ prices of the visited days.
+    #     "tickets $5 on Monday, twice as much Wednesday, 5× Monday on Saturday; goes Wed + Sat" → 2·5+5·5=35.
+    _dre = r"(monday|tuesday|wednesday|thursday|friday|saturday|sunday)"
+    bm = re.search(rf"\$({N}) (?:each )?on an? {_dre}\b", full)
+    if bm and re.search(r"how much does \w+ spend", ql):
+        base_day, base_price = bm.group(2), f(bm.group(1))
+        prices = {base_day: base_price}
+        rels = [(pm.group(3), _scale(pm.group(1)), pm.group(2) or base_day)   # (day, scale, referent-day)
+                for pm in re.finditer(rf"({_SCALE_RE}) as much(?: as (?:an? )?{_dre})? on an? {_dre}\b", full)]
+        changed = True
+        while changed:                                   # resolve relative prices to a fixpoint
+            changed = False
+            for day, scale, ref in rels:
+                if day not in prices and ref in prices:
+                    prices[day] = scale * prices[ref]; changed = True
+        # the days he actually VISITS — the UNION of the "goes/attends/visits … on <days>" clause and the
+        # question (the splitter severs a conjunct list at "and", so "on Wednesday and Saturday" becomes a
+        # premise "… on Wednesday" + an orphaned "Saturday" in the question). NOT all of `full` — that has
+        # the price-definition days too.
+        vm = re.search(r"(?:goes|go|went|attends?|visits?)\b[^.]*", full)
+        goes = set(re.findall(_dre, vm.group(0)) if vm else []) | set(re.findall(_dre, ql))
+        if goes and all(d in prices for d in goes) and dok({bm.group(1)}):
+            return _rs_ret(sum(prices[d] for d in goes))
     # 22. lunch thirds — DELETED (#315): now the generic `_anchored_sum_system` claims it, via the shared
     #     `_equality_relation` ("Rick and Jose … the same price" → Rick = Jose) + the "for all three" sum cue.
     # 23. Daphney potatoes: buys a kg; b kg costs $c → a·c/b
