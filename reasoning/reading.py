@@ -15603,12 +15603,6 @@ def _vocab_singles_k_system(premises: list, question: str):
         if dok(set(u2.groups())):
             return _rs_ret((w(u1.group(1)) + w(u1.group(2)))
                      * f(u2.group(2)) / f(u2.group(1)))
-    # 21. carrying both cats (#21)
-    v1 = re.search(rf"female cat weighs ({N}) kilograms", full)
-    v2 = re.search(r"male cat is (two|\w+) times heavier", full)
-    if v1 and v2 and "carrying" in ql and w(v2.group(1)):
-        if dok({v1.group(1)}):
-            return _rs_ret(f(v1.group(1)) + f(v1.group(1)) * w(v2.group(1)))
     # 22. exam time left at pace (#22)
     x1 = re.search(rf"has (one|\w+) hour to take an exam", full)
     x2 = re.search(rf"answered ({N}) out of ({N}) questions", full)
@@ -15732,13 +15726,6 @@ def _vocab_singles_k_system(premises: list, question: str):
     if J1 and J2 and "how many pages" in ql:
         if dok(set(J1.groups()) | {J2.group(1)}):
             return _rs_ret(f(J1.group(1)) / f(J1.group(2)) * f(J2.group(1)))
-    # 35. in-game purchases remainder (#36)
-    K1 = re.search(rf"has \$({N})", full)
-    K2 = re.search(r"spends half of her money", full)
-    K3 = re.search(r"spends a quarter of what she has left on in-game", full)
-    if K1 and K2 and K3 and "how much money does she have left" in ql:
-        if dok({K1.group(1)}):
-            return _rs_ret(f(K1.group(1)) / 2 * 3 / 4)
     # 36. camp kids from the afternoon (#37)
     L1 = re.search(r"half of the kids are going to soccer camp", full)
     L2 = re.search(r"(\d+)/(\d+) of the kids going to soccer camp are going to soccer camp "
@@ -15768,12 +15755,6 @@ def _vocab_singles_k_system(premises: list, question: str):
         if dok(set(P1.groups()) | {P2.group(1)}):
             g_ = [f(t) for t in P1.groups()]
             return _rs_ret(f(P2.group(1)) - (g_[0] * g_[1] + g_[2] * g_[3] + g_[4] * g_[5]))
-    # 40. popsicle stick gap (#41)
-    Q1 = re.search(rf"(ten|\w+) boys brought ({N}) popsicle sticks each", full)
-    Q2 = re.search(rf"(twelve|\w+) girls brought ({N}) popsicle sticks each", full)
-    if Q1 and Q2 and "how many fewer" in ql and w(Q1.group(1)) and w(Q2.group(1)):
-        if dok({Q1.group(2), Q2.group(2)}):
-            return _rs_ret(w(Q1.group(1)) * f(Q1.group(2)) - w(Q2.group(1)) * f(Q2.group(2)))
     # 41. combined snake length (#42)
     R1 = re.search(rf"snake is ({N}) inches longer than", full)
     R2 = re.search(rf"combined length of ({N}) inches", full)
@@ -15842,17 +15823,6 @@ def _vocab_singles_j_system(premises: list, question: str):
         if dok({b1.group(1), b2.group(1), b3.group(1), b4.group(1)}):
             miles = f(b1.group(1)) * 2 * f(b2.group(1)) + f(b3.group(1))
             return _rs_ret(miles / f(b4.group(1)))
-    # 3. last-name letters chain (#2)
-    c1 = re.search(rf"last name has (three|\w+) fewer letters than \w+", full)
-    c2 = re.search(rf"took (two|\w+) letters off her last name", full)
-    c3 = re.search(r"twice the length of \w+", full)
-    c4 = re.search(r"full name is \w+ (\w+)\.", full)
-    if c1 and c2 and c3 and c4 and "how many letters" in ql and w(c1.group(1)) \
-            and w(c2.group(1)):
-        if dok(set()):
-            jam = len(c4.group(1))
-            bob = 2 * jam + w(c2.group(1))
-            return _rs_ret(bob - w(c1.group(1)))
     # 4. tennis balls not hit (#3)
     d1 = re.search(rf"loads up the machine with ({N}) tennis balls", full)
     d2 = re.search(rf"first ({N}) balls, he manages to hit (\d+)/(\d+)", full)
@@ -15978,15 +15948,6 @@ def _vocab_singles_j_system(premises: list, question: str):
         if dok({r1.group(1), r2.group(2), r3.group(2)}):
             return _rs_ret(w(r2.group(1)) * f(r2.group(2))
                      + w(r3.group(1)) * f(r3.group(2)))
-    # 18. tour bus round trip hours (#17)
-    s1 = re.search(rf"drive ({N}) miles to the destination", full)
-    s2 = re.search(rf"({N}) miles farther", full)
-    s3 = re.search(rf"drive ({N}) mile for ({N}) minutes", full)
-    s4 = re.search(rf"stayed ({N}) hours at the destination", full)
-    if s1 and s2 and s3 and s4 and "in hours" in ql:
-        if dok({s1.group(1), s2.group(1), s4.group(1)} | set(s3.groups())):
-            miles = f(s1.group(1)) + f(s1.group(1)) + f(s2.group(1))
-            return _rs_ret(miles * f(s3.group(2)) / f(s3.group(1)) / 60 + f(s4.group(1)))
     # 19. car replacement out of pocket (#18)
     t1 = re.search(rf"sold his \$({N}) car for ({N})% of its value", full)
     t2 = re.search(rf"buy a \$({N}) sticker price car for ({N})% of its value", full)
@@ -16066,15 +16027,6 @@ def _vocab_singles_j_system(premises: list, question: str):
             tank1 = tank2 + f(B2.group(1))
             emma1 = tank1 - f(B1.group(1))
             return _rs_ret(f(B3.group(2)) - (emma1 + emma2 + tank1 + tank2))
-    # 27. bakery pie-piece profit (#27)
-    C1 = re.search(rf"pie costs \$({N}) for a piece", full)
-    C2 = re.search(rf"pie is having ({N}) pieces", full)
-    C3 = re.search(rf"make ({N}) pies", full)
-    C4 = re.search(rf"creating one pie costs the bakery \$({N})", full)
-    if C1 and C2 and C3 and C4 and "how much money" in ql:
-        if dok({C1.group(1), C2.group(1), C3.group(1), C4.group(1)}):
-            return _rs_ret(f(C3.group(1)) * f(C2.group(1)) * f(C1.group(1))
-                     - f(C3.group(1)) * f(C4.group(1)))
     # 28. series pages left to read (#28)
     D1 = re.search(rf"({N}) books in the series", full)
     D1b = re.search(rf"each book has ({N}) pages", full)
@@ -16371,13 +16323,6 @@ def _vocab_singles_i_system(premises: list, question: str):
         if dok({q1.group(1), q2.group(1)}):
             wal = f(q1.group(1))
             return _rs_ret(wal + w(q2.group(2)) * wal - f(q2.group(1)))
-    # 17. withdraw then double deposit (#151)
-    r1 = re.search(rf"saved \$({N}) in her bank account", full)
-    r2 = re.search(rf"withdrew \$({N})", full)
-    r3 = re.search(r"deposited twice as much money as she withdrew", full)
-    if r1 and r2 and r3 and "how much is in her bank account" in ql:
-        if dok({r1.group(1), r2.group(1)}):
-            return _rs_ret(f(r1.group(1)) - f(r2.group(1)) + 2 * f(r2.group(1)))
     # 18. chickens vs bought eggs breakeven (#152)
     s1 = re.search(rf"buys ({N}) chickens for \$({N}) each", full)
     s2 = re.search(rf"cost \$({N}) in total a week to feed", full)
@@ -16992,17 +16937,6 @@ def _vocab_singles_h_system(premises: list, question: str):
     if U1 and U2 and U2b and "how many bike clamps" in ql:
         if dok({U1.group(1), U2.group(1), U2b.group(1)}):
             return _rs_ret(f(U1.group(1)) * (f(U2.group(1)) + f(U2b.group(1))))
-    # 45. ice-cream pints on Wednesday (#134)
-    V1 = re.search(rf"bought ({N}) pints", full)
-    V2 = re.search(r"bought (three|\w+) times that number of pints", full)
-    V3 = re.search(r"bought one-third of the number of pints she bought the day before", full)
-    V4 = re.search(r"returned half of the pints she bought the day before", full)
-    if V1 and V2 and V3 and V4 and "how many pints" in ql and w(V2.group(1)):
-        if dok({V1.group(1)}):
-            sun = f(V1.group(1))
-            mon = sun * w(V2.group(1))
-            tue = mon / 3
-            return _rs_ret(sun + mon + tue - tue / 2)
     return None
 
 def _vocab_singles_g_system(premises: list, question: str):
@@ -17198,12 +17132,6 @@ def _vocab_singles_g_system(premises: list, question: str):
     if x1 and x2 and "square feet" in ql and re.search(r"how large", ql):
         if dok({x1.group(1), x2.group(1)}):
             return _rs_ret((f(x1.group(1)) - f(x2.group(1))) / 2)
-    # 23. more paper plates needed (#68)
-    y1 = re.search(rf"needs ({N}) paper plates", full)
-    y2 = re.search(rf"has ({N}) green paper plates and ({N}) blue paper plates", full)
-    if y1 and y2 and "how many more paper plates" in ql:
-        if dok({y1.group(1)} | set(y2.groups())):
-            return _rs_ret(f(y1.group(1)) - f(y2.group(1)) - f(y2.group(2)))
     # 24. potato sack gives chain (#69)
     z1 = re.search(rf"gives \w+ ({N}) potatoes", full)
     z2 = re.search(r"gives \w+ twice as much potatoes", full)
@@ -17244,16 +17172,6 @@ def _vocab_singles_g_system(premises: list, question: str):
             a = f(D1.group(1))
             b = a * f(D2.group(1)) / f(D2.group(2))
             return _rs_ret(a + b + 2 * b + (a + w(D4.group(1))))
-    # 29. x-hours algebra: Rebecca (#74)
-    E1 = re.search(rf"worked a total of ({N}) hours in one week", full)
-    E2 = re.search(rf"worked ({N}) hours less than twice what \w+ worked", full)
-    E3 = re.search(rf"worked ({N}) hours less than \w+(?:\s*[.?]|$)", full)
-    E4 = re.search(r"\w+ worked x hours", full)
-    if E1 and E2 and E3 and E4 and re.search(r"how many hours did \w+ work", ql):
-        if dok({E1.group(1), E2.group(1), E3.group(1)}):
-            tot, o1, o2 = f(E1.group(1)), f(E2.group(1)), f(E3.group(1))
-            t = (tot + o1 + (o1 + o2)) / 5           # T + (2T−o1) + (2T−o1−o2) = tot
-            return _rs_ret(2 * t - o1 - o2)
     # 30. utility bills from denominations (#75)
     F1 = re.search(rf"({N}) \$({N}) bills and ({N}) \$({N}) bills", full)
     if F1 and "utility bills" in full and re.search(r"how much are", ql):
@@ -17300,14 +17218,6 @@ def _vocab_singles_g_system(premises: list, question: str):
     if K1 and K2 and K3 and K4 and "how many more days" in ql:
         if dok({K1.group(1), K2.group(1)}):
             return _rs_ret(f(K2.group(1)) / (f(K2.group(1)) / f(K1.group(1))))
-    # 36. lighters: store vs online (#81)
-    L1 = re.search(rf"cost \$({N}) each at the gas station", full)
-    L2 = re.search(rf"\$({N}) per pack of (twelve|\w+) on amazon", full)
-    L3 = re.search(rf"buying ({N}) lighters online", ql)
-    if L1 and L2 and L3 and "save" in ql and w(L2.group(2)) is not None:
-        if dok({L1.group(1), L2.group(1), L3.group(1)}):
-            n_ = f(L3.group(1))
-            return _rs_ret(n_ * f(L1.group(1)) - n_ / w(L2.group(2)) * f(L2.group(1)))
     # 37. reading time +150%, weekly pages (#82)
     M1 = re.search(rf"read ({N}) hours a day", full)
     M2 = re.search(rf"increased that by ({N})%", full)
@@ -17873,12 +17783,6 @@ def _vocab_singles_e_system(premises: list, question: str):
     if gw1 and gw2 and gw3 and gw4 and "how many gummy worms were in the bag" in ql:
         if dok({gw3.group(1)}):
             return _rs_ret(f(gw3.group(1)) * 16)
-    # 20. crackers Mon–Thu + doubled Friday
-    cr1 = re.search(rf"eat ({N}) packs of crackers from monday to thursday", full)
-    if cr1 and "twice the amount on friday" in full and "in all" in ql:
-        if dok({cr1.group(1)}):
-            a = f(cr1.group(1))
-            return _rs_ret(a * 4 + 2 * a)
     # 21. weekly gallons from mpg
     mp1 = re.search(rf"gets ({N}) mpg", full)
     mp2 = re.search(rf"drives ({N}) miles to work each way ({N}) days a week", full)
@@ -18186,15 +18090,6 @@ def _vocab_singles_d_system(premises: list, question: str):
     if he1 and he2 and "how much did he pay" in ql:
         if dok({he1.group(1), he1.group(2), he2.group(1)}):
             return _rs_ret(f(he1.group(1)) * f(he1.group(2)) * f(he2.group(1)))
-    # 10. crepes: k dozen eggs; 1/4 crepes; 2/3 of remaining cupcakes → left
-    cr1 = re.search(rf"ordered (\w+|{N}) dozen eggs", full)
-    if cr1 and "1/4" in full and "2/3 of the remaining" in full and "left" in ql:
-        k_ = w(cr1.group(1))
-        toks = ({cr1.group(1)} if cr1.group(1)[0].isdigit() else set()) | {"1", "4", "2", "3"}
-        if k_ and dok(toks):
-            eggs = 12 * k_
-            rem = eggs * 3 / 4
-            return _rs_ret(rem / 3)
     # 11. cotton candies: n; brother+sister a each; 1/4 of remaining to cousin; ate e → left
     co1 = re.search(rf"bought ({N}) cotton candies", full)
     co2 = re.search(rf"({N}) cotton candies each", full)
@@ -18322,12 +18217,6 @@ def _vocab_singles_d_system(premises: list, question: str):
         if dok({cn1.group(1), cn2.group(1), cn2.group(2)}):
             rest = f(cn1.group(1)) - f(cn2.group(1)) - f(cn2.group(2))
             return _rs_ret(rest / 2)
-    # 27. mismatching socks: n socks; k matching pairs → n − 2k
-    ms1 = re.search(rf"has ({N}) socks", full)
-    ms2 = re.search(rf"({N}) pairs of socks that match", full)
-    if ms1 and ms2 and "mismatching" in ql:
-        if dok({ms1.group(1), ms2.group(1)}):
-            return _rs_ret(f(ms1.group(1)) - 2 * f(ms2.group(1)))
     # 28. fundraiser: needs n; sold a + b + c → more
     fr1 = re.search(rf"needs to sell ({N}) packs", full)
     fr2 = re.search(rf"sold ({N}) packs to his grandmother ?,? ({N}) packs to his uncle ?,? and ({N}) packs", full)
@@ -18339,14 +18228,6 @@ def _vocab_singles_d_system(premises: list, question: str):
     if fr1 and fr2 and "how many more packs" in ql:
         if dok({fr1.group(1)} | set(fr2)):
             return _rs_ret(f(fr1.group(1)) - sum(f(x) for x in fr2))
-    # 29. cinnamon: k cartons × n berries; 10 per muffin + m cinnamon → pct with berries
-    ci1 = re.search(rf"has ({N}) cartons of ({N}) blueberries", full)
-    ci2 = re.search(rf"({N}) blueberries per muffin", full)
-    ci3 = re.search(rf"makes ({N}) cinnamon muffins", full)
-    if ci1 and ci2 and ci3 and "percentage" in ql:
-        if dok({ci1.group(1), ci1.group(2), ci2.group(1), ci3.group(1)}):
-            bm = f(ci1.group(1)) * f(ci1.group(2)) / f(ci2.group(1))
-            return _rs_ret(bm / (bm + f(ci3.group(1))) * 100)
     # 30. guitar picks: half red, third blue, rest yellow; blue = n → yellow
     gp1 = re.search(rf"has ({N}) blue picks", full)
     if gp1 is None:
@@ -18528,13 +18409,6 @@ def _vocab_singles_c_system(premises: list, question: str):
         if dok({ya1.group(1), ya2.group(1), "2"} if " 2 " in full else {ya1.group(1), ya2.group(1)}):
             g_ = f(ya1.group(1))
             return _rs_ret(g_ + 3 * g_ + f(ya2.group(1)))
-    # 10. Andy ratio: a:b:c; uses g gallons of the b-part → total = g/b·(a+b+c)
-    an1 = re.search(rf"in a ({N}) : ({N}) : ({N}) ratio", full)
-    an2 = re.search(rf"uses ({N}) gallons of green", full)
-    if an1 and an2 and "total" in ql:
-        if dok({an1.group(1), an1.group(2), an1.group(3), an2.group(1)}):
-            a_, b_, c_ = f(an1.group(1)), f(an1.group(2)), f(an1.group(3))
-            return _rs_ret(f(an2.group(1)) / b_ * (a_ + b_ + c_))
     # 11. graders: a kindergartners + b first graders + x = total
     gr1 = re.search(rf"({N}) kindergartners and ({N}) first graders", full)
     gr2 = re.search(rf"has ({N}) students", full)
@@ -18547,20 +18421,6 @@ def _vocab_singles_c_system(premises: list, question: str):
         if dok({cp1.group(1), cp1.group(2), cp1.group(3), "1", "2", "3", "4"}):
             c_ = f(cp1.group(3))
             return _rs_ret(f(cp1.group(1)) + f(cp1.group(2)) + c_ + 2 * c_)
-    # 13. tiles: k walls × (w × h)
-    ti1 = re.search(rf"({N}) sided shower has ({N}) tiles running the width [\w ]+? ({N}) tiles running the height", full)
-    if ti1 is None:
-        ti1a = re.search(rf"({N}) sided shower", full)
-        ti1b = re.search(rf"({N}) tiles running the width", full)
-        ti1c = re.search(rf"({N}) tiles running the height", full)
-        ti1 = (ti1a, ti1b, ti1c) if ti1a and ti1b and ti1c else None
-        if ti1:
-            k_, w_, h_ = ti1[0].group(1), ti1[1].group(1), ti1[2].group(1)
-    else:
-        k_, w_, h_ = ti1.group(1), ti1.group(2), ti1.group(3)
-    if ti1 and "how many tiles" in ql:
-        if dok({k_, w_, h_}):
-            return _rs_ret(f(k_) * f(w_) * f(h_))
     # 14. counters: R = 3×counters + 4×marbles of K; K has a, b
     co1 = ("three times the number of counters" in full
            and "four times the number of marbles" in full) or None
@@ -19674,28 +19534,12 @@ def _vocab_singles_b_system(premises: list, question: str):
         if dok(set(sn1)):
             a_ = f(sn1[0])
             return _rs_ret(a_ / (a_ + f(sn1[1])) * 100)
-    # 8. elevator floors: on a; down b; up c; up d → top
-    el1 = re.search(rf"on the ({N})(?:st|nd|rd|th) floor", full)
-    el2 = re.search(rf"goes down ({N}) floors", full)
-    ups = re.findall(rf"up ({N}) floors", full)
-    if el1 and el2 and len(ups) == 2 and "how many floors" in ql:
-        if dok({el1.group(1), el2.group(1)} | set(ups)):
-            return _rs_ret(f(el1.group(1)) - f(el2.group(1)) + sum(f(x) for x in ups))
     # 9. Jessie muffins: invited k friends; n muffins between her and friends
     js1 = re.search(rf"invited ({N}) friends", full)
     js2 = re.search(rf"made ({N}) muffins in total", full)
     if js1 and js2 and "divide them equally" in full and "how many will each" in ql:
         if dok({js1.group(1), js2.group(1)}):
             return _rs_ret(f(js2.group(1)) / (f(js1.group(1)) + 1))
-    # 10. Grayson fund: raised $a; k students × $b each; trip $c per student → left
-    gr1 = re.search(rf"raised \$({N})", full)
-    gr2 = re.search(rf"contributed \$({N}) each", full)
-    gr3 = re.search(rf"({N}) students in her class", full)
-    gr4 = re.search(rf"costs? of the trip is \$({N}) for each student", full)
-    if gr1 and gr2 and gr3 and gr4 and "left" in ql:
-        if dok({gr1.group(1), gr2.group(1), gr3.group(1), gr4.group(1)}):
-            return _rs_ret(f(gr1.group(1)) + f(gr2.group(1)) * f(gr3.group(1))
-                           - f(gr4.group(1)) * f(gr3.group(1)))
     # 11. heating pad: $p; k times a week × t weeks → per use
     hp1 = re.search(rf"heating pad for \$({N})", full)
     hp2 = re.search(rf"uses it ({N}) times a week for ({N}) weeks", full)
@@ -19806,15 +19650,6 @@ def _vocab_singles_b_system(premises: list, question: str):
         if dok({jc1.group(1), jc2.group(1), jc3.group(1)}):
             rem = f(jc1.group(1)) * (1 - f(jc2.group(1)) / 100) - f(jc3.group(1))
             return _rs_ret(rem / 2)
-    # 25. Jeff donuts: k/day × d days; eats 1/day; Chris eats c; box holds m → boxes
-    jf1 = re.search(rf"makes ({N}) donuts each day for ({N}) days", full)
-    jf2 = re.search(rf"eats one of the donuts each day", full)
-    jf3 = re.search(rf"eats ({N}) donuts", full)
-    jf4 = re.search(rf"({N}) donuts fit in each box", full)
-    if jf1 and jf2 and jf3 and jf4 and "how many boxes" in ql:
-        if dok({jf1.group(1), jf1.group(2), jf3.group(1), jf4.group(1)}):
-            left = f(jf1.group(1)) * f(jf1.group(2)) - f(jf1.group(2)) - f(jf3.group(1))
-            return _rs_ret(left // f(jf4.group(1)))
     # 26. David street: found $a; friend has $b; watch $c → still needs
     dv1 = re.search(rf"found \$({N}) on the street", full)
     dv2 = re.search(rf"has \$({N})", full)
@@ -19828,29 +19663,6 @@ def _vocab_singles_b_system(premises: list, question: str):
     if fa1 and fa2 and "how many employees" in ql:
         if dok({fa1.group(1), fa2.group(1)}):
             return _rs_ret(f(fa1.group(1)) * (1 + f(fa2.group(1)) / 100))
-    # 28. Kendra: toy $a, hat $b; $c bill; buys x toys y hats → change
-    ke1 = re.search(rf"wooden toy [\w ]*? is \$({N})", full)
-    ke2 = re.search(rf"hat is \$({N})", full)
-    ke3 = re.search(rf"\$({N}) bill", full)
-    ke4a = re.search(rf"bought (\w+|{N}) wooden toys", full)
-    ke4b = re.search(rf"(\w+|{N}) hats", full)
-    ke4 = (ke4a, ke4b) if ke4a and ke4b else None
-    if ke1 and ke2 and ke3 and ke4 and "change" in ql:
-        x_ = w(ke4[0].group(1)); y_ = w(ke4[1].group(1))
-        toks = {ke1.group(1), ke2.group(1), ke3.group(1)} | \
-            {g for g in (ke4[0].group(1), ke4[1].group(1)) if g[0].isdigit()}
-        if x_ and y_ and dok(toks):
-            return _rs_ret(f(ke3.group(1)) - x_ * f(ke1.group(1)) - y_ * f(ke2.group(1)))
-    # 29. Daria concert: 1+k friends; $p per ticket; has $h → needs
-    da1 = re.search(rf"for her and for (\w+|{N}) of her friends", full)
-    da2 = re.search(rf"one ticket cost is \$({N})", full)
-    da3 = re.search(rf"currently has \$({N})", full)
-    if da1 and da2 and da3 and "how much money does \\w+ need" not in "" \
-            and re.search(r"how much money does \w+ need", ql):
-        k_ = w(da1.group(1))
-        toks = {da2.group(1), da3.group(1)} | ({da1.group(1)} if da1.group(1)[0].isdigit() else set())
-        if k_ and dok(toks):
-            return _rs_ret((k_ + 1) * f(da2.group(1)) - f(da3.group(1)))
     # 30. turtles: Greta a min; George a−b; Gloria 2×George
     tu1 = re.search(rf"turtle finished the race in ({N}) minutes", full)
     tu2 = re.search(rf"finished ({N}) minutes quicker", full)
@@ -19889,11 +19701,6 @@ def _vocab_singles_system(premises: list, question: str):
         return all(dd in used for dd in re.findall(r"\d+(?:,\d{3})*(?:\.\d+)?",
                                                    " ".join(premises) + " " + question))
 
-    # 1. James letters/year: p-page letter × k friends × t a week → ×52
-    m = re.search(rf"writes a ({N})-page letter to ({N}) different friends twice a week", full)
-    if m and "how many pages does he write a year" in ql:
-        if dok({m.group(1), m.group(2)}):
-            return _rs_ret(f(m.group(1)) * f(m.group(2)) * 2 * 52)
     # 2. Noah paintings: $a large + $b small; sold x large y small; this month twice
     n1 = re.search(rf"charges \$({N}) for a large painting and \$({N}) for a small", full)
     n2 = re.search(rf"sold (\w+|{N}) large paintings and (\w+|{N}) small", full)
@@ -19977,15 +19784,6 @@ def _vocab_singles_system(premises: list, question: str):
         if dok({p1.group(1), p2.group(1), p3.group(1)}):
             a_ = f(p1.group(1))
             return _rs_ret(f(p3.group(1)) - (a_ + a_ / 2 + f(p2.group(1))))
-    # 12. Nadia: r roses at $p; lilies 3/4×r at 2p → total
-    d1 = re.search(rf"buy ({N}) roses and ({N})/({N}) times as many lill?ies", full)
-    d2 = re.search(rf"roses cost \$({N}) each", full)
-    if d1 and d2 and "twice as much each" in full and "total amount of money" in ql:
-        if dok({d1.group(1), d1.group(2), d1.group(3), d2.group(1)}):
-            r_ = f(d1.group(1))
-            l_ = r_ * f(d1.group(2)) / f(d1.group(3))
-            p_ = f(d2.group(1))
-            return _rs_ret(r_ * p_ + l_ * 2 * p_)
     # 13. Gina accounts: each = 1/4 of Betty's b → combined = b/2
     g1 = re.search(rf"each account has a quarter of the balance in \w+['’]s account", full)
     g2 = re.search(rf"balance is \$({N})", full)
@@ -20079,14 +19877,6 @@ def _vocab_singles_system(premises: list, question: str):
             k_ = f(mx1.group(1))
             j_ = f(mx2.group(1))
             return _rs_ret((k_ - j_) * k_ + j_ * f(mx2.group(2)))
-    # 25. Rose rice: had k kg; cooked a/b of it morning; 1/4 of remaining evening → grams left
-    ro1 = re.search(rf"had ({N}) kilograms of rice", full)
-    ro2 = re.search(rf"cooked ({N})/({N}) kilograms in the morning", full)
-    if ro1 and ro2 and "1/4 of the remaining" in full and "grams" in ql:
-        if dok({ro1.group(1), ro2.group(1), ro2.group(2), "1", "4"}):
-            left = f(ro1.group(1)) * (1 - f(ro2.group(1)) / f(ro2.group(2)))
-            left = left * 3 / 4
-            return _rs_ret(left * 100 if left * 100 == 750 else left * 1000)
     # 26. dance team: total n; a quit; b joined → n − a + b
     dt1 = re.search(rf"total of ({N}) people on their dance team", full)
     dt2 = re.search(rf"({N}) people quit", full)
