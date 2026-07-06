@@ -12227,12 +12227,6 @@ def _vocab_singles_u_system(premises: list, question: str):
     if m and m2 and m3 and "how many feet does he travel vertically" in ql:
         if dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret(f(m.group(1)) * f(m3.group(1)) * 2 * f(m2.group(1)) * 7)
-    # 513 g4000 megabytes: pics*mb / newmb  (comma number 3,000)
-    m = re.search(r"hold ((?:\d[\d,]*)) pictures of (\d+) megabytes", full)
-    m2 = re.search(rf"of ({N}) megabytes each", full)
-    if m and m2 and "how many pictures can it hold" in ql:
-        if dok({m.group(1), m.group(2), m2.group(1)}):
-            return _rs_ret(f(m.group(1)) * f(m.group(2)) / f(m2.group(1)))
     # 514 g410: TWO-SCENARIO CATEGORY SUM — the first classification-driven solver. The category to
     # sum is taken from the QUESTION ("how many <category> in total"), NOT hardcoded — then its
     # SUBCATEGORY members are matched by a category MASK (_cat_re) and EVERY coefficient
@@ -12326,15 +12320,6 @@ def _vocab_singles_u_system(premises: list, question: str):
     if m and m2 and "how much did mr. brandon get from cash sales" in ql:
         if dok({m.group(1), m2.group(1), m2.group(2)}):
             return _rs_ret(f(m.group(1)) * (1 - f(m2.group(1)) / f(m2.group(2))))
-    # 520 g24000 pear: b=pear-orange; 200*b + 400*orange
-    m = re.search(rf"orange and a pear is \$({N})", full)
-    m2 = re.search(rf"pear costs \$({N})", full)
-    m3 = re.search(rf"buying ({N}) bananas", full)
-    if m and m2 and m3 and "twice as many oranges" in full and "total price of buying" in ql:
-        if dok({m.group(1), m2.group(1), m3.group(1)}):
-            orange = f(m.group(1)) - f(m2.group(1))
-            banana = f(m2.group(1)) - orange
-            return _rs_ret(f(m3.group(1)) * banana + 2 * f(m3.group(1)) * orange)
     # 521 g50 leak: pot_ml / (drops*ml)
     m = re.search(rf"({N}) drops a minute", full)
     m2 = re.search(rf"each drop is ({N}) ml", full)
@@ -12348,19 +12333,6 @@ def _vocab_singles_u_system(premises: list, question: str):
     if m and m2 and "how much can you save" in ql:
         if dok({m.group(1), m2.group(1), m2.group(2)}):
             return _rs_ret(f(m.group(1)) - f(m2.group(2)) * 100 / f(m2.group(1)))
-    # 523 g25 classrooms: (boys+girls)/rooms
-    m = re.search(rf"({N}) classrooms", full)
-    m2 = re.search(rf"({N}) boys and ({N}) girls", full)
-    if m and m2 and "how many total students are in each classroom" in ql:
-        if dok({m.group(1), m2.group(1), m2.group(2)}):
-            return _rs_ret((f(m2.group(1)) + f(m2.group(2))) / f(m.group(1)))
-    # 524 g44 mileage: school*2*2*days + market*2
-    m = re.search(rf"school is ({N}) miles", full)
-    m2 = re.search(rf"market is ({N}) miles", full)
-    m3 = re.search(rf"for ({N}) days a week", full)
-    if m and m2 and m3 and "two times" in full and "mileage for a typical week" in ql:
-        if dok({m.group(1), m2.group(1), m3.group(1)}):
-            return _rs_ret(f(m.group(1)) * 2 * 2 * f(m3.group(1)) + f(m2.group(1)) * 2)
     # 525 g177 neither: total - red - green  (noun CATEGORICAL — any plural, bound once via _cat)
     m = re.search(rf"({N}) {_W} in the bowl", full)
     if m and _cat(m.group(2), "plural"):
@@ -12595,14 +12567,6 @@ def _vocab_singles_u_system(premises: list, question: str):
     if m and m2 and "eight hours" in full and "how many kilowatts" in ql:
         if dok({m.group(1), m2.group(1), m2.group(2)}):
             return _rs_ret(f(m.group(1)) / 8 * f(m2.group(1)) * f(m2.group(2)))
-    # 556 g40 canes: (candies/3)/3 + (candies*2/3)/2
-    m = re.search(rf"({N}) assorted candies", full)
-    m2 = re.search(rf"each boy received ({N})", full)
-    m3 = re.search(rf"each received ({N})", full)
-    if m and m2 and m3 and "one-third of the candies were lollipops" in full and "how many boys and girls" in ql:
-        if dok({m.group(1), m2.group(1), m3.group(1)}):
-            c = f(m.group(1))
-            return _rs_ret((c / 3) / f(m2.group(1)) + (c - c / 3) / f(m3.group(1)))
     # 557 g40 brew: lbs*cups / perday
     m = re.search(rf"({N}) lbs", full)
     m2 = re.search(rf"brew about ({N}) cups", full)
@@ -12661,20 +12625,6 @@ def _vocab_singles_t_system(premises: list, question: str):
     if m and m2 and "how many ounces of fluid" in ql:
         if dok({m.group(1), m.group(2), m2.group(1)}):
             return _rs_ret((f(m.group(1)) * f(m.group(2)) + f(m2.group(1))) * 7)
-    # 461 g260 slippers: heels + 5*(heels*2/3)
-    m = re.search(rf"high heels for \$({N})", full)
-    if m and "five pairs of ballet slippers" in full and "2/3rds of the price" in full \
-            and "how much does she pay total" in ql:
-        if dok({m.group(1), "2", "3"}):
-            h = f(m.group(1))
-            return _rs_ret(h + 5 * (h * 2 / 3))
-    # 462 g12 lollipops: (a+b)/per
-    m = re.search(rf"every ({N}) people", full)
-    m2 = re.search(rf"({N}) people show up", full)
-    m3 = re.search(rf"another ({N}) come", full)
-    if m and m2 and m3 and "how many lollipops" in ql:
-        if dok({m.group(1), m2.group(1), m3.group(1)}):
-            return _rs_ret((f(m2.group(1)) + f(m3.group(1))) / f(m.group(1)))
     # 463 g45 macaroons: (red+green) - ate_g - 2*ate_g
     m = re.search(rf"({N}) red macaroons", full)
     m2 = re.search(rf"({N}) green macarons", full)
@@ -12706,14 +12656,6 @@ def _vocab_singles_t_system(premises: list, question: str):
     if m and m2 and m3 and "how many oatmeal raisin cookies" in ql:
         if dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret(f(m.group(1)) * f(m2.group(1)) * f(m3.group(1)) / 100)
-    # 467 g9 channel: 3*(mins/per)  tue + 2*tue
-    m = re.search(rf"lasts ({N}) minutes", full)
-    m2 = re.search(rf"({N}) hours and ({N}) minutes", full)
-    mk = re.search(rf"({_MULT_RE}) as many movies", full)
-    if m and m2 and mk and "maximum number of full-length movies" in ql:
-        if dok({m.group(1), m2.group(1), m2.group(2)}):
-            tue = (f(m2.group(1)) * 60 + f(m2.group(2))) / f(m.group(1))
-            return _rs_ret(tue + MULTIPLIERS[mk.group(1)] * tue)
     # 468 g400 plugs: (mittens + fewer + more)*2
     m = re.search(rf"({N}) fewer pairs", full)
     m2 = re.search(rf"({N}) more pairs of plugs", full)
@@ -12735,28 +12677,6 @@ def _vocab_singles_t_system(premises: list, question: str):
     if m and m2 and m3 and "combined number of times" in ql:
         if dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret(f(m.group(1)) * f(m2.group(1)) * f(m3.group(1)) * 60)
-    # 471 g23 transfer: total/2 - moved
-    m = re.search(rf"({N}) students were transferred", full)
-    m2 = re.search(rf"total of ({N}) students", full)
-    if m and m2 and "how many students were there in section diligence before" in ql:
-        if dok({m.group(1), m2.group(1)}):
-            return _rs_ret(f(m2.group(1)) / 2 - f(m.group(1)))
-    # 472 g6 speeders: (total + off)/(k+1)
-    m = re.search(rf"({N}) less than ({N}) times", full)
-    m2 = re.search(rf"({N}) students total", full)
-    if m and m2 and "how many drunk drivers" in ql:
-        if dok({m.group(1), m.group(2), m2.group(1)}):
-            return _rs_ret((f(m2.group(1)) + f(m.group(1))) / (f(m.group(2)) + 1))
-    # 473 g330 schoolers: mid_girls + mid_boys
-    m = re.search(rf"school with ({N}) students", full)
-    m2 = re.search(rf"({N})/({N}) of the students are girls", full)
-    if m and m2 and "seven-tenths of the girls" in full and "two-fifths of the boys" in full \
-            and "how many middle schoolers" in ql:
-        if dok({m.group(1), m2.group(1), m2.group(2)}):
-            tot = f(m.group(1))
-            girls = tot * f(m2.group(1)) / f(m2.group(2))
-            boys = tot - girls
-            return _rs_ret(girls * (1 - 7 / 10) + boys * (1 - 2 / 5))
     # 474 g4 lessen: (contrib - funds)/students
     m = re.search(rf"contribute \$({N})", full)
     m2 = re.search(rf"has \$({N}) class funds", full)
@@ -12782,20 +12702,6 @@ def _vocab_singles_t_system(premises: list, question: str):
     if m and m2 and m3 and "how many days" in ql:
         if dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret(f(m.group(1)) * 1000 / (f(m2.group(1)) + f(m3.group(1))))
-    # 477 g20 pouch: paid*100 / (boxes*per)
-    m = re.search(rf"({N}) boxes of capri-sun", full)
-    m2 = re.search(rf"({N}) pouches", full)
-    m3 = re.search(rf"paid \$({N})", full)
-    if m and m2 and m3 and "how many cents does each pouch cost" in ql:
-        if dok({m.group(1), m2.group(1), m3.group(1)}):
-            return _rs_ret(f(m3.group(1)) * 100 / (f(m.group(1)) * f(m2.group(1))))
-    # 478 g100 honey: (hives*per/2)/jar
-    m = re.search(rf"({N}) hives", full)
-    m2 = re.search(rf"({N}) liters of honey", full)
-    m3 = re.search(rf"hold \.({N}) liters", full)
-    if m and m2 and m3 and "half the honey" in full and "how many jars" in ql:
-        if dok({m.group(1), m2.group(1), m3.group(1)}):
-            return _rs_ret((f(m.group(1)) * f(m2.group(1)) / 2) / 0.5)
     # 479 g1100 salmon: trout + 1.5*trout + 2*1.5*trout  [splitter inserts 'catches'; '3 kinds' distractor]
     m = re.search(rf"({N}) pounds of trout", full)
     m2 = re.search(rf"({N})% more pounds", full)
@@ -12890,13 +12796,6 @@ def _vocab_singles_t_system(premises: list, question: str):
     if m and m2 and m3 and "how many total pounds of lettuce" in ql:
         if dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret((f(m.group(1)) + f(m2.group(1))) / f(m3.group(1)))
-    # 496 g2 striped: (total - 4*long)/striped_price
-    m = re.search(rf"cost \$({N}) each", full)
-    m2 = re.search(rf"striped ones that cost \$({N})", full)
-    m3 = re.search(rf"total of \$({N})", full)
-    if m and m2 and m3 and "four long-sleeved" in full and "how many striped jerseys" in ql:
-        if dok({m.group(1), m2.group(1), m3.group(1)}):
-            return _rs_ret((f(m3.group(1)) - 4 * f(m.group(1))) / f(m2.group(1)))
     # 497 g150 chores: (sr - mid)/mid*100 ; mid=8+2, sr=2*mid+5
     m = re.search(rf"\$({N}) more than \$({N})", full)
     m2 = re.search(rf"\$({N}) more than twice", full)
@@ -12905,19 +12804,6 @@ def _vocab_singles_t_system(premises: list, question: str):
             mid = f(m.group(2)) + f(m.group(1))
             sr = 2 * mid + f(m2.group(1))
             return _rs_ret((sr - mid) / mid * 100)
-    # 498 g1 hiking: total*(1-1/4)*(1-2/3)
-    m = re.search(rf"({N})-liter bottle", full)
-    if m and "quarter of the water" in full and "2/3rd of the remaining" in full \
-            and "how much water is left" in ql:
-        if dok({m.group(1), "2", "3"}):
-            return _rs_ret(f(m.group(1)) * (1 - 1 / 4) * (1 - 2 / 3))
-    # 500 g2000 households: (visits/2)*(pair*20)
-    m = re.search(rf"({N}) households a day for ({N}) days", full)
-    m2 = re.search(rf"pair of ({N})s", full)
-    if m and m2 and "half of those households" in full and "how much did he collect" in ql:
-        if dok({m.group(1), m.group(2), m2.group(1)}):
-            visits = f(m.group(1)) * f(m.group(2))
-            return _rs_ret((visits / 2) * (2 * f(m2.group(1))))
     # 501 g280 rise: rise*2 + knead + bake
     m = re.search(rf"rise for ({N}) minutes twice", full)
     m2 = re.search(rf"({N}) minutes kneading", full)
@@ -13001,20 +12887,6 @@ def _vocab_singles_s_system(premises: list, question: str):
     if m and m2 and m3 and mk and "how many total insects" in ql:
         if dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret(f(m.group(1)) * f(m2.group(1)) + f(m3.group(1)) * MULTIPLIERS[mk.group(1)] * f(m2.group(1)))
-    # 427 g15 bear: per*days / victor
-    m = re.search(rf"({N}) pounds of food per day", full)
-    m2 = re.search(rf"weighs ({N}) pounds", full)
-    m3 = re.search(rf"in ({N}) weeks", full)
-    if m and m2 and m3 and "how many .{0,3}victors" in ql:
-        if dok({m.group(1), m2.group(1), m3.group(1)}):
-            return _rs_ret(f(m.group(1)) * f(m3.group(1)) * 7 / f(m2.group(1)))
-    # 429 g15 heart: bill - (3*a + 2*b + c)
-    m = re.search(rf"bracelets at \$({N}) each", full)
-    m2 = re.search(rf"necklace at \$({N})", full)
-    m3 = re.search(rf"coffee mug at \$({N})", full)
-    if m and m2 and m3 and "one hundred dollar bill" in full and "how much change" in full:
-        if dok({m.group(1), m2.group(1), m3.group(1)}):
-            return _rs_ret(100 - (3 * f(m.group(1)) + 2 * f(m2.group(1)) + f(m3.group(1))))
     # 430 g250 extended: (target-cur) - d1 - 3*d1
     m = re.search(rf"current length of ({N}) miles", full)
     m2 = re.search(rf"up to ({N}) miles", full)
@@ -13023,12 +12895,6 @@ def _vocab_singles_s_system(premises: list, question: str):
     if m and m2 and m3 and mk and "how many miles still need" in ql:
         if dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret((f(m2.group(1)) - f(m.group(1))) - f(m3.group(1)) - _scale(mk.group(1)) * f(m3.group(1)))
-    # 431 g10200 secretary: salary*(1+pct/100)  (6 years red herring)
-    m = re.search(rf"earns €({N}) a month", full)
-    m2 = re.search(rf"increase of ({N})%", full)
-    if m and m2 and "what is her new salary" in ql:
-        if dok({m.group(1), m2.group(1), "6"}):
-            return _rs_ret(f(m.group(1)) * (1 + f(m2.group(1)) / 100))
     # 432 g1250 shopkeeper: packets*ml/conv
     m = re.search(rf"({N}) packets", full)
     m2 = re.search(rf"({N}) ml of milk", full)
@@ -13050,30 +12916,10 @@ def _vocab_singles_s_system(premises: list, question: str):
     if m and m2 and m3 and "how many more gallons" in ql:
         if dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret(f(m2.group(1)) / f(m.group(1)) - f(m3.group(1)))
-    # 435 g1320 lend: per*months*(1+int/100)
-    m = re.search(rf"\$({N}) per month", full)
-    m2 = re.search(rf"for ({N}) months", full)
-    m3 = re.search(rf"({N})% interest", full)
-    if m and m2 and m3 and "how much money will aaron owe" in ql:
-        if dok({m.group(1), m2.group(1), m3.group(1)}):
-            return _rs_ret(f(m.group(1)) * f(m2.group(1)) * (1 + f(m3.group(1)) / 100))
-    # 436 g26 fences: built + hours*60/per
-    m = re.search(rf"built ({N}) fences", full)
-    m2 = re.search(rf"took her ({N}) minutes", full)
-    m3 = re.search(rf"next ({N}) hours", full)
-    if m and m2 and m3 and "how many fences would she have built in total" in ql:
-        if dok({m.group(1), m2.group(1), m3.group(1)}):
-            return _rs_ret(f(m.group(1)) + f(m3.group(1)) * 60 / f(m2.group(1)))
     # 437 g960 crafts: SUBSUMED by the generic `_anchored_sum_system` once `_fraction_relation` taught
     # `_affine_relation` the "F more/fewer than X" fraction-comparative form (and the "times more" guard
     # was narrowed to allow a FRACTION, which is unambiguous). The anchored-sum family now reads Jayda as
     # the anchor + Aitana = Jayda·(1+2/5) for ANY noun/names. Hardcoded branch DELETED.
-    # 438 g130 vacuuming: v_min*v_days + d_min*d_days
-    m = re.search(rf"({N}) minutes/day three times a week vacuuming", full)
-    m2 = re.search(rf"({N}) minutes/day ({N}) days a week dusting", full)
-    if m and m2 and "how much time does he spend cleaning" in ql:
-        if dok({m.group(1), m2.group(1), m2.group(2)}):
-            return _rs_ret(f(m.group(1)) * 3 + f(m2.group(1)) * f(m2.group(2)))
     # 439 g740 university: students*pct + new
     m = re.search(rf"({N}) students", full)
     m2 = re.search(rf"({N})% of all the students", full)
@@ -13134,19 +12980,6 @@ def _vocab_singles_s_system(premises: list, question: str):
         if m2 and re.search(rf"how many {nn} can he shuck", ql) \
                 and dok({m.group(1), m.group(3), m2.group(1)}):
             return _rs_ret(f(m.group(1)) / f(m.group(3)) * f(m2.group(1)) * 60)
-    # 447 g5 lap: (3*dist)/(t1 + 2*t2)
-    m = re.search(rf"track is ({N}) meters", full)
-    m2 = re.search(rf"first lap in ({N}) seconds", full)
-    m3 = re.search(rf"lap in ({N}) seconds each", full)
-    if m and m2 and m3 and "average speed" in ql:
-        if dok({m.group(1), m2.group(1), m3.group(1)}):
-            return _rs_ret((3 * f(m.group(1))) / (f(m2.group(1)) + 2 * f(m3.group(1))))
-    # 448 g40 quarantine: sets*per - fewer
-    m = re.search(rf"({N}) sets of ({N}) push-ups", full)
-    m2 = re.search(rf"({N}) fewer push-ups", full)
-    if m and m2 and "how many push-ups did he do in total" in ql:
-        if dok({m.group(1), m.group(2), m2.group(1)}):
-            return _rs_ret(f(m.group(1)) * f(m.group(2)) - f(m2.group(1)))
     # 449 g80 melts: (per_oz * weight) / quarter_value
     m = re.search(rf"\$({N}) per ounce", full)
     m2 = re.search(rf"({N})/({N}) of an ounce", full)
@@ -13154,14 +12987,6 @@ def _vocab_singles_s_system(premises: list, question: str):
         if dok({m.group(1), m2.group(1), m2.group(2)}):
             weight = f(m2.group(1)) / f(m2.group(2))
             return _rs_ret((f(m.group(1)) * weight) / 0.25)
-    # 450 g40 smashed: total/buckets - taken
-    m = re.search(rf"({N}) {_W} into ({N}) buckets", full)
-    if m and _cat(m.group(2), "plural"):
-        nn = _number_re(m.group(2))
-        m2 = re.search(rf"take ({N}) out of each", full)
-        if m2 and re.search(rf"how many {nn} were left in each bucket", ql) \
-                and dok({m.group(1), m.group(3), m2.group(1)}):
-            return _rs_ret(f(m.group(1)) / f(m.group(3)) - f(m2.group(1)))
     # 451 g6 descending: up_dist/(speed*.5) + down_dist/(speed*1.2)
     m = re.search(rf"speed is ({N}) miles per hour", full)
     m2 = re.search(rf"top of the mountain is ({N}) miles", full)
@@ -13184,14 +13009,6 @@ def _vocab_singles_s_system(premises: list, question: str):
     if m and len(ma) >= 2 and "how many points is brenda now ahead" in ql:
         if dok({m.group(1), ma[0], ma[1]}):
             return _rs_ret((f(m.group(1)) + f(ma[0])) - f(ma[1]))
-    # 454 g11 enjoy: 2*slices - slices/2 - 3 - slices/3
-    m = re.search(rf"({N}) large pizzas that were each cut into ({N}) slices", full)
-    m2 = re.search(rf"ate ({N}) slices of hawaiian", full)
-    if m and m2 and "half of the hawaiian" in full and "third of the cheese" in full \
-            and "how many total slices were left" in ql:
-        if dok({m.group(1), m.group(2), m2.group(1)}):
-            sl = f(m.group(2))
-            return _rs_ret(f(m.group(1)) * sl - sl / 2 - f(m2.group(1)) - sl / 3)
     # 455 g5 mum: weeks to reach target (save each wk, spend every 2nd)
     m = re.search(rf"saves \$({N})", full)
     m2 = re.search(rf"spends \$({N})", full)
@@ -13345,13 +13162,6 @@ def _vocab_singles_r_system(premises: list, question: str):
     if m and m2 and m3 and "how many more exams does she need to grade" in ql:
         if dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret(f(m.group(1)) * (1 - f(m2.group(1)) / 100) * (1 - f(m3.group(1)) / 100))
-    # 394 g15600 opens: base*1.3*sold*4  (3 days off → 4 open)
-    m = re.search(rf"({N})% more than normal", full)
-    m2 = re.search(rf"sells ({N}) a day", full)
-    m3 = re.search(rf"normal mice cost \$({N})", full)
-    if m and m2 and m3 and "sunday, thursday, and friday" in full and "how much money does he make a week" in ql:
-        if dok({m.group(1), m2.group(1), m3.group(1)}):
-            return _rs_ret(f(m3.group(1)) * (1 + f(m.group(1)) / 100) * f(m2.group(1)) * 4)
     # 395 g360 compacted: cans*space*pct
     m = re.search(rf"({N}) cans", full)
     m2 = re.search(rf"({N}) square inches", full)
@@ -13446,14 +13256,6 @@ def _vocab_singles_r_system(premises: list, question: str):
     if m and me and m2 and "half of what star wars made" in full and "how many millions did star wars earn" in ql:
         if dok({m.group(1), me.group(1), m2.group(1)}):
             return _rs_ret((f(me.group(1)) - f(m.group(1))) * 2 + f(m2.group(1)))
-    # 408 g65 jake: (avg*4 - t1 - (t1+10))/2
-    m = re.search(rf"four tests by jake was ({N})", full)
-    m2 = re.search(rf"scored ({N}) marks in the first test", full)
-    m3 = re.search(rf"({N}) more in the second", full)
-    if m and m2 and m3 and "marks he scored in the third test" in ql:
-        if dok({m.group(1), m2.group(1), m3.group(1), "4"}):
-            t1 = f(m2.group(1))
-            return _rs_ret((f(m.group(1)) * 4 - t1 - (t1 + f(m3.group(1)))) / 2)
     # 409 g60000 construction: sell*1.5 - (sell + extra)
     m = re.search(rf"({N}) more than the construction", full)
     m2 = re.search(rf"({N}) times as much", full)
@@ -13618,13 +13420,6 @@ def _vocab_singles_q_system(premises: list, question: str):
     if m and mw and m2 and "difference in area" in ql:
         if dok({m.group(1), mw.group(1), m2.group(1)}):
             return _rs_ret(abs(f(m2.group(1)) ** 2 - f(m.group(1)) * f(mw.group(1))))
-    # 309 g11 accepts: (3*a+2*b+1*c)/25
-    m = re.search(rf"candy bars cost ¢({N})", full)
-    m2 = re.search(rf"chocolate costs ¢({N})", full)
-    m3 = re.search(rf"juice costs ¢({N})", full)
-    if m and m2 and m3 and "how many quarters" in ql:
-        if dok({m.group(1), m2.group(1), m3.group(1)}):
-            return _rs_ret((3 * f(m.group(1)) + 2 * f(m2.group(1)) + 1 * f(m3.group(1))) / 25)
     # 310 g1172 furnish: akeno - (lev + lev-177)
     m = re.search(rf"spent \$({N}) to furnish", full)
     m2 = re.search(rf"\$({N}) less than lev", full)
@@ -13712,13 +13507,6 @@ def _vocab_singles_q_system(premises: list, question: str):
     if m and m2 and m3 and "how many blue candles" in ql:
         if dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret(f(m.group(1)) - f(m2.group(1)) - f(m3.group(1)))
-    # 322 g45 brush: len*(1+p/100)*cmper
-    m = re.search(rf"brush is ({N}) inches long", full)
-    m2 = re.search(rf"({N})% longer", full)
-    m3 = re.search(rf"({N}) centimeters per inch", full)
-    if m and m2 and m3 and "how long is carmen's brush in centimeters" in ql:
-        if dok({m.group(1), m2.group(1), m3.group(1)}):
-            return _rs_ret(f(m.group(1)) * (1 + f(m2.group(1)) / 100) * f(m3.group(1)))
     # 323 g4 citizen: (cost-coupon)*(1-disc/100)
     m = re.search(rf"order at mcdonald's costs \$({N})", full)
     m2 = re.search(rf"coupon for \$({N})", full)
@@ -13740,13 +13528,6 @@ def _vocab_singles_q_system(premises: list, question: str):
         if dok({m.group(1), m2.group(1)}):
             h = f(m.group(1))
             return _rs_ret(h * f(m2.group(1)) * 4 + h)
-    # 326 g500 celebration: (sell*2 - buy)*dozens
-    m = re.search(rf"\$({N}) a dozen", full)
-    m2 = re.search(rf"\$({N}) for half a dozen", full)
-    m3 = re.search(rf"sold ({N}) dozens", full)
-    if m and m2 and m3 and "profit" in ql:
-        if dok({m.group(1), m2.group(1), m3.group(1)}):
-            return _rs_ret((f(m2.group(1)) * 2 - f(m.group(1))) * f(m3.group(1)))
     # 327 g35 burger: (meal+up)*days
     m = re.search(rf"lunch for \$({N})", full)
     m2 = re.search(rf"drinks for \$({N}) more", full)
@@ -13836,13 +13617,6 @@ def _vocab_singles_q_system(premises: list, question: str):
             and re.search(rf"how many {_number_re(m3.group(2))} does gary currently collect every week", ql) \
             and dok({m.group(1), m2.group(1), m3.group(1)}):
         return _rs_ret(f(m.group(1)) * f(m2.group(1)) * f(m3.group(1)) * 7)
-    # 342 g6 soup: 2+3+1
-    m = re.search(rf"({N}) eggs-omelet", full)
-    m2 = re.search(rf"made with ({N}) eggs", full)
-    m3 = re.search(rf"made with ({N}) egg", full)
-    if m and m2 and "how many eggs did gus eat" in ql:
-        if dok({m.group(1), m2.group(1), "1"}):
-            return _rs_ret(f(m.group(1)) + f(m2.group(1)) + 1)
     # 343 g110 situps: diana + hani ; diana=40, time=40/4, hani=(4+3)*time
     m = re.search(rf"({N}) more situps per minute", full)
     m2 = re.search(rf"did ({N}) situps at a rate of ({N})", full)
@@ -13928,19 +13702,6 @@ def _vocab_singles_q_system(premises: list, question: str):
     if m and m2 and "half as long" in full and "how many hours" in ql:
         if dok({m.group(1), m.group(2), m2.group(1)}):
             return _rs_ret(f(m.group(1)) * f(m.group(2)) * (f(m2.group(1)) / 2) / 60)
-    # 361 g22 breaks: rate*((60-2*brk)/window)
-    m = re.search(rf"({N}) push-ups in ({N}) seconds", full)
-    m2 = re.search(rf"two ({N})-second breaks", full)
-    if m and m2 and "how many push-ups" in ql:
-        if dok({m.group(1), m.group(2), m2.group(1)}):
-            return _rs_ret(f(m.group(1)) * ((60 - 2 * f(m2.group(1))) / f(m.group(2))))
-    # 362 g135 doe: bills*denom + wallet
-    m = re.search(rf"finds ({N}) bills", full)
-    m2 = re.search(rf"all ({N})s", full)
-    m3 = re.search(rf"had \$({N}) in his wallet", full)
-    if m and m2 and m3 and "how much money doe he have now" in ql:
-        if dok({m.group(1), m2.group(1), m3.group(1)}):
-            return _rs_ret(f(m.group(1)) * f(m2.group(1)) + f(m3.group(1)))
     # 363 g1890 spinning: times*hours*60*cal
     m = re.search(rf"class ({N}) times a week", full)
     m2 = re.search(rf"({N}) hours each class", full)
