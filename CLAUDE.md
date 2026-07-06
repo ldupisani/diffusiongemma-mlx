@@ -191,6 +191,18 @@ a query. Originally an experiment around DiffusionGemma — the model is now a p
   0 model calls. Use it to see where solve's coverage actually comes from (the anchored family dominates; age
   algebra silently carries ~⅓ of the general fold) and to sanity-check a new solver actually fires. CLI:
   `python -m reasoning.reading_rulestats [--slice dev|dev-train|dev-holdout|test] [--limit N] [--commits]`.
+- **`reasoning/reading_resolve.py`** — the **world-knowledge resolution loop** (the outward half of the
+  reader's bridge; prototype). `reading.diagnose`/`report` say WHAT a question is missing (an unsatisfied
+  `QUESTION_REQUIREMENTS` entry NAMES the fact); this SUPPLIES that fact from a PROVIDER and COMPUTES the
+  answer for the recognised shape. Firewall-safe by isolation: it NEVER touches `reading.solve` (which still
+  declines these shapes) — only the FETCHED FACT is trusted input, and the arithmetic runs through
+  `translate.run_program` (the audited safe evaluator) so the math is correct-by-construction, every answer
+  carrying `provenance`. The default provider is 0-call — conversion factors DERIVED by chaining
+  `reading.CONVERSIONS` (BFS: second→minute→hour ⇒ 3600, no curation), part-counts from a small curated
+  table; inject a custom `provider(kind, key)` (e.g. model-backed, like `reference.py`'s opt-in retrieval)
+  to widen coverage without changing the loop or the arithmetic. `resolve(text, provider=None)` tries
+  `solve` first, else resolves an unsatisfied requirement, else returns the honest `deficiency`. CLI:
+  `python -m reasoning.reading_resolve "<question>"`.
 - **`backend.py`** — pluggable inference backend (see below).
 - **`reasoning/mcp_server.py`** — exposes the reasoning project as an MCP service (FastMCP, stdio):
   `ask` (route → coded answer + domain + model-call count; 0-call compound split; non-coded types
