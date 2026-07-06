@@ -8264,6 +8264,27 @@ class TestAnimalCategorySum(unittest.TestCase):
             "hoop?"), 32)
 
 
+class TestPoolAndSplit(unittest.TestCase):
+    """#322 — several holders each hold a stated count of ONE item; they share the POOLED total equally
+    among the K of them → Σ holdings / K. Word-agnostic (synthetic nouns/names, never the GSM8K source)."""
+
+    def test_pool_and_split_three_way(self):
+        self.assertEqual(reading.solve(
+            "Mary has 30 cards, Sam has 18 cards and Rita has no cards. They decide to share the cards "
+            "equally between the 3 of them. How many cards will each one get?"), 16)
+
+    def test_pool_and_split_generalizes_noun_and_arity(self):
+        self.assertEqual(reading.solve(
+            "Ann has 10 marbles, Bob has 20 marbles, Cal has 30 marbles and Dee has no marbles. They "
+            "decide to share the marbles equally between the 4 of them. How many marbles will each one "
+            "get?"), 15)
+
+    def test_no_share_cue_does_not_trigger_split(self):
+        # without the "share equally among the K" cue the pool-split must not fire (a plain sum, if any)
+        self.assertNotEqual(reading.solve(
+            "Mary has 30 cards and Sam has 18 cards. How many cards will each one get?"), 16)
+
+
 class TestQuestionRequirementsCorpus(unittest.TestCase):
     """The QUESTION_REQUIREMENTS corpus — question shapes answerable GIVEN certain facts. An unsatisfied
     entry NAMES the world-knowledge to fetch; the corpus must generalize past a single shape."""

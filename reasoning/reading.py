@@ -19156,6 +19156,20 @@ def _cat_singles_a_system(premises: list, question: str):
             and dok({mn.group(1), mw.group(1)}):
         return _rs_ret(f(mn.group(1)) * f(mpp.group(1)) * _conv("pound", "ounce") / f(mw.group(1)))
 
+    # 18. POOL-AND-SPLIT: several holders each have a STATED count of ONE item; they SHARE the pooled total
+    #     EQUALLY among the K of them → Σ holdings / K. "John has 54 gum, Cole 45, Aubrey none … share the
+    #     gum equally between the 3 of them … how many gum will each get?" → (54+45+0)/3. Distinct from
+    #     _synth_equal_split (a KNOWN whole from ONE distributor); here the whole is POOLED across holders.
+    m = re.search(rf"shares?\s+(?:the\s+)?{_W}\s+equally\s+(?:among|between)\s+the\s+({N})\s+of\s+them", full)
+    if m and _cat(m.group(1), "noun"):
+        item = _number_re(m.group(1))
+        holds = re.findall(rf"has\s+({N}|no)\s+(?:\w+\s+of\s+)?{item}\b", full)
+        k = f(m.group(2))
+        if len(holds) >= 2 and k and re.search(rf"how many\s+(?:\w+\s+of\s+)?{item}\b.*\beach\b", ql):
+            used = {h for h in holds if h != "no"} | {m.group(2)}
+            if dok(used):
+                return _rs_ret(sum(0.0 if h == "no" else f(h) for h in holds) / k)
+
     return None
 
 
