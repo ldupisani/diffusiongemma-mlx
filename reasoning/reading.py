@@ -19068,24 +19068,115 @@ def _cat_singles_a_system(premises: list, question: str):
             and dok({mn.group(1), mw.group(1)}):
         return _rs_ret(f(mn.group(1)) * f(mpp.group(1)) * _conv("pound", "ounce") / f(mw.group(1)))
 
-    # 35. TWO-STAGE FRACTION CHAIN (the multi-step successor to the singles): "[N people in a Y] … f1 of
-    #     them do A / the REST do B … OF THOSE [B], f2 are X … how many <group>?" → N·(1−f1)·(f2 if the
-    #     asked group == X else 1−f2). "20 students, 1/4 stayed / rest went, 1/3 boys → girls" =
-    #     20·(3/4)·(2/3) = 10. Total from the dropped stated count (#309); the second stage operates on
-    #     the (1−f1) "rest". Tightly gated (person total, a "the rest" bridge, an "of those" stage-2, two
-    #     real fractions, a PERSON stage-2 group) because the digits are gone (dropped total, word fractions).
-    _FR = r"(half|a third|a fourth|a quarter|a fifth|a sixth|one-\w+|two-\w+|three-\w+|\d+/\d+)"
-    total = next((c for (big, small), c in _STATED_CONV.items() if _cat(small, "person")), None)
-    mf1 = re.search(rf"{_FR} of (?:the|them)", full)
-    mf2 = re.search(rf"{_FR} (?:of (?:those|them|the \w+) )?are {_W}", full)
-    mask = re.search(r"how many (\w+)", ql)
-    if total and mf1 and mf2 and mask and "the rest" in full and "of those" in full \
-            and _cat(mf2.group(2), "person"):
-        v1, v2 = _fraction_value(mf1.group(1)), _fraction_value(mf2.group(1))
-        if v1 and v2:
-            same = _key(mask.group(1)) == _key(mf2.group(2))
-            return _rs_ret(total * (1 - v1) * (v2 if same else 1 - v2))
+    return None
 
+
+# ── PARTITION-CHAIN: a group split into disjoint parts, resolved by FACT SATURATION (#312) ──────────────
+# The general reformulation of the two-stage fraction chain (was a fixed formula in _cat_singles_a #35).
+# Instead of computing N·(1−f1)·(1−f2), it READS the text into GROUP facts — a universe split into disjoint
+# parts, each part either a FRACTION of its parent or the COMPLEMENT (the "rest") of a sibling — then
+# SATURATES part counts to a fixpoint: a part resolves the moment its parent (and any sibling it complements)
+# is known. So the chain composes to ANY depth for free, and the parts are inspectable facts, not a buried
+# arithmetic expression. The question "how many Y" is an OBLIGATION: if Y names an unstated group it is
+# DERIVED as the complement of the stated sibling within the same parent (the "formulate the question"
+# step — "how many girls" carries the fact girls = went − boys). Digit-free (dropped total, word fractions),
+# so the SPECIFICITY comes from the fact structure (a PERSON universe, a "rest" bridge, a person part), not dok.
+_PC_FR = r"(half|a third|a fourth|a quarter|a fifth|a sixth|one-\w+|two-\w+|three-\w+|\d+/\d+)"
+
+
+def _partition_universe(full: str):
+    """The size of the top group being partitioned (a PERSON collection): from the dropped stated count
+    (#309, "there are 20 students in a class") or a bare "there are N <person>". None if absent."""
+    total = next((c for (big, small), c in _STATED_CONV.items() if _cat(small, "person")), None)
+    if total is None:
+        m = re.search(rf"there (?:are|were) ({_RS_N}) {_W}", full)
+        if m and _cat(m.group(2), "person"):
+            total = float(m.group(1))
+    return total
+
+
+_PC_COPULA = {"are", "is", "was", "were", "be", "been", "being", "have", "has", "had"}
+
+
+def _read_partitions(full: str):
+    """Read GROUP facts from the text: `{label: {of, fraction|complement_of}}`, `__u__` = the universe.
+    STAGE 1 "f of the <ppl> <A> … the rest <B>" → A = fraction f of __u__, B = complement of A.
+    STAGE 2 "of those who <B> … f2 are <X>" → X = fraction f2 of <B> (parent named by "of those who").
+    Gated to the CHAIN shape for safety (there is no digit-accounting on word fractions): a person
+    universe, an "of those" stage-2 bridge, and a stage-1 part labelled by an ACTION verb — so a bare
+    "1/3 of them ARE boys" (copula, no "of those") never mis-reads as a partition."""
+    total = _partition_universe(full)
+    if total is None or "of those" not in full:
+        return None
+    groups = {"__u__": {"count": float(total)}}
+    m1 = re.search(rf"{_PC_FR} of (?:the \w+|them|us) (\w+)", full)
+    m1b = re.search(r"the rest (\w+)", full)
+    if not (m1 and m1b):
+        return None
+    a, b = _key(m1.group(2)), _key(m1b.group(1))
+    if a in _PC_COPULA or not _cat(a, "verb"):     # the part must be an ACTION ("stayed"), not "are"
+        return None
+    f1 = _fraction_value(m1.group(1))
+    if not f1:
+        return None
+    groups[a] = {"of": "__u__", "fraction": f1}
+    groups[b] = {"of": "__u__", "complement_of": a}
+    m2 = re.search(rf"{_PC_FR} (?:of (?:those|them|the \w+) )?are (\w+)", full)
+    if m2:
+        m2p = re.search(r"of those (?:who (\w+))?", full)
+        parent = _key(m2p.group(1)) if (m2p and m2p.group(1)) else b
+        f2, x = _fraction_value(m2.group(1)), _key(m2.group(2))
+        if f2 and parent in groups:
+            groups[x] = {"of": parent, "fraction": f2}
+    return groups
+
+
+def _saturate_partitions(groups: dict) -> None:
+    """Fill each group's `count` to a FIXPOINT: a fractional part = fraction·parent; a complement part =
+    parent − sibling. Repeats until nothing new resolves, so a chain of any depth composes. In place."""
+    changed = True
+    while changed:
+        changed = False
+        for g in groups.values():
+            if g.get("count") is not None:
+                continue
+            parent = groups.get(g.get("of"))
+            pc = parent.get("count") if parent else None
+            if pc is None:
+                continue
+            if g.get("fraction") is not None:
+                g["count"] = pc * g["fraction"]
+                changed = True
+            elif g.get("complement_of"):
+                sib = groups.get(g["complement_of"])
+                if sib and sib.get("count") is not None:
+                    g["count"] = pc - sib["count"]
+                    changed = True
+
+
+def _partition_chain_system(premises: list, question: str):
+    """Answer "how many <Y>" over a saturated partition chain. Y resolves as a known group's count, or —
+    when Y names the unstated complement of a stated PERSON part (girls vs boys) — as parent − that part."""
+    ql = question.lower()
+    full = " . ".join(p.lower() for p in premises) + " . " + ql
+    groups = _read_partitions(full)
+    if not groups:
+        return None
+    _saturate_partitions(groups)
+    ma = re.search(r"how many (\w+)", ql)
+    if not ma:
+        return None
+    y = _key(ma.group(1))
+    if y in groups and groups[y].get("count") is not None:
+        return _rs_ret(groups[y]["count"])
+    # OBLIGATION: Y is the unstated complement of a stated person-part within the same parent.
+    if _cat(y, "person"):
+        for lab, g in groups.items():
+            if g.get("fraction") is not None and _cat(lab, "person") and lab != y \
+                    and g.get("count") is not None:
+                parent = groups.get(g["of"])
+                if parent and parent.get("count") is not None:
+                    return _rs_ret(parent["count"] - g["count"])
     return None
 
 
@@ -23534,6 +23625,9 @@ _EARLY_SYSTEMS = [
     ("vocab_singles_c", _vocab_singles_c_system),
     # VOCAB+STRUCTURE SINGLES B: thirty branches with wave-23 vocabulary (#233).
     ("vocab_singles_b", _vocab_singles_b_system),
+    # PARTITION CHAIN: a group split into disjoint parts, resolved by fact SATURATION (#312) — the general
+    # reformulation of the two-stage fraction chain (facts + fixpoint + question-obligation, not a formula).
+    ("partition_chain", _partition_chain_system),
     # CATEGORICAL SINGLES: word-agnostic long-tail branches (item noun via _W/_cat, coeff via _scale).
     ("cat_singles_a", _cat_singles_a_system),
     # VOCAB+STRUCTURE SINGLES: twenty-eight branches with wave-22 vocabulary (#232).
