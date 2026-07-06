@@ -8285,6 +8285,27 @@ class TestPoolAndSplit(unittest.TestCase):
             "Mary has 30 cards and Sam has 18 cards. How many cards will each one get?"), 16)
 
 
+class TestRemainderThenSplit(unittest.TestCase):
+    """#323 — an initial amount, a removal, then the REST divided equally into P parts → (init−removed)/P.
+    Word-agnostic (synthetic nouns/verbs/containers, never the GSM8K source)."""
+
+    def test_remainder_then_split(self):
+        self.assertEqual(reading.solve(
+            "Sam had 30 apples. He gave away 6 apples. Then he divided the rest equally into 3 boxes. "
+            "How many apples are in each box?"), 8)
+
+    def test_generalizes_verb_and_container(self):
+        self.assertEqual(reading.solve(
+            "Nora had 48 cookies. She ate 8 cookies. Then she divided the rest equally into 5 jars. "
+            "How many cookies are in each jar?"), 8)
+
+    def test_no_removal_does_not_fire(self):
+        # without a removal the (init−removed)/P shape must not fire
+        self.assertNotEqual(reading.solve(
+            "Sam had 30 apples. Then he divided them equally into 3 boxes. "
+            "How many apples are in each box?"), 8)
+
+
 class TestQuestionRequirementsCorpus(unittest.TestCase):
     """The QUESTION_REQUIREMENTS corpus — question shapes answerable GIVEN certain facts. An unsatisfied
     entry NAMES the world-knowledge to fetch; the corpus must generalize past a single shape."""

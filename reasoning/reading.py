@@ -19170,6 +19170,21 @@ def _cat_singles_a_system(premises: list, question: str):
             if dok(used):
                 return _rs_ret(sum(0.0 if h == "no" else f(h) for h in holds) / k)
 
+    # 19. REMAINDER-THEN-SPLIT: an initial amount, a removal (a loss-category verb), then the REST divided
+    #     equally into P parts → (initial − removed)/P. "had 36 oz jelly beans … ate 6 oz … divided the
+    #     rest equally into 3 piles … how much per pile?" → (36−6)/3 = 10. Single-entity remainder, then
+    #     split (contrast branch 18's multi-holder POOL, and _synth_equal_split's distributor whole).
+    m = re.search(rf"divided?\s+(?:the\s+)?(?:rest|remainder|remaining|them|it)\s+(?:up\s+)?"
+                  rf"(?:equally|evenly)\s+into\s+({N})\s+(\w+)", full)
+    if m:
+        cont = _singular_of(m.group(2)) or m.group(2)
+        init = re.search(rf"\bhad\s+({N})\b", full)
+        rem = re.search(rf"\b(?:{_cat_re('lose')})\s+(?:away\s+)?({N})\b", full)
+        p = f(m.group(1))
+        if init and rem and p and re.search(rf"(?:how many|how much)\b.*\beach\s+{cont}\b", ql) \
+                and dok({init.group(1), rem.group(1), m.group(1)}):
+            return _rs_ret((f(init.group(1)) - f(rem.group(1))) / p)
+
     return None
 
 
