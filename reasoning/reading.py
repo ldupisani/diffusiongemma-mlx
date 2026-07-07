@@ -11716,6 +11716,16 @@ _register_category("contribute", "verb")
 for _cv in "contribute contributes contributed pay pays paid chip chips".split():
     _tag_word(_cv, "contribute")
 
+# ACCOMPANY verb category (#372, user critique) — "arrive WITH someone": guests BRING a plus one /
+# HAVE a partner / INVITE a friend / TAKE a date. have/has are super-generic but only consumed inside
+# the tight "<frac> of the <person>s <accompany> a <companion>" structure. Companion nouns
+# (partner/companion/spouse) join the person category — partner is admitted, the rest tag inert.
+_register_category("accompany", "verb")
+for _acv in "bring brings brought take takes took invite invites invited have has had".split():
+    _tag_word(_acv, "accompany")
+for _cn in "partner partners companion companions spouse spouses".split():
+    _tag_word(_cn, "person")
+
 # LOSS polarity for the semantic fold, DERIVED from the `lose` category (#301) — the single source of truth
 # unifying `_verb_sign` (declared far above, reads this at call time) with the regex branches. Every surface
 # tagged `lose` or a descendant, base forms AND inflections: the fold lemmatizes REGULAR verbs (spent→spend,
@@ -19469,7 +19479,8 @@ def _cat_singles_a_system(premises: list, question: str):
     cr = re.search(rf"({N})-(\w+) {_W}", full)
     if cr and (_cat(cr.group(3), "noun") or _cat(cr.group(3), "plural")):
         iv = re.search(rf"invite[sd]? ({N}) {_W}", full)
-        fr = re.search(rf"(\d+/\d+|[a-z-]+(?: [a-z]+)?) of the {_W} bring an? plus one", full)
+        fr = re.search(rf"(\d+/\d+|[a-z-]+(?: [a-z]+)?) of the {_W} {_cat_re('accompany')} "
+                       rf"an? (?:plus one|{_cat_re('person')})", full)
         pl = re.search(rf"new {_W} for every {re.escape(cr.group(2))}", full)
         if iv and fr and pl and _cat(iv.group(2), "person") and _cat(fr.group(2), "person") \
                 and (_cat(pl.group(1), "noun") or _cat(pl.group(1), "plural")):
