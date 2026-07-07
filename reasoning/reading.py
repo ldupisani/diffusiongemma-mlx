@@ -11762,6 +11762,23 @@ for _acv in "bring brings brought take takes took invite invites invited have ha
 for _cn in "partner partners companion companions spouse spouses".split():
     _tag_word(_cn, "person")
 
+# PRODUCE verb category (#385) — the "bring into existence" cluster: bake/make/cook/build/craft/create/
+# brew/knit/sew/draw/paint + inflections. Consumed inside tight produced-then-lost branch structures;
+# un-admitted members stay GUARD-1-inert until a word earns LEXICON admission (the #348 pattern).
+_register_category("produce", "verb")
+for _pd in ("bake bakes baked make makes made cook cooks cooked build builds built craft crafts crafted "
+            "create creates created brew brews brewed knit knits knitted sew sews sewed draw draws drew "
+            "paint paints painted").split():
+    _tag_word(_pd, "produce")
+
+# ATTACH verb category (#385) — placing/affixing a sub-item ONTO an item: "PUTS 6 candles on each cake".
+# put/place/add/stick/attach/pin + inflections. add/adds/added are also acquire-tagged (a word can belong
+# to several categories); the mask is only consumed inside "<attach> N SUB on each ITEM" structures.
+_register_category("attach", "verb")
+for _at in ("put puts place places placed add adds added stick sticks stuck attach attaches attached "
+            "pin pins pinned").split():
+    _tag_word(_at, "attach")
+
 # LOSS polarity for the semantic fold, DERIVED from the `lose` category (#301) — the single source of truth
 # unifying `_verb_sign` (declared far above, reads this at call time) with the regex branches. Every surface
 # tagged `lose` or a descendant, base forms AND inflections: the fold lemmatizes REGULAR verbs (spent→spend,
@@ -12024,23 +12041,37 @@ def _vocab_singles_l_system(premises: list, question: str):
     def dok(used):
         return all(dd in used for dd in re.findall(r"\d+(?:,\d{3})*(?:\.\d+)?",
                                                    " ".join(premises) + " " + question))
-    # B. dollars + quarters after gives (Oliver — second receiving branch)
-    cb = re.search(rf"has \$({N}) and ({N}) quarters", full)
-    cc = re.search(rf"gives his sister \$({N})", full)
-    cd = re.findall(rf"({N}) quarters", full)
-    if cb and cc and len(cd) == 2 and "left" in full:
-        if dok(set(cb.groups()) | {cc.group(1)} | set(cd)):
+    # B. CASH + COINS AFTER A TRANSFER (Oliver — de-hardcoded #385): has $A and N <coin>s,
+    # <lose-verb> [someone] $B and M <coin>s → (A−B) + (N−M)·cents/100 dollars left. The coin word
+    # comes from the coin category and its VALUE from the cents attribute (#275) — no denomination
+    # or 0.25 hardcoded; any coin pair of this shape is ours.
+    cb = re.search(rf"has \$({N}) and ({N}) ({_cat_re('coin')})", full)
+    zcents = _attr(cb.group(3), "cents") if cb else None
+    if cb and zcents:
+        cn = _number_re(cb.group(3))
+        # the transfer conjunct is SEVERED by the splitter — probe its pieces separately (the
+        # original's shape): the lose-verb dollar amount, and exactly two <coin> counts anywhere.
+        cc = re.search(rf"{_cat_re('lose')}(?: \w+){{0,2}} \$({N})", full)
+        cd = re.findall(rf"({N}) {cn}\b", full)
+        if cc and len(cd) == 2 and "how much money" in ql and re.search(r"left|remain", full) \
+                and dok({cb.group(1), cc.group(1)} | set(cd)):
             return _rs_ret(f(cb.group(1)) - f(cc.group(1))
-                     + (f(cd[0]) - f(cd[1])) * 0.25)
-    # C. years away from a fraction of an age (Alvin/Simon — a "being" unlock the fold
-    # mis-read: it echoed the 5-year offset; the fraction-of-age minus offset is ours)
+                           + (f(cd[0]) - f(cd[1])) * zcents / 100)
+    # C. YEARS AWAY FROM A FRACTION OF AN AGE (Alvin/Simon — a "being" unlock the fold mis-read:
+    # it echoed the offset; de-hardcoded #385): X is A years old; Y is D years away from being
+    # FRAC the age of X → FRAC·A − D. FRAC reads as a/b digits OR a word form (_FRAC_WORDS);
+    # the offset D accepts word-numbers (outside dok's digit accounting, per the house rule).
     ce = re.search(rf"\w+ is ({N}) years old", full)
-    ce2 = re.search(rf"\w+ is ({N}) years away from being (\d+)/(\d+) the age of \w+",
-                    full)
+    ce2 = re.search(rf"\w+ is ({_GP_NUMW}) years? (?:away from|short of) being "
+                    rf"(?:(\d+)/(\d+)|("
+                    + "|".join(re.escape(k) for k in sorted(_FRAC_WORDS, key=len, reverse=True))
+                    + r")) the age of \w+", full)
     if ce and ce2 and "how old" in ql:
-        if dok({ce.group(1)} | set(ce2.groups())):
-            return _rs_ret(f(ce.group(1)) * f(ce2.group(2)) / f(ce2.group(3))
-                           - f(ce2.group(1)))
+        zfrac = (f(ce2.group(2)) / f(ce2.group(3))) if ce2.group(2) else _FRAC_WORDS[ce2.group(4)]
+        zoff = w(ce2.group(1))
+        zused = {ce.group(1)} | {g for g in ce2.groups()[:3] if g and g[0].isdigit()}
+        if zoff is not None and zfrac and dok(zused):
+            return _rs_ret(f(ce.group(1)) * zfrac - zoff)
     # 1. half-dozen crayons (#45)
     a1 = re.search(rf"bought ({N}) half dozen colored crayons at \$({N}) per crayon", full)
     if a1 and "total cost" in ql:
@@ -15467,22 +15498,38 @@ def _vocab_singles_k_system(premises: list, question: str):
     if y1 and y2 and "how many hours" in ql and y1.group(1) != y2.group(1):
         if dok(set(y1.groups()) | {y2.group(1)}):
             return _rs_ret(f(y2.group(1)) / (f(y1.group(1)) / f(y1.group(2))))
-    # 23b. candles on the remaining cakes (Sunny — a wave-34 unlock the fold mis-read: it
-    # committed the per-cake 6; the product over remaining cakes is ours)
-    zz1 = re.search(rf"bakes ({N}) cakes", full)
-    zz2 = re.search(rf"gives away ({N}) cakes", full)
-    zz3 = re.search(rf"puts ({N}) candles on each cake", full)
-    if zz1 and zz2 and zz3 and "how many candles" in ql and "total" in ql:
-        if dok({zz1.group(1), zz2.group(1), zz3.group(1)}):
-            return _rs_ret((f(zz1.group(1)) - f(zz2.group(1))) * f(zz3.group(1)))
-    # 23c. chairs at mixed tables (Alan — same unlock class: Σ(count × per-table chairs))
-    zz4 = re.search(rf"has ({N}) round tables and ({N}) rectangular tables", full)
-    zz5 = re.search(rf"round table has ({N}) chairs", full)
-    zz6 = re.search(rf"rectangular table has ({N}) chairs", full)
-    if zz4 and zz5 and zz6 and "how many chairs" in ql:
-        if dok(set(zz4.groups()) | {zz5.group(1), zz6.group(1)}):
+    # 23b. SUB-ITEMS ON THE REMAINING ITEMS (Sunny — a wave-34 unlock the fold mis-read: it committed
+    # the per-item count; de-hardcoded #385): P produced, G given away, K subs attached per remaining
+    # item → (P−G)·K. produce/lose/attach verb masks; the item and sub nouns are READ from the text
+    # (_W + _cat) and re-matched BY LEMMA, so any noun pair of this shape is ours.
+    zz1 = re.search(rf"{_cat_re('produce')} ({N}) {_W}", full)
+    zzit = _number_re(zz1.group(2)) \
+        if zz1 and (_cat(zz1.group(2), "noun") or _cat(zz1.group(2), "plural")) else None
+    if zzit:
+        zz2 = re.search(rf"{_cat_re('lose')}(?: away| out)? ({N}) {zzit}\b", full)
+        zz3 = re.search(rf"{_cat_re('attach')} ({N}) {_W} on (?:each|every) {zzit}\b", full)
+        if zz2 and zz3 and (_cat(zz3.group(2), "noun") or _cat(zz3.group(2), "plural")):
+            zzsub = _number_re(zz3.group(2))
+            if re.search(rf"how many {zzsub}\b", ql) and re.search(r"total|in all|altogether", ql) \
+                    and dok({zz1.group(1), zz2.group(1), zz3.group(1)}):
+                return _rs_ret((f(zz1.group(1)) - f(zz2.group(1))) * f(zz3.group(1)))
+    # 23c. QUALIFIED-SUBTYPE COUNT × PER-EACH SUM (Alan — same unlock class; de-hardcoded #385):
+    # N <q1> ITEMs and M <q2> ITEMs; each <q1> ITEM has K SUBs, each <q2> ITEM has L SUBs →
+    # N·K + M·L. Both nouns READ from the text and re-matched by lemma; the qualifier pair
+    # self-verifies (each must reappear before its per-each clause); receive mask for has/holds.
+    zz4 = re.search(rf"({N}) (\w+) {_W} and ({N}) (\w+) {_W}", full)
+    if zz4 and zz4.group(2) != zz4.group(5) \
+            and _noun_lemma(zz4.group(3)) == _noun_lemma(zz4.group(6)) \
+            and (_cat(zz4.group(3), "noun") or _cat(zz4.group(3), "plural")):
+        zzitem = _number_re(zz4.group(3))
+        zz5 = re.search(rf"{re.escape(zz4.group(2))} {zzitem} {_cat_re('receive')} ({N}) {_W}", full)
+        zz6 = re.search(rf"{re.escape(zz4.group(5))} {zzitem} {_cat_re('receive')} ({N}) {_W}", full)
+        if zz5 and zz6 and _noun_lemma(zz5.group(2)) == _noun_lemma(zz6.group(2)) \
+                and (_cat(zz5.group(2), "noun") or _cat(zz5.group(2), "plural")) \
+                and re.search(rf"how many {_number_re(zz5.group(2))}\b", ql) \
+                and dok({zz4.group(1), zz4.group(4), zz5.group(1), zz6.group(1)}):
             return _rs_ret(f(zz4.group(1)) * f(zz5.group(1))
-                           + f(zz4.group(2)) * f(zz6.group(1)))
+                           + f(zz4.group(4)) * f(zz6.group(1)))
     # 24. candle ratio (#24)
     z1 = re.search(rf"in the ratio of (\d+):(\d+)", full)
     z2 = re.search(rf"had ({N}) red candles", full)
@@ -16763,12 +16810,14 @@ def _vocab_singles_h_system(premises: list, question: str):
             tick = f(S2.group(1)) * f(S2.group(2)) \
                 + f(S2.group(2)) * f(S3.group(1)) / f(S3.group(2))
             return _rs_ret(f(S5.group(1)) - tick / 2)
-    # 43. waitress wage + tips (#132)
-    T1 = re.search(rf"\$({N})/hour", full)
-    T2h = re.findall(rf"works for ({N}) hours", full)
-    T2t = re.findall(rf"receives \$({N}) in tips", full)
-    if T1 and len(T2h) == 3 and len(T2t) == 3 \
-            and "how much money does she earn in total" in ql:
+    # 43. HOURLY WAGE + PER-STINT TIPS (#132 Hallie — the fold committed the tips sum alone;
+    # de-hardcoded #385): $W/hour over N work stints + N tip amounts → W·ΣH + ΣT. The stint and
+    # tip leg counts must MATCH (an unpaired stint or tip declines), ≥2 legs; receive/acquire masks.
+    T1 = re.search(rf"\$({N})(?:/| per )hour", full)
+    T2h = re.findall(rf"work(?:s|ed)? for ({N}) hours", full)
+    T2t = re.findall(rf"{_cat_re('receive')} \$({N}) in tips", full)
+    if T1 and len(T2h) >= 2 and len(T2h) == len(T2t) \
+            and re.search(rf"how much money (?:does|did|will) \w+ {_cat_re('acquire')} in total", ql):
         if dok({T1.group(1)} | set(T2h) | set(T2t)):
             return _rs_ret(sum(f(h) * f(T1.group(1)) for h in T2h) + sum(f(t) for t in T2t))
     # 44. bike clamps giveaway (#133)
