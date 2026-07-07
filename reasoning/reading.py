@@ -335,6 +335,7 @@ def _merge_labels(reading: Reading) -> Reading:
 # tells us to extend the dictionary — not to invent a rule.
 PLURALS = {
     "skirts": "skirt", "marks": "mark", "readers": "reader",
+    "leaves": "leaf",   # irregular; the surface also has a verb sense ("he leaves") that shadows it
     "ladies": "lady", "phones": "phone", "earrings": "earring",
     "worms": "worm", "crabs": "crab",
     "bunnies": "bunny", "bushes": "bush",
@@ -19073,6 +19074,23 @@ def _cat_singles_a_system(premises: list, question: str):
             taken = n_ * c_ - l_
             if c_ and taken > 0 and taken % c_ == 0 and dok({bm.group(1), em.group(1), lm.group(1)}):
                 return _rs_ret(taken / c_)
+
+    # 35. REST-PERCENT OF A TWO-DAY SUM: A acquired on one day and B on another; P1% are <mod1>, P2% are
+    #     <mod2>, …; the rest are <mod*>; ask "how many <mod*> <noun>" → (A+B)·(100−ΣP)/100. "Collects 12
+    #     on Thursday and 13 on Friday; 20% are brown and 20% are green; the rest are yellow; how many
+    #     yellow leaves?" → 25·0.6 = 15. The asked modifier must BE the "rest" one and NOT a stated
+    #     percent class (asking a stated class is a different formula → decline); verbs via _cat_re.
+    cm = re.search(rf"{_cat_re('acquire')} ({N}) on \w+ and ({N}) on \w+", full)
+    pcts = re.findall(rf"({N})% are (\w+)", full)
+    rm2 = re.search(r"the rest (?:are|were) (\w+)", full)
+    if cm and pcts and rm2:
+        am = re.search(rf"how many (\w+) {_W}", ql)
+        mods = {w for _p, w in pcts}
+        if am and am.group(1) == rm2.group(1) and am.group(1) not in mods \
+                and (_cat(am.group(2), "noun") or _cat(am.group(2), "plural")):
+            psum = sum(f(p) for p, _w in pcts)
+            if 0 < psum < 100 and dok({cm.group(1), cm.group(2)} | {p for p, _w in pcts}):
+                return _rs_ret((f(cm.group(1)) + f(cm.group(2))) * (100 - psum) / 100)
 
     return None
 
