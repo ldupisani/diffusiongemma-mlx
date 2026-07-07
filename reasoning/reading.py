@@ -18955,6 +18955,25 @@ def _cat_singles_a_system(premises: list, question: str):
         if sel is not None and (a + b) and dok({rm.group(1), rm.group(4), rm.group(5)} | parts_dig):
             return _rs_ret(tot * sel / (a + b))
 
+    # 28. SOMEONE-ELSE-PAYS-FOR-SOME: buyer buys N <item>, another person pays for K of them, each <item>
+    #     costs $C; ask what the BUYER pays → (N−K)·C (or the payer → K·C). "John buys 20 candy bars; his
+    #     brother Dave pays for 6 of them; each candy bar costs $1.50; how much did John pay?" → 14·1.50 = 21.
+    by = re.search(rf"(\w+) (?:buys|bought|orders?|ordered) ({N}) {_W}", full)
+    if by and _cat(by.group(3), "noun"):
+        pf = re.search(rf"(\w+) (?:pays?|paid) for ({N}) of them", full)
+        cm = re.search(rf"each [\w ]*?costs? \$?({N})\b", full) or re.search(rf"costs? \$?({N}) each", full)
+        ask = re.search(r"how much did (\w+) (?:pay|spend)", ql)
+        if pf and cm and ask and f(cm.group(1)):
+            n_, k_, c_ = f(by.group(2)), f(pf.group(2)), f(cm.group(1))
+            who = ask.group(1)
+            val = None
+            if who == by.group(1):
+                val = (n_ - k_) * c_
+            elif who == pf.group(1):
+                val = k_ * c_
+            if val is not None and val >= 0 and dok({by.group(2), pf.group(2), cm.group(1)}):
+                return _rs_ret(val)
+
     return None
 
 
