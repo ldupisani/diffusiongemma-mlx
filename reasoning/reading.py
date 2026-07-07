@@ -11646,6 +11646,14 @@ for _av in ("get gets got getting receive receives received buy buys bought purc
             "win wins won earn earns earned").split():
     _tag_word(_av, "acquire")
 
+# PURCHASE verb category (#361) — acquire-BY-PAYMENT, a SUBCATEGORY of `acquire` (the hierarchy's
+# narrow/broaden move: a purchase-tagged word still satisfies an acquire mask, but a money-total branch
+# can require the narrow tag so "found 20 roses" doesn't read as a transaction). Members were already
+# acquire-tagged; the extra tag narrows, never widens.
+_register_category("purchase", "acquire")
+for _pv in ("buy buys bought buying purchase purchases purchased order orders ordered").split():
+    _tag_word(_pv, "purchase")
+
 # RETAIN verb category (#356) — the "still have it afterwards" cluster: "how much did he KEEP?" ≡
 # "…RETAIN?". The complement ask after a lose-verb event; consumed inside tight keep-ask regexes.
 _register_category("retain", "verb")
@@ -19373,19 +19381,25 @@ def _cat_singles_a_system(premises: list, question: str):
         if spent > 0 and change2 >= 0 and dok(sdig2 | {bill2.group(1)}):
             return _rs_ret(change2)
 
-    # 51. SCALED-COMPANION PURCHASE TOTAL (imperative ask): buy N <noun> and <frac/scale> times as
-    #     many <companion>; <noun> cost $P each; <companion> cost <scale2> as much each; calculate the
-    #     total → N·P + (frac·N)·(scale2·P). "20 roses and 3/4 times as many lillies; roses $5 each;
-    #     lilies cost twice as much each" → 100 + 15·10 = 250. The companion noun is matched
-    #     STRUCTURALLY, not by lemma — GSM8K's own spelling drifts (Lillies/lilies) — its count and
-    #     price both anchor to the first noun's. dok consumes N, P and a digit fraction's parts.
-    b1 = re.search(rf"buy ({N}) {_W}", full)
+    # 51. SCALED-COMPANION PURCHASE TOTAL (imperative ask; #361 generalized per user critique):
+    #     <purchase-verb> N <noun> and <frac/scale> times as many/more <companion>; <noun> cost $P
+    #     each; <companion> cost <scale2> as much each; <imperative> the total → N·P +
+    #     (frac·N)·(scale2·P). "20 roses and 3/4 times as many lillies; roses $5 each; lilies cost
+    #     twice as much each" → 100 + 15·10 = 250. The verb is the `purchase` SUBcategory of acquire
+    #     (a money-total needs a transaction — "found 20 roses" declines); the ask reads any parse
+    #     imperative + total object ("calculate the total amount of money" / "find the total cost");
+    #     the companion noun is matched STRUCTURALLY, not by lemma — GSM8K's own spelling drifts
+    #     (Lillies/lilies) — its count and price both anchor to the first noun's. dok consumes N, P
+    #     and a digit fraction's parts.
+    b1 = re.search(rf"{_cat_re('purchase')} ({N}) {_W}", full)
     if b1 and _cat(b1.group(2), "noun"):
         rn = _number_re(b1.group(2))
-        s1 = re.search(rf"(\d+/\d+|{_SCALE_RE}) times as many \w+ as {rn}", full)
+        s1 = re.search(rf"(\d+/\d+|{_SCALE_RE}) times (?:as many \w+ as|more \w+ than) {rn}", full)
         p1 = re.search(rf"{rn} cost \$({N}) each", full)
         p2 = re.search(rf"\w+ cost ({_SCALE_RE}) as much each", full)
-        if s1 and p1 and p2 and re.search(r"calculate the total amount of money", ql):
+        if s1 and p1 and p2 and re.search(
+                r"(?:calculate|determine|find|compute) the total (?:amount of money|cost|price|money)",
+                ql):
             tok2 = s1.group(1)
             fr3 = (f(tok2.split("/")[0]) / f(tok2.split("/")[1])) if "/" in tok2 else _scale(tok2)
             fdig2 = set(tok2.split("/")) if "/" in tok2 else set()
