@@ -18974,6 +18974,22 @@ def _cat_singles_a_system(premises: list, question: str):
             if val is not None and val >= 0 and dok({by.group(2), pf.group(2), cm.group(1)}):
                 return _rs_ret(val)
 
+    # 29. LINEAR PER-YEAR CHANGE: a quantity changes by a fixed D each year; its value in year Y1 is V; ask
+    #     its value in year Y2 → V ± D·(Y2−Y1) (− for decrease/drop/reduce, + for increase/rise/grow/add).
+    #     "Each year a store decreased the price of a TV by $35; price in 2001 was $1950; price in 2009?"
+    #     → 1950 − 35·(2009−2001) = 1670. Years are 4-digit; D/V/both years dok-accounted.
+    ycm = re.search(rf"each year[^.]*?\b(decreas\w+|increas\w+|reduc\w+|dropp?\w*|rais\w+|rose|grew|grow\w*|"
+                    rf"add\w*|los\w+|gain\w+)[^.]*?\bby \$?({N})", full)
+    yv = re.search(rf"in (\d{{4}}) was \$?({N})", full)
+    yq = re.search(r"in (\d{4})", ql)
+    if ycm and yv and yq:
+        verb, d = ycm.group(1), f(ycm.group(2))
+        v1, y1, y2 = f(yv.group(2)), f(yv.group(1)), f(yq.group(1))
+        sign = -1 if re.match(r"(decreas|reduc|drop|los)", verb) else 1
+        val = v1 + sign * d * (y2 - y1)
+        if val >= 0 and dok({ycm.group(2), yv.group(1), yv.group(2), yq.group(1)}):
+            return _rs_ret(val)
+
     return None
 
 
