@@ -19057,6 +19057,23 @@ def _cat_singles_a_system(premises: list, question: str):
         if s1 and s2 and s1 != s2 and dok({dm.group(1), sm.group(1), sm.group(3)}):
             return _rs_ret(d_ / min(s1, s2) - d_ / max(s1, s2))
 
+    # 34. CONTAINERS OPENED: N <container> of items, C items in each, opened one at a time; L items
+    #     left after taking; ask how many <container> were opened → (N·C − L)/C — claimed only when the
+    #     taken count divides evenly into whole containers (else the whole-container reading is
+    #     unjustified → decline). "9 packs; each pack had 8; 40 left; how many packs did she open?" →
+    #     (72−40)/8 = 4. Container word read via _W + _cat and reused by lemma; dok rejects distractors.
+    bm = re.search(rf"({N}) {_W} of", full)
+    if bm and _cat(bm.group(2), "noun"):
+        cn = _number_re(bm.group(2))
+        em = re.search(rf"each {cn} had ({N})", full)
+        lm = re.search(rf"there were ({N}) [\w ]*?left", full)
+        ask = re.search(rf"how many {cn} did \w+ open", ql)
+        if em and lm and ask:
+            n_, c_, l_ = f(bm.group(1)), f(em.group(1)), f(lm.group(1))
+            taken = n_ * c_ - l_
+            if c_ and taken > 0 and taken % c_ == 0 and dok({bm.group(1), em.group(1), lm.group(1)}):
+                return _rs_ret(taken / c_)
+
     return None
 
 
