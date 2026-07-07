@@ -19636,6 +19636,30 @@ def _cat_singles_a_system(premises: list, question: str):
                 if share > 0 and share.is_integer():
                     return _rs_ret(share)
 
+    # 60. CONTAINER SUM, KEEP-FRACTION, GIVE-AWAY ASK (#374): ≥2 clauses "K <container> with S
+    #     <item> each" (same item lemma throughout); "<retain> <frac> of the <item>"; ask "how
+    #     many <item> can s?he <lose> (away)" → (1−frac)·Σ K·S. "4 notebooks with 20 stamps each;
+    #     two binders with 50 stamps each; keep 1/4; give away" → 180·¾ = 135. Container and item
+    #     nouns read and gated; the keep verb via the retain mask, the give verb via the lose
+    #     mask; fraction via _fraction_value. Integral positive only; digit-accounted incl. the
+    #     fraction's parts.
+    packs = re.findall(rf"({_GP_NUMW}) {_W} with ({N}) {_W} each", full)
+    if len(packs) >= 2 and all(_cat(c, "noun") or _cat(c, "plural") for _k, c, _s, _i in packs) \
+            and len({_noun_lemma(i) for _k, _c, _s, i in packs}) == 1 \
+            and (_cat(packs[0][3], "noun") or _cat(packs[0][3], "plural")):
+        nn = _number_re(packs[0][3])
+        kp = re.search(rf"{_cat_re('retain')} (\d+/\d+|[a-z-]+(?: [a-z]+)?) of the {nn}", full)
+        ak = re.search(rf"how many {nn} can s?he {_cat_re('lose')}(?: away)?", ql)
+        if kp and ak:
+            fv = _fraction_value(kp.group(1))
+            dig = {k for k, _c, _s, _i in packs if k.isdigit()} | {s for _k, _c, s, _i in packs}
+            fdig = set(kp.group(1).split("/")) if "/" in kp.group(1) else set()
+            if fv and 0 < fv < 1 and dok(dig | fdig):
+                total = sum(f(k) * f(s) for k, _c, s, _i in packs)
+                ans = total * (1 - fv)
+                if ans > 0 and ans.is_integer():
+                    return _rs_ret(ans)
+
     return None
 
 
