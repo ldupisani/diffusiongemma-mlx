@@ -19429,16 +19429,18 @@ def _cat_singles_a_system(premises: list, question: str):
                 if ans > 0 and ans.is_integer():
                     return _rs_ret(ans)
 
-    # 53. PLUS-ONE GUESTS × COURSES (#363): invites N <person>; <frac> of the <person> bring a
-    #     plus one; a K-<unit> meal; a new <item> for every <unit>; ask how many <item> →
-    #     (N + frac·N)·K. "invites 30 people; half of the guests bring a plus one; 3-course meal;
-    #     a new plate for every course; how many plates" → 45·3 = 135. Person words via the person
-    #     category; the fraction read with _fraction_value; the meal unit captured from the
-    #     "K-<unit> meal" compound and identity-chained into "for every <unit>"; the item noun
-    #     captured and lemma-matched into the ask. Claimed only when the plus-one count is
-    #     integral; dok consumes N and K (+ a digit fraction's parts).
-    cr = re.search(rf"({N})-(\w+) meal", full)
-    if cr:
+    # 53. PLUS-ONE GUESTS × COURSES (#363; event noun de-hardcoded per user critique #370):
+    #     invites N <person>; <frac> of the <person> bring a plus one; a K-<unit> <event>; a new
+    #     <item> for every <unit>; ask how many <item> → (N + frac·N)·K. "invites 30 people; half
+    #     of the guests bring a plus one; 3-course meal; a new plate for every course; how many
+    #     plates" → 45·3 = 135. Person words via the person category; the fraction read with
+    #     _fraction_value; the serving unit captured from the "K-<unit> <event>" compound and
+    #     identity-chained into "for every <unit>"; the EVENT noun (meal/dinner/…) is read and
+    #     noun-gated, not hardcoded — the precision lives in the surrounding structural gates.
+    #     Claimed only when the plus-one count is integral; dok consumes N and K (+ a digit
+    #     fraction's parts).
+    cr = re.search(rf"({N})-(\w+) {_W}", full)
+    if cr and (_cat(cr.group(3), "noun") or _cat(cr.group(3), "plural")):
         iv = re.search(rf"invite[sd]? ({N}) {_W}", full)
         fr = re.search(rf"(\d+/\d+|[a-z-]+(?: [a-z]+)?) of the {_W} bring an? plus one", full)
         pl = re.search(rf"new {_W} for every {re.escape(cr.group(2))}", full)
