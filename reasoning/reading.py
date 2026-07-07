@@ -11651,6 +11651,14 @@ _register_category("retain", "verb")
 for _kv in ("keep keeps kept keeping retain retains retained").split():
     _tag_word(_kv, "retain")
 
+# TIMEPERIOD category (#357) — nouns naming a span a narrative runs over: "ends the DAY/WEEK/YEAR
+# with…". Rarer spans (fortnight/decade/…) are tagged without LEXICON admission (mask-known,
+# GUARD-1-inert until admitted — the #348 pattern).
+_register_category("timeperiod", "noun")
+for _tp in ("day week fortnight month year decade morning afternoon evening night weekend "
+            "semester term season").split():
+    _tag_word(_tp, "timeperiod")
+
 # LOSE verb category (#299) — the ANTONYM cluster of `acquire`: "come to have LESS of something" —
 # lose/give/spend/use/drop/sell/eat/throw/break/donate + inflections (aligned with LOSS_VERBS, the
 # semantic-fold's polarity set — keep the two in agreement). Multi-word forms ("gave away", "threw out")
@@ -19325,6 +19333,23 @@ def _cat_singles_a_system(premises: list, question: str):
         p_ = f(gv.group(1))
         if 0 < p_ < 100 and dok({wn.group(1), gv.group(1)}):
             return _rs_ret(f(wn.group(1)) * (100 - p_) / 100)
+
+    # 49. BEGIN-OF-PERIOD BACKWARD: consumption events (<lose-verb> Vi <unit>) and a mid-period
+    #     purchase of a B-<unit> container, ending the <period> with E <unit>; ask how many <unit> at
+    #     the BEGINNING → E + Σ Vi − B (what was consumed came from somewhere; the purchase wasn't
+    #     there at the start). "Drinks 8 oz ×3; buys a new 64-ounce container; ends the day with 56 oz;
+    #     began the day with?" → 56+24−64 = 16. The period word (day/week/year/… via the timeperiod
+    #     mask) is captured once and identity-chained into the begin-ask; the unit is read once and
+    #     lemma-matched everywhere; claimed only when positive; dok consumes all values.
+    en = re.search(rf"ends the ({_cat_re('timeperiod')}) with ({N}) {_W}", full)
+    if en:
+        per, un2 = re.escape(en.group(1)), _number_re(en.group(3))
+        evs = re.findall(rf"{_cat_re('lose')} (?:another )?({N}) {un2}", full)
+        bysz = re.search(rf"{_cat_re('acquire')} a new ({N})[- ]{un2}", full)
+        if evs and bysz and re.search(rf"how many {un2} [\w ]*did \w+ begin the {per} with", ql):
+            beg = f(en.group(2)) + sum(f(v) for v in evs) - f(bysz.group(1))
+            if beg > 0 and dok({en.group(2), bysz.group(1)} | set(evs)):
+                return _rs_ret(beg)
 
     return None
 
