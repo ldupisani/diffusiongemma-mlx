@@ -19451,6 +19451,31 @@ def _cat_singles_a_system(premises: list, question: str):
                 if (fv * n).is_integer() and dok({iv.group(1), cr.group(1)} | fdig):
                     return _rs_ret((n + fv * n) * k)
 
+    # 54. RATIO-SHARE SPEND REMAINDER (#364): "the ratio of <item> that X has to (that which)
+    #     Y has is a:b"; "total number of <item> they have is T"; "<spender> spends <frac> of
+    #     what s?he has"; ask "how many will s?he remain with" → the SPENDER's share of T by the
+    #     ratio (a or b picked by matching the spender's name back to the ratio clause), times
+    #     (1−frac). "coins 10:45, total 440, Amalie spends 3/4" → 440·45/55·(1/4) = 90. The
+    #     pronoun binds to the spend-clause subject (it directly precedes the ask). Claimed only
+    #     when the share and the answer are integral and positive; dok consumes a, b, T and a
+    #     digit fraction's parts.
+    rt = re.search(rf"ratio of {_W} that (\w+) has to (?:that which )?(\w+) has is ({N}):({N})",
+                   full)
+    if rt and (_cat(rt.group(1), "noun") or _cat(rt.group(1), "plural")):
+        tt = re.search(rf"total number of {_number_re(rt.group(1))} they have is ({N})", full)
+        sp = re.search(rf"(\w+) spends (\d+/\d+|[a-z-]+(?: [a-z]+)?) of what s?he has", full)
+        if tt and sp and re.search(r"how many (?:\w+ )?will s?he remain with", ql):
+            a, b, t = f(rt.group(4)), f(rt.group(5)), f(tt.group(1))
+            fv = _fraction_value(sp.group(2))
+            part = a if sp.group(1) == rt.group(2) else b if sp.group(1) == rt.group(3) else None
+            fdig = set(sp.group(2).split("/")) if "/" in sp.group(2) else set()
+            if part is not None and fv and 0 < fv < 1 and (a + b) > 0 \
+                    and dok({rt.group(4), rt.group(5), tt.group(1)} | fdig):
+                share = t * part / (a + b)
+                ans = share * (1 - fv)
+                if share.is_integer() and ans > 0 and ans.is_integer():
+                    return _rs_ret(ans)
+
     return None
 
 
