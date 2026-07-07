@@ -19123,6 +19123,21 @@ def _cat_singles_a_system(premises: list, question: str):
             if left > 0 and dok({tm.group(1), dm2.group(1), dm2.group(2)}):
                 return _rs_ret(left)
 
+    # 38. ROUND-TRIP ROUTE SAVING: two named routes with one-way times ("route A … 5 hours", "route B …
+    #     2 hours"); ask how much time is saved taking the named route there AND BACK → 2·(other −
+    #     asked), claimed only when positive (asking the slower route declines). The splitter severs
+    #     "if he takes route X" from "it will take him N hours" into adjacent premises — the pair regex
+    #     bridges the " . " join explicitly. Time units must agree between the two routes.
+    rts = re.findall(rf"route (\w+)\s*\.\s*it will (?:\w+ )?take (?:him|her|them) ({N}) (\w+)", full)
+    bk = re.search(r"takes? route (\w+) [\w ]*?and back", full)
+    if len(rts) == 2 and bk and re.search(r"how much time will \w+ save", ql):
+        (r1, t1, u1), (r2, t2, u2) = rts
+        if _noun_lemma(u1) == _noun_lemma(u2) and bk.group(1) in (r1, r2) and r1 != r2:
+            asked, other = (f(t1), f(t2)) if bk.group(1) == r1 else (f(t2), f(t1))
+            save = 2 * (other - asked)
+            if save > 0 and dok({t1, t2}):
+                return _rs_ret(save)
+
     return None
 
 
