@@ -19700,6 +19700,28 @@ def _cat_singles_a_system(premises: list, question: str):
         if base and ak2 and _scale(sc) and dok({base.group(1), base.group(2)} | scdig):
             return _rs_ret(f(base.group(1)) * (1 + _scale(sc)))
 
+    # 63. ORDINAL STARTS THEN STEADY RATE TO EXHAUSTION (#377): a pool "T <item> in total";
+    #     ordinal consumption "Ki <item> the first/second/… <period>"; a tail rate "R <item>
+    #     every <period> after"; ask "how many <period>s did it take" → len(ordinals) +
+    #     (T − ΣKi)/R when that divides exactly. "54 books; 6 first week, 3 second week, then 9
+    #     every week after" → 2 + 45/9 = 7. Item and period words read once and lemma-chained
+    #     everywhere; ordinals must be distinct; digit-accounted over T, every Ki and R.
+    tt = re.search(rf"(?:was|is|are|has) ({N}) {_W} in total", full)
+    if tt and (_cat(tt.group(2), "noun") or _cat(tt.group(2), "plural")):
+        nn = _number_re(tt.group(2))
+        ords = re.findall(rf"({N}) {nn} the (first|second|third|fourth) "
+                          rf"({_cat_re('timeperiod')})", full)
+        rate = re.search(rf"({N}) {nn} every ({_cat_re('timeperiod')}) after", full)
+        if ords and rate and len({o for _v, o, _p in ords}) == len(ords) \
+                and {p for _v, _o, p in ords} == {rate.group(2)} \
+                and re.search(rf"how many {re.escape(rate.group(2))}s? did it take", ql):
+            t0, r0 = f(tt.group(1)), f(rate.group(1))
+            eaten = sum(f(v) for v, _o, _p in ords)
+            if r0 > 0 and dok({tt.group(1), rate.group(1)} | {v for v, _o, _p in ords}):
+                rest = (t0 - eaten) / r0
+                if rest > 0 and rest.is_integer():
+                    return _rs_ret(len(ords) + rest)
+
     return None
 
 
