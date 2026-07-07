@@ -505,7 +505,8 @@ DISTRIBUTION_METHODS = {"equally": "equal", "evenly": "equal", "uniformly": "equ
 # stated in one unit folds into a rate/answer asked in another ("50 minutes" for an hourly rate).
 CONVERSIONS = {("minute", "hour"): 1 / 60, ("hour", "minute"): 60, ("second", "minute"): 1 / 60,
                ("minute", "second"): 60, ("hour", "day"): 1 / 24, ("day", "hour"): 24,
-               ("day", "week"): 1 / 7, ("week", "day"): 7, ("gram", "kilogram"): 1 / 1000,
+               ("day", "week"): 1 / 7, ("week", "day"): 7,
+               ("month", "year"): 1 / 12, ("year", "month"): 12, ("gram", "kilogram"): 1 / 1000,
                ("kilogram", "gram"): 1000, ("ounce", "pound"): 1 / 16, ("pound", "ounce"): 16,
                ("inch", "foot"): 1 / 12, ("foot", "inch"): 12, ("foot", "yard"): 1 / 3, ("yard", "foot"): 3,
                ("centimeter", "meter"): 1 / 100, ("meter", "centimeter"): 100,
@@ -19391,6 +19392,25 @@ def _cat_singles_a_system(premises: list, question: str):
             if fr3 and _scale(p2.group(1)) and dok({b1.group(1), p1.group(1)} | fdig2):
                 n1, pr1 = f(b1.group(1)), f(p1.group(1))
                 return _rs_ret(n1 * pr1 + (fr3 * n1) * (_scale(p2.group(1)) * pr1))
+
+    # 52. TENURE-PLUS-RAISE TOTAL EARNINGS: worked at the new company K months longer than the old;
+    #     old tenure Y years at $P per month; now earning R% more; calculate the total earned in both
+    #     → 12Y·P + (12Y+K)·P·(1+R/100), the year→month factor from _conv (added to CONVERSIONS, not
+    #     hardcoded). "Five months longer; 3 years at $5000/month; 20% more" → 180000 + 246000 =
+    #     426000. K may be a word-number; dok consumes Y, P, R.
+    t1 = re.search(rf"worked for [\w' ]*?new company ({_GP_NUMW}) months longer", full)
+    t2 = re.search(rf"worked at [\w' ]*?old company for ({N}) years earning \$({N}) per month", full)
+    t3 = re.search(rf"earning ({N})% more", full)
+    if t1 and t2 and t3 and re.search(r"calculate the total amount of money", ql) \
+            and "both companies" in ql:
+        c12 = _conv("year", "month")
+        if c12:
+            oldm = f(t2.group(1)) * c12
+            p3 = f(t2.group(2))
+            tot = oldm * p3 + (oldm + f(t1.group(1))) * p3 * (1 + f(t3.group(1)) / 100)
+            kdig2 = {t1.group(1)} if t1.group(1).isdigit() else set()
+            if tot > 0 and dok({t2.group(1), t2.group(2), t3.group(1)} | kdig2):
+                return _rs_ret(tot)
 
     return None
 
