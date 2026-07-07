@@ -11703,11 +11703,12 @@ _register_category("discount", "noun")
 for _dc in "coupon coupons voucher vouchers discount discounts rebate rebates".split():
     _tag_word(_dc, "discount")
 
-# DIVIDE verb category (#371) — the "apportion into parts" cluster: SPLIT/SHARE/DIVIDE the cost evenly.
-# "divided" carries an operator sense (arithmetic), so it is mask-reachable but _cat-inert — fine, the
-# consuming branches match via the mask inside tight structural regexes.
+# DIVIDE verb category (#371) — the "apportion into parts" cluster: SPLIT/SHARE/DIVIDE the cost evenly;
+# CUT each watermelon into 10 slices (#375). "divided" carries an operator sense (arithmetic), so it is
+# mask-reachable but _cat-inert — fine, the consuming branches match via the mask inside tight
+# structural regexes.
 _register_category("divide", "verb")
-for _dv in "split splits divide divides divided share shares shared".split():
+for _dv in "split splits divide divides divided share shares shared cut cuts".split():
     _tag_word(_dv, "divide")
 
 # CONTRIBUTE verb category (#371) — the "put money in" ask verbs: how much does each person CONTRIBUTE/
@@ -19659,6 +19660,26 @@ def _cat_singles_a_system(premises: list, question: str):
                 ans = total * (1 - fv)
                 if ans > 0 and ans.is_integer():
                     return _rs_ret(ans)
+
+    # 61. BRING-AND-CUT PART SUM (#375): paired events "<accompany> Ki <item>" and "<divide>
+    #     each/the <item> into Si <part>", zipped IN ORDER; ask "how many <item> <part> are there
+    #     in total" → Σ Ki·Si. "brings 3 watermelons, cuts each into 10 slices; brings 1, cuts
+    #     into 15" → 45. Everything read from the ask (item + part nouns) and matched via
+    #     existing masks (accompany for brings/takes, divide gaining cut/cuts); word-number
+    #     counts via _GP_NUMW; claimed only when the event lists pair up 1:1 (≥2 pairs) and every
+    #     digit is consumed.
+    ak = re.search(rf"how many {_W} {_W} are there in total", ql)
+    if ak and (_cat(ak.group(1), "noun") or _cat(ak.group(1), "plural")) \
+            and (_cat(ak.group(2), "noun") or _cat(ak.group(2), "plural")):
+        nn, pt = _number_re(ak.group(1)), _number_re(ak.group(2))
+        brs = re.findall(rf"{_cat_re('accompany')} ({_GP_NUMW}) {nn}", full)
+        cts = re.findall(rf"{_cat_re('divide')} (?:each|the|every) {nn} into ({N}) {pt}", full)
+        if len(brs) == len(cts) >= 2:
+            dig = {b for b in brs if b.isdigit()} | set(cts)
+            if dok(dig):
+                total = sum(f(b) * f(c) for b, c in zip(brs, cts))
+                if total > 0:
+                    return _rs_ret(total)
 
     return None
 
