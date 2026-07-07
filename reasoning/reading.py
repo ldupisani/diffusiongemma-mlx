@@ -18935,6 +18935,26 @@ def _cat_singles_a_system(premises: list, question: str):
         if dok(mdig | {str(int(fac)), "1"}):            # incl. a stated "1 <big> = <fac> <small>" clause
             return _rs_ret(abs(measures[0] - measures[1]))
 
+    # 27. RATIO INTO TWO PARTS: a total <unit> <noun> divided into 2 parts in the ratio a:b, ask the
+    #     shorter/longer (or first/second) part → total × sel/(a+b). "40 meters rope cut into 2 parts in
+    #     the ratio of 2:3; shorter part?" → 40·2/5 = 16. Unit/noun-agnostic; dok rejects any distractor.
+    rm = re.search(rf"({N})\s+{_W}[^.]*?(?:cut|divided|split|separated|shared|partitioned)[^.]*?"
+                   rf"into\s+(2|two)\s+parts?\s+in\s+(?:the\s+|a\s+)?ratio\s+(?:of\s+)?({N})\s*:\s*({N})", full)
+    if rm:
+        tot, a, b = f(rm.group(1)), f(rm.group(4)), f(rm.group(5))
+        parts_dig = {rm.group(3)} if rm.group(3).isdigit() else set()
+        sel = None
+        if re.search(r"\bthe (?:shorter|smaller|lesser|lower|shortest|smallest) part", ql):
+            sel = min(a, b)
+        elif re.search(r"\bthe (?:longer|larger|bigger|greater|higher|longest|largest) part", ql):
+            sel = max(a, b)
+        elif re.search(r"\bthe (?:first|1st) part", ql):
+            sel = a
+        elif re.search(r"\bthe (?:second|2nd) part", ql):
+            sel = b
+        if sel is not None and (a + b) and dok({rm.group(1), rm.group(4), rm.group(5)} | parts_dig):
+            return _rs_ret(tot * sel / (a + b))
+
     return None
 
 
