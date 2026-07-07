@@ -19044,6 +19044,19 @@ def _cat_singles_a_system(premises: list, question: str):
                 if val > 0:
                     return _rs_ret(val)
 
+    # 33. TWO-SPEED TIME SAVED: a D-<unit> trip; drive S2 <unit> an hour instead of S1 → the hours saved
+    #     = D/min(S) − D/max(S). "a 1200-mile trip … drive 60 miles an hour instead of 50 miles an hour"
+    #     → 1200/50 − 1200/60 = 4. The distance unit ("1200-mile") must lemma-match the speed unit
+    #     ("miles an hour") — a mismatched pair declines rather than dividing incompatible measures.
+    dm = re.search(rf"a ({N})[- ]({_W}) trip", full)
+    sm = re.search(rf"drives? ({N}) (\w+) (?:an|per) hour instead of ({N}) (\w+) (?:an|per) hour", full)
+    if dm and sm and re.search(r"how much time (?:will|would|do|does|can|did) \w+ save", ql) \
+            and _noun_lemma(dm.group(2)) == _noun_lemma(sm.group(2)) \
+            and _noun_lemma(sm.group(2)) == _noun_lemma(sm.group(4)):
+        d_, s1, s2 = f(dm.group(1)), f(sm.group(1)), f(sm.group(3))
+        if s1 and s2 and s1 != s2 and dok({dm.group(1), sm.group(1), sm.group(3)}):
+            return _rs_ret(d_ / min(s1, s2) - d_ / max(s1, s2))
+
     return None
 
 
