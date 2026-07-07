@@ -19138,6 +19138,19 @@ def _cat_singles_a_system(premises: list, question: str):
             if save > 0 and dok({t1, t2}):
                 return _rs_ret(save)
 
+    # 39. GOAL SHORTFALL FROM PER-GROUP EARNINGS: a stated money goal $G; earned $P1 each from K1
+    #     <group> and $P2 each from K2 <group>; ask how much more to reach the goal → G − Σ Ki·Pi,
+    #     claimed only when positive (goal already reached declines). "Goal $150; $10 each from three
+    #     families and $5 each from 15 families" → 150 − 30 − 75 = 45. Counts may be word-numbers.
+    gg = re.search(rf"goal is to (?:collect|earn|raise|make) \$({N})", full)
+    ee = re.findall(rf"\$({N}) each from ({_GP_NUMW}) \w+", full)
+    if gg and len(ee) >= 2 and re.search(r"how much more money do(?:es)? \w+ have to earn", ql) \
+            and "goal" in ql:
+        edig = {p for p, _k in ee} | {k for _p, k in ee if k.isdigit()}
+        left = f(gg.group(1)) - sum(f(p) * f(k) for p, k in ee)
+        if left > 0 and dok({gg.group(1)} | edig):
+            return _rs_ret(left)
+
     return None
 
 
