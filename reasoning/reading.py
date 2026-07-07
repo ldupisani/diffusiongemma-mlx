@@ -19282,6 +19282,30 @@ def _cat_singles_a_system(premises: list, question: str):
         if have >= f(cc.group(1)) and dok(ddig | {lc.group(1), cc.group(1)}):
             return _rs_ret(have - f(cc.group(1)))
 
+    # 47. FRACTION-SUBSET EQUAL SPLIT: has N <container> of <item>; <frac> of them are <subtype>;
+    #     split the <container> of <subtype> into P equal piles; ask per pile → N·frac/P, claimed only
+    #     when integral (whole containers). "80 bags of chips; one quarter are Doritos; split into 4
+    #     equal piles → 80/4/4 = 5." The fraction reads via FRACTION_MULTIPLIERS ("one quarter" →
+    #     one-quarter → (1,4)) or a literal a/b; the subtype word is identity-chained through the
+    #     split clause and the ask; dok consumes N, P (+ any digit fraction).
+    hm2 = re.search(rf"has ({N}) {_W} of {_W}", full)
+    if hm2 and _cat(hm2.group(2), "noun"):
+        cn3, in3 = _number_re(hm2.group(2)), _number_re(hm2.group(3))
+        fm2 = re.search(rf"(\w+[- ]\w+|\d+/\d+) of the {cn3} of {in3} are (\w+)", full)
+        if fm2:
+            tok = fm2.group(1)
+            fr2 = FRACTION_MULTIPLIERS.get(tok.replace(" ", "-"))
+            if "/" in tok and tok.split("/")[0].isdigit():
+                fr2 = (f(tok.split("/")[0]), f(tok.split("/")[1]))
+            sub = re.escape(fm2.group(2))
+            sm2 = re.search(rf"split the {cn3} of {sub} into ({N}) equal \w+", full)
+            qm5 = re.search(rf"how many {cn3} of {sub} will be in each", ql)
+            if fr2 and fr2[1] and sm2 and qm5 and f(sm2.group(1)):
+                fdig = set(tok.split("/")) if "/" in tok else set()
+                val = f(hm2.group(1)) * fr2[0] / fr2[1] / f(sm2.group(1))
+                if val > 0 and val == int(val) and dok({hm2.group(1), sm2.group(1)} | fdig):
+                    return _rs_ret(val)
+
     return None
 
 
