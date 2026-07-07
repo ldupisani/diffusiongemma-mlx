@@ -19214,6 +19214,21 @@ def _cat_singles_a_system(premises: list, question: str):
         if vals and len(vals) == n_ and len(units) == 1 and dok(vdig | {nm2.group(1)}):
             return _rs_ret(sum(vals) / n_)
 
+    # 43. GRID OCCUPANCY: R rows of <noun> with C <noun> in each row; only U <seat-word> not occupied;
+    #     ask how many <seat-word> taken → R·C − U. "40 rows of chairs, 20 chairs in each row, only 10
+    #     seats not occupied → 790." The ask's noun is identity-chained to the NOT-OCCUPIED clause's
+    #     noun (seats↔seats; the grid noun "chairs" is incidental); dok consumes R, C, U.
+    gr2 = re.search(rf"({N}) rows of {_W}", full)
+    if gr2 and _cat(gr2.group(2), "noun"):
+        nn = _number_re(gr2.group(2))
+        cm2 = re.search(rf"({N}) {nn} in each row", full)
+        um = re.search(rf"only ({N}) {_W} (?:were|are) not occupied", full)
+        qm4 = re.search(rf"how many {_W} (?:were|are) taken", ql)
+        if cm2 and um and qm4 and _noun_lemma(um.group(2)) == _noun_lemma(qm4.group(1)):
+            taken = f(gr2.group(1)) * f(cm2.group(1)) - f(um.group(1))
+            if taken > 0 and dok({gr2.group(1), cm2.group(1), um.group(1)}):
+                return _rs_ret(taken)
+
     return None
 
 
