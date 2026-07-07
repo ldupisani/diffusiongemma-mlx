@@ -19681,6 +19681,25 @@ def _cat_singles_a_system(premises: list, question: str):
                 if total > 0:
                     return _rs_ret(total)
 
+    # 62. SCALED-PAIR TOTAL OVER A SHARED PERIOD (#376): "X <verb> N <item-phrase> in D
+    #     <period>s"; "Y <verb> <scale> times as many <item-phrase> as X in the same period";
+    #     ask "the total of <item-phrase> they both <verb>" → N·(1+scale). "Max attended 40
+    #     college courses in 2 years; Sid four times as many; total both attended" → 200. The
+    #     verb and the (possibly compound) item phrase are read once and identity-chained through
+    #     the base clause and the ask; the duration D is READ so its digit is accounted (the
+    #     'same period' anchor is what makes it irrelevant to the sum). Scale via _scale.
+    s2 = re.search(rf"(\w+) (\w+) ({_SCALE_RE}) as many ((?:\w+ )?\w+) as (\w+) "
+                   rf"in the same period", full)
+    if s2 and _cat(s2.group(2), "verb") \
+            and (_cat(s2.group(4).split()[-1], "noun") or _cat(s2.group(4).split()[-1], "plural")):
+        y2, vb, sc, item, x2 = s2.groups()
+        base = re.search(rf"{re.escape(x2)} {re.escape(vb)} ({N}) {re.escape(item)} "
+                         rf"in ({N}) ({_cat_re('timeperiod')})s?", full)
+        ak2 = re.search(rf"total of {re.escape(item)} they both {re.escape(vb)}", ql)
+        scdig = set(re.findall(r"\d+", sc))
+        if base and ak2 and _scale(sc) and dok({base.group(1), base.group(2)} | scdig):
+            return _rs_ret(f(base.group(1)) * (1 + _scale(sc)))
+
     return None
 
 
