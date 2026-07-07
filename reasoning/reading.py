@@ -19777,6 +19777,46 @@ def _cat_singles_a_system(premises: list, question: str):
     return None
 
 
+def _fraction_split_part_count(premises: list, question: str):
+    """FRACTION SPLIT × PART-COUNT (#380): "<frac> of all the <group> … are <A> and the rest are
+    <B>"; "there are T <group>"; ask "total number of <part> of <A|B>" → share·T·attr(asked, part).
+    "two-thirds of animals are cats, rest dogs; 300 animals; legs of dogs" → 100·4 = 400. Composes
+    the fraction reader with the world-knowledge attr table (legs/wheels — the store the part-count
+    sum reads); the asked subtype picks frac or 1−frac; the split count must be integral (rounded
+    to 9dp first — 1−2/3 is float-inexact); digit-accounted (T is the only digit). A standalone
+    system (not a cat_singles_a branch) because GUARD 12 pre-declines legs-asks BEFORE the early
+    systems and must DEFER to this recognizer only when it actually CLAIMS — a decline here falls
+    back to the guard's decline, never to the fold (the Camden legs wrong-class stays shut out)."""
+    N = _RS_N
+    ql = question.lower()
+    full = " . ".join(p.lower() for p in premises) + " . " + ql
+
+    def f(t):
+        t = t.lower().replace(",", "")
+        return float(t) if t.replace(".", "", 1).isdigit() else float(NUMBERS.get(t, 0) or 0)
+
+    def dok(used):
+        return all(dd in used for dd in re.findall(r"\d+(?:,\d{3})*(?:\.\d+)?",
+                                                   " ".join(premises) + " " + question))
+
+    sp2 = re.search(rf"([\w-]+(?: \w+)?|\d+/\d+) of all the {_W}[\w ]* are ({_cat_re('animal')}) "
+                    rf"\. the rest are ({_cat_re('animal')})", full)
+    if sp2 and (_cat(sp2.group(2), "noun") or _cat(sp2.group(2), "plural")):
+        tt2 = re.search(rf"there are ({N}) {_number_re(sp2.group(2))}", full)
+        ak3 = re.search(rf"total number of (\w+) of ({_cat_re('animal')})", ql)
+        fv2 = _fraction_value(sp2.group(1))
+        if tt2 and ak3 and fv2 and 0 < fv2 < 1 and dok({tt2.group(1)}):
+            asked = ak3.group(2)
+            share = fv2 if _noun_lemma(asked) == _noun_lemma(sp2.group(3)) else \
+                (1 - fv2) if _noun_lemma(asked) == _noun_lemma(sp2.group(4)) else None
+            per = _attr(asked, _noun_lemma(ak3.group(1)) + "s")
+            if share is not None and per is not None:
+                cnt = round(share * f(tt2.group(1)), 9)
+                if cnt > 0 and cnt.is_integer():
+                    return _rs_ret(cnt * per)
+    return None
+
+
 # ── PARTITION-CHAIN: a group split into disjoint parts, resolved by FACT SATURATION (#312) ──────────────
 # The general reformulation of the two-stage fraction chain (was a fixed formula in _cat_singles_a #35).
 # Instead of computing N·(1−f1)·(1−f2), it READS the text into GROUP facts — a universe split into disjoint
@@ -24389,6 +24429,9 @@ _EARLY_SYSTEMS = [
     ("ratio_partition", _ratio_partition_system),
     # CATEGORICAL SINGLES: word-agnostic long-tail branches (item noun via _W/_cat, coeff via _scale).
     ("cat_singles_a", _cat_singles_a_system),
+    # FRACTION SPLIT × PART-COUNT: "⅔ of animals are cats, rest dogs; 300 animals; legs of dogs?" → 400.
+    # Also called directly from GUARD 12's exception (legs-asks are pre-declined before the early systems).
+    ("fraction_split_part_count", _fraction_split_part_count),
     # VOCAB+STRUCTURE SINGLES: twenty-eight branches with wave-22 vocabulary (#232).
     ("vocab_singles", _vocab_singles_system),
     # MIXED SINGLES C: thirty-nine residual branches (#231).
@@ -24893,6 +24936,13 @@ def _solve_inner(text: str):
                    re.findall(rf"({_RS_N}) {_W}", " . ".join(p.lower() for p in premises))
                    if _attr(_wd, "legs") is not None}
         if len(_legged) < 2:
+            # EXCEPTION (#380): the fraction-split × part-count recognizer carries its own world
+            # knowledge (subtype counts DERIVED from frac × total, so nothing here is digit-counted).
+            # Defer only when it CLAIMS; its decline falls through to the guard's decline, so the
+            # fold still can't reach a legs-ask (the Camden wrong-class stays shut out).
+            _fs = _fraction_split_part_count(premises, question)
+            if _fs is not None:
+                return _snap(_fs)
             return "undetermined"
     # ARITHMETIC SYSTEM-SOLVERS (EARLY) — tried before the read-synthesize fixpoint (each relation
     # DEFERS to no fact, so a stated factor/offset/total would trip the unused-given GUARD 3 in the
