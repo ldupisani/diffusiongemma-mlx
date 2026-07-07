@@ -19550,6 +19550,25 @@ def _cat_singles_a_system(premises: list, question: str):
                 and dok({m.group(1), m.group(4), m2.group(1), m2.group(2)}):
             return _rs_ret(f(m.group(1)) * f(m.group(4)) + f(m2.group(1)) * f(m2.group(2)))
 
+    # 58. ORDINAL POSITION + SIGNED MOVES = TOTAL COUNT (#368): "is on the P-th <unit>"; signed
+    #     moves "up/down Vi <unit>s"; "is on the top <unit>"; ask "how many <unit>s are there in
+    #     the <container>" → P + Σ(±Vi). "9th floor; down 7, up 3, up 8; on the top floor; how
+    #     many floors in the building" → 13. The unit word is read from the ordinal clause and
+    #     lemma-chained through the moves, the top-clause and the ask; the TOP clause is what
+    #     licenses position = count. Claimed only with ≥2 moves and a positive integral result;
+    #     dok consumes the start and every move.
+    st = re.search(rf"is on the ({N})(?:st|nd|rd|th) {_W}", full)
+    if st and (_cat(st.group(2), "noun") or _cat(st.group(2), "plural")):
+        un = _number_re(st.group(2))
+        moves = re.findall(rf"(up|down) ({N}) +{un}", full)
+        if len(moves) >= 2 and re.search(rf"is on the top {re.escape(st.group(2))}", full):
+            ak = re.search(rf"how many {un} are there in the {_W}", ql)
+            if ak and (_cat(ak.group(1), "noun") or _cat(ak.group(1), "plural")) \
+                    and dok({st.group(1)} | {v for _d, v in moves}):
+                pos = f(st.group(1)) + sum((1 if d == "up" else -1) * f(v) for d, v in moves)
+                if pos > 0 and pos.is_integer():
+                    return _rs_ret(pos)
+
     return None
 
 
