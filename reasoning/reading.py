@@ -19247,6 +19247,17 @@ def _cat_singles_a_system(premises: list, question: str):
             if dok(sdig):
                 return _rs_ret(sum(f(k) * f(sizes[mod]) for k, _c, mod, _n in buys2))
 
+    # 45. MULTI-LEG AVERAGE SPEED: "the drive from <A> to <B> is D1 <unit>" legs (same unit lemma),
+    #     a total time "in T hours", ask the average (minimum) speed → Σ Di / T (unit per hour).
+    #     "SLC→Vegas 420 miles; Vegas→LA 273 miles; in 11 hours" → 693/11 = 63. dok consumes every
+    #     leg + the time; a leg in a different unit breaks the single-lemma gate → decline.
+    legs = re.findall(rf"the drive from [\w ]+? to [\w ]+? is ({N}) {_W}", full)
+    tt = re.search(rf"in ({N}) hours", full)
+    if len(legs) >= 2 and tt and len({_noun_lemma(u) for _d, u in legs}) == 1 \
+            and re.search(r"average (?:minimum )?speed", ql) and f(tt.group(1)):
+        if dok({d for d, _u in legs} | {tt.group(1)}):
+            return _rs_ret(sum(f(d) for d, _u in legs) / f(tt.group(1)))
+
     return None
 
 
