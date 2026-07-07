@@ -19007,6 +19007,21 @@ def _cat_singles_a_system(premises: list, question: str):
         if c and rr and a2 > a1 and dok({gm.group(1), gm.group(3), ga.group(2)} | rdig):
             return _rs_ret(f(gm.group(1)) + rr * c * (a2 - a1))
 
+    # 31. ARITHMETIC-SERIES GOAL: on the first day A <item> collected, the count increasing by D each
+    #     day, over K days; ask the goal (the K-day total) → K·A + D·K·(K−1)/2. "On the first day,
+    #     20 cans were collected; increased by 5 each day; collected 5 days a week to reach their goal;
+    #     how many cans was their goal per week?" → 100 + 5·10 = 150. The "goal" gate keeps this off
+    #     single-day asks ("how many on the third day"); dok rejects any distractor digit.
+    fm = re.search(rf"on the first day,? ({N}) {_W}", full)
+    if fm and _cat(fm.group(2), "noun"):
+        nn = _number_re(fm.group(2))
+        dm = re.search(rf"{nn} increased by ({N}) each day", full)
+        km = re.search(rf"({N}) days", full)
+        if dm and km and re.search(rf"how many {nn}", ql) and "goal" in ql:
+            a_, d_, k_ = f(fm.group(1)), f(dm.group(1)), f(km.group(1))
+            if k_ >= 2 and dok({fm.group(1), dm.group(1), km.group(1)}):
+                return _rs_ret(k_ * a_ + d_ * k_ * (k_ - 1) / 2)
+
     return None
 
 
