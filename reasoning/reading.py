@@ -19569,6 +19569,25 @@ def _cat_singles_a_system(premises: list, question: str):
                 if pos > 0 and pos.is_integer():
                     return _rs_ret(pos)
 
+    # 59. EVEN SPLIT MINUS COUPON (#369): an enumerated name list "X, Y(,) and Z decided to go";
+    #     "split the cost of the <event> evenly"; "total price of the <event> comes to $T";
+    #     "coupon for $C"; ask "how much does each <person> need to contribute" → (T−C)/count,
+    #     the head-count READ from the enumeration. "$67 meal, $4 coupon, 3 names" → 21. The
+    #     event noun is captured once and identity-chained into the price clause; claimed only
+    #     when the share is integral and positive; dok consumes T and C.
+    nl = re.search(rf"((?:\w+, )+\w+,? and \w+) decided to go", full)
+    if nl:
+        ev = re.search(rf"split the cost of the {_W} evenly", full)
+        if ev and (_cat(ev.group(1), "noun") or _cat(ev.group(1), "plural")):
+            tp = re.search(rf"total price of the {re.escape(ev.group(1))} comes to \$({N})", full)
+            cp = re.search(rf"coupon for \$({N})", full)
+            ak = re.search(rf"how much does each ({_cat_re('person')}) need to contribute", ql)
+            names = [w for w in re.split(r",? and |, ", nl.group(1)) if w]
+            if tp and cp and ak and len(names) >= 2 and dok({tp.group(1), cp.group(1)}):
+                share = (f(tp.group(1)) - f(cp.group(1))) / len(names)
+                if share > 0 and share.is_integer():
+                    return _rs_ret(share)
+
     return None
 
 
