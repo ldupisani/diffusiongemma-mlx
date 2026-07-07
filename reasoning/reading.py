@@ -19796,6 +19796,32 @@ def _cat_singles_a_system(premises: list, question: str):
                 if ans > 0 and ans.is_integer():
                     return _rs_ret(ans)
 
+    # 67. SELLS-AT PRICE LIST, WORD-NUMBER BILL CHANGE (#382): a "sells <head> at $Pi (each)"
+    #     price list (the splitter's conjunct-rewrite inserts 'sells' before every head noun, so
+    #     one pattern reads all entries); purchases "<numword> <mod…> <head>" keyed by head
+    #     lemma; a word-number bill "<lose> a (one) hundred dollar <cashtoken>"; ask "how much
+    #     change does … get back" → bill − Σ Ki·Pi, non-negative, every purchase priced.
+    #     "bracelets $15, necklace $10, mug $20; 3+2+1; $100 bill" → 15. Complements branch 50
+    #     (imperative-ask price list); lose + cashtoken masks reused; digit-accounted (counts
+    #     and the bill are word-numbers; the prices are the only digits).
+    pr2 = {_noun_lemma(a or b): p for a, b, p in
+           re.findall(rf"(?:sells (\w+)|(\w+) sells) at \$({N})", full)}
+    if len(pr2) >= 2 and re.search(r"how much change does \w+ get back", ql):
+        bl = re.search(rf"{_cat_re('lose')} an? (?:({_GP_NUMW}) )?hundred dollar "
+                       rf"{_cat_re('cashtoken')}", full)
+        by = re.search(r"buys ([^.?]*)", full)
+        if bl and by:
+            terms = re.findall(rf"({_GP_NUMW}) ((?:[a-z]+ ){{0,3}}?[a-z]+)(?:,| and| for|\.|$)",
+                               by.group(1))
+            heads = [(k, w.split()[-1]) for k, w in terms]
+            if len(heads) >= 2 and all(_noun_lemma(h) in pr2 for _k, h in heads) \
+                    and dok(set(pr2.values())):
+                bill3 = 100 * (f(bl.group(1)) if bl.group(1) else 1)
+                spent2 = sum(f(k) * f(pr2[_noun_lemma(h)]) for k, h in heads)
+                change3 = bill3 - spent2
+                if spent2 > 0 and change3 >= 0:
+                    return _rs_ret(change3)
+
     return None
 
 
