@@ -19191,6 +19191,29 @@ def _cat_singles_a_system(premises: list, question: str):
             if dok(used):
                 return _rs_ret((f(wm.group(1)) * c + f(wm.group(3))) / f(wm.group(5)))
 
+    # 42. ORDINAL-LISTED AVERAGE with an "each" group (#349 — the shape #324 deferred): "average
+    #     <measure> of her <noun>; has N of them; the first K <verb> V <unit> each; the third <verb> V2
+    #     <unit>; …; what is their average <measure>?" → Σ/N. NO measure→unit world knowledge needed:
+    #     the ask's measure word is identity-chained to the intro premise ("average WEIGHT of her cats"
+    #     ↔ "their average WEIGHT"), and every value must share one unit lemma. Claimed only when the
+    #     listed values (each-group counts + singles) number exactly N. "4 cats; first two weigh 12 lbs
+    #     each; third 14.7; fourth 9.3 → (24+14.7+9.3)/4 = 12."
+    im = re.search(rf"average (\w+) of \w+ {_W}", full)
+    nm2 = re.search(rf"has ({N}) of them", full)
+    qa = re.search(r"what is their average (\w+)", ql)
+    if im and nm2 and qa and qa.group(1) == im.group(1):
+        vals, vdig, units = [], set(), set()
+        for mm in re.finditer(rf"the (?:first|next|last) ({_GP_NUMW}) \w+ ({N}) {_W} each", full):
+            vals += [f(mm.group(2))] * int(f(mm.group(1)))
+            vdig.add(mm.group(2)); vdig |= {mm.group(1)} if mm.group(1).isdigit() else set()
+            units.add(_noun_lemma(mm.group(3)))
+        for mm in re.finditer(rf"the (?:second|third|fourth|fifth|sixth|seventh|last) \w+ ({N}) {_W}\b",
+                              full):
+            vals.append(f(mm.group(1))); vdig.add(mm.group(1)); units.add(_noun_lemma(mm.group(2)))
+        n_ = f(nm2.group(1))
+        if vals and len(vals) == n_ and len(units) == 1 and dok(vdig | {nm2.group(1)}):
+            return _rs_ret(sum(vals) / n_)
+
     return None
 
 
