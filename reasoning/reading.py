@@ -19167,6 +19167,20 @@ def _cat_singles_a_system(premises: list, question: str):
         if change > 0 and dok({bl.group(1)} | pdig):
             return _rs_ret(change)
 
+    # 41. COMPOUND-MEASURE EQUAL PARTS: an object "A <big> B <small> long" divided into P equal parts;
+    #     ask each part in <small> → (A·conv + B)/P, factor from _conv (no hardcoded pair; the text's
+    #     own stated "1 <big> = c <small>" clause is dok-accounted like branch 26). "Wire 5 feet
+    #     4 inches long divided into 4 equal parts; each part in inches?" → (60+4)/4 = 16. Asking in
+    #     the BIG unit declines (a different formula — decline, don't guess).
+    wm = re.search(rf"({N}) {_W} ({N}) {_W} long was divided into ({N}) equal parts", full)
+    if wm:
+        c = _conv(wm.group(2), wm.group(4))
+        qm3 = re.search(rf"how long was each part in {_number_re(wm.group(4))}", ql)
+        if c and c > 1 and qm3 and f(wm.group(5)):
+            used = {wm.group(1), wm.group(3), wm.group(5), "1", str(int(c))}
+            if dok(used):
+                return _rs_ret((f(wm.group(1)) * c + f(wm.group(3))) / f(wm.group(5)))
+
     return None
 
 
