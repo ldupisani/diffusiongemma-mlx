@@ -19229,6 +19229,24 @@ def _cat_singles_a_system(premises: list, question: str):
             if taken > 0 and dok({gr2.group(1), cm2.group(1), um.group(1)}):
                 return _rs_ret(taken)
 
+    # 44. TYPED PACK-SIZE SUM: bought K1 <container> of <mod1> <noun> and K2 <container> of <mod2>
+    #     <noun>; "the <modi> <noun> come in <container> of Si"; ask total <noun> → Σ Ki·Si, keyed by
+    #     the modifier. "3 packs of white T-shirts, 2 packs of blue; white come in packs of 6, blue in
+    #     packs of 4 → 18+8 = 26." Container and noun are read words (boxes/packs/…); every bought
+    #     modifier must have a stated size (else decline); dok consumes all counts and sizes.
+    buys2 = re.findall(rf"({N}) {_W} of (\w+) {_W}", full)
+    if len(buys2) >= 2 and len({_noun_lemma(b[3]) for b in buys2}) == 1 \
+            and len({_noun_lemma(b[1]) for b in buys2}) == 1:
+        cn2, nn2 = _number_re(buys2[0][1]), _number_re(buys2[0][3])
+        sizes = dict()
+        for mm in re.finditer(rf"the (\w+) {nn2} come in {cn2} of ({N})", full):
+            sizes[mm.group(1)] = mm.group(2)
+        if re.search(rf"how many {nn2} did \w+ buy (?:in all|in total|altogether)", ql) \
+                and all(mod in sizes for _k, _c, mod, _n in buys2):
+            sdig = {k for k, _c, _m, _n in buys2} | set(sizes.values())
+            if dok(sdig):
+                return _rs_ret(sum(f(k) * f(sizes[mod]) for k, _c, mod, _n in buys2))
+
     return None
 
 
