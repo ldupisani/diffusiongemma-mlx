@@ -11601,7 +11601,8 @@ for _b in ("building buildings house houses apartment apartments condo condos to
 # swimmer's "lap" of a person never counts. Roots at "verb", so `_ctx_syn` requires a member used AS a verb.
 _register_category("motion", "verb")
 for _mv in ("walk walks walked run runs ran drive drives drove ride rides rode jog jogs jogged bike bikes "
-            "biked swim swims swam travel travels traveled row rows rowed sprint sprints sprinted").split():
+            "biked swim swims swam travel travels traveled row rows rowed sprint sprints sprinted "
+            "fly flies flew sail sails sailed hike hikes hiked").split():
     _tag_word(_mv, "motion")
 
 # RECEIVE verb category (#297) — distribution/receipt verbs: "each person RECEIVES 2 towels" ≡ "each guest
@@ -19108,19 +19109,22 @@ def _cat_singles_a_system(premises: list, question: str):
         if need > 0 and dok({ck.group(2), hk.group(1)} | kdig):
             return _rs_ret(need)
 
-    # 37. TOTAL-DISTANCE MINUS DRIVEN: the distance across a <place> is T <unit>; drove A <unit> on one
-    #     day and B <unit> on another; ask how many <unit> still to drive → T − A − B (claimed only when
-    #     positive). "Distance across a country is 8205 km; drove 907 km on Monday and 582 km on
-    #     Tuesday; how many km does she still have to drive?" → 6716. Unit read once and lemma-matched
-    #     at every site (the "no hardcoded units" rule); dok consumes T, A, B.
+    # 37. TOTAL-DISTANCE MINUS TRAVELED (#345 generalized drove→motion category): the distance across a
+    #     <place> is T <unit>; <moved> A <unit> on one day and B <unit> on another; ask how many <unit>
+    #     still to <move> → T − A − B (claimed only when positive). "Distance across a country is 8205
+    #     km; drove 907 km on Monday and 582 km on Tuesday; how many km does she still have to drive?"
+    #     → 6716 — and the same branch reads walked/flew/sailed/hiked/… via _cat_re('motion'). The ask
+    #     verb must share the premise verb's LEMMA (drove↔drive; a mode switch declines). Unit read once
+    #     and lemma-matched at every site (the "no hardcoded units" rule); dok consumes T, A, B.
     tm = re.search(rf"distance across a \w+ is ({N}) {_W}", full)
     if tm:
         un = _number_re(tm.group(2))
-        dm2 = re.search(rf"drove ({N}) {un} on \w+ and ({N}) {un} on \w+", full)
-        if dm2 and re.search(rf"how many {un} .*still (?:has|have) to drive", ql):
-            t_, a_, b_ = f(tm.group(1)), f(dm2.group(1)), f(dm2.group(2))
+        dm2 = re.search(rf"({_cat_re('motion')}) ({N}) {un} on \w+ and ({N}) {un} on \w+", full)
+        qm2 = re.search(rf"how many {un} .*still (?:has|have) to ({_cat_re('motion')})", ql)
+        if dm2 and qm2 and _lemma(dm2.group(1)) == _lemma(qm2.group(1)):
+            t_, a_, b_ = f(tm.group(1)), f(dm2.group(2)), f(dm2.group(3))
             left = t_ - a_ - b_
-            if left > 0 and dok({tm.group(1), dm2.group(1), dm2.group(2)}):
+            if left > 0 and dok({tm.group(1), dm2.group(2), dm2.group(3)}):
                 return _rs_ret(left)
 
     # 38. ROUND-TRIP ROUTE SAVING: two named routes with one-way times ("route A … 5 hours", "route B …
