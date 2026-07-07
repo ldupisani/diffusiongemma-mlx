@@ -19476,6 +19476,35 @@ def _cat_singles_a_system(premises: list, question: str):
                 if share.is_integer() and ans > 0 and ans.is_integer():
                     return _rs_ret(ans)
 
+    # 55. AGE-DIFFERENCE-ENCODED QUANTITY (#365 — the DIFFERENCE sibling of branch 52's sum):
+    #     "the age difference between X and Y's age is <frac/scale> the total number of <item> X
+    #     has"; "the sum of their ages is S"; "X is A years old"; "Y has D more <item> than X";
+    #     imperative ask "the total number of <item> they have together" → Y's age = S−A,
+    #     diff = |A−(S−A)|, X's items = diff/value, total = 2·(X's items) + D. "diff is half of
+    #     Asaf's pencils; ages sum 140; Asaf is 50; Alexander has 60 more" → 40/0.5=80 → 220.
+    #     The coefficient token reads as a fraction OR a multiplier (half/2/3/twice — the same
+    #     inversion is correct either way). Claimed only when the item count is integral and
+    #     positive; dok consumes S, A, D (+ a digit fraction's parts).
+    m = re.search(rf"age difference between (\w+) and (\w+)'s age is "
+                  rf"(\d+/\d+|[a-z-]+(?: [a-z]+)?) the total number of {_W} \1 has", full)
+    if m and (_cat(m.group(4), "noun") or _cat(m.group(4), "plural")):
+        x, y = re.escape(m.group(1)), re.escape(m.group(2))
+        nn = _number_re(m.group(4))
+        sm = re.search(rf"sum of their ages is ({N})", full)
+        ag = re.search(rf"{x} is ({N}) years old", full)
+        mo = re.search(rf"{y} has ({N}) more {nn} than {x}", full)
+        if sm and ag and mo and re.search(
+                rf"(?:calculate|determine|find|compute) the total number of {nn} "
+                rf"(?:that )?they have together", ql):
+            val = _fraction_value(m.group(3)) or _scale(m.group(3))
+            s, a, dmore = f(sm.group(1)), f(ag.group(1)), f(mo.group(1))
+            fdig = set(m.group(3).split("/")) if "/" in m.group(3) else set()
+            if val and 0 < a < s and dok({sm.group(1), ag.group(1), mo.group(1)} | fdig):
+                diff = abs(a - (s - a))
+                xi = diff / val
+                if diff > 0 and xi > 0 and xi.is_integer():
+                    return _rs_ret(2 * xi + dmore)
+
     return None
 
 
