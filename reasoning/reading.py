@@ -19092,6 +19092,22 @@ def _cat_singles_a_system(premises: list, question: str):
             if 0 < psum < 100 and dok({cm.group(1), cm.group(2)} | {p for p, _w in pcts}):
                 return _rs_ret((f(cm.group(1)) + f(cm.group(2))) * (100 - psum) / 100)
 
+    # 36. SELF-PLUS-K SHORTFALL: buy <item>s for her/him and for K of her/his friends (K+1 buyers);
+    #     one <item> costs $C; ask how much money is needed to earn given currently has $H →
+    #     (K+1)·C − H, claimed only when positive (already-affordable declines rather than answering
+    #     a negative need). "Tickets for her and for three of her friends; one ticket cost is $90;
+    #     currently has only $189" → 4·90 − 189 = 171. Item lemma-linked premise↔price; K may be a
+    #     word-number ("three", not dok'd — dok covers the digit prices).
+    tk = re.search(rf"buy {_W} for (?:her|him) and for ({_GP_NUMW}) of", full)
+    ck = re.search(rf"one {_W} costs? (?:is )?\$({N})", full)
+    hk = re.search(rf"currently has (?:only )?\$({N})", full)
+    if tk and ck and hk and re.search(r"how much (?:more )?money does \w+ need to earn", ql) \
+            and _noun_lemma(tk.group(1)) == _noun_lemma(ck.group(1)):
+        kdig = {tk.group(2)} if tk.group(2).isdigit() else set()
+        need = (f(tk.group(2)) + 1) * f(ck.group(2)) - f(hk.group(1))
+        if need > 0 and dok({ck.group(2), hk.group(1)} | kdig):
+            return _rs_ret(need)
+
     return None
 
 
