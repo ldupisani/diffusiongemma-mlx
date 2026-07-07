@@ -19752,6 +19752,28 @@ def _cat_singles_a_system(premises: list, question: str):
                     if tot > 0:
                         return _rs_ret(tot)
 
+    # 65. SUBTYPE-PAIR EVEN DIVISION (#379): "there are N <adj1> <item>"; "there are D more
+    #     <adj2> <item> than <adj1> <item>"; "<item> will be evenly <divide>d among K <group>";
+    #     ask "how many <item> will one <group> <receive>" → (2N+D)/K, exact only. "3414 yellow
+    #     balloons, 1762 more black; divided among 10 schools" → 859. Divide + receive masks
+    #     reused; adjectives and both nouns read and identity-chained; digit-accounted.
+    b0 = re.search(rf"are ({N}) (\w+) {_W}", full)
+    if b0 and (_cat(b0.group(3), "noun") or _cat(b0.group(3), "plural")):
+        nn, adj1 = _number_re(b0.group(3)), b0.group(2)
+        mr = re.search(rf"are ({N}) more (\w+) {nn} than {re.escape(adj1)} {nn}", full)
+        dv = re.search(rf"{nn} will be (?:evenly|equally) {_cat_re('divide')}d? among "
+                       rf"({N}) {_W}", full)
+        if mr and dv and (_cat(dv.group(2), "noun") or _cat(dv.group(2), "plural")):
+            gp = _number_re(dv.group(2))
+            ak = re.search(rf"how many {nn} will (?:one|each|every) {gp} "
+                           rf"{_cat_re('receive')}", ql)
+            if ak and dok({b0.group(1), mr.group(1), dv.group(1)}):
+                n0, d0, k0 = f(b0.group(1)), f(mr.group(1)), f(dv.group(1))
+                if k0 > 0:
+                    ans = (2 * n0 + d0) / k0
+                    if ans > 0 and ans.is_integer():
+                        return _rs_ret(ans)
+
     return None
 
 
