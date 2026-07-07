@@ -19108,6 +19108,21 @@ def _cat_singles_a_system(premises: list, question: str):
         if need > 0 and dok({ck.group(2), hk.group(1)} | kdig):
             return _rs_ret(need)
 
+    # 37. TOTAL-DISTANCE MINUS DRIVEN: the distance across a <place> is T <unit>; drove A <unit> on one
+    #     day and B <unit> on another; ask how many <unit> still to drive → T − A − B (claimed only when
+    #     positive). "Distance across a country is 8205 km; drove 907 km on Monday and 582 km on
+    #     Tuesday; how many km does she still have to drive?" → 6716. Unit read once and lemma-matched
+    #     at every site (the "no hardcoded units" rule); dok consumes T, A, B.
+    tm = re.search(rf"distance across a \w+ is ({N}) {_W}", full)
+    if tm:
+        un = _number_re(tm.group(2))
+        dm2 = re.search(rf"drove ({N}) {un} on \w+ and ({N}) {un} on \w+", full)
+        if dm2 and re.search(rf"how many {un} .*still (?:has|have) to drive", ql):
+            t_, a_, b_ = f(tm.group(1)), f(dm2.group(1)), f(dm2.group(2))
+            left = t_ - a_ - b_
+            if left > 0 and dok({tm.group(1), dm2.group(1), dm2.group(2)}):
+                return _rs_ret(left)
+
     return None
 
 
