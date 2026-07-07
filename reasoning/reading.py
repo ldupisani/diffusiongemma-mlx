@@ -19536,6 +19536,20 @@ def _cat_singles_a_system(premises: list, question: str):
                 if diff > 0:
                     return _rs_ret(a0 + diff + k0)
 
+    # 57. TWO-RATE MAKEUP TOTAL (#367): "gets H1 <unit> of <act> D1 <period>s in a row";
+    #     "<verb> H2 <unit> the next D2 <period>s"; ask "how much <act> did .e get" →
+    #     H1·D1 + H2·D2. "6 hours of sleep 2 days in a row; sleeps 10 hours the next 2 days;
+    #     how much sleep" → 12+20 = 32. The measure unit, the activity noun and the period word
+    #     are all read from the text and identity-chained (unit by lemma, period via the
+    #     timeperiod mask) — nothing item-specific hardcoded. dok consumes all four values.
+    m = re.search(rf"({N}) {_W} of {_W} ({N}) ({_cat_re('timeperiod')})s? in a row", full)
+    if m and (_cat(m.group(2), "measure") or _cat(m.group(2), "noun") or _cat(m.group(2), "plural")):
+        un, act, per = _number_re(m.group(2)), m.group(3), m.group(5)
+        m2 = re.search(rf"\w+ ({N}) {un} the next ({N}) {re.escape(per)}s?", full)
+        if m2 and re.search(rf"how much {re.escape(act)} did \w+ get", ql) \
+                and dok({m.group(1), m.group(4), m2.group(1), m2.group(2)}):
+            return _rs_ret(f(m.group(1)) * f(m.group(4)) + f(m2.group(1)) * f(m2.group(2)))
+
     return None
 
 
