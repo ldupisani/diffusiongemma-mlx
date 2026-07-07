@@ -18990,6 +18990,23 @@ def _cat_singles_a_system(premises: list, question: str):
         if val >= 0 and dok({ycm.group(2), yv.group(1), yv.group(2), yq.group(1)}):
             return _rs_ret(val)
 
+    # 30. AGE-INDEXED LINEAR GROWTH (units read, factor from _conv): measure V <small-unit> on the Nth
+    #     birthday, grows R <big-unit> per year, ask the measure in <small-unit> on the Mth birthday →
+    #     V + R·conv(big,small)·(M−N). "Alexander was 50 inches on his 8th birthday; grows 1/2 a foot a
+    #     year; how many inches on his 12th birthday?" → 50 + (1/2)·12·(12−8) = 74. R may be a fraction;
+    #     _conv returning a factor is what proves both captured words are real units (or the same word).
+    gm = re.search(rf"was ({N}) {_W} on \w+ (\d+)(?:st|nd|rd|th) birthday", full)
+    gr = re.search(rf"grows? (\d+/\d+|{N}) (?:of )?(?:an? )?(\w+) (?:a|per|each|every) year", full)
+    ga = re.search(rf"how many {_W}\b.*?\b(\d+)(?:st|nd|rd|th) birthday", ql)
+    if gm and gr and ga and _noun_lemma(gm.group(2)) == _noun_lemma(ga.group(1)):
+        c = _conv(gr.group(2), gm.group(2))
+        rtok = gr.group(1)
+        rr = f(rtok.split("/")[0]) / f(rtok.split("/")[1]) if "/" in rtok else f(rtok)
+        a1, a2 = f(gm.group(3)), f(ga.group(2))
+        rdig = set(rtok.split("/")) if "/" in rtok else ({rtok} if rtok[0].isdigit() else set())
+        if c and rr and a2 > a1 and dok({gm.group(1), gm.group(3), ga.group(2)} | rdig):
+            return _rs_ret(f(gm.group(1)) + rr * c * (a2 - a1))
+
     return None
 
 
