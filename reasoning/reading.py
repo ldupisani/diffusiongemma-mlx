@@ -11551,6 +11551,14 @@ _register_category("coin", "noun")
 for _c, _cents in (("penny", 1), ("nickel", 5), ("dime", 10), ("quarter", 25)):
     _tag_word(_c, "coin")
     _tag_attr(_c, cents=_cents)
+# CASHTOKEN category (#348) — the denomination-bearing physical money words: "a $50 BILL/NOTE/BANKNOTE/
+# COIN". "bill" is the American form; a branch reading "$N <token>" should read them all. note/banknote
+# are tagged WITHOUT LEXICON admission (the spider precedent: mask-known but GUARD-1-inert — admitting a
+# common word like "note", also a verb, is the holdout-poison mechanism; the tag goes live for free the
+# day the word earns admission). Plural forms come from _number_variants in the mask.
+_register_category("cashtoken", "noun")
+for _ct in ("bill", "note", "banknote", "coin"):
+    _tag_word(_ct, "cashtoken")
 # LEG counts — world knowledge for "how many legs" sums (0 for legless; snakes/fish 0).
 for _leg, _legwords in ((4, "dog cat cow horse pig goat sheep lamb bear tiger lion fox wolf deer donkey "
                             "camel zebra rabbit koala elephant"),
@@ -19155,11 +19163,13 @@ def _cat_singles_a_system(premises: list, question: str):
         if left > 0 and dok({gg.group(1)} | edig):
             return _rs_ret(left)
 
-    # 40. BILL CHANGE FROM PER-ITEM PURCHASES: given a $B bill; bought K1 <container> of <item> that
-    #     cost $P1 each and K2 <container> of <item> that cost $P2 each; ask how much to return →
-    #     B − Σ Ki·Pi, claimed only when positive (overspending declines). "$50 bill; 2 boxes of pizza
-    #     $12 each; 2 packs of juice drinks $2 each; how much should she return?" → 50 − 28 = 22.
-    bl = re.search(rf"given a \$({N}) bill", full)
+    # 40. CASH CHANGE FROM PER-ITEM PURCHASES (#348 generalized bill→cashtoken category): given a $B
+    #     <bill/note/banknote/coin>; bought K1 <container> of <item> that cost $P1 each and K2
+    #     <container> of <item> that cost $P2 each; ask how much to return → B − Σ Ki·Pi, claimed only
+    #     when positive (overspending declines). "$50 bill; 2 boxes of pizza $12 each; 2 packs of juice
+    #     drinks $2 each; how much should she return?" → 50 − 28 = 22. "bank note" spelled as two words
+    #     is the optional "bank " prefix.
+    bl = re.search(rf"given a \$({N}) (?:bank )?{_cat_re('cashtoken')}", full)
     pp = re.findall(rf"({N}) \w+ of [\w ]+? that costs? \$({N}) each", full)
     if bl and len(pp) >= 2 and re.search(r"how much money should \w+ return", ql):
         pdig = {k for k, _p in pp} | {p for _k, p in pp}
