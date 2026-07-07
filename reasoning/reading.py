@@ -19372,6 +19372,26 @@ def _cat_singles_a_system(premises: list, question: str):
         if spent > 0 and change2 >= 0 and dok(sdig2 | {bill2.group(1)}):
             return _rs_ret(change2)
 
+    # 51. SCALED-COMPANION PURCHASE TOTAL (imperative ask): buy N <noun> and <frac/scale> times as
+    #     many <companion>; <noun> cost $P each; <companion> cost <scale2> as much each; calculate the
+    #     total → N·P + (frac·N)·(scale2·P). "20 roses and 3/4 times as many lillies; roses $5 each;
+    #     lilies cost twice as much each" → 100 + 15·10 = 250. The companion noun is matched
+    #     STRUCTURALLY, not by lemma — GSM8K's own spelling drifts (Lillies/lilies) — its count and
+    #     price both anchor to the first noun's. dok consumes N, P and a digit fraction's parts.
+    b1 = re.search(rf"buy ({N}) {_W}", full)
+    if b1 and _cat(b1.group(2), "noun"):
+        rn = _number_re(b1.group(2))
+        s1 = re.search(rf"(\d+/\d+|{_SCALE_RE}) times as many \w+ as {rn}", full)
+        p1 = re.search(rf"{rn} cost \$({N}) each", full)
+        p2 = re.search(rf"\w+ cost ({_SCALE_RE}) as much each", full)
+        if s1 and p1 and p2 and re.search(r"calculate the total amount of money", ql):
+            tok2 = s1.group(1)
+            fr3 = (f(tok2.split("/")[0]) / f(tok2.split("/")[1])) if "/" in tok2 else _scale(tok2)
+            fdig2 = set(tok2.split("/")) if "/" in tok2 else set()
+            if fr3 and _scale(p2.group(1)) and dok({b1.group(1), p1.group(1)} | fdig2):
+                n1, pr1 = f(b1.group(1)), f(p1.group(1))
+                return _rs_ret(n1 * pr1 + (fr3 * n1) * (_scale(p2.group(1)) * pr1))
+
     return None
 
 
