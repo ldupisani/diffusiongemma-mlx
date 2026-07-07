@@ -11717,6 +11717,14 @@ _register_category("contribute", "verb")
 for _cv in "contribute contributes contributed pay pays paid chip chips".split():
     _tag_word(_cv, "contribute")
 
+# CLOTHING category (#383) — garment nouns for the hypernym count-sum: "10 shirts, 7 pairs of SHORTS…
+# how many CLOTHES did they wash?". The hypernym surfaces (clothes/clothing/garments) are tagged INTO
+# the category so an ask can name the class; sock/socks stay LEXICON-inert (holdout-poison list).
+_register_category("clothing", "noun")
+for _cl in ("shirt shirts short shorts pant pants sock socks dress dresses jacket jackets sweater "
+            "sweaters coat coats skirt skirts blouse blouses clothes clothing garment garments").split():
+    _tag_word(_cl, "clothing")
+
 # ACCOMPANY verb category (#372, user critique) — "arrive WITH someone": guests BRING a plus one /
 # HAVE a partner / INVITE a friend / TAKE a date. have/has are super-generic but only consumed inside
 # the tight "<frac> of the <person>s <accompany> a <companion>" structure. Companion nouns
@@ -19821,6 +19829,24 @@ def _cat_singles_a_system(premises: list, question: str):
                 change3 = bill3 - spent2
                 if spent2 > 0 and change3 >= 0:
                     return _rs_ret(change3)
+
+    # 68. HYPERNYM COUNT-SUM (#383): enumerated garment counts ("10 white shirts, 5 colored
+    #     shirts, 7 pairs of shorts, …"); ask "how many <clothing-hypernym> did they <verb>" —
+    #     the ask names the CLASS (clothes), the counts sit on its MEMBERS (shirts/shorts/pants,
+    #     the clothing category), and the ask verb must appear in a premise (washed↔wash, by
+    #     lemma). Pairs count as units (gold's reading). Σ all member counts; ≥3 terms;
+    #     digit-accounted. "10+5+7+6+6+8+10+6 → 58".
+    akc = re.search(rf"how many ({_cat_re('clothing')}) did they (\w+)", ql)
+    if akc:
+        vb2 = akc.group(2)
+        vforms = {vb2, vb2 + "ed", vb2 + "d", vb2 + "es", vb2 + "s"}
+        if any(w in vforms or _lemma(w) == vb2
+               for w in re.findall(r"[a-z]+", " ".join(p.lower() for p in premises))):
+            cterms = re.findall(rf"({N}) (?:pairs of )?(?:[a-z]+ )?({_cat_re('clothing')})", full)
+            if len(cterms) >= 3 and dok({n for n, _w in cterms}):
+                tot2 = sum(f(n) for n, _w in cterms)
+                if tot2 > 0:
+                    return _rs_ret(tot2)
 
     return None
 
