@@ -8624,6 +8624,26 @@ def _fraction_value(s: str):
     return int(m.group(1)) / int(m.group(2)) if m else None
 
 
+def _numphrase(s: str):
+    """A word-number PHRASE → its value: "one hundred"→100, "fifty"→50, "two hundred fifty"→250,
+    "100"→100. hundred/thousand act as multipliers over the running value; other tokens add via
+    NUMBERS or digits. None if any token is unreadable (#384)."""
+    cur = 0.0
+    toks = s.lower().replace("-", " ").split()
+    if not toks:
+        return None
+    for t in toks:
+        if t in ("hundred", "thousand"):
+            cur = (cur or 1) * (100 if t == "hundred" else 1000)
+        elif t.replace(",", "").isdigit():
+            cur += float(t.replace(",", ""))
+        elif NUMBERS.get(t):
+            cur += float(NUMBERS[t])
+        else:
+            return None
+    return cur or None
+
+
 def _fraction_remainder_system(premises: list, question: str):
     """FRACTION-OF-BASE REMAINDER — a single stated POOL of an item, reduced by loss clauses that are each a
     FRACTION OF THAT POOL or a LITERAL count, then "how many <item> left/remain?" → N − Σ(fraction×N | literal).
@@ -11716,6 +11736,13 @@ for _dv in "split splits divide divides divided share shares shared cut cuts".sp
 _register_category("contribute", "verb")
 for _cv in "contribute contributes contributed pay pays paid chip chips".split():
     _tag_word(_cv, "contribute")
+
+# CURRENCY category (#384, user critique) — unit-of-money nouns for denomination NPs: "a one hundred
+# DOLLAR bill", "a fifty EURO note". pound is also a weight (sense-shared); euro/buck tag inert until
+# admitted. Consumed only inside "<amount> <currency> <cashtoken>" denomination structures.
+_register_category("currency", "noun")
+for _cu in "dollar dollars euro euros pound pounds buck bucks".split():
+    _tag_word(_cu, "currency")
 
 # CLOTHING category (#383) — garment nouns for the hypernym count-sum: "10 shirts, 7 pairs of SHORTS…
 # how many CLOTHES did they wash?". The hypernym surfaces (clothes/clothing/garments) are tagged INTO
@@ -19810,21 +19837,24 @@ def _cat_singles_a_system(premises: list, question: str):
     #     lemma; a word-number bill "<lose> a (one) hundred dollar <cashtoken>"; ask "how much
     #     change does … get back" → bill − Σ Ki·Pi, non-negative, every purchase priced.
     #     "bracelets $15, necklace $10, mug $20; 3+2+1; $100 bill" → 15. Complements branch 50
-    #     (imperative-ask price list); lose + cashtoken masks reused; digit-accounted (counts
-    #     and the bill are word-numbers; the prices are the only digits).
+    #     (imperative-ask price list); lose + cashtoken + currency + receive masks reused
+    #     (#384 de-hardcode: the denomination NP is ANY word/digit amount via _numphrase × any
+    #     currency word, and the ask verb is the receive mask — get back/receive/be given);
+    #     digit-accounted (prices + any digits in the denomination).
     pr2 = {_noun_lemma(a or b): p for a, b, p in
            re.findall(rf"(?:sells (\w+)|(\w+) sells) at \$({N})", full)}
-    if len(pr2) >= 2 and re.search(r"how much change does \w+ get back", ql):
-        bl = re.search(rf"{_cat_re('lose')} an? (?:({_GP_NUMW}) )?hundred dollar "
-                       rf"{_cat_re('cashtoken')}", full)
+    if len(pr2) >= 2 and re.search(rf"how much change (?:does|do|will|is) \w+ (?:be )?"
+                                   rf"{_cat_re('receive')}(?: back)?", ql):
+        bl = re.search(rf"{_cat_re('lose')} an? ((?:[a-z]+ |\d+ ){{1,3}}?)"
+                       rf"{_cat_re('currency')} {_cat_re('cashtoken')}", full)
         by = re.search(r"buys ([^.?]*)", full)
-        if bl and by:
+        if bl and by and _numphrase(bl.group(1)):
             terms = re.findall(rf"({_GP_NUMW}) ((?:[a-z]+ ){{0,3}}?[a-z]+)(?:,| and| for|\.|$)",
                                by.group(1))
             heads = [(k, w.split()[-1]) for k, w in terms]
             if len(heads) >= 2 and all(_noun_lemma(h) in pr2 for _k, h in heads) \
-                    and dok(set(pr2.values())):
-                bill3 = 100 * (f(bl.group(1)) if bl.group(1) else 1)
+                    and dok(set(pr2.values()) | set(re.findall(r"\d+", bl.group(1)))):
+                bill3 = _numphrase(bl.group(1))
                 spent2 = sum(f(k) * f(pr2[_noun_lemma(h)]) for k, h in heads)
                 change3 = bill3 - spent2
                 if spent2 > 0 and change3 >= 0:
