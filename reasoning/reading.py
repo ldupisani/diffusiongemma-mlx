@@ -11617,7 +11617,7 @@ for _b in ("building buildings house houses apartment apartments condo condos to
 _register_category("motion", "verb")
 for _mv in ("walk walks walked run runs ran drive drives drove ride rides rode jog jogs jogged bike bikes "
             "biked swim swims swam travel travels traveled row rows rowed sprint sprints sprinted "
-            "fly flies flew sail sails sailed hike hikes hiked").split():
+            "fly flies flew sail sails sailed hike hikes hiked go goes went gone").split():
     _tag_word(_mv, "motion")
 
 # RECEIVE verb category (#297) — distribution/receipt verbs: "each person RECEIVES 2 towels" ≡ "each guest
@@ -11688,6 +11688,33 @@ for _lo in "less fewer younger shorter lighter slower cheaper smaller lower poor
 _register_category("higher", "adjective")
 for _hi in "more older taller longer heavier faster costlier bigger larger higher richer".split():
     _tag_word(_hi, "higher")
+
+# CHARGE category (#371, user critique) — nouns naming an amount owed: "split the COST/PRICE/BILL/FEE
+# of the meal evenly", "the total PRICE comes to $67". fare/charge are tagged without LEXICON admission
+# (mask-known, GUARD-1-inert until admitted — the #348 pattern). "bill" is also a cashtoken — a word can
+# carry several categories; the consuming branch's structure picks the reading.
+_register_category("charge", "noun")
+for _ch in "cost costs price prices bill bills fee fees fare fares expense expenses charge charges".split():
+    _tag_word(_ch, "charge")
+
+# DISCOUNT category (#371) — nouns naming a price-reduction instrument: "a COUPON/DISCOUNT/VOUCHER for
+# $4". voucher/rebate tagged without admission (inert until they earn a LEXICON entry).
+_register_category("discount", "noun")
+for _dc in "coupon coupons voucher vouchers discount discounts rebate rebates".split():
+    _tag_word(_dc, "discount")
+
+# DIVIDE verb category (#371) — the "apportion into parts" cluster: SPLIT/SHARE/DIVIDE the cost evenly.
+# "divided" carries an operator sense (arithmetic), so it is mask-reachable but _cat-inert — fine, the
+# consuming branches match via the mask inside tight structural regexes.
+_register_category("divide", "verb")
+for _dv in "split splits divide divides divided share shares shared".split():
+    _tag_word(_dv, "divide")
+
+# CONTRIBUTE verb category (#371) — the "put money in" ask verbs: how much does each person CONTRIBUTE/
+# PAY/CHIP (in). pay/pays/paid stay lose-tagged too (multi-category, like get in receive+acquire).
+_register_category("contribute", "verb")
+for _cv in "contribute contributes contributed pay pays paid chip chips".split():
+    _tag_word(_cv, "contribute")
 
 # LOSS polarity for the semantic fold, DERIVED from the `lose` category (#301) — the single source of truth
 # unifying `_verb_sign` (declared far above, reads this at call time) with the regex branches. Every surface
@@ -19571,19 +19598,26 @@ def _cat_singles_a_system(premises: list, question: str):
                 if pos > 0 and pos.is_integer():
                     return _rs_ret(pos)
 
-    # 59. EVEN SPLIT MINUS COUPON (#369): an enumerated name list "X, Y(,) and Z decided to go";
-    #     "split the cost of the <event> evenly"; "total price of the <event> comes to $T";
-    #     "coupon for $C"; ask "how much does each <person> need to contribute" → (T−C)/count,
-    #     the head-count READ from the enumeration. "$67 meal, $4 coupon, 3 names" → 21. The
-    #     event noun is captured once and identity-chained into the price clause; claimed only
-    #     when the share is integral and positive; dok consumes T and C.
-    nl = re.search(rf"((?:\w+, )+\w+,? and \w+) decided to go", full)
+    # 59. EVEN SPLIT MINUS DISCOUNT (#369; phrasals de-hardcoded per user critique #371): an
+    #     enumerated name list "X, Y(,) and Z decided/agreed/planned to <motion>"; "<divide> the
+    #     <charge> of the <event> evenly/equally"; "total <charge> of the <event> comes to/
+    #     amounts to/is $T"; "<discount> for/of/worth $C"; ask "how much does/must each <person>
+    #     (need to) <contribute>" → (T−C)/count, the head-count READ from the enumeration.
+    #     "$67 meal, $4 coupon, 3 names" → 21. Every content word goes through a category mask
+    #     (divide/charge/discount/contribute — #371's new categories); the event noun is captured
+    #     once and identity-chained into the price clause; claimed only when the share is
+    #     integral and positive; dok consumes T and C.
+    nl = re.search(rf"((?:\w+, )+\w+,? and \w+) (?:decided|agreed|planned|chose) to "
+                   rf"{_cat_re('motion')}", full)
     if nl:
-        ev = re.search(rf"split the cost of the {_W} evenly", full)
+        ev = re.search(rf"{_cat_re('divide')} the {_cat_re('charge')} of the {_W} "
+                       rf"(?:evenly|equally)", full)
         if ev and (_cat(ev.group(1), "noun") or _cat(ev.group(1), "plural")):
-            tp = re.search(rf"total price of the {re.escape(ev.group(1))} comes to \$({N})", full)
-            cp = re.search(rf"coupon for \$({N})", full)
-            ak = re.search(rf"how much does each ({_cat_re('person')}) need to contribute", ql)
+            tp = re.search(rf"total {_cat_re('charge')} of the {re.escape(ev.group(1))} "
+                           rf"(?:comes to|amounts to|adds up to|totals|is) \$({N})", full)
+            cp = re.search(rf"{_cat_re('discount')} (?:for|of|worth) \$({N})", full)
+            ak = re.search(rf"how much (?:does|do|will|must|should) each ({_cat_re('person')}) "
+                           rf"(?:need to |have to )?{_cat_re('contribute')}", ql)
             names = [w for w in re.split(r",? and |, ", nl.group(1)) if w]
             if tp and cp and ak and len(names) >= 2 and dok({tp.group(1), cp.group(1)}):
                 share = (f(tp.group(1)) - f(cp.group(1))) / len(names)
