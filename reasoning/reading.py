@@ -19429,6 +19429,28 @@ def _cat_singles_a_system(premises: list, question: str):
                 if ans > 0 and ans.is_integer():
                     return _rs_ret(ans)
 
+    # 53. PLUS-ONE GUESTS × COURSES (#363): invites N <person>; <frac> of the <person> bring a
+    #     plus one; a K-<unit> meal; a new <item> for every <unit>; ask how many <item> →
+    #     (N + frac·N)·K. "invites 30 people; half of the guests bring a plus one; 3-course meal;
+    #     a new plate for every course; how many plates" → 45·3 = 135. Person words via the person
+    #     category; the fraction read with _fraction_value; the meal unit captured from the
+    #     "K-<unit> meal" compound and identity-chained into "for every <unit>"; the item noun
+    #     captured and lemma-matched into the ask. Claimed only when the plus-one count is
+    #     integral; dok consumes N and K (+ a digit fraction's parts).
+    cr = re.search(rf"({N})-(\w+) meal", full)
+    if cr:
+        iv = re.search(rf"invite[sd]? ({N}) {_W}", full)
+        fr = re.search(rf"(\d+/\d+|[a-z-]+(?: [a-z]+)?) of the {_W} bring an? plus one", full)
+        pl = re.search(rf"new {_W} for every {re.escape(cr.group(2))}", full)
+        if iv and fr and pl and _cat(iv.group(2), "person") and _cat(fr.group(2), "person") \
+                and (_cat(pl.group(1), "noun") or _cat(pl.group(1), "plural")):
+            fv = _fraction_value(fr.group(1))
+            if fv and 0 < fv < 1 and re.search(rf"how many {_number_re(pl.group(1))}", ql):
+                n, k = f(iv.group(1)), f(cr.group(1))
+                fdig = set(fr.group(1).split("/")) if "/" in fr.group(1) else set()
+                if (fv * n).is_integer() and dok({iv.group(1), cr.group(1)} | fdig):
+                    return _rs_ret((n + fv * n) * k)
+
     return None
 
 
