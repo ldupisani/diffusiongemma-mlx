@@ -19774,6 +19774,28 @@ def _cat_singles_a_system(premises: list, question: str):
                     if ans > 0 and ans.is_integer():
                         return _rs_ret(ans)
 
+    # 66. SCALED-SUBTYPE LOSS, BUY-TO-TOTAL ASK (#381): "had N <adj1> <item>"; "had <scale> more
+    #     <adj2> <item>" (GSM8K's 'times more' = 'times as many'); "<lose> L of the <adj1>
+    #     <item>"; ask "how many <adj3> <item> did .e <purchase>" with a stated end state "had T
+    #     <item> in total" → T − (N−L) − scale·N. "16 red, two times more blue, lost 6 red,
+    #     74 total → 32 yellow". Lose + purchase masks reused; scale via _scale; the asked
+    #     subtype must be NEW (≠ adj1, adj2); positive integral only; digit-accounted.
+    j1 = re.search(rf"had ({N}) (\w+) {_W}", full)
+    if j1 and (_cat(j1.group(3), "noun") or _cat(j1.group(3), "plural")):
+        nn, adj1 = _number_re(j1.group(3)), j1.group(2)
+        j2 = re.search(rf"(?:had |and )?({_SCALE_RE}) more (\w+) {nn}", full)
+        j3 = re.search(rf"{_cat_re('lose')} ({N}) of the {re.escape(adj1)} {nn}", full)
+        j4 = re.search(rf"had ({N}) {nn} in total", full)
+        j5 = re.search(rf"how many (\w+) {nn} did .e {_cat_re('purchase')}", ql)
+        if j2 and j3 and j4 and j5 and j2.group(2) != adj1 \
+                and j5.group(1) not in (adj1, j2.group(2)) and _scale(j2.group(1)):
+            scdig2 = set(re.findall(r"\d+", j2.group(1)))
+            if dok({j1.group(1), j3.group(1), j4.group(1)} | scdig2):
+                n0, l0, t0 = f(j1.group(1)), f(j3.group(1)), f(j4.group(1))
+                ans = t0 - (n0 - l0) - _scale(j2.group(1)) * n0
+                if ans > 0 and ans.is_integer():
+                    return _rs_ret(ans)
+
     return None
 
 
