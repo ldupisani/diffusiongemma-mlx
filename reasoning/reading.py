@@ -19406,6 +19406,29 @@ def _cat_singles_a_system(premises: list, question: str):
                 n1, pr1 = f(b1.group(1)), f(p1.group(1))
                 return _rs_ret(n1 * pr1 + (fr3 * n1) * (_scale(p2.group(1)) * pr1))
 
+    # 52. AGE-SUM-ENCODED QUANTITY (imperative ask; #362): "the sum of the ages of two <people>,
+    #     X and Y, is <scale1> the total number of <item> X <verb-ed> …"; "Y is <scale2> as old as
+    #     X . s?he is V"; ask "<imperative> X's <noun>" → X's age = V/scale2, sum = V + V/scale2,
+    #     answer = sum/scale1. "Melina is three times as old as Alma, and she is 60; the sum of
+    #     their ages is twice Alma's test score; calculate the score" → (60+20)/2 = 40. The asked
+    #     noun must be the LEMMA of the premise verb (scored→score) — read from the text, never
+    #     hardcoded; the pronoun's referent is the scale-clause SUBJECT (adjacency across the
+    #     split, bridged explicitly with the " . " join). Claimed only when integral and positive.
+    m = re.search(rf"sum of the ages of two \w+, (\w+) and (\w+), is ({_SCALE_RE}) the total "
+                  rf"number of {_W} \1 (\w+)", full)
+    if m and (_cat(m.group(4), "noun") or _cat(m.group(4), "plural")):
+        x, y, sc1 = re.escape(m.group(1)), re.escape(m.group(2)), _scale(m.group(3))
+        m2 = re.search(rf"{y} is ({_SCALE_RE}) as old as {x} \. s?he is ({N})", full)
+        ak = re.search(rf"(?:calculate|determine|find|compute) {x}'s (\w+)", ql)
+        if m2 and ak and ak.group(1) == _lemma(m.group(5)) and sc1:
+            sc2, v = _scale(m2.group(1)), f(m2.group(2))
+            sdig = {m2.group(2)} | {d for t in (m.group(3), m2.group(1))
+                                    for d in re.findall(r"\d+", t)}
+            if sc2 and dok(sdig):
+                ans = (v + v / sc2) / sc1
+                if ans > 0 and ans.is_integer():
+                    return _rs_ret(ans)
+
     return None
 
 
