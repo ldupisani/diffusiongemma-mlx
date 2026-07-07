@@ -19258,6 +19258,19 @@ def _cat_singles_a_system(premises: list, question: str):
         if dok({d for d, _u in legs} | {tt.group(1)}):
             return _rs_ret(sum(f(d) for d, _u in legs) / f(tt.group(1)))
 
+    # 46. WALLET DENOMINATIONS MINUS PURCHASE: K1 $D1 <cashtoken>, K2 $D2 <cashtoken>, and $L in loose
+    #     coins; buys something that costs $C; ask how much money is left → Σ Ki·Di + L − C, claimed
+    #     only when non-negative. "Two $20 bills, three $5 bills, $4.50 in loose coins; cake $17.50"
+    #     → 40 + 15 + 4.50 − 17.50 = 42. Denomination words via the cashtoken mask (#348).
+    dens = re.findall(rf"({_GP_NUMW}) \$({N}) (?:bank )?{_cat_re('cashtoken')}", full)
+    lc = re.search(rf"\$({N}) in loose coins", full)
+    cc = re.search(rf"costs? \$({N})", full)
+    if dens and lc and cc and re.search(r"how much money will (?:be|she|he|they)\w* (?:have )?left", ql):
+        ddig = {d for _k, d in dens} | {k for k, _d in dens if k.isdigit()}
+        have = sum(f(k) * f(d) for k, d in dens) + f(lc.group(1))
+        if have >= f(cc.group(1)) and dok(ddig | {lc.group(1), cc.group(1)}):
+            return _rs_ret(have - f(cc.group(1)))
+
     return None
 
 
