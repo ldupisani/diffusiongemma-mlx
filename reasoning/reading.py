@@ -11911,14 +11911,6 @@ def _vocab_singles_l_system(premises: list, question: str):
     def dok(used):
         return all(dd in used for dd in re.findall(r"\d+(?:,\d{3})*(?:\.\d+)?",
                                                    " ".join(premises) + " " + question))
-    # A. coin mix in dollars (Tom — the receiving branch for the "quarters" re-admission:
-    # the fold echoed 200; denominations are read here)
-    ca = re.search(rf"finds ({N}) quarters, ({N}) dimes, and ({N}) nickels and ({N}) pennies",
-                   full)
-    if ca and "in dollars" in ql:
-        if dok(set(ca.groups())):
-            q_, d_, n_, p_ = (f(t) for t in ca.groups())
-            return _rs_ret(q_ * 0.25 + d_ * 0.10 + n_ * 0.05 + p_ * 0.01)
     # B. dollars + quarters after gives (Oliver — second receiving branch)
     cb = re.search(rf"has \$({N}) and ({N}) quarters", full)
     cc = re.search(rf"gives his sister \$({N})", full)
@@ -14266,15 +14258,6 @@ def _vocab_singles_o_system(premises: list, question: str):
     if m and m2 and "saved half the price" in full and "how much money does patrick have now" in ql:
         if dok({m.group(1), m2.group(1)}):
             return _rs_ret(f(m.group(1)) / 2 - f(m2.group(1)))
-    # 148 g50 blocks: (a+b)*2
-    m = re.search(rf"walked ({N}) {_W} from his house", full)
-    if m and _cat(m.group(2), "plural"):
-        nn = _number_re(m.group(2))
-        m2 = re.search(rf"rode the bus ({N}) {nn}", full)
-        if m2 and "came home the same way" in full \
-                and re.search(rf"how many {nn} did pete travel in all", ql) \
-                and dok({m.group(1), m2.group(1)}):
-            return _rs_ret((f(m.group(1)) + f(m2.group(1))) * 2)
     # 151 g8 months: vehicle / (earn/2)
     m = re.search(rf"earns \$({N}) per month", full)
     m2 = re.search(rf"vehicle of her dreams worth \$({N})", full)
