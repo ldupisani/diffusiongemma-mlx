@@ -11559,6 +11559,13 @@ for _c, _cents in (("penny", 1), ("nickel", 5), ("dime", 10), ("quarter", 25)):
 _register_category("cashtoken", "noun")
 for _ct in ("bill", "note", "banknote", "coin"):
     _tag_word(_ct, "cashtoken")
+# JOURNEY category (#354) — the NOUNS naming a traversal: "the TRIP/JOURNEY/FLIGHT from A to B is
+# N miles". The motion VERBS' base forms already serve nominally ("the drive/walk/ride from…") via the
+# motion mask; this holds the pure nouns with no verb twin in that category. commute is tagged without
+# LEXICON admission (mask-known, GUARD-1-inert until admitted — the #348 pattern).
+_register_category("journey", "noun")
+for _jn in ("trip", "journey", "flight", "commute"):
+    _tag_word(_jn, "journey")
 # LEG counts — world knowledge for "how many legs" sums (0 for legless; snakes/fish 0).
 for _leg, _legwords in ((4, "dog cat cow horse pig goat sheep lamb bear tiger lion fox wolf deer donkey "
                             "camel zebra rabbit koala elephant"),
@@ -19247,11 +19254,15 @@ def _cat_singles_a_system(premises: list, question: str):
             if dok(sdig):
                 return _rs_ret(sum(f(k) * f(sizes[mod]) for k, _c, mod, _n in buys2))
 
-    # 45. MULTI-LEG AVERAGE SPEED: "the drive from <A> to <B> is D1 <unit>" legs (same unit lemma),
-    #     a total time "in T hours", ask the average (minimum) speed → Σ Di / T (unit per hour).
-    #     "SLC→Vegas 420 miles; Vegas→LA 273 miles; in 11 hours" → 693/11 = 63. dok consumes every
-    #     leg + the time; a leg in a different unit breaks the single-lemma gate → decline.
-    legs = re.findall(rf"the drive from [\w ]+? to [\w ]+? is ({N}) {_W}", full)
+    # 45. MULTI-LEG AVERAGE SPEED (#354 generalized drive→motion/journey masks): "the <drive/walk/
+    #     ride/trip/flight/…> from <A> to <B> is D1 <unit>" legs (same unit lemma), a total time "in
+    #     T hours", ask the average (minimum) speed → Σ Di / T (unit per hour). "SLC→Vegas 420 miles;
+    #     Vegas→LA 273 miles; in 11 hours" → 693/11 = 63. The leg noun is a motion verb's nominal form
+    #     (motion mask) or a journey noun (trip/journey/flight). No mode-agreement gate: the ask names
+    #     no mode, and Σ distance / time is valid across mixed legs. dok consumes every leg + the time;
+    #     a leg in a different unit breaks the single-lemma gate → decline.
+    legs = re.findall(rf"the (?:{_cat_re('motion')}|{_cat_re('journey')}) from [\w ]+? to [\w ]+? "
+                      rf"is ({N}) {_W}", full)
     tt = re.search(rf"in ({N}) hours", full)
     if len(legs) >= 2 and tt and len({_noun_lemma(u) for _d, u in legs}) == 1 \
             and re.search(r"average (?:minimum )?speed", ql) and f(tt.group(1)):
