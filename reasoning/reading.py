@@ -11641,8 +11641,15 @@ for _rv in ("receive receives received get gets got given has have had "
 _register_category("acquire", "verb")
 for _av in ("get gets got getting receive receives received buy buys bought purchase purchases purchased "
             "order orders ordered find finds found collect collects collected gather gathers gathered "
-            "add adds added grab grabs grabbed").split():
+            "add adds added grab grabbed grabs "
+            "win wins won earn earns earned").split():
     _tag_word(_av, "acquire")
+
+# RETAIN verb category (#356) — the "still have it afterwards" cluster: "how much did he KEEP?" ≡
+# "…RETAIN?". The complement ask after a lose-verb event; consumed inside tight keep-ask regexes.
+_register_category("retain", "verb")
+for _kv in ("keep keeps kept keeping retain retains retained").split():
+    _tag_word(_kv, "retain")
 
 # LOSE verb category (#299) — the ANTONYM cluster of `acquire`: "come to have LESS of something" —
 # lose/give/spend/use/drop/sell/eat/throw/break/donate + inflections (aligned with LOSS_VERBS, the
@@ -19305,6 +19312,19 @@ def _cat_singles_a_system(premises: list, question: str):
                 val = f(hm2.group(1)) * fr2[0] / fr2[1] / f(sm2.group(1))
                 if val > 0 and val == int(val) and dok({hm2.group(1), sm2.group(1)} | fdig):
                     return _rs_ret(val)
+
+    # 48. ACQUIRE-THEN-LOSE-PERCENT, RETAIN ASK: <acquired> a $W <prize>; <lost> P% ; ask how much
+    #     <retained> → W·(100−P)/100. "Won a $100 raffle; gave away 20% to his friend; how much did
+    #     he keep?" → 80 — and the same branch reads earned/spent/donated/retained via the acquire/
+    #     lose/retain masks (no literal verbs; win/earn newly seeded into acquire, retain a new
+    #     category). ("won a $100 raffle" reads the prize AMOUNT off the compound — the general fold
+    #     doesn't.)
+    wn = re.search(rf"{_cat_re('acquire')} an? \$({N}) \w+", full)
+    gv = re.search(rf"{_cat_re('lose')} (?:away )?({N})%", full)
+    if wn and gv and re.search(rf"how much did \w+ (?:{_cat_re('retain')}|have left)", ql):
+        p_ = f(gv.group(1))
+        if 0 < p_ < 100 and dok({wn.group(1), gv.group(1)}):
+            return _rs_ret(f(wn.group(1)) * (100 - p_) / 100)
 
     return None
 
