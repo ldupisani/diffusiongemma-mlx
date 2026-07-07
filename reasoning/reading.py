@@ -19022,6 +19022,28 @@ def _cat_singles_a_system(premises: list, question: str):
             if k_ >= 2 and dok({fm.group(1), dm.group(1), km.group(1)}):
                 return _rs_ret(k_ * a_ + d_ * k_ * (k_ - 1) / 2)
 
+    # 32. LAST-PART REMAINDER: an object of P parts with a stated total measure T <unit>; the other parts
+    #     stated as ordinal singles ("the first part … is V <unit> long") and/or an "each" pair ("the
+    #     second and third parts are each V <unit> long"); ask the last part → T − Σ stated — claimed only
+    #     when the stated parts number exactly P−1 (a missing part means the remainder is unattributable).
+    #     "4 parts; total 74.5 km; first 15.5; second and third each 21.5; last part?" → 16. Unit read
+    #     from the text and lemma-matched into the ask; every digit incl. P dok-accounted.
+    pm = re.search(rf"had ({N}) parts", full)
+    tm = re.search(rf"total \w+ [\w ]*?(?:was|is) ({N}) {_W}", full)
+    if pm and tm and _cat(tm.group(2), "noun"):
+        un = _number_re(tm.group(2))
+        if re.search(rf"how many {un} (?:is|was) the last part", ql):
+            stated, sdig = [], set()
+            for mm in re.finditer(rf"the \w+ part [\w ]*?(?:is|was) ({N}) {un} long", full):
+                stated.append(f(mm.group(1))); sdig.add(mm.group(1))
+            for mm in re.finditer(rf"the \w+ and \w+ parts (?:are|were) each ({N}) {un} long", full):
+                stated += [f(mm.group(1))] * 2; sdig.add(mm.group(1))
+            p_, t_ = f(pm.group(1)), f(tm.group(1))
+            if stated and len(stated) == p_ - 1 and dok({pm.group(1), tm.group(1)} | sdig):
+                val = t_ - sum(stated)
+                if val > 0:
+                    return _rs_ret(val)
+
     return None
 
 
