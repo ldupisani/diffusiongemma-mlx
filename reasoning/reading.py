@@ -19503,7 +19503,8 @@ def _cat_singles_a_system(premises: list, question: str):
                    full)
     if rt and (_cat(rt.group(1), "noun") or _cat(rt.group(1), "plural")):
         tt = re.search(rf"total number of {_number_re(rt.group(1))} they have is ({N})", full)
-        sp = re.search(rf"(\w+) spends (\d+/\d+|[a-z-]+(?: [a-z]+)?) of what s?he has", full)
+        sp = re.search(rf"(\w+) {_cat_re('lose')} (\d+/\d+|[a-z-]+(?: [a-z]+)?) of what s?he has",
+                       full)
         if tt and sp and re.search(r"how many (?:\w+ )?will s?he remain with", ql):
             a, b, t = f(rt.group(4)), f(rt.group(5)), f(tt.group(1))
             fv = _fraction_value(sp.group(2))
@@ -19554,8 +19555,8 @@ def _cat_singles_a_system(premises: list, question: str):
     #     as many, Alice 20, Clara older, Clara's age in 5 years" → 20+36+5 = 61. Claimed only
     #     when every name maps into the {X,Y} pair, the ask names the older one, the scaled count
     #     is integral and the difference positive; dok consumes N, A, K + fraction parts.
-    m = re.search(rf"difference in the number of {_W} that (\w+) and (\w+) each have matches "
-                  rf"their age difference", full)
+    m = re.search(rf"difference in the number of {_W} that (\w+) and (\w+) each have "
+                  rf"(?:matches|equals|is (?:equal to|the same as)) their age difference", full)
     if m and (_cat(m.group(1), "noun") or _cat(m.group(1), "plural")):
         nn = _number_re(m.group(1))
         pair = {m.group(2), m.group(3)}
@@ -19586,7 +19587,7 @@ def _cat_singles_a_system(premises: list, question: str):
     if m and (_cat(m.group(2), "measure") or _cat(m.group(2), "noun") or _cat(m.group(2), "plural")):
         un, act, per = _number_re(m.group(2)), m.group(3), m.group(5)
         m2 = re.search(rf"\w+ ({N}) {un} the next ({N}) {re.escape(per)}s?", full)
-        if m2 and re.search(rf"how much {re.escape(act)} did \w+ get", ql) \
+        if m2 and re.search(rf"how much {re.escape(act)} did \w+ {_cat_re('acquire')}", ql) \
                 and dok({m.group(1), m.group(4), m2.group(1), m2.group(2)}):
             return _rs_ret(f(m.group(1)) * f(m.group(4)) + f(m2.group(1)) * f(m2.group(2)))
 
