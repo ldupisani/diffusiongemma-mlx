@@ -19155,6 +19155,18 @@ def _cat_singles_a_system(premises: list, question: str):
         if left > 0 and dok({gg.group(1)} | edig):
             return _rs_ret(left)
 
+    # 40. BILL CHANGE FROM PER-ITEM PURCHASES: given a $B bill; bought K1 <container> of <item> that
+    #     cost $P1 each and K2 <container> of <item> that cost $P2 each; ask how much to return →
+    #     B − Σ Ki·Pi, claimed only when positive (overspending declines). "$50 bill; 2 boxes of pizza
+    #     $12 each; 2 packs of juice drinks $2 each; how much should she return?" → 50 − 28 = 22.
+    bl = re.search(rf"given a \$({N}) bill", full)
+    pp = re.findall(rf"({N}) \w+ of [\w ]+? that costs? \$({N}) each", full)
+    if bl and len(pp) >= 2 and re.search(r"how much money should \w+ return", ql):
+        pdig = {k for k, _p in pp} | {p for _k, p in pp}
+        change = f(bl.group(1)) - sum(f(k) * f(p) for k, p in pp)
+        if change > 0 and dok({bl.group(1)} | pdig):
+            return _rs_ret(change)
+
     return None
 
 
