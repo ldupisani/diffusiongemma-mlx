@@ -19505,6 +19505,37 @@ def _cat_singles_a_system(premises: list, question: str):
                 if diff > 0 and xi > 0 and xi.is_integer():
                     return _rs_ret(2 * xi + dmore)
 
+    # 56. ITEM-DIFFERENCE-AS-AGE-DIFFERENCE, FUTURE ASK (#366 — third member of the age↔quantity
+    #     encoding family, branches 52/55): "the difference in the number of <item> that X and Y
+    #     each have matches their age difference"; "H1 has N <item>"; "H2 has <frac> times as many
+    #     <item> as H1"; "P's age is A . Q is older than P" (the split severs the 'and' — bridged
+    #     explicitly); ask "<imperative> Q's age in K years to come" → item diff = |N − frac·N| =
+    #     age diff; Q (the stated OLDER one) = A + diff; answer + K. "Alice 60 pens, Clara 2/5
+    #     as many, Alice 20, Clara older, Clara's age in 5 years" → 20+36+5 = 61. Claimed only
+    #     when every name maps into the {X,Y} pair, the ask names the older one, the scaled count
+    #     is integral and the difference positive; dok consumes N, A, K + fraction parts.
+    m = re.search(rf"difference in the number of {_W} that (\w+) and (\w+) each have matches "
+                  rf"their age difference", full)
+    if m and (_cat(m.group(1), "noun") or _cat(m.group(1), "plural")):
+        nn = _number_re(m.group(1))
+        pair = {m.group(2), m.group(3)}
+        h = re.search(rf"(\w+) has ({N}) {nn}", full)
+        s2 = re.search(rf"(\w+) has (\d+/\d+|{_SCALE_RE}) times as many {nn} as (\w+)", full)
+        av = re.search(rf"(\w+)'s age is ({N}) \. (\w+) is older than (\w+)", full)
+        kq = re.search(rf"(?:calculate|determine|find|compute) (\w+)'s age in ({N}) years", ql)
+        if h and s2 and av and kq and {h.group(1), s2.group(1)} == pair \
+                and s2.group(3) == h.group(1) and {av.group(1), av.group(3)} == pair \
+                and av.group(4) == av.group(1) and kq.group(1) == av.group(3):
+            tok = s2.group(2)
+            fv = _fraction_value(tok) or _scale(tok)
+            fdig = set(tok.split("/")) if "/" in tok else set()
+            n0, a0, k0 = f(h.group(2)), f(av.group(2)), f(kq.group(2))
+            if fv and fv != 1 and (fv * n0).is_integer() \
+                    and dok({h.group(2), av.group(2), kq.group(2)} | fdig):
+                diff = abs(n0 - fv * n0)
+                if diff > 0:
+                    return _rs_ret(a0 + diff + k0)
+
     return None
 
 
