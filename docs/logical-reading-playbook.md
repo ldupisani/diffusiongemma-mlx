@@ -346,10 +346,78 @@ on `_anchored_sum_system` (`reasoning/reading.py`); the recipe, in order:
    a year" money-elision, only ever showed up on TEST — underscoring why the checkpoint is mandatory, not
    optional, for a change of this shape).
 
-Only `_anchored_sum_system` is migrated so far — the sibling `_anchored_single_system`/
-`_anchored_difference_system`/`_residual_sum_system`/noun-affine family (all consumers of the now-
-`readings_prem`-aware `_anchored_affine_coeffs`) are natural next candidates, each its own diff-verified
-increment. See `reading-engine-handoff` memory for the session log.
+**Update (same day): all five `_anchored_affine_coeffs`-sharing solvers are now migrated** — the sum twin
+above, plus `_anchored_single_system`, `_anchored_difference_system`, `_anchored_average_system`, and
+`_residual_sum_system` (in that order; each its own diff-verified increment, per the working-method
+discipline). Four more lessons the later migrations added:
+
+8. **`origin` must be a `dict[str, list[int]]`, not `dict[str, int]`** — an entity can be BOTH the subject
+   of its own relation AND separately anchored, consistently ("Reese has 3 more stickers than Quinn" defines
+   her; "If Reese has 23 stickers" ALSO anchors her — both true, not a conflict). The first version of this
+   fix picked ONE premise (whichever was "more primary") and starved the other of a fact, tripping GUARD 4
+   for it. Track EVERY premise that primarily defines an entity (a relation subject, or an anchor — both
+   APPEND, never overwrite) in a list; a purely-mentioned entity (referenced only as another relation's
+   standard) falls back to its first mention ONLY if it earns no primary origin at all. Attribute the
+   entity's ONE fact to every premise in its list — `_solve_inner`'s SystemResult fold must then DEDUPE
+   (`if f not in context: context.append(f)`) so the same fact isn't double-counted just because it's
+   attributed to two premises.
+9. **A plain single-entity ask is verb-SENSITIVE, unlike a sum/difference/average ask.** `answer()`'s
+   `combined_q` fold and its comparative-difference branch both consume facts via `_holdings()`, which sums
+   by verb-SIGN (have/gave/sold all fold via `_verb_sign`, agnostic to which one) — the `Quantity` default
+   `verb="have"` is fine there. But a bare "How much does X WEIGH?" / "How many pounds does X weigh?" ask
+   hits a DIFFERENT branch that filters `f.verb == q_verb` by EXACT LEMMA when the question's verb isn't
+   "have"/"own" — a fact left at the default `verb="have"` silently fails to match and declines. A migrated
+   solver whose consumer is the plain single-entity fold (`_anchored_single_system`, and `_residual_sum_
+   system`'s final residual value, which is handed to that SAME fold) must extract the question's own verb
+   lemma (excluding pure copulas "is"/"are"/"was"/"were") and stamp every emitted fact with it, not rely on
+   the dataclass default.
+10. **`answer()`'s entity/subject resolution has several real, narrow gaps a migrated solver's own
+    precondition doesn't share** — each surfaced as a dev-clean regression only visible once a solver
+    started depending on that resolution instead of computing its own answer. All four are CHEAP to detect
+    from the question's own parse (no changes to `answer()` itself, which stays untouched — the fix lives in
+    the solver's own safe-vs-legacy gate):
+    - **Bare "how much" with an intransitive verb** ("How much does X weigh?", no unit noun) leaves `much`'s
+      `collection` obligation unbound — `answer()` returns an "unanswerable" Deficiency before reaching any
+      numeric fold. Detect via `_queried_measure(question) is None` (it performs the SAME `queries→
+      collection` walk `answer()`'s own `query` resolution does, so it fails the identical way).
+    - **A copula-only question** ("How many centimeters tall IS Ken?") has no `auxiliary` unit and its only
+      verb-sensed word is a bare "is"/"are"/"was"/"were" — `answer()`'s entity/verb resolution needs EITHER
+      an auxiliary ("does"/"did") OR a substantive non-copula verb to recover the asked entity at all;
+      neither exists here. Detect via `has_auxiliary or has_non_copula_verb`.
+    - **A possessive name** ("How many rooms does GRANT'S APARTMENT have?") makes `_question_subjects`
+      return BOTH `['grant', 'apartment']`, mis-extracting the possessed noun as a second, separately-
+      resolved subject (as if conjoined, "Grant and apartment have"); no fact exists for the bare noun
+      "apartment", so the fold fails for that half and declines the whole ask. Detect by checking whether
+      any asked-name unit in the question is immediately followed by a `possessive`-sensed unit.
+    - **A kinship noun fronted by a possessive pronoun** ("how many more did HIS DAD catch compared to
+      Caleb?" — "dad" is KINSHIP-tagged with `name` sense) confuses the SAME `_question_subjects`/`_follow
+      (verb, "subject")` resolution into binding the pronoun, not the kinship noun, as the subject. Detect
+      by checking whether an asked-name unit is immediately preceded by a bare pronoun.
+    None of these are bugs worth fixing IN `answer()` — they're real but narrow parser gaps, and the
+    established lesson from point 5 above (don't loosen shared matching logic to paper over one solver's
+    need) applies here too: cheaper and safer to detect them from the solver side and fall back to the
+    unchanged legacy scalar path than to teach `_question_subjects`/the "much" binding new tricks that every
+    OTHER question in the engine would then also traverse.
+11. **A solver that calls `_anchored_affine_coeffs` on a POSITIONAL SUBSET of `premises` (not `premises`
+    itself) needs its own index-remapping layer.** `_residual_sum_system` excludes the "total" clause before
+    passing the rest to `_anchored_affine_coeffs` (`rest = [p for p in premises if p is not tot_clause]`) —
+    its `readings_prem` safety check must receive the MATCHING subset of the shared readings
+    (`_rest_idxs = [i for i, p in enumerate(premises) if p is not tot_clause]`, `_rest_readings =
+    [readings_prem[i] for i in _rest_idxs]`), and every origin index `_anchored_affine_coeffs` returns is
+    LOCAL to `rest` — translate back via `_rest_idxs[local_i]` before attributing a fact to `facts_of`. Get
+    this wrong and either the safety check never fires (silently always falling back to legacy — safe but
+    no coverage gained) or facts land on the wrong premise entirely (unsafe). When a solver's own residual/
+    derived value doesn't come from the shared relation-graph algebra at all (the NO-RELATION fallback path,
+    and the final residual-entity computation itself), it can still be wrapped in a `Quantity` fact by hand
+    and handed to whichever generic `answer()` capability matches its shape (here, the plain single-entity
+    fold) — the fact-emission pattern doesn't require the WHOLE computation to run through
+    `_anchored_affine_coeffs`, just that the FINAL value ends up as a fact instead of a returned scalar.
+
+The noun-affine family (`_noun_affine_system`/`_noun_anchored_sum_system`/`_noun_residual_sum_system` —
+common-noun entities like "pigs"/"cows" rather than named people) is structurally DIFFERENT (no shared
+`_anchored_affine_coeffs`) and remains the next real candidate for a future session, starting from scratch
+with this same recipe rather than reusing any of the `_AnchoredCoeffs`-specific machinery above. See
+`reading-engine-handoff` memory for the session log.
 
 ### A clause that is BOTH meta and data — read the recorded meta, don't fight the parse (#309)
 
