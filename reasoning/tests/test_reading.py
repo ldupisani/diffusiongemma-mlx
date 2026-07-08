@@ -8568,6 +8568,20 @@ class TestIncrement387RatioChain(unittest.TestCase):
             "Anna's box. Anna's box contained twice as many pencils as were in Rose's box. "
             "If Mary's box contained 60 pencils, how many pencils were in Rose's box?"), 10)
 
+    def test_verb_echo_chain(self):
+        # #388 widening: "X <verb> SCALE as many <n n> as Y (<verb>)" + verbed anchor
+        # ("If Alvin ATE 4") + bare "how many did X eat" ask. Patrick 2, Matthew 6.
+        self.assertEqual(reading.solve(
+            "Matthew, Patrick and Alvin are eating dinner together. Matthew eats three "
+            "times as many egg rolls as Patrick eats. Patrick eats half as many egg rolls "
+            "as Alvin eats. If Alvin ate 4 egg rolls, how many did Matthew eat?"), 6)
+
+    def test_verb_echo_chain_unseen_literals(self):
+        # Carl 3 → Ben 6 → Amy 24
+        self.assertEqual(reading.solve(
+            "Amy makes four times as many cakes as Ben makes. Ben makes twice as many "
+            "cakes as Carl makes. If Carl made 3 cakes, how many did Amy make?"), 24)
+
     def test_stray_digit_declines_the_system(self):
         # an unaccounted digit (3 apples) → full digit accounting declines the SYSTEM
         # (other solvers may still answer; pin the system itself)

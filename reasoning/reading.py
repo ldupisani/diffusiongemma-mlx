@@ -19999,7 +19999,8 @@ def _ratio_chain_system(premises: list, question: str):
     N = _RS_N
     W0 = r"(?:[a-z][a-z'’\-]*)"
     stop = {"she", "he", "it", "they", "who", "that", "this", "which", "there", "the",
-            "and", "but", "if", "then", "them", "her", "his", "each", "one"}
+            "and", "but", "if", "then", "them", "her", "his", "each", "one",
+            "a", "an", "you", "we", "i"}
     ql = question.lower()
     full = " . ".join(p.lower().rstrip(".") for p in premises) + " . " + ql
     if "$" in full or "%" in full or "percent" in full:
@@ -20035,6 +20036,9 @@ def _ratio_chain_system(premises: list, question: str):
         rf"(\w+) (?:has |had )?\w+(?:ed|s)? to ({_SCALE_RE}) the number of {W0} (?:that )?(\w+)",
         # severed-conjunct bridge (#343 style): "X had the … . containing SCALE as many … as were in Y's"
         rf"(\w+) (?:has|had) [^.]{{0,60}} \. contain\w* ({_SCALE_RE}) as many {W0} as (?:were in )?(\w+)",
+        # verb-echo form (#388): "X eats SCALE as many <n n> as Y (eats)" — any single verb, the
+        # copular forms excluded (they belong to the old/tall pattern above)
+        rf"(\w+) (?!is\b|was\b)[a-z]+ ({_SCALE_RE}) as (?:many|much) {W0}(?: {W0})? as (\w+)",
     ]
     seen_spans = []
     for pat in mult_pats:
@@ -20055,8 +20059,7 @@ def _ratio_chain_system(premises: list, question: str):
     if sum(1 for _, _, k, c in rels if c == 0.0) < 2:
         return None
 
-    anch = re.search(rf"if (\w+)(?:['’]s {W0})? (?:is|was|has|had|contained|traveled to) ({N})",
-                     full)
+    anch = re.search(rf"if (\w+)(?:['’]s {W0})? [a-z]+(?: to)? ({N})", full)
     if not anch or anch.group(1) in stop:
         return None
     used_digits.add(anch.group(2))
@@ -20079,7 +20082,7 @@ def _ratio_chain_system(premises: list, question: str):
             break
 
     m = re.search(r"how (?:old|tall) is (\w+)", ql) \
-        or re.search(rf"how many {W0} (?:were in|did|does|has) (\w+)", ql)
+        or re.search(rf"how many(?: {W0}){{0,2}} (?:were in|did|does|has) (\w+)", ql)
     if m:
         name = m.groups()[-1]
         if name in values and name != anch.group(1):
