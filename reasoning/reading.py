@@ -19984,6 +19984,79 @@ def _fraction_split_part_count(premises: list, question: str):
     return None
 
 
+def _percent_partition_rest_system(premises: list, question: str):
+    """PERCENT PARTITION + REST (#389) — the percent twin of `fraction_partition_rest`:
+    percent-labeled parts of ONE pool, ask the unlabeled "rest" part → total·(1 − Σp).
+    "100 stamp collection; 35% Chinese, 20% US, rest Japanese → 45." The total is either
+    STATED ("has a 100 stamp collection", "there are N <pool>") or DERIVED from an anchored
+    part ("Three blue chips … which is 10% of the entire chips" → 3/0.10 = 30; the anchor's
+    percent joins the partition → green = 30·(1−0.10−0.50) = 12). Parts are read PER CLAUSE,
+    taking the percent token NEAREST the copula — the splitter re-inserts the shared subject
+    phrase into severed conjuncts ("thirty-five percent 20% are us stamps"), so a global scan
+    would double-read. Percent words go through _numphrase ("thirty-five percent"). Gated:
+    a "rest are <label>" clause, the ask names that label, Σp < 100, integral result, full
+    digit accounting, no money."""
+    N = _RS_N
+    ql = question.lower()
+    clauses = [p.lower().rstrip(".") for p in premises]
+    full = " . ".join(clauses) + " . " + ql
+    if "$" in full:
+        return None
+    PCT = rf"(?:({N}) ?%|([a-z]+(?:[- ][a-z]+)?) percent)"
+
+    def pctval(mo):
+        if mo.group(1):
+            return float(mo.group(1)), mo.group(1)
+        v = _numphrase(mo.group(2))
+        return (v, None) if v else (None, None)
+
+    rest = next((m.group(1) for c in clauses
+                 for m in [re.search(r"(?:the )?rest (?:are|were) (\w+)", c)] if m), None)
+    if not rest or not re.search(rf"how many {rest}\b", ql):
+        return None
+
+    parts, used_digits, total = [], set(), None
+    for c in clauses:
+        if " rest " in f" {c} ":
+            continue
+        halves = re.split(r" (?:are|were) ", c, maxsplit=1)
+        if len(halves) != 2:
+            continue
+        pcts = list(re.finditer(PCT, halves[0]))
+        if pcts:
+            v, d = pctval(pcts[-1])            # NEAREST the copula (splitter-prefix immunity)
+            if v is None:
+                return None
+            parts.append(v)
+            if d:
+                used_digits.add(d)
+        # derived total: "<count> <label> <pool> are in a <place> which is P% of the entire <pool>"
+        da = re.search(rf"^(\w+) \w+ \w+$", halves[0]) and \
+            re.search(rf"which is {PCT} of the entire", halves[1])
+        if da:
+            cnt = _num_word_value(halves[0].split()[0])
+            v, d = pctval(da)
+            if cnt and v:
+                total = cnt / (v / 100)
+                parts.append(v)
+                if d:
+                    used_digits.add(d)
+
+    if total is None:
+        m = re.search(rf"(?:has|have|owns?) an? ({N}) \w+ collection", full) \
+            or re.search(rf"there (?:are|were) ({N}) \w+", full)
+        if m:
+            total = float(m.group(1))
+            used_digits.add(m.group(1))
+    if total is None or len(parts) < 2 or not 0 < sum(parts) < 100:
+        return None
+    if set(re.findall(r"\d+(?:,\d{3})*(?:\.\d+)?",
+                      " ".join(premises) + " " + question)) - used_digits:
+        return None
+    val = round(total * (1 - sum(parts) / 100), 9)
+    return _rs_ret(val) if val > 0 and val.is_integer() else None
+
+
 def _ratio_chain_system(premises: list, question: str):
     """RATIO CHAIN (#387): a chain of linear relations between NAMES — X = s·Y (scale forms:
     "twice as old as", "3 times older than", "half the age of", "twice as many <n> as were in",
@@ -24890,6 +24963,9 @@ _EARLY_SYSTEMS = [
     # propagated to a fixpoint; noun-agnostic (ages, crayon boxes, countries traveled). After
     # age_equations on purpose: it catches only chain shapes every age solver declines.
     ("ratio_chain", _ratio_chain_system),
+    # PERCENT PARTITION + REST (#389) — percent twin of fraction_partition_rest: percent-labeled
+    # parts of one pool, rest-ask → total·(1−Σp); total stated OR derived from an anchored part.
+    ("percent_partition_rest", _percent_partition_rest_system),
 ]
 
 # LATE systems run AFTER the read-synthesize fixpoint has built `context` (they consume derived

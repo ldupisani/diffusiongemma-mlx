@@ -8597,5 +8597,47 @@ class TestIncrement387RatioChain(unittest.TestCase):
         self.assertIsNone(reading._ratio_chain_system(prem, q))
 
 
+class TestIncrement389PercentPartitionRest(unittest.TestCase):
+    """#389 — percent_partition_rest: the percent twin of fraction_partition_rest.
+    Percent-labeled parts of one pool, rest-ask → total·(1−Σp); word-number percents via
+    _numphrase; parts read PER CLAUSE (the splitter re-inserts the shared subject phrase
+    into severed conjuncts, so a global scan would double-read); total stated or derived
+    from an anchored part (its percent joins the partition)."""
+
+    def test_stated_total_word_and_digit_percents(self):
+        # 100·(1 − 0.35 − 0.20) = 45
+        self.assertEqual(reading.solve(
+            "Nikka has a 100 stamp collection. Thirty-five percent of her stamps are "
+            "Chinese, 20% are US stamps, and the rest are Japanese stamps. How many "
+            "Japanese stamps does Nikka have?"), 45)
+
+    def test_derived_total_from_anchored_part(self):
+        # total = 3/0.10 = 30; green = 30·(1 − 0.10 − 0.50) = 12
+        self.assertEqual(reading.solve(
+            "Three blue chips are in a jar which is 10% of the entire chips. If 50% of "
+            "the chips are white and the rest are green, how many green chips are "
+            "there?"), 12)
+
+    def test_unseen_literals_generalize(self):
+        # 200·(1 − 0.40 − 0.25) = 70
+        self.assertEqual(reading.solve(
+            "Marta has a 200 coin collection. Forty percent of her coins are silver, "
+            "25% are gold, and the rest are green. How many green coins does Marta "
+            "have?"), 70)
+
+    def test_stray_digit_declines(self):
+        # never a number — an unaccounted digit (7 albums) must keep the shape declined
+        self.assertNotIsInstance(reading.solve(
+            "Nikka has a 100 stamp collection. Thirty-five percent of her stamps are "
+            "Chinese, 20% are US stamps, and the rest are Japanese stamps. She also has "
+            "7 albums. How many Japanese stamps does Nikka have?"), (int, float))
+
+    def test_over_100_percent_declines(self):
+        self.assertNotIsInstance(reading.solve(
+            "Nikka has a 100 stamp collection. Sixty percent of her stamps are Chinese, "
+            "50% are US stamps, and the rest are Japanese stamps. How many Japanese "
+            "stamps does Nikka have?"), (int, float))
+
+
 if __name__ == "__main__":
     unittest.main()
