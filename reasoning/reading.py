@@ -7866,7 +7866,7 @@ def _anchored_difference_system(premises: list, question: str, readings_prem: li
     return SystemResult(facts_by_premise, matched)
 
 
-def _anchored_average_system(premises: list, question: str):
+def _anchored_average_system(premises: list, question: str, readings_prem: list = None):
     """The ANCHORED-AVERAGE twin: the question asks for the MEAN of the N entities (Σ ÷ N) instead of the
     sum — "Rachel weighs 75 pounds, 6 pounds less than Jimmy and 15 pounds more than Adam. What is the
     average weight of the three people?" → Σ=216 over {Rachel,Jimmy,Adam}, ÷3 = 72. Reuses the exact sum
@@ -7875,13 +7875,20 @@ def _anchored_average_system(premises: list, question: str):
     the number of entities the coeffs captured (`n in q_ints`), so a system that captured a subset (a
     missing/unsupported relation, e.g. an "as tall as" equality) DECLINES rather than dividing by the wrong
     denominator. Age-typed averages ("average age of the three") already decline inside
-    `_anchored_affine_coeffs`, so this never competes with the age domain's own average branch."""
+    `_anchored_affine_coeffs`, so this never competes with the age domain's own average branch.
+
+    Migrated (see `_anchored_sum_system`'s docstring for the full recipe): emits one `Quantity` fact per
+    entity instead of computing the mean here — `answer()` already has a working "average over a set"
+    branch (checked FIRST, before the wh_value dispatch, specifically so a "What IS the average…" phrasing
+    doesn't decline there) that groups same-measure facts by owner, folds each via `_holdings`, and divides
+    by the count — with its OWN matching denominator-safety check. No `_has_interrogative` gate is needed
+    here (unlike the sum/difference twins) since that branch fires regardless of question form."""
     ql = question.lower()
     if "average" not in ql:
         return None                                                  # not an average question
     if any(w in ql for w in ("altogether", "in all", " total", "combined", "in total")):
         return None                                                  # a sum question is the other twin's shape
-    got = _anchored_affine_coeffs(premises, question)
+    got = _anchored_affine_coeffs(premises, question, readings_prem)
     if got is None:
         return None
     coeff, pivot = got.coeff, got.pivot
@@ -7890,8 +7897,38 @@ def _anchored_average_system(premises: list, question: str):
               if "value" in u.features.get("senses", []) and float(u.features["value"]).is_integer()}
     if n not in q_ints:                                              # the stated group size must match N
         return None
-    total = " + ".join(f"({_num(a)} * {_num(pivot)} + ({_num(b)}))" for a, b in coeff.values())
-    return _compute(f"({total}) / {n}")
+    if readings_prem is None or got.rps is not readings_prem or got.unified:
+        total = " + ".join(f"({_num(a)} * {_num(pivot)} + ({_num(b)}))" for a, b in coeff.values())
+        return _compute(f"({total}) / {n}")
+    if got.measures:
+        _head = next(iter(got.measures))
+        _qm = _queried_measure(question)
+        measure = _qm if (_qm is not None and _qm[0] == _head) else (_head, frozenset())
+    else:
+        measure = _queried_measure(question) or ("count", frozenset())
+    values = {got.free: pivot}
+    progress = True
+    while progress:
+        progress = False
+        for e, (k, std, c) in got.rels.items():
+            if std in values and e not in values:
+                values[e] = _compute(f"{_num(k)} * ({_num(values[std])}) + ({_num(c)})")
+                progress = True
+    facts_by_premise = {}
+    matched = []
+    for e in coeff:
+        idxs = got.origin.get(e)
+        if not idxs or e not in values:
+            continue
+        fact = Quantity(e, measure, values[e])
+        for i in idxs:
+            facts_by_premise.setdefault(i, []).append(fact)
+    for i in range(len(premises)):
+        facts_by_premise.setdefault(i, [])
+    for i, fs in facts_by_premise.items():
+        if fs:
+            matched.extend(got.rps[i].units)
+    return SystemResult(facts_by_premise, matched)
 
 
 def _residual_sum_system(premises: list, question: str):
@@ -25169,7 +25206,7 @@ _EARLY_SYSTEMS = [
     # ANCHORED-DIFFERENCE (bare anchor, 'how many more X than Y'): "Ann 60 cards … how many more than Anton?" → 30.
     ("anchored_difference", lambda P, Q, R: _anchored_difference_system(P, Q, R)),   # MIGRATED
     # ANCHORED-AVERAGE (bare anchor, 'average X of the N people'): "Rachel 75, 6 less than Jimmy, 15 more than Adam … average of the three?" → 72.
-    ("anchored_average", lambda P, Q, R, _fn=_anchored_average_system: _fn(P, Q)),
+    ("anchored_average", lambda P, Q, R: _anchored_average_system(P, Q, R)),   # MIGRATED
     # RESIDUAL SUM (stated total names 3+, asked one never related): "Jermaine/Terrence/Emilee $90 … Emilee?" → 25.
     ("residual_sum", lambda P, Q, R, _fn=_residual_sum_system: _fn(P, Q)),
     # TWO-RELATION 2x2 (same pair, no anchor/total): "24 more blue than red; 5 times as many blue as red → red 6".

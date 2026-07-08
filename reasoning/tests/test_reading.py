@@ -5696,6 +5696,26 @@ class TestSystemResultMigration(unittest.TestCase):
             "5 more than twice the number of books that Theo has. How many more books are in Nora's room "
             "than Theo's room?"), 9)
 
+    def test_average_system_returns_system_result_not_scalar(self):
+        # fresh synthetic numbers — _anchored_average_system migrated the same way as the sum/difference
+        # twins, relying on answer()'s EXISTING "average over a set" branch (no new answer() code needed).
+        text = ("Priya weighs 60 pounds, 5 pounds less than Quinn and 10 pounds more than Reese. What is "
+                "the average weight of the three people?")
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._anchored_average_system(premises, question, rp)
+        self.assertIsInstance(result, reading.SystemResult)
+        # Priya=60, Quinn=65, Reese=50 -> (60+65+50)/3 = 58.333...
+        self.assertAlmostEqual(reading.solve(text), 175 / 3)
+
+    def test_average_stated_count_must_match_entity_count_still_declines(self):
+        # the system has 3 entities but the question says "four" — never divide by a guessed/mismatched N,
+        # migrated or not (this precondition is checked BEFORE the solver decides safe-vs-legacy).
+        self.assertEqual(reading.solve(
+            "Priya weighs 60 pounds, 5 pounds less than Quinn and 10 pounds more than Reese. What is the "
+            "average weight of the four people?"), "undetermined")
+
 
 class TestIncrement146ContainerContentsSum(unittest.TestCase):
     """#146 — CONTAINER × CONTENTS product-sum (the count twin of revenue_product_sum): each container-count
