@@ -6974,7 +6974,7 @@ def _affine_system(premises: list, question: str):
 
 # --- system family: common-noun / coordinate-noun entities ----------------------------------
 
-def _noun_affine_system(premises: list, question: str):
+def _noun_affine_system(premises: list, question: str, readings_prem: list = None):
     """The COORDINATE/SUBTYPE-NOUN twin of `_affine_system`: entities are COMMON NOUNS (via
     `_affine_relation`'s noun-entity fallback — "twice as many pigs as cows", "4 more cows than goats"), not
     names, and the stated total is over a CATEGORY word ("56 ANIMALS total" for pig/cow/goat entities) rather
@@ -6987,17 +6987,25 @@ def _noun_affine_system(premises: list, question: str):
     named-entity system's own (stricter, already-tested) total-matching. Same pivot-propagation as
     `_affine_system`: an entity value = A·pivot + B, propagated from the one FREE entity (no relation's
     subject) via ≥2 relations, T = Σ(A)·pivot + Σ(B). "A farmer has twice as many pigs as cows, and 4 more
-    cows than goats. If the farmer has 56 animals total, how many goats does he have?" → pivot=goats=11."""
+    cows than goats. If the farmer has 56 animals total, how many goats does he have?" → pivot=goats=11.
+
+    Migrated (see `_anchored_sum_system`'s docstring for the full recipe) when SAFE: emits a `Quantity`
+    fact per entity, keyed by the NOUN itself ('goat', not a person), and lets `answer()`'s noun-keyed
+    entity fallback (#395) resolve the ask — the same capability `_anchored_single_system`'s consumer is,
+    just reached via the fallback instead of direct subject-matching, since the question's grammatical
+    subject here is a pronoun/possessor, never the noun entity itself."""
     if any(w in question.lower() for w in ("altogether", "in all", " total", "combined", "in total")):
         return None                                       # a sum question is a different shape, not this one
     for p in premises:
         if re.search(r"\btimes (more|less|fewer)\b", p.lower()):
             return None                                   # ambiguous ×N idiom → decline (GATE C)
-    rels = {}
-    for p in premises:
+    rels, origin, origin_secondary, tot_idx = {}, {}, {}, None
+    _rps = readings_prem if readings_prem is not None and len(readings_prem) == len(premises) else None
+    for i, p in enumerate(premises):
         if any(w in p.lower() for w in ("total", "combined", "altogether", "together")):
-            continue                                      # the total clause itself isn't a relation
-        rp = analyze(p)
+            tot_idx = i                                   # the total clause itself isn't a relation
+            continue
+        rp = _rps[i] if _rps is not None else analyze(p)
         if sum(1 for u in rp.units if "name" in u.features.get("senses", [])) == 2:
             continue                                      # a genuine 2-NAME relation is _affine_system's turf
         rel = _affine_relation(rp)
@@ -7010,22 +7018,31 @@ def _noun_affine_system(premises: list, question: str):
             if std_e in rels:                              # `_affine_system`
                 return None
             rels[std_e] = (1.0 / k, subj_e, -c / k)
+            _defined, _mentioned = std_e, subj_e
         else:
             rels[subj_e] = (k, std_e, c)
+            _defined, _mentioned = subj_e, std_e
+        origin.setdefault(_defined, []).append(i)         # PRIMARY/SECONDARY origin — see
+        origin_secondary.setdefault(_mentioned, i)         # `_AnchoredCoeffs.origin`'s docstring for why
     if len(rels) < 2:
         return None                                       # a genuine N-entity SYSTEM, like `_affine_system`
     total = None
-    for p in premises:
+    for i, p in enumerate(premises):
         if not any(w in p.lower() for w in ("total", "combined", "altogether", "together")):
             continue
-        vals = [u for u in analyze(p).units
+        rp = _rps[i] if _rps is not None else analyze(p)
+        vals = [u for u in rp.units
                 if "value" in u.features.get("senses", []) and u.features.get("value") is not None]
         if len(vals) == 1:
             total = vals[0].features["value"]
+            tot_idx = i
             break
     if total is None:
         return None
     entities = set(rels) | {std for _k, std, _c in rels.values()}
+    for e in entities:
+        if e not in origin and e in origin_secondary:
+            origin[e] = [origin_secondary[e]]
     free = [e for e in entities if e not in rels]
     if len(free) != 1:
         return None
@@ -7046,8 +7063,36 @@ def _noun_affine_system(premises: list, question: str):
     if asked is None or asked not in coeff:
         return None
     pivot = _compute(f"({_num(total)} - ({_num(sum_b)})) / {_num(sum_a)}")
-    a_ask, b_ask = coeff[asked]
-    return _compute(f"{_num(a_ask)} * {_num(pivot)} + ({_num(b_ask)})")
+    _has_interrogative = any("interrogative" in u.features.get("senses", []) for u in qr.units)
+    if _rps is None or not _has_interrogative or any(e not in origin for e in entities):
+        a_ask, b_ask = coeff[asked]
+        return _compute(f"{_num(a_ask)} * {_num(pivot)} + ({_num(b_ask)})")
+    # unlike the anchored-affine family (one SHARED measure across all named entities, e.g. all "$"), each
+    # noun entity here IS its own measure — 'goat' facts measure 'goat', 'cow' facts measure 'cow'; the
+    # question's own asked noun (`_queried_measure`) only tells us `asked`'s measure, not every entity's.
+    _qverb_unit = next((u for u in qr.units if "verb" in u.features.get("senses", [])
+                        and _key(u.surface) not in ("is", "are", "was", "were")), None)
+    verb = _lemma(_qverb_unit.surface) if _qverb_unit is not None else "have"
+    facts_by_premise = {}
+    for e, (a, b) in coeff.items():
+        amount = _compute(f"{_num(a)} * {_num(pivot)} + ({_num(b)})")
+        measure = _queried_measure(question) if e == asked and _queried_measure(question) is not None \
+            else (e, frozenset())
+        fact = Quantity(e, measure, amount, verb)
+        for i in origin[e]:
+            facts_by_premise.setdefault(i, []).append(fact)
+    if tot_idx is not None:
+        facts_by_premise.setdefault(tot_idx, [])
+    matched = []
+    for i, fs in facts_by_premise.items():
+        if fs:
+            matched.extend(_rps[i].units)
+    if tot_idx is not None:
+        # the TOTAL clause carries a real stated value CONSUMED by the pivot computation but attaches to
+        # no single entity's fact — mark its units too (even with an empty fact list) so GUARD 3's
+        # pattern_consumed exemption still recognizes the stated total as accounted for.
+        matched.extend(_rps[tot_idx].units)
+    return SystemResult(facts_by_premise, matched)
 
 
 def _noun_anchored_sum_system(premises: list, question: str):
@@ -25245,7 +25290,7 @@ _EARLY_SYSTEMS = [
     # MIXED AFFINE (N entities, ratio+offset mixed, +total): "Anna=3·Mandy & 2 fewer than Amanda; 142 → Mandy 20."
     ("affine", lambda P, Q, R, _fn=_affine_system: _fn(P, Q)),
     # COORDINATE/SUBTYPE-NOUN AFFINE (common-noun entities): "twice as many pigs as cows, 4 more cows than goats; 56 animals → goats 11."
-    ("noun_affine", lambda P, Q, R, _fn=_noun_affine_system: _fn(P, Q)),
+    ("noun_affine", lambda P, Q, R: _noun_affine_system(P, Q, R)),   # MIGRATED
     # COORDINATE-NOUN ANCHORED-SUM (no total, one noun anchor, category-sum ask): "Hannah's family: 10 pigs … how many animals?" → 50.
     ("noun_anchored_sum", lambda P, Q, R, _fn=_noun_anchored_sum_system: _fn(P, Q)),
     # SUBTYPE-PARTITION (adjective subtypes of one head noun, total in same noun, 'the rest' ask): "Ryan 40 balls … green balls?" → 7.
@@ -26063,12 +26108,17 @@ def _solve_inner(text: str):
         return "undetermined"
     # GUARD 4 — a premise that STATES a number (value/percent/multiplier) but produced no quantity fact
     # dropped information we can't model ("…increases by 50% every year"; "gave his three friends total"
-    # → spurious instances) → decline rather than answer off the part we did parse.
+    # → spurious instances) → decline rather than answer off the part we did parse. PATTERN-CONSUMED
+    # exemption (see GUARD 2/3 above): a migrated solver's CONSTRAINT premise ("If the farmer has 56
+    # animals total") is genuinely consumed by the pivot computation but attaches to no SINGLE entity's own
+    # Quantity fact — `_bind_pattern` having marked its units is proof the solver already accounted for it.
     for i, rp in enumerate(readings[:len(premises)]):
         if any(s in u.features.get("senses", []) for u in rp.units
                for s in ("value", "percent", "multiplier")) \
                 and not any(isinstance(f, (Quantity, Rate, Frequency, RateRel)) for f in (facts_of[i] or [])) \
-                and not _set_size_cardinal(rp, cast_n):
+                and not _set_size_cardinal(rp, cast_n) \
+                and not any(o.target is _PATTERN_UNIT for u in rp.units
+                           for o in u.features.get("obligations", [])):
             return "undetermined"
     # GUARD 5 — temporal safety (now that we FOLD along the timeline, not blanket-decline). (a) A TIMED
     # premise that states a value/multiplier/percent but produced no Quantity dropped a time-tagged event

@@ -5814,6 +5814,21 @@ class TestNounKeyedEntityFallback(unittest.TestCase):
         ctx = [reading.Quantity("melanie", ("year", frozenset()), 8, "be")]
         self.assertEqual(reading.answer("How many years until her age doubles?", ctx), "undetermined")
 
+    def test_noun_affine_system_returns_system_result(self):
+        # fresh synthetic numbers (same nouns as the docstring example, to stay clear of vocabulary gaps):
+        # goat=x (free pivot), cow=x+5, pig=3(x+5); total animals = x+(x+5)+3(x+5) = 5x+20 = 45 -> x=5.
+        text = ("A farmer has three times as many pigs as cows, and 5 more cows than goats. If the farmer "
+                "has 45 animals total, how many goats does he have?")
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._noun_affine_system(premises, question, rp)
+        self.assertIsInstance(result, reading.SystemResult)
+        all_facts = [f for fs in result.facts_by_premise.values() for f in fs]
+        amounts = {f.entity: f.amount for f in all_facts}
+        self.assertEqual(amounts, {"goat": 5, "cow": 10, "pig": 30})
+        self.assertEqual(reading.solve(text), 5)
+
 
 class TestIncrement146ContainerContentsSum(unittest.TestCase):
     """#146 — CONTAINER × CONTENTS product-sum (the count twin of revenue_product_sum): each container-count
