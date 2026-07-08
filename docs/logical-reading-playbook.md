@@ -419,6 +419,61 @@ common-noun entities like "pigs"/"cows" rather than named people) is structurall
 with this same recipe rather than reusing any of the `_AnchoredCoeffs`-specific machinery above. See
 `reading-engine-handoff` memory for the session log.
 
+**Update (2026-07-08): the noun-affine family AND the total-pinned mixed-affine family are both done.**
+`_noun_affine_system`/`_noun_residual_sum_system` migrated first (`_noun_anchored_sum_system`, the
+category-sum "how many animals?" ask, stays UNMIGRATED — it needs hypernym-based summing across DIFFERENT
+measure-heads, a materially larger, separate capability, explicitly out of scope). Then the anchor-less,
+TOTAL-pinned mixed-affine family — `_affine_system`, `_sum_ratio_system`, `_offset_sum_pure`,
+`_offset_sum_system` — all four, each its own diff-verified increment. Four more lessons:
+
+12. **Common-noun entities need a genuinely NEW `answer()` capability; named-person entities don't.**
+    The noun-affine family's entities are common nouns ("goat"/"pig"), never tracked by any existing
+    subject-resolution path (a pronoun/possessor subject like "how many GOATS does HE have?" resolves to
+    nothing) — this justified building the **noun-keyed entity fallback** (a subject with NO fact of its
+    own resolves to the unique context entity sharing the query's measure, gated against real names/`each`/
+    `TIME_UNITS` to avoid hijacking cases with a different correct resolution) and an **existential "are
+    there" fallback** (`answer()` had NO `entities`-resolution path at all for "how many X ARE THERE?" —
+    "are" is excluded from the verb search as a copula and "there" can never be a subject — independent of
+    any migration; this is a genuine parser gap, not the noun-family's own quirk). The mixed-affine family's
+    entities are NAMED PEOPLE sharing one measure, so the EXISTING single-entity fold + its established
+    SAFE-path disqualifiers (point 10 above) sufficed unchanged — zero new `answer()` capability needed for
+    any of the four. Lesson: before reaching for new shared machinery, check whether the migrated family's
+    entities are already a kind `answer()` resolves elsewhere — named people usually are, common nouns
+    usually aren't.
+13. **A new fallback's gate must match the SPECIFIC shape it was built for, not the general one.** The first
+    cut of the existential fallback matched ANY exactly-one-fact measure — including a BARE head noun ("how
+    many students are there?"). That wrongly resolved to an unrelated SUBGROUP's fact (a fraction-partition
+    problem's "20 without a desktop" for a "students" query) instead of declining for the population total,
+    a real TEST regression (45/5→45/6) invisible to the dev diff (the fraction-partition problem lives on
+    TEST, not dev). Restricting the gate to a QUALIFIED measure (`query[1]` non-empty, e.g. `{'green'}`) —
+    matching exactly the noun-family's own subtype-partition shape the fallback was built for — fixed it.
+    Generalizing a narrow fallback's gate "while I'm at it" reintroduces exactly the risk point 5 warns
+    against; keep a new fallback's gate as narrow as the concrete case that motivated it.
+14. **A solver with NO shared coefficients-helper still needs the SAME `origin`/`readings_prem` plumbing,
+    just inlined.** `_affine_system`/`_sum_ratio_system`/`_offset_sum_pure`/`_offset_sum_system` (unlike the
+    anchored family) never call a shared `_*_coeffs` extractor — each builds its own `rels`/`coeff` inline.
+    That doesn't change the recipe: add `readings_prem=None`, track `origin`/`origin_secondary` in the SAME
+    loop that already builds `rels` (append primary origin, record secondary as a fallback for the free/
+    pivot entity), and compute values HOP-BY-HOP over the raw relation dict for GUARD 14 — identical to the
+    anchored family's points 4/8, just without an intermediate dataclass to carry them.
+15. **A stated TOTAL clause has no entity of its own — find its premise index by re-deriving, not by
+    threading an index through the shared total-finder.** `_combined_total` (shared by 3 of these 4 solvers)
+    returns only the VALUE, not which premise produced it, and widening its signature would touch every
+    caller including the two not-yet-migrated ones. Cheaper and just as safe: re-scan premises with the
+    SAME cue-word gate `_combined_total` used, matched by its own extracted value (`v.features["value"] ==
+    total`) — unambiguous in practice since GSM8K rarely repeats a value across two different roles in the
+    same problem. Mark that premise's `facts_by_premise[i] = []` (no fact — it's a constraint, not one
+    entity's own value) but still add its units to `matched`, so GUARD 4's `pattern_consumed` exemption
+    recognizes the stated total as accounted for (else the fold declines even with fully-correct facts —
+    the exact gap #395's noun-affine migration hit first).
+
+`_noun_anchored_sum_system` (category-sum) is the one remaining solver in either family, deliberately
+unmigrated (needs hypernym-summing, a separate capability). Beyond these two families, the other ~90
+solvers in `_EARLY_SYSTEMS`/`_LATE_SYSTEMS` are NOT part of a clean shared-structure family the way these
+were (vocab_singles/mixed_singles/day-chain/rate-chain solvers are each their own idiosyncratic shape) —
+migrating any of those would need its own from-scratch assessment of whether a generic `answer()` consumer
+already exists for its output shape, not a mechanical repeat of this recipe.
+
 ### A clause that is BOTH meta and data — read the recorded meta, don't fight the parse (#309)
 
 `_parse_problem` recognizes "there are N X in a Y" as a stated unit conversion (`_stated_conversion`),

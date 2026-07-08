@@ -8566,7 +8566,7 @@ def _residual_system_result(premises, question, readings_prem, tot_idx, tot_val,
     return SystemResult(facts_by_premise, matched)
 
 
-def _two_relation_system(premises: list, question: str):
+def _two_relation_system(premises: list, question: str, readings_prem: list = None):
     """TWO relations between the SAME entity PAIR, with NO anchor or total — a self-contained 2×2 linear
     system. "Brett has 24 more blue marbles than red marbles. He has 5 times as many blue marbles as red
     marbles. How many red marbles?" → blue = red+24 AND blue = 5·red, so red = (0−24)/(1−5) = 6. EVERY premise
@@ -8574,13 +8574,29 @@ def _two_relation_system(premises: list, question: str):
     has no unique solution (two same-slope offsets at different times, e.g. "30 more … currently" / "80 more
     … 2 years ago", correctly decline). Tightly gated: exactly two relations, nothing else, and the question
     must ask for one of the two entities (works for a common-noun pair via `_asked_noun_entity`, or a named
-    pair via the question's name)."""
+    pair via the question's name).
+
+    Migrated (see `_anchored_sum_system`'s docstring for the full recipe) when SAFE, but UNLIKE the other
+    migrated families, SAFE here is narrowed to the NAMED-PAIR case only: neither entity here is a free pivot
+    (both premises jointly constrain BOTH values — there's no single "defining premise" per entity), so both
+    facts are attributed to BOTH premise indices (the same over-determined-entity dedup `_solve_inner`
+    already does for the anchored family handles this). The coordinate-noun twin (the REAL dev-train hit,
+    "Brett"'s blue/red marbles) asks via a genuinely BARE noun-phrase question ("How many red marbles?" — no
+    subject, no verb, no aux at all) that `answer()` has NO generic resolution path for at all (a new,
+    deeper gap than the existential "are there" one #395 fixed — not attempted here); forcing that case
+    through would just decline where the legacy scalar already succeeds, so it stays on the legacy path
+    unconditionally. Only when the pair is NAMED PEOPLE (the same shape `_affine_system`/`_sum_ratio_system`
+    already proved a consumer for) does this attempt the new path."""
+    _rps = readings_prem if readings_prem is not None and len(readings_prem) == len(premises) else None
     rels = []
-    for p in premises:
-        rel = _affine_relation(analyze(p))
+    rps_used = []
+    for i, p in enumerate(premises):
+        rp = _rps[i] if _rps is not None else analyze(p)
+        rel = _affine_relation(rp)
         if rel is None:
             return None                                      # every premise must be one of the two relations
         rels.append(rel)
+        rps_used.append(rp)
     if len(rels) != 2:
         return None
     (s1, k1, t1, c1), (s2, k2, t2, c2) = rels
@@ -8597,10 +8613,36 @@ def _two_relation_system(premises: list, question: str):
         + [_noun_entity_key(u) for u in qr.units if "noun" in u.features.get("senses", [])]
     asked = next((a for a in cands if a in (s1, t1)), None)
     if asked == t1:
-        return std
-    if asked == s1:
-        return subj
-    return None                                              # asks for neither entity — not this shape
+        scalar = std
+    elif asked == s1:
+        scalar = subj
+    else:
+        return None                                          # asks for neither entity — not this shape
+    _is_named_pair = any("name" in u.features.get("senses", []) and _entity(u) in (s1, t1)
+                         for rp in rps_used for u in rp.units)
+    if _rps is None or not _is_named_pair:
+        return scalar
+    qr_units = qr.units
+    asked_measure = _queried_measure(question)
+    _has_interrogative = any("interrogative" in u.features.get("senses", []) for u in qr_units)
+    _comparative_ask = any("comparative" in u.features.get("senses", []) for u in qr_units)
+    _has_verb_path = any("auxiliary" in u.features.get("senses", []) for u in qr_units) or \
+        any("verb" in u.features.get("senses", []) and _key(u.surface) not in ("is", "are", "was", "were")
+            for u in qr_units)
+    qnames = [u for u in qr_units if "name" in u.features.get("senses", [])]
+    _possessive_name = any(qr_units[qr_units.index(u) + 1].features.get("senses") == ["possessive"]
+                           for u in qnames if qr_units.index(u) + 1 < len(qr_units))
+    if not _has_interrogative or _comparative_ask or _possessive_name or asked_measure is None \
+            or not _has_verb_path:
+        return scalar
+    _qverb_unit = next((u for u in qr_units if "verb" in u.features.get("senses", [])
+                        and _key(u.surface) not in ("is", "are", "was", "were")), None)
+    verb = _lemma(_qverb_unit.surface) if _qverb_unit is not None else "have"
+    facts = [Quantity(s1, asked_measure, subj, verb), Quantity(t1, asked_measure, std, verb)]
+    facts_by_premise = {0: list(facts), 1: list(facts)}   # BOTH premises jointly define BOTH values — no
+    #                                                        single defining premise to attribute either to
+    matched = list(rps_used[0].units) + list(rps_used[1].units)
+    return SystemResult(facts_by_premise, matched)
 
 
 _GOAL_VERBS = {"collect", "save", "earn", "raise", "reach", "gather", "sell", "read", "make", "buy",
@@ -25753,7 +25795,7 @@ _EARLY_SYSTEMS = [
     # RESIDUAL SUM (stated total names 3+, asked one never related): "Jermaine/Terrence/Emilee $90 … Emilee?" → 25.
     ("residual_sum", lambda P, Q, R: _residual_sum_system(P, Q, R)),   # MIGRATED
     # TWO-RELATION 2x2 (same pair, no anchor/total): "24 more blue than red; 5 times as many blue as red → red 6".
-    ("two_relation", lambda P, Q, R, _fn=_two_relation_system: _fn(P, Q)),
+    ("two_relation", lambda P, Q, R: _two_relation_system(P, Q, R)),   # MIGRATED (named pair only)
     # TARGET − CONTRIBUTIONS: "need to collect 100 cans; collected 30, 43; how many more to collect?" → 27.
     ("target_contributions", lambda P, Q, R, _fn=_target_contributions_system: _fn(P, Q)),
     # TOTAL-BETWEEN RESIDUAL: "12 in total between A, B, C; 3 B and 2 A; how many C?" → 12−5 = 7.

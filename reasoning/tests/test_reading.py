@@ -5946,6 +5946,43 @@ class TestOffsetSumSystemsReturnSystemResult(unittest.TestCase):
         self.assertEqual(reading.solve(text), 20)
 
 
+class TestTwoRelationSystemReturnsSystemResult(unittest.TestCase):
+    """#399 — `_two_relation_system` (2x2 linear system, no anchor/total) migrated to `SystemResult` for
+    the NAMED-PAIR case only: neither entity is a free pivot (both premises jointly constrain both values),
+    so both facts are attributed to BOTH premise indices. The coordinate-noun twin (the real dev-train hit,
+    Brett's blue/red marbles) asks via a bare noun-phrase question ("How many red marbles?") `answer()` has
+    no consumer for at all -- stays on the legacy scalar path unconditionally, unchanged."""
+
+    def test_named_pair_returns_system_result(self):
+        # alba = bo + 15, alba = 4*bo -> bo = 15/3 = 5, alba = 20.
+        text = ("Alba has 15 more coins than Bo. Alba has 4 times as many coins as Bo. How many coins does "
+                "Bo have?")
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._two_relation_system(premises, question, rp)
+        self.assertIsInstance(result, reading.SystemResult)
+        seen = {}
+        for fs in result.facts_by_premise.values():
+            for f in fs:
+                seen[f.entity] = f.amount
+        self.assertEqual(seen, {"alba": 20, "bo": 5})
+        self.assertEqual(reading.solve(text), 5)
+
+    def test_coordinate_noun_pair_stays_on_legacy_scalar_path(self):
+        # the real dev-train shape (Brett's blue/red marbles) -- a bare noun-phrase question answer() can't
+        # yet resolve generically; must still return a plain scalar, not a SystemResult.
+        text = ("Brett has 24 more blue marbles than red marbles. He has 5 times as many blue marbles as "
+                "red marbles. How many red marbles?")
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._two_relation_system(premises, question, rp)
+        self.assertNotIsInstance(result, reading.SystemResult)
+        self.assertEqual(result, 6)
+        self.assertEqual(reading.solve(text), 6)
+
+
 class TestIncrement146ContainerContentsSum(unittest.TestCase):
     """#146 — CONTAINER × CONTENTS product-sum (the count twin of revenue_product_sum): each container-count
     pairs with a following CONTENTS-count of the questioned item, Σ(container·contents), minus any stated item
