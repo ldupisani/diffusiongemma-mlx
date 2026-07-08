@@ -5064,6 +5064,38 @@ def answer(question: str, context: list, discourse: list = None):
                   and f.amount is not None}
         if len(_exact) == 1:
             entities, q_verb, q_time = [next(iter(_exact))], "have", None
+    # CATEGORY-SUM FALLBACK: "how many ANIMALS do they have?" asks for a HYPERNYM SUM — the query's own head
+    # noun ("animal") is a REGISTERED semantic category (`_cat`/`CATEGORY_PARENTS`), not itself one of the
+    # tracked entities; each tracked entity (pig/cow/goat) is one of its MEMBERS. Fires only when the direct
+    # per-entity fold has nothing to work with (no context fact's entity is among the resolved `entities` —
+    # the subject is an untracked pronoun/possessor, mirroring the noun-keyed fallback's own gate) and the
+    # query carries NO qualifier of its own (`query[1]` empty — a category ask is always a bare head noun;
+    # "how many RED animals" isn't this shape). `query[0] in CATEGORY_PARENTS` is an explicit membership
+    # check, not just relying on `_cat`'s degrade-to-False for an unregistered word, so the gate's intent
+    # (ONLY classification-driven categories, never an accidental sense-name collision) stays legible. At
+    # least TWO distinct members must be present — a single member is an ordinary single-entity ask, not a
+    # category question (and is already handled by the noun-keyed fallback above). Supports the same
+    # COMPLEMENT/negation form the pre-migration `_noun_anchored_sum_system` handled directly: "how many
+    # animals are NOT <subtype>?" sums every member except the one named after "not"/"n't" — but ONLY when
+    # that excluded token IS itself one of the matched members; an unresolvable negation must DECLINE, never
+    # silently return the full (wrong) sum.
+    if query is not None and not query[1] and query[0] in CATEGORY_PARENTS \
+            and not any(isinstance(f, Quantity) and f.entity in (entities or []) for f in context):
+        _cat_members = {f.entity: f.amount for f in context if isinstance(f, Quantity)
+                        and f.amount is not None and _cat(f.entity, query[0])}
+        if len(_cat_members) >= 2:
+            _excluded = _cat_unresolved = None
+            if any("negation" in u.features.get("senses", []) for u in r.units):
+                # a plural surface ("goats") must lemma-normalize to the entity key ("goat") before the
+                # membership check, or a plural negated subtype never matches (the entities are singular
+                # lemma keys throughout the noun-affine family) — a real gap this fixed.
+                _qtok = [_key(w.surface) for u in r.units for w in u.words]
+                _excluded = next((_noun_lemma(_qtok[i + 1]) for i, w in enumerate(_qtok[:-1])
+                                  if w in ("not", "n't") and _noun_lemma(_qtok[i + 1]) in _cat_members), None)
+                _cat_unresolved = _excluded is None
+            if not _cat_unresolved:
+                _summed = {e: v for e, v in _cat_members.items() if e != _excluded}
+                return _compute(" + ".join(_num(v) for v in _summed.values()))
     if query is not None and entities is not None:
         if entities:
             terms = []                                   # each conjunct's contribution, summed once at the end
@@ -7352,7 +7384,7 @@ def _noun_affine_system(premises: list, question: str, readings_prem: list = Non
     return SystemResult(facts_by_premise, matched)
 
 
-def _noun_anchored_sum_system(premises: list, question: str):
+def _noun_anchored_sum_system(premises: list, question: str, readings_prem: list = None):
     """The ANCHOR-based twin of `_noun_affine_system`: no combined/category total is stated, but ONE entity
     has a bare absolute value (a noun ANCHOR — "Hannah's family has ten PIGS", via `_noun_anchor_fact`,
     ignoring the outer possessor Hannah). The question asks for a CATEGORY SUM ("how many ANIMALS do they
@@ -7369,7 +7401,16 @@ def _noun_anchored_sum_system(premises: list, question: str):
     numeric value ("...and 5 students to every teacher, how many TEACHERS are there?") — a real confident-
     wrong (180 vs gold 36) came from a conversion clause getting glued onto the question by clause-splitting;
     a bare "how many X" question never has a number of its own, so a stray one signals unaccounted info this
-    solver has no way to fold in (here, a students-per-teacher ratio, not a category sum at all)."""
+    solver has no way to fold in (here, a students-per-teacher ratio, not a category sum at all).
+
+    Migrated (see `_anchored_sum_system`'s docstring for the full recipe) when SAFE: instead of computing
+    the (possibly complement) sum here, emits a `Quantity` fact PER ENTITY and lets `answer()`'s NEW
+    CATEGORY-SUM FALLBACK resolve the ask — the hypernym-membership check (`_cat`/`CATEGORY_PARENTS`) this
+    solver's own docstring calls "the hypernym check the older solvers explicitly route around" is now a
+    shared, reusable `answer()` capability instead of being reimplemented locally, including the SAME
+    complement/negation handling. SAFE requires the asked category to be a REGISTERED category
+    (`query[0] in CATEGORY_PARENTS`) — the exact membership test `answer()`'s fallback will independently
+    perform — so this never falls through to a fold that's guaranteed to decline."""
     qr_check = analyze(question)
     if any("value" in u.features.get("senses", []) and u.features.get("value") is not None
            for u in qr_check.units):
@@ -7379,9 +7420,10 @@ def _noun_anchored_sum_system(premises: list, question: str):
             return None                                    # a stated total is _noun_affine_system's turf
         if re.search(r"\btimes (more|less|fewer)\b", p.lower()):
             return None                                    # ambiguous ×N idiom → decline (GATE C)
-    rels, anchors = {}, {}
-    for p in premises:
-        rp = analyze(p)
+    rels, anchors, origin, origin_secondary, anchor_idx = {}, {}, {}, {}, {}
+    _rps = readings_prem if readings_prem is not None and len(readings_prem) == len(premises) else None
+    for i, p in enumerate(premises):
+        rp = _rps[i] if _rps is not None else analyze(p)
         if sum(1 for u in rp.units if "name" in u.features.get("senses", [])) == 2:
             return None                                    # a genuine 2-name relation is _affine_system's turf
         rel = _affine_relation(rp)
@@ -7396,19 +7438,28 @@ def _noun_anchored_sum_system(premises: list, question: str):
                 if std_e in rels:
                     return None
                 rels[std_e] = (1.0 / k, subj_e, -c / k)
+                _defined, _mentioned = std_e, subj_e
             else:
                 rels[subj_e] = (k, std_e, c)
+                _defined, _mentioned = subj_e, std_e
+            origin.setdefault(_defined, []).append(i)
+            origin_secondary.setdefault(_mentioned, i)
         else:
             e, v = anc
             if e in anchors:
                 return None
             anchors[e] = v
+            anchor_idx[e] = i
+            origin.setdefault(e, []).append(i)
     if len(rels) < 1 or len(anchors) != 1:
         return None
     entities = set(rels) | {std for _k, std, _c in rels.values()}
     anchor_e, anchor_v = next(iter(anchors.items()))
     if anchor_e not in entities:
         return None
+    for e in entities:
+        if e not in origin and e in origin_secondary:
+            origin[e] = [origin_secondary[e]]
     free = [e for e in entities if e not in rels]
     if len(free) != 1:
         return None
@@ -7428,6 +7479,28 @@ def _noun_anchored_sum_system(premises: list, question: str):
     asked = _asked_noun_entity(qr)
     if asked is None or asked in coeff:
         return None                                        # a specific entity ask — not this SUM shape
+    # SAFE PATH: the asked category must be a REGISTERED semantic category (`answer()`'s new CATEGORY-SUM
+    # FALLBACK performs the exact same `query[0] in CATEGORY_PARENTS` check independently, so this never
+    # falls through to a fold that's guaranteed to decline). Emits every entity's fact and lets that
+    # fallback do the (possibly complement) summing generically instead of computing it here.
+    _has_interrogative = any("interrogative" in u.features.get("senses", []) for u in qr.units)
+    _query = _queried_measure(question)
+    if _rps is not None and _has_interrogative and all(e in origin for e in entities) \
+            and _query is not None and _query[0] in CATEGORY_PARENTS:
+        _qverb_unit = next((u for u in qr.units if "verb" in u.features.get("senses", [])
+                            and _key(u.surface) not in ("is", "are", "was", "were")), None)
+        verb = _lemma(_qverb_unit.surface) if _qverb_unit is not None else "have"
+        facts_by_premise = {}
+        for e, (a, b) in coeff.items():
+            amount = _compute(f"{_num(a)} * {_num(pivot)} + ({_num(b)})")
+            fact = Quantity(e, (e, frozenset()), amount, verb)
+            for i in origin[e]:
+                facts_by_premise.setdefault(i, []).append(fact)
+        matched = []
+        for i, fs in facts_by_premise.items():
+            if fs:
+                matched.extend(_rps[i].units)
+        return SystemResult(facts_by_premise, matched)
     # COMPLEMENT sum: "how many <category> are NOT <subtype>?" → Σ over every entity EXCEPT the excluded one
     # (the subtype named right after "not"/"n't"). Reuses the full-Σ machinery verbatim, dropping one term.
     # Tightly gated: the excluded token must ITSELF be one of the system's entities — a negation we can't
@@ -25638,7 +25711,7 @@ _EARLY_SYSTEMS = [
     # COORDINATE/SUBTYPE-NOUN AFFINE (common-noun entities): "twice as many pigs as cows, 4 more cows than goats; 56 animals → goats 11."
     ("noun_affine", lambda P, Q, R: _noun_affine_system(P, Q, R)),   # MIGRATED
     # COORDINATE-NOUN ANCHORED-SUM (no total, one noun anchor, category-sum ask): "Hannah's family: 10 pigs … how many animals?" → 50.
-    ("noun_anchored_sum", lambda P, Q, R, _fn=_noun_anchored_sum_system: _fn(P, Q)),
+    ("noun_anchored_sum", lambda P, Q, R: _noun_anchored_sum_system(P, Q, R)),   # MIGRATED
     # SUBTYPE-PARTITION (adjective subtypes of one head noun, total in same noun, 'the rest' ask): "Ryan 40 balls … green balls?" → 7.
     ("noun_residual_sum", lambda P, Q, R: _noun_residual_sum_system(P, Q, R)),   # MIGRATED
     # CHAIN-COUNT × UNIT-PRICE (money-spend total + per-item price over an anchored count chain): "Robert 4 pens, Julia 3×, Dorothy ½×; one pen $1.50; total spent?" → 22×1.50 = 33. BEFORE anchored_sum (which would commit the bare count 22).

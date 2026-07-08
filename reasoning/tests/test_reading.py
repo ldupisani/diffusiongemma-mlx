@@ -5835,6 +5835,38 @@ class TestNounKeyedEntityFallback(unittest.TestCase):
         ctx = [reading.Quantity("without_desktop", ("student", frozenset()), 20, "have")]
         self.assertEqual(reading.answer("How many students are there?", ctx), "undetermined")
 
+    def test_category_sum_fallback_sums_registered_members(self):
+        # pig/cow/goat are all tagged the "animal" category -- "how many animals" sums them, even though
+        # no context entity is itself named "animal".
+        ctx = [reading.Quantity("pig", ("pig", frozenset()), 10, "have"),
+               reading.Quantity("cow", ("cow", frozenset()), 17, "have"),
+               reading.Quantity("goat", ("goat", frozenset()), 23, "have")]
+        self.assertEqual(reading.answer("How many animals do they have?", ctx), 50)
+
+    def test_category_sum_fallback_complement_excludes_negated_subtype(self):
+        ctx = [reading.Quantity("pig", ("pig", frozenset()), 10, "have"),
+               reading.Quantity("cow", ("cow", frozenset()), 17, "have"),
+               reading.Quantity("goat", ("goat", frozenset()), 23, "have")]
+        self.assertEqual(reading.answer("How many animals are not goats?", ctx), 27)
+
+    def test_category_sum_fallback_unresolvable_negation_declines(self):
+        ctx = [reading.Quantity("pig", ("pig", frozenset()), 10, "have"),
+               reading.Quantity("cow", ("cow", frozenset()), 17, "have"),
+               reading.Quantity("goat", ("goat", frozenset()), 23, "have")]
+        self.assertEqual(reading.answer("How many animals are not fish?", ctx), "undetermined")
+
+    def test_category_sum_fallback_declines_single_member(self):
+        # a single category member is an ordinary single-entity ask, not a category question -- must decline
+        # here (the noun-keyed fallback / normal per-entity fold owns that shape, not this one).
+        ctx = [reading.Quantity("pig", ("pig", frozenset()), 10, "have")]
+        self.assertEqual(reading.answer("How many animals do they have?", ctx), "undetermined")
+
+    def test_category_sum_fallback_declines_unregistered_category(self):
+        # "children" is not a registered semantic category -- must decline, not silently sum unrelated facts.
+        ctx = [reading.Quantity("daughter", ("daughter", frozenset()), 18, "have"),
+               reading.Quantity("son", ("son", frozenset()), 3, "have")]
+        self.assertEqual(reading.answer("How many children does he have?", ctx), "undetermined")
+
     def test_noun_affine_system_returns_system_result(self):
         # fresh synthetic numbers (same nouns as the docstring example, to stay clear of vocabulary gaps):
         # goat=x (free pivot), cow=x+5, pig=3(x+5); total animals = x+(x+5)+3(x+5) = 5x+20 = 45 -> x=5.
@@ -5865,6 +5897,34 @@ class TestNounKeyedEntityFallback(unittest.TestCase):
         amounts = {f.entity: f.amount for f in all_facts}
         self.assertEqual(amounts, {"blue": 15, "red": 30, "green": 5})
         self.assertEqual(reading.solve(text), 5)
+
+    def test_noun_anchored_sum_system_returns_system_result(self):
+        # fresh synthetic numbers (docstring's own pig/cow/goat vocabulary, "animal" is a registered
+        # category): pig=10 (anchor), cow=2*10-3=17, goat=17+6=23, sum=50 via the new category-sum fallback.
+        text = ("Priya's family has ten pigs on their farm. They also have three fewer than twice as many "
+                "cows as pigs and six more goats than cows. How many animals do they have on their farm?")
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._noun_anchored_sum_system(premises, question, rp)
+        self.assertIsInstance(result, reading.SystemResult)
+        all_facts = [f for fs in result.facts_by_premise.values() for f in fs]
+        amounts = {f.entity: f.amount for f in all_facts}
+        self.assertEqual(amounts, {"pig": 10, "cow": 17, "goat": 23})
+        self.assertEqual(reading.solve(text), 50)
+
+    def test_noun_anchored_sum_system_unregistered_category_stays_legacy_scalar(self):
+        # "children" isn't a registered category -- must stay on the unchanged legacy scalar path, not a
+        # SystemResult (answer()'s category-sum fallback would decline it).
+        text = ("Wesley has six times as many daughters as sons. If he currently has three sons, how many "
+                "children does he have?")
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._noun_anchored_sum_system(premises, question, rp)
+        self.assertNotIsInstance(result, reading.SystemResult)
+        self.assertEqual(result, 21)
+        self.assertEqual(reading.solve(text), 21)
 
 
 class TestAffineSystemReturnsSystemResult(unittest.TestCase):
