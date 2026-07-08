@@ -8000,7 +8000,7 @@ def _anchored_average_system(premises: list, question: str, readings_prem: list 
     return SystemResult(facts_by_premise, matched)
 
 
-def _residual_sum_system(premises: list, question: str):
+def _residual_sum_system(premises: list, question: str, readings_prem: list = None):
     """The RESIDUAL twin: a stated total names THREE (or more) entities ("Jermaine, Terrence, and Emilee earn
     a total of $90"), but only SOME of them are related/anchored elsewhere ("Jermaine earns $5 more than
     Terrence"; "Terrence earns $30") — the ASKED entity (Emilee) is never mentioned again at all. Unlike
@@ -8011,9 +8011,18 @@ def _residual_sum_system(premises: list, question: str):
     should Emily buy?" — no premise ever lists all three together) — the OTHER premises (anchor/relation
     graph, via the shared `_anchored_affine_coeffs`) must cover ALL BUT EXACTLY ONE of them, and the asked
     entity must BE that one uncovered residual — else this isn't the residual shape (or another solver
-    already owns it)."""
-    tot_names = tot_val = tot_clause = None
-    for p in premises:
+    already owns it).
+
+    Migrated (see `_anchored_sum_system`'s docstring for the full recipe) when SAFE: emits a `Quantity` fact
+    for every COVERED entity plus one for the RESIDUAL (asked) entity — `amount = total − Σcovered`, the
+    same arithmetic as the legacy scalar, just computed into a fact instead of a return value — and lets
+    `answer()`'s plain single-entity fold (the SAME capability `_anchored_single_system` relies on, so the
+    SAME verb/query-resolution disqualifiers apply here too) resolve the actual ask. `_anchored_affine_
+    coeffs` is called on `rest` (premises MINUS the total clause) — a positional subset, not `premises`
+    itself — so its own `readings_prem` safety check needs the MATCHING subset of the shared readings, not
+    the full list; `_rest_idxs` tracks the mapping back to original premise indices for fact-attribution."""
+    tot_names = tot_val = tot_clause = tot_idx = None
+    for i, p in enumerate(premises):
         if not any(w in p.lower() for w in ("total", "combined", "altogether", "together")):
             continue
         rp = analyze(p)
@@ -8034,7 +8043,7 @@ def _residual_sum_system(premises: list, question: str):
             if len(other_names) < 3:
                 continue
             names = sorted(other_names)
-        tot_names, tot_val, tot_clause = names, vals[0].features["value"], p
+        tot_names, tot_val, tot_clause, tot_idx = names, vals[0].features["value"], p, i
         break
     if tot_val is None:
         return None
@@ -8045,8 +8054,11 @@ def _residual_sum_system(premises: list, question: str):
     asked = _entity(qnames[0])
     if asked not in tot_names:
         return None
-    rest = [p for p in premises if p is not tot_clause]
-    got = _anchored_affine_coeffs(rest, question)
+    _rest_idxs = [i for i, p in enumerate(premises) if p is not tot_clause]
+    rest = [premises[i] for i in _rest_idxs]
+    _rest_readings = [readings_prem[i] for i in _rest_idxs] if readings_prem is not None else None
+    _safe = readings_prem is not None
+    got = _anchored_affine_coeffs(rest, question, _rest_readings)
     if got is not None:
         coeff, pivot = got.coeff, got.pivot
         covered = [e for e in tot_names if e in coeff]
@@ -8054,6 +8066,12 @@ def _residual_sum_system(premises: list, question: str):
         if len(residual) != 1 or residual[0] != asked:
             return None                          # not the residual shape — 0 or ≥2 uncovered, or the asked
         #                                           entity isn't the uncovered one (another solver's turf)
+        _safe = _safe and got.rps is _rest_readings and not got.unified
+        if _safe:
+            _r = _residual_system_result(premises, question, readings_prem, tot_idx, tot_val,
+                                         {e: coeff[e] for e in covered}, pivot, _rest_idxs, got)
+            if _r is not None:
+                return _r
         covered_sum = " + ".join(f"({_num(a)} * {_num(pivot)} + ({_num(b)}))" for a, b in
                                  (coeff[e] for e in covered))
         return _compute(f"{_num(tot_val)} - ({covered_sum})")
@@ -8064,7 +8082,8 @@ def _residual_sum_system(premises: list, question: str):
     # directly instead: every "rest" premise must be a single-name anchor or purely declarative (no
     # relations at all — a 2-name premise here means a REAL relation exists and this fallback doesn't apply).
     anchors = {}
-    for p in rest:
+    anchor_idx = {}
+    for _ri, p in zip(_rest_idxs, rest):
         rp = analyze(p)
         if not any(s in u.features.get("senses", []) for u in rp.units
                    for s in ("value", "multiplier", "comparative", "interrogative", "aggregator")) \
@@ -8085,11 +8104,81 @@ def _residual_sum_system(premises: list, question: str):
         if e in anchors:
             return None
         anchors[e] = v
+        anchor_idx[e] = _ri
     covered = [e for e in tot_names if e in anchors]
     residual = [e for e in tot_names if e not in anchors]
     if len(residual) != 1 or residual[0] != asked:
         return None
+    if _safe:
+        _r = _residual_system_result(premises, question, readings_prem, tot_idx, tot_val,
+                                     {e: (1.0, anchors[e]) for e in covered}, 0.0, _rest_idxs, None,
+                                     covered_origin={e: [anchor_idx[e]] for e in covered})
+        if _r is not None:
+            return _r
     return _compute(f"{_num(tot_val)} - ({' + '.join(_num(anchors[e]) for e in covered)})")
+
+
+def _residual_system_result(premises, question, readings_prem, tot_idx, tot_val, covered_coeff, pivot,
+                            rest_idxs, got, covered_origin=None):
+    """Shared SystemResult builder for both `_residual_sum_system` code paths (the affine-relation path
+    passes real `(A, B)` coeffs + a `got` to hop-walk; the no-relation fallback passes each covered entity's
+    bare anchor value directly as `(1.0, v)` with `pivot=0.0`, so `A*pivot+B` collapses to `v` — same
+    formula, no relation graph to walk). Declines (returns None) when `answer()`'s single-entity fold can't
+    resolve the ask — the SAME disqualifiers `_anchored_single_system` uses, since that's the exact
+    capability this residual value is handed off to."""
+    qr = analyze(question)
+    _has_interrogative = any("interrogative" in u.features.get("senses", []) for u in qr.units)
+    qnames = [u for u in qr.units if "name" in u.features.get("senses", [])]
+    _possessive_name = any(qr.units[qr.units.index(u) + 1].features.get("senses") == ["possessive"]
+                           for u in qnames if qr.units.index(u) + 1 < len(qr.units))
+    _has_verb_path = any("auxiliary" in u.features.get("senses", []) for u in qr.units) or \
+        any("verb" in u.features.get("senses", []) and _key(u.surface) not in ("is", "are", "was", "were")
+            for u in qr.units)
+    if not _has_interrogative or _possessive_name or not _has_verb_path \
+            or _queried_measure(question) is None:
+        return None
+    if got is not None and got.measures:
+        _head = next(iter(got.measures))
+        _qm = _queried_measure(question)
+        measure = _qm if (_qm is not None and _qm[0] == _head) else (_head, frozenset())
+    else:
+        measure = _queried_measure(question) or ("count", frozenset())
+    _qverb_unit = next((u for u in qr.units if "verb" in u.features.get("senses", [])
+                        and _key(u.surface) not in ("is", "are", "was", "were")), None)
+    verb = _lemma(_qverb_unit.surface) if _qverb_unit is not None else "have"
+    facts_by_premise = {}
+    if got is not None:
+        values = {got.free: pivot}
+        progress = True
+        while progress:
+            progress = False
+            for e, (k, std, c) in got.rels.items():
+                if std in values and e not in values:
+                    values[e] = _compute(f"{_num(k)} * ({_num(values[std])}) + ({_num(c)})")
+                    progress = True
+        for e in covered_coeff:
+            idxs = got.origin.get(e)
+            if not idxs or e not in values:
+                return None
+            fact = Quantity(e, measure, values[e], verb)
+            for _local_i in idxs:
+                facts_by_premise.setdefault(rest_idxs[_local_i], []).append(fact)
+        covered_sum = " + ".join(f"({_num(values[e])})" for e in covered_coeff)
+    else:
+        for e, (a, b) in covered_coeff.items():
+            for i in covered_origin[e]:
+                facts_by_premise.setdefault(i, []).append(Quantity(e, measure, b, verb))
+        covered_sum = " + ".join(f"({_num(b)})" for _a, b in covered_coeff.values())
+    residual_amount = _compute(f"{_num(tot_val)} - ({covered_sum})")
+    asked = _entity(qnames[0])
+    facts_by_premise.setdefault(tot_idx, []).append(Quantity(asked, measure, residual_amount, verb))
+    for i in range(len(premises)):
+        facts_by_premise.setdefault(i, [])
+    matched = []
+    for i, fs in facts_by_premise.items():
+        if fs and readings_prem is not None:
+            matched.extend(readings_prem[i].units)
+    return SystemResult(facts_by_premise, matched)
 
 
 def _two_relation_system(premises: list, question: str):
@@ -25277,7 +25366,7 @@ _EARLY_SYSTEMS = [
     # ANCHORED-AVERAGE (bare anchor, 'average X of the N people'): "Rachel 75, 6 less than Jimmy, 15 more than Adam … average of the three?" → 72.
     ("anchored_average", lambda P, Q, R: _anchored_average_system(P, Q, R)),   # MIGRATED
     # RESIDUAL SUM (stated total names 3+, asked one never related): "Jermaine/Terrence/Emilee $90 … Emilee?" → 25.
-    ("residual_sum", lambda P, Q, R, _fn=_residual_sum_system: _fn(P, Q)),
+    ("residual_sum", lambda P, Q, R: _residual_sum_system(P, Q, R)),   # MIGRATED
     # TWO-RELATION 2x2 (same pair, no anchor/total): "24 more blue than red; 5 times as many blue as red → red 6".
     ("two_relation", lambda P, Q, R, _fn=_two_relation_system: _fn(P, Q)),
     # TARGET − CONTRIBUTIONS: "need to collect 100 cans; collected 30, 43; how many more to collect?" → 27.

@@ -5751,6 +5751,32 @@ class TestSystemResultMigration(unittest.TestCase):
         self.assertEqual(reading.solve(
             "Sana is 5 cm shorter than Mira. Mira is 100 cm tall. How many centimeters tall is Sana?"), 95)
 
+    def test_residual_system_affine_path_returns_system_result(self):
+        # fresh synthetic numbers — _residual_sum_system's affine-relation path (Reese=30 anchor, Quinn=
+        # Reese+5=35 relation, Priya never mentioned again -> 90-35-30=25), migrated the same way as the
+        # other anchored-family twins, reusing the single-entity fold's disqualifiers (the residual value
+        # is handed to that SAME answer() capability).
+        text = ("Priya, Quinn, and Reese collect a total of 90 stamps. Quinn collects 5 more stamps than "
+                "Reese. If Reese collects 30 stamps, how many stamps does Priya collect?")
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._residual_sum_system(premises, question, rp)
+        self.assertIsInstance(result, reading.SystemResult)
+        self.assertEqual(reading.solve(text), 25)
+
+    def test_residual_system_no_relation_fallback_returns_system_result(self):
+        # fresh synthetic numbers — the NO-RELATION fallback path (independent anchors only, no ratio/
+        # offset relates any pair): Mona=3, Nina=4, total=10 -> Owen=10-3-4=3.
+        text = ("Mona buys 3 apples for a picnic. Nina and Owen also buy apples for the picnic. If they "
+                "need 10 apples total, and Nina buys 4 apples, how many apples should Owen buy?")
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._residual_sum_system(premises, question, rp)
+        self.assertIsInstance(result, reading.SystemResult)
+        self.assertEqual(reading.solve(text), 3)
+
 
 class TestIncrement146ContainerContentsSum(unittest.TestCase):
     """#146 — CONTAINER × CONTENTS product-sum (the count twin of revenue_product_sum): each container-count
