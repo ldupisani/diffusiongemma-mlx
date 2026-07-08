@@ -7749,7 +7749,7 @@ def _anchored_sum_system(premises: list, question: str, readings_prem: list = No
     return SystemResult(facts_by_premise, matched)
 
 
-def _anchored_single_system(premises: list, question: str):
+def _anchored_single_system(premises: list, question: str, readings_prem: list = None):
     """The ANCHORED-SINGLE twin: same anchor-pinned relation graph as `_anchored_sum_system`, but the question
     asks for ONE named entity's value (not the sum) — "Al is 25 pounds heavier than Ben. Ben is 16 pounds
     lighter than Carl. Ed weighs 146 pounds and is 38 pounds lighter than Al. Find Carl's weight." → pivot=Ed
@@ -7757,7 +7757,18 @@ def _anchored_single_system(premises: list, question: str):
     a "needs...to have as large as" DEFICIT-TO-TARGET question (the same "needs"-idiom risk as the relation
     extractors — "how many stamps does SHE NEED to ADD to have a collection AS LARGE AS Bert's?" asks
     Bert−Peggy, not Bert's raw value; naively grabbing the first name in the question gave a confident-wrong,
-    900 vs gold 825), and requires the asked entity to be a NAME reachable from the anchor."""
+    900 vs gold 825), and requires the asked entity to be a NAME reachable from the anchor.
+
+    Migrated (see `_anchored_sum_system`'s docstring for the full recipe) when SAFE: emits one `Quantity`
+    fact per entity and lets `answer()`'s plain single-entity fold resolve the ask. UNLIKE the sum/
+    difference/average twins (whose consuming `answer()` branches sum via `_holdings`'s verb-SIGN, not
+    verb-EQUALITY), this fold requires the fact's `verb` to match the question's own verb lemma whenever
+    that verb isn't "have"/"own" ("How much does Pria WEIGH?" filters `f.verb == "weigh"` — a fact left at
+    the `Quantity` default `verb="have"` would silently NOT match and decline). So every emitted fact here
+    carries the QUESTION's own main verb (falling back to "have" only if none is found — matching the
+    default), not the dataclass default blindly. A genuine IMPERATIVE ("Find Carl's weight.") has no
+    interrogative sense at all and is caught by the shared `_has_interrogative` gate, same as the other
+    twins — `answer()` declines "not-a-question" for it regardless."""
     if any(w in question.lower() for w in ("altogether", "in all", " total", "combined", "in total",
                                            " together")) \
             or re.search(r"\bfor all\b|\ball (?:two|three|four|five|of them)\b", question.lower()):
@@ -7771,14 +7782,72 @@ def _anchored_single_system(premises: list, question: str):
     if not qnames:
         return None
     asked = _entity(qnames[0])
-    got = _anchored_affine_coeffs(premises, question)
+    got = _anchored_affine_coeffs(premises, question, readings_prem)
     if got is None:
         return None
     coeff, pivot = got.coeff, got.pivot
     if asked not in coeff:
         return None
-    a, b = coeff[asked]
-    return _compute(f"{_num(a)} * {_num(pivot)} + ({_num(b)})")
+    _has_interrogative = any("interrogative" in u.features.get("senses", []) for u in qr.units)
+    # a BARE "How much does X weigh?" (no explicit unit noun) leaves `much`'s `collection` obligation
+    # UNBOUND ("weigh" is intransitive, nothing for it to bind to) — `answer()` returns an "unanswerable"
+    # Deficiency before ever reaching the numeric fold, unlike a "how many POUNDS does X weigh?" ask (where
+    # `collection` binds to the stated noun). `_queried_measure` performs the SAME `queries→collection`
+    # walk `answer()`'s own `query` resolution does, so `None` here reliably predicts that failure — a real
+    # gap this caught (the two real dev-holdout cases for this solver are BOTH the bare "how much" form).
+    # A copula-only question ("How many centimeters tall IS Ken?", "how many square feet IS Benedict's
+    # house?") has no `auxiliary` unit AND its only verb-sensed word is a bare "is"/"are"/"was"/"were" —
+    # `answer()`'s entity/verb resolution needs EITHER an auxiliary ("does"/"did") OR a substantive,
+    # non-copula verb to find the asked entity at all; with neither, it can't recover `entities` regardless
+    # of what verb an emitted fact carries — another real gap this caught.
+    _has_verb_path = any("auxiliary" in u.features.get("senses", []) for u in qr.units) or \
+        any("verb" in u.features.get("senses", []) and _key(u.surface) not in ("is", "are", "was", "were")
+            for u in qr.units)
+    # a POSSESSIVE name ("How many rooms does GRANT'S APARTMENT have?") makes `_question_subjects` return
+    # BOTH `['grant', 'apartment']` — the possessed noun is mis-extracted as a SECOND, separately-resolved
+    # subject (as if "Grant and apartment have" were a conjunction) rather than a modifier of one entity;
+    # since no fact exists for the bare entity "apartment", `answer()`'s per-entity fold fails for that half
+    # and declines the whole ask — a real gap this caught (unrelated to the DIFFERENCE twin's "his dad"
+    # kinship-pronoun gap, though similarly rooted in question-subject extraction).
+    _possessive_name = any(qr.units[qr.units.index(u) + 1].features.get("senses") == ["possessive"]
+                           for u in qnames if qr.units.index(u) + 1 < len(qr.units))
+    if readings_prem is None or got.rps is not readings_prem or not _has_interrogative or got.unified \
+            or _possessive_name \
+            or _queried_measure(question) is None or not _has_verb_path:
+        a, b = coeff[asked]
+        return _compute(f"{_num(a)} * {_num(pivot)} + ({_num(b)})")
+    if got.measures:
+        _head = next(iter(got.measures))
+        _qm = _queried_measure(question)
+        measure = _qm if (_qm is not None and _qm[0] == _head) else (_head, frozenset())
+    else:
+        measure = _queried_measure(question) or ("count", frozenset())
+    _qverb_unit = next((u for u in qr.units if "verb" in u.features.get("senses", [])
+                        and _key(u.surface) not in ("is", "are", "was", "were")), None)
+    verb = _lemma(_qverb_unit.surface) if _qverb_unit is not None else "have"
+    values = {got.free: pivot}
+    progress = True
+    while progress:
+        progress = False
+        for e, (k, std, c) in got.rels.items():
+            if std in values and e not in values:
+                values[e] = _compute(f"{_num(k)} * ({_num(values[std])}) + ({_num(c)})")
+                progress = True
+    facts_by_premise = {}
+    matched = []
+    for e in coeff:
+        idxs = got.origin.get(e)
+        if not idxs or e not in values:
+            continue
+        fact = Quantity(e, measure, values[e], verb)
+        for i in idxs:
+            facts_by_premise.setdefault(i, []).append(fact)
+    for i in range(len(premises)):
+        facts_by_premise.setdefault(i, [])
+    for i, fs in facts_by_premise.items():
+        if fs:
+            matched.extend(got.rps[i].units)
+    return SystemResult(facts_by_premise, matched)
 
 
 def _anchored_difference_system(premises: list, question: str, readings_prem: list = None):
@@ -25202,7 +25271,7 @@ _EARLY_SYSTEMS = [
     # ANCHORED-SUM (no total, one bare anchor, sum ask): "Cecil $600 … how much altogether?" → 2800.
     ("anchored_sum", lambda P, Q, R: _anchored_sum_system(P, Q, R)),   # MIGRATED — see _anchored_sum_system
     # ANCHORED-SINGLE (bare anchor, single named ask): "Ed weighs 146 … Find Carl's weight." → 220.
-    ("anchored_single", lambda P, Q, R, _fn=_anchored_single_system: _fn(P, Q)),
+    ("anchored_single", lambda P, Q, R: _anchored_single_system(P, Q, R)),   # MIGRATED
     # ANCHORED-DIFFERENCE (bare anchor, 'how many more X than Y'): "Ann 60 cards … how many more than Anton?" → 30.
     ("anchored_difference", lambda P, Q, R: _anchored_difference_system(P, Q, R)),   # MIGRATED
     # ANCHORED-AVERAGE (bare anchor, 'average X of the N people'): "Rachel 75, 6 less than Jimmy, 15 more than Adam … average of the three?" → 72.

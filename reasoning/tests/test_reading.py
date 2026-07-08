@@ -5716,6 +5716,41 @@ class TestSystemResultMigration(unittest.TestCase):
             "Priya weighs 60 pounds, 5 pounds less than Quinn and 10 pounds more than Reese. What is the "
             "average weight of the four people?"), "undetermined")
 
+    def test_single_system_returns_system_result_with_explicit_unit_noun(self):
+        # "how many POUNDS does X weigh" has an explicit unit noun, so `answer()`'s query resolves and the
+        # SAFE path applies — unlike a bare "how much does X weigh" (see the next test).
+        text = ("Priya weighs 60 pounds, 5 pounds less than Quinn and 10 pounds more than Reese. How many "
+                "pounds does Quinn weigh?")
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._anchored_single_system(premises, question, rp)
+        self.assertIsInstance(result, reading.SystemResult)
+        self.assertEqual(reading.solve(text), 65)
+
+    def test_single_system_bare_how_much_falls_back_to_legacy(self):
+        # a bare "How much does X weigh?" (no unit noun) leaves `much`'s `collection` obligation unbound —
+        # `answer()` returns an unanswerable Deficiency before reaching the numeric fold at all. The solver
+        # must detect this (`_queried_measure(question) is None`) and use the legacy scalar path instead.
+        self.assertEqual(reading.solve(
+            "Priya weighs 60 pounds, 5 pounds less than Quinn and 10 pounds more than Reese. How much "
+            "does Quinn weigh?"), 65)
+
+    def test_single_system_possessive_name_falls_back_to_legacy(self):
+        # "How many rooms does X'S HOUSE have?" makes `_question_subjects` return BOTH ['x', 'house'] (the
+        # possessed noun mis-extracted as a second subject) — no fact exists for the bare entity "house",
+        # so the generic fold would decline; the solver must detect this and use the legacy path.
+        self.assertEqual(reading.solve(
+            "Ravi's house has 6 rooms. Priya's house has 3 times as many rooms as Ravi's house. How many "
+            "rooms does Priya's house have?"), 18)
+
+    def test_single_system_copula_only_question_falls_back_to_legacy(self):
+        # "How many centimeters tall IS X?" has no auxiliary and its only verb-sensed word is a bare
+        # copula "is" — answer()'s entity/verb resolution needs an auxiliary or a substantive verb, neither
+        # of which is present, so it can never recover the asked entity; the solver must fall back.
+        self.assertEqual(reading.solve(
+            "Sana is 5 cm shorter than Mira. Mira is 100 cm tall. How many centimeters tall is Sana?"), 95)
+
 
 class TestIncrement146ContainerContentsSum(unittest.TestCase):
     """#146 — CONTAINER × CONTENTS product-sum (the count twin of revenue_product_sum): each container-count
