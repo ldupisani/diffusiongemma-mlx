@@ -5660,6 +5660,42 @@ class TestSystemResultMigration(unittest.TestCase):
             "fish that Ryan got. If Jeffery caught 60 fish, how many fish did all of "
             "them catch in total?"), 100)
 
+    def test_difference_system_returns_system_result_not_scalar(self):
+        # fresh synthetic numbers — _anchored_difference_system migrated the same way as the sum twin.
+        text = ("Priya has 5 stickers. Quinn has 4 times as many stickers as Priya, and Reese has 3 "
+                "more stickers than Quinn. How many more stickers does Reese have than Priya?")
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._anchored_difference_system(premises, question, rp)
+        self.assertIsInstance(result, reading.SystemResult)
+        self.assertEqual(reading.solve(text), 18)   # Priya=5, Quinn=20, Reese=23, 23-5=18
+
+    def test_difference_less_than_sign_flip(self):
+        self.assertEqual(reading.solve(
+            "Priya has 5 stickers. Quinn has 4 times as many stickers as Priya, and Reese has 3 "
+            "more stickers than Quinn. How many fewer stickers does Priya have than Reese?"), 18)
+
+    def test_over_determined_entity_both_related_and_anchored(self):
+        # an entity can be BOTH the subject of its own relation AND separately anchored (Reese here: defined
+        # via "3 more than Quinn" in one premise, and is ALSO the anchor's own entity in another — the
+        # anchor value and the relation-derived value agree, since GSM8K premises are consistent) — origin
+        # must attribute her single fact to BOTH premises (GUARD 4 needs each to have SOME fact) without
+        # adding a duplicate to context (which would double her value in a sum/difference).
+        text = ("Quinn has 4 times as many stickers as Priya. Reese has 3 more stickers than Quinn. If "
+                "Reese has 23 stickers, how many more stickers does Reese have than Priya?")
+        self.assertEqual(reading.solve(text), 18)
+
+    def test_possessive_location_phrasing_falls_back_to_legacy(self):
+        # "How many more X are in A's Y than B's Y" uses a copula "are" (tagged `verb`, not `auxiliary`),
+        # so answer()'s comparative-difference branch (which requires an auxiliary unit) can never fire —
+        # the solver must recognize this and use the legacy scalar path instead of silently mis-answering
+        # via an earlier, unrelated yes/no dispatch in answer().
+        self.assertEqual(reading.solve(
+            "There are 8 books in Mia's room. Theo has half the number of books that Mia has. Nora has "
+            "5 more than twice the number of books that Theo has. How many more books are in Nora's room "
+            "than Theo's room?"), 9)
+
 
 class TestIncrement146ContainerContentsSum(unittest.TestCase):
     """#146 — CONTAINER × CONTENTS product-sum (the count twin of revenue_product_sum): each container-count

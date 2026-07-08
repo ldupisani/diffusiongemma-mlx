@@ -7347,7 +7347,12 @@ class _AnchoredCoeffs:
     form multiplies factors together internally in plain Python, so a raw factor like "6" or "2" never
     appears in any `_compute()` program string on its own, and GUARD 14 declines a fact built straight from
     `coeff` alone). `rps`/`origin` support fact-attribution (see `_anchored_sum_system`); `measures` is the
-    shared unit descriptor head, if any."""
+    shared unit descriptor head, if any. `origin: dict[str, list[int]]` — a LIST because an entity can be
+    BOTH the subject of its own relation AND separately anchored (over-determined but consistent — "Ann has
+    six times as many cards as Heike" defines her, "If Ann has 60 cards" also anchors her); a caller should
+    attribute the entity's ONE fact to EVERY premise in its list (satisfying GUARD 4 for each), while
+    deduping the fact itself so it isn't added to `context` more than once (`_solve_inner`'s SystemResult
+    dispatch does this)."""
     coeff: dict
     pivot: object
     rps: list
@@ -7445,7 +7450,7 @@ def _anchored_affine_coeffs(premises: list, question: str, readings_prem: list =
             #                                                         A FRACTION "times more" ("2/5 times
             #                                                         more") is UNAMBIGUOUS (= 1±F) and is
             #                                                         read by `_fraction_relation` — allow it.
-    rels, anchors, measures, origin = {}, {}, set(), {}
+    rels, anchors, measures, origin, origin_secondary = {}, {}, set(), {}, {}
     rps = readings_prem if (readings_prem is not None and premises == _orig_premises) \
         else [analyze(p) for p in premises]
     cast_n = _cast_size(rps)               # for the SET-SIZE-cardinal skip below
@@ -7526,18 +7531,19 @@ def _anchored_affine_coeffs(premises: list, question: str, readings_prem: list =
             else:
                 rels[subj_e] = (k, std_e, c)
                 _defined, _mentioned = subj_e, std_e
-            # PRIMARY vs SECONDARY origin (must be order-independent — a chain's premises can classify in
-            # ANY order): `_defined` is the entity this premise's `rels[...]` entry is FOR (whichever key
-            # was just written above — the one `coeff` will later derive FROM this relation) — its true
-            # defining clause is HERE, so this unconditionally OVERWRITES any earlier fallback guess for it
-            # (a prior premise may have only MENTIONED it as the other side of a different relation). The
-            # OTHER entity this clause mentions (`_mentioned`) gets a fallback via setdefault ONLY — it must
-            # NOT clobber a stronger assignment `_mentioned` earns from its OWN defining premise, wherever
-            # that is in iteration order (GUARD 4 needs every value/multiplier-bearing premise to have SOME
-            # fact land in `facts_of[i]`; misattributing an entity's fact to the wrong premise starves the
-            # true premise and a real regression follows — see the Bill/Harry/Sue 720 case this fixed).
-            origin[_defined] = _i
-            origin.setdefault(_mentioned, _i)
+            # PRIMARY vs SECONDARY origin: `_defined` is the entity this premise's `rels[...]` entry is FOR
+            # (whichever key was just written above — the one `coeff` will later derive FROM this relation)
+            # — its true defining clause is HERE, so this APPENDS to its primary-origin list (never
+            # overwrites: an entity can be BOTH the subject of its own relation AND separately anchored —
+            # "Ann has six times as many cards as Heike" defines Ann here, "If Ann has 60 cards" anchors her
+            # too; GUARD 4 needs a fact attributed to EACH operative premise, so both must end up in Ann's
+            # origin list, not just whichever is processed last — a real regression the single-int version of
+            # this fixed the Bill/Harry/Sue case but then broke on Anton/Heike/Ann). The OTHER entity this
+            # clause mentions (`_mentioned`) only gets a SECONDARY fallback (used later, only if it never
+            # earns a primary origin of its own from its OWN defining premise, wherever that is in iteration
+            # order — misattributing an entity's fact to the wrong premise starves the true premise).
+            origin.setdefault(_defined, []).append(_i)
+            origin_secondary.setdefault(_mentioned, _i)
             if not elided:                    # COORDINATED elided clauses share ONE standard ("her
                 last_entity = subj_e          # brother has thrice as much WHILE her sister has half
             #                                   as much" — both elide "as Joanna's"); an elliptically
@@ -7548,8 +7554,9 @@ def _anchored_affine_coeffs(premises: list, question: str, readings_prem: list =
             if e in anchors:
                 return None
             anchors[e] = v
-            origin[e] = _i    # an anchor is always PRIMARY (it's the entity's own stated value) — never a
-            #                   fallback a mere relation-mention should be allowed to keep instead
+            origin.setdefault(e, []).append(_i)   # an anchor is always PRIMARY — appended, never
+            #                                        overwritten, in case `e` is ALSO relation-defined
+            #                                        elsewhere (see the relation branch's comment)
             last_entity = e
             vals = [u for u in rp.units if "value" in u.features.get("senses", [])
                     and u.features.get("value") is not None]
@@ -7563,6 +7570,10 @@ def _anchored_affine_coeffs(premises: list, question: str, readings_prem: list =
     if len(rels) < 1 or len(anchors) != 1:
         return None
     entities = set(rels) | {std for _k, std, _c in rels.values()}
+    for e in entities:                    # finalize: an entity with no PRIMARY origin (never itself a
+        if e not in origin:                # relation subject or an anchor — the free/pivot entity, when
+            if e in origin_secondary:       # it isn't also anchored) falls back to wherever it was merely
+                origin[e] = [origin_secondary[e]]   # MENTIONED as another entity's relation standard.
     anchor_e, anchor_v = next(iter(anchors.items()))
     unified = False
     if anchor_e not in entities:
@@ -7716,11 +7727,13 @@ def _anchored_sum_system(premises: list, question: str, readings_prem: list = No
     facts_by_premise = {}
     matched = []
     for e in coeff:
-        i = got.origin.get(e)
-        if i is None or e not in values:
+        idxs = got.origin.get(e)
+        if not idxs or e not in values:
             continue                    # shouldn't happen (every coeff entity has an origin premise and a
             #                             hop-walk value), but a defensive skip beats a mis-attributed fact
-        facts_by_premise.setdefault(i, []).append(Quantity(e, measure, values[e]))
+        fact = Quantity(e, measure, values[e])
+        for i in idxs:                   # an over-determined entity (both relation-defined AND anchored)
+            facts_by_premise.setdefault(i, []).append(fact)   # attributes to EVERY premise (deduped later)
     # EVERY premise this solver classified must land in `facts_of` (even with an EMPTY fact list) — not
     # just the ones that got an entity's Quantity fact attributed. Otherwise a premise that is ALSO a
     # perfectly ordinary declarative sentence the general fold can parse on its own ("If Jeffery caught 60
@@ -7768,13 +7781,20 @@ def _anchored_single_system(premises: list, question: str):
     return _compute(f"{_num(a)} * {_num(pivot)} + ({_num(b)})")
 
 
-def _anchored_difference_system(premises: list, question: str):
+def _anchored_difference_system(premises: list, question: str, readings_prem: list = None):
     """The ANCHORED-DIFFERENCE twin: same anchor-pinned relation graph, but the question names TWO entities
     and asks how much MORE one has than the other — "Anton has three times as many cards as Heike. Ann has
     six times as many cards as Heike. If Ann has 60 cards, how many more cards does Ann have than Anton?" →
     Heike=10 (from Ann=60=6·Heike), Anton=30, Ann−Anton=30. Requires the question to carry a comparative
     sense (declined by `_anchored_single_system`, so the two never collide) and EXACTLY two names — the first
-    named (textually) minus the second, matching the "X … more … than Y" surface order."""
+    named (textually) minus the second, matching the "X … more … than Y" surface order.
+
+    Migrated (see `_anchored_sum_system`'s docstring for the full recipe): when `_anchored_affine_coeffs`
+    classified against the SHARED `readings_prem`, emits one `Quantity` fact per entity instead of computing
+    the difference here — `answer()` already has a working comparative-difference branch (`_holdings(a,
+    query, context) - _holdings(b, query, context)`, sign-flipped for "less/fewer... than") that resolves
+    it generically, including the more/less sign flip this solver used to hand-compute. Falls back to the
+    legacy scalar path (identical to pre-migration) when that attribution isn't safe."""
     qr = analyze(question)
     if not any("comparative" in u.features.get("senses", []) for u in qr.units):
         return None
@@ -7784,18 +7804,66 @@ def _anchored_difference_system(premises: list, question: str):
     e1, e2 = _entity(qnames[0]), _entity(qnames[1])
     if e1 == e2:
         return None
-    got = _anchored_affine_coeffs(premises, question)
+    got = _anchored_affine_coeffs(premises, question, readings_prem)
     if got is None:
         return None
     coeff, pivot = got.coeff, got.pivot
     if e1 not in coeff or e2 not in coeff:
         return None
-    a1, b1 = coeff[e1]
-    a2, b2 = coeff[e2]
-    if re.search(r"\b(?:less|fewer)\b[^.?]*\bthan\b", question.lower()):
-        (a1, b1), (a2, b2) = (a2, b2), (a1, b1)   # "how much LESS does X have than Y" → Y − X
-    return _compute(f"({_num(a1)} * {_num(pivot)} + ({_num(b1)})) - "
-                    f"({_num(a2)} * {_num(pivot)} + ({_num(b2)}))")
+    _has_interrogative = any("interrogative" in u.features.get("senses", []) for u in qr.units)
+    # `answer()`'s comparative-difference branch REQUIRES an auxiliary-sensed unit ("does"/"did") to even be
+    # reached (`if comp is not None and aux is not None and query is not None:`) — a possessive-location
+    # phrasing ("How many more trees ARE IN Harry's yard than Ferdinand's yard?") uses a copula "are" tagged
+    # `verb`, not `auxiliary`, so that branch is structurally unreachable and the question falls through to
+    # an EARLIER yes/no dispatch instead, returning "no" — a real regression this caught (correct on TEST
+    # pre-migration via the solver's own direct computation, silently wrong once routed through answer()).
+    _has_auxiliary = any("auxiliary" in u.features.get("senses", []) for u in qr.units)
+    # a KINSHIP entity fronted by a possessive pronoun in the QUESTION ("how many more did HIS DAD catch
+    # compared to Caleb?" — "dad" is KINSHIP-tagged with 'name' sense, per `_anchored_affine_coeffs`'s own
+    # kin-apposition handling) confuses `answer()`'s comparative-difference subject resolution
+    # (`_question_subjects`/`_follow(verb, "subject")` binds the pronoun, not the kinship noun, as the
+    # subject) — SAFE for the legacy path (which never asks `answer()` to resolve a subject at all), not
+    # for the fact-emitting one. A plain "Ann"/"Anton"-style name has no such preceding pronoun.
+    _kin_pronoun = any(qr.units[qr.units.index(u) - 1].features.get("senses") == ["pronoun"]
+                       for u in qnames if qr.units.index(u) > 0)
+    if readings_prem is None or got.rps is not readings_prem or not _has_interrogative or got.unified \
+            or not _has_auxiliary \
+            or _kin_pronoun:
+        a1, b1 = coeff[e1]
+        a2, b2 = coeff[e2]
+        if re.search(r"\b(?:less|fewer)\b[^.?]*\bthan\b", question.lower()):
+            (a1, b1), (a2, b2) = (a2, b2), (a1, b1)   # "how much LESS does X have than Y" → Y − X
+        return _compute(f"({_num(a1)} * {_num(pivot)} + ({_num(b1)})) - "
+                        f"({_num(a2)} * {_num(pivot)} + ({_num(b2)}))")
+    if got.measures:
+        _head = next(iter(got.measures))
+        _qm = _queried_measure(question)
+        measure = _qm if (_qm is not None and _qm[0] == _head) else (_head, frozenset())
+    else:
+        measure = _queried_measure(question) or ("count", frozenset())
+    values = {got.free: pivot}
+    progress = True
+    while progress:
+        progress = False
+        for e, (k, std, c) in got.rels.items():
+            if std in values and e not in values:
+                values[e] = _compute(f"{_num(k)} * ({_num(values[std])}) + ({_num(c)})")
+                progress = True
+    facts_by_premise = {}
+    matched = []
+    for e in coeff:
+        idxs = got.origin.get(e)
+        if not idxs or e not in values:
+            continue
+        fact = Quantity(e, measure, values[e])
+        for i in idxs:
+            facts_by_premise.setdefault(i, []).append(fact)
+    for i in range(len(premises)):
+        facts_by_premise.setdefault(i, [])
+    for i, fs in facts_by_premise.items():
+        if fs:
+            matched.extend(got.rps[i].units)
+    return SystemResult(facts_by_premise, matched)
 
 
 def _anchored_average_system(premises: list, question: str):
@@ -25099,7 +25167,7 @@ _EARLY_SYSTEMS = [
     # ANCHORED-SINGLE (bare anchor, single named ask): "Ed weighs 146 … Find Carl's weight." → 220.
     ("anchored_single", lambda P, Q, R, _fn=_anchored_single_system: _fn(P, Q)),
     # ANCHORED-DIFFERENCE (bare anchor, 'how many more X than Y'): "Ann 60 cards … how many more than Anton?" → 30.
-    ("anchored_difference", lambda P, Q, R, _fn=_anchored_difference_system: _fn(P, Q)),
+    ("anchored_difference", lambda P, Q, R: _anchored_difference_system(P, Q, R)),   # MIGRATED
     # ANCHORED-AVERAGE (bare anchor, 'average X of the N people'): "Rachel 75, 6 less than Jimmy, 15 more than Adam … average of the three?" → 72.
     ("anchored_average", lambda P, Q, R, _fn=_anchored_average_system: _fn(P, Q)),
     # RESIDUAL SUM (stated total names 3+, asked one never related): "Jermaine/Terrence/Emilee $90 … Emilee?" → 25.
@@ -25567,7 +25635,9 @@ def _solve_inner(text: str):
         if isinstance(_r, SystemResult):
             for i, fs in _r.facts_by_premise.items():
                 facts_of[i] = fs
-                context += fs
+                for f in fs:                 # DEDUPE: an over-determined entity (both relation-defined AND
+                    if f not in context:      # anchored) can legitimately appear in TWO premises' fact
+                        context.append(f)     # lists — add it to context only once (see _AnchoredCoeffs.origin)
             _bind_pattern(_r.matched, _label)
             _early_claimed = True
             break
@@ -25663,7 +25733,9 @@ def _solve_inner(text: str):
             # solvers tried) beats reopening the double-claim risk `--collisions` guards against.
             for i, fs in _r.facts_by_premise.items():
                 facts_of[i] = fs
-                context += fs
+                for f in fs:                 # DEDUPE — see the EARLY branch's identical comment above
+                    if f not in context:
+                        context.append(f)
             _bind_pattern(_r.matched, _label)
             _ar = answer(question, context, discourse)
             return _snap(_ar) if _ar is not None else "undetermined"
