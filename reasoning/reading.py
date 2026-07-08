@@ -6483,7 +6483,7 @@ def _gated_nonneg(result):
     return result if ok else None
 
 
-def _sum_ratio_system(premises: list, question: str):
+def _sum_ratio_system(premises: list, question: str, readings_prem: list = None):
     """An N-UNKNOWN SUM+RATIO-CHAIN system: several entities, each a multiple of another (relations may
     CHAIN), and a COMBINED TOTAL → solve for the asked one by PIVOT REDUCTION. "Amy, Jeremy, Chris combined
     age 132; Amy = ⅓·Jeremy; Chris = 2·Amy" → reduce all to the root Jeremy (coeffs 1+⅓+⅔ = 2) → Jeremy =
@@ -6492,7 +6492,15 @@ def _sum_ratio_system(premises: list, question: str):
     in CORRECT forward problems: a unique ROOT (one entity never a relation subject), a CONNECTED tree (every
     entity reduces to the root, no cycle / multi-definition), and the asked measure must MATCH the total's
     measure incl. qualifier (rejects "combined YEARS … how many MONTHS", and "parking" vs "traffic" tickets).
-    None if the shape doesn't apply."""
+    None if the shape doesn't apply.
+
+    Migrated (see `_anchored_sum_system`'s docstring for the full recipe; `_affine_system`'s migration is
+    this solver's closest sibling — same SAFE-path disqualifiers, same TOTAL-clause attribution trick) when
+    SAFE: emits one `Quantity` fact per entity (ratio-tree entities computed hop-by-hop via `coeff`, `knowns`
+    entities carrying their own stated value directly) instead of returning `coeff[asked]·pivot`, and lets
+    `answer()`'s plain single-entity fold resolve the ask. The trivial `asked in knowns` short-circuit (the
+    question asks about an entity whose value is already stated bare in a premise) is left untouched — it's
+    an ordinary declarative fact `learn()` already extracts on its own, no new machinery needed for it."""
     qr = analyze(question)
     qnames = [u for u in qr.units if "name" in u.features.get("senses", [])]
     if not qnames:
@@ -6501,11 +6509,12 @@ def _sum_ratio_system(premises: list, question: str):
     asked_measure = _queried_measure(question)
     if asked_measure is not None and "verb" in analyze(asked_measure[0]).units[0].features.get("senses", []):
         asked_measure = RESULT_MEASURE.get(asked_measure[0])           # "how much did X EARN" → money
+    _rps = readings_prem if readings_prem is not None and len(readings_prem) == len(premises) else None
     # OFFSET-TAINTED SYSTEM: a premise with both a factor and a comparative offset ("CJ has 5 MORE than
     # TWICE …") is a relation we can't fold into the pure linear system — _ratio_relation drops it, leaving
     # an INCOMPLETE system that would still "solve" off the remaining relations. Decline the whole system.
-    for p in premises:
-        rp = analyze(p)
+    for i, p in enumerate(premises):
+        rp = _rps[i] if _rps is not None else analyze(p)
         has_factor = any("multiplier" in u.features.get("senses", []) for u in rp.units) \
             or any(_fraction_parts(u.surface) is not None for u in rp.units)
         if has_factor and any(_key(u.surface) in ("more", "less", "older", "younger", "fewer")
@@ -6519,8 +6528,9 @@ def _sum_ratio_system(premises: list, question: str):
             return None
     rels = {}                                                          # subject → (factor, standard)
     rel_mod = rel_desc = None
-    for p in premises:
-        rp = analyze(p)
+    origin, origin_secondary = {}, {}
+    for i, p in enumerate(premises):
+        rp = _rps[i] if _rps is not None else analyze(p)
         if _name_count(rp) != 2:
             continue                       # not a genuine 2-name relation — may be `_ratio_relation`'s
         rr = _ratio_relation(rp)           # coordinate-noun fallback firing, a DIFFERENT family's turf
@@ -6530,6 +6540,8 @@ def _sum_ratio_system(premises: list, question: str):
         if subj_e in rels:                                             # a subject defined twice → reject
             return None
         rels[subj_e] = (k, std_e)
+        origin.setdefault(subj_e, []).append(i)
+        origin_secondary.setdefault(std_e, i)
         # carry over #3h's qualifier checks:
         if asked_measure is not None and any(_descriptor(u)[0] == asked_measure[0] for u in rp.units):
             rel_mod = _measure_mod(rp, asked_measure[0])               # a separate pre-modifier ('parking'),
@@ -6538,8 +6550,9 @@ def _sum_ratio_system(premises: list, question: str):
     if not rels:
         return None
     knowns = {}                                                        # entities with a stated ABSOLUTE value
-    for p in premises:                                                 # ("Delta took 8 donuts" → delta=8) —
-        rp = analyze(p)                                                # a part of the total that isn't a ratio
+    known_idx = {}
+    for i, p in enumerate(premises):                                   # ("Delta took 8 donuts" → delta=8) —
+        rp = _rps[i] if _rps is not None else analyze(p)               # a part of the total that isn't a ratio
         if any("multiplier" in u.features.get("senses", []) for u in rp.units) \
                 or any(_fraction_parts(u.surface) is not None for u in rp.units) \
                 or any(_key(u.surface) in ("more", "less", "fewer") for u in rp.units):
@@ -6551,6 +6564,7 @@ def _sum_ratio_system(premises: list, question: str):
                    ), None) if asked_measure is not None else None
         if len(nm) == 1 and kv is not None and _entity(nm[0]) not in rels:
             knowns[_entity(nm[0])] = kv.features["value"]
+            known_idx[_entity(nm[0])] = i
     total = _combined_total(premises, asked_measure, rel_mod, rel_desc)
     if total is None:
         return None
@@ -6575,7 +6589,66 @@ def _sum_ratio_system(premises: list, question: str):
     # = 40" → Gamma = (40−8)/4 = 8). With no knowns this is exactly #3r's Total / Σ coeff.
     pivot = _compute(f"({_num(total)} - ({_num(sum(knowns.values()))})) / {_num(denom)}") if knowns \
         else _compute(f"{_num(total)} / {_num(denom)}")
-    return pivot if coeff[asked] == 1 else _compute(f"{_num(coeff[asked])} * {_num(pivot)}")
+    scalar = pivot if coeff[asked] == 1 else _compute(f"{_num(coeff[asked])} * {_num(pivot)}")
+    for e in entities:                     # finalize: an entity with no PRIMARY origin (the free/pivot entity,
+        if e not in origin and e in origin_secondary:   # when it isn't also the subject of ITS OWN relation)
+            origin[e] = [origin_secondary[e]]           # falls back to wherever it was merely MENTIONED.
+    _has_interrogative = any("interrogative" in u.features.get("senses", []) for u in qr.units)
+    _comparative_ask = any("comparative" in u.features.get("senses", []) for u in qr.units)
+    _has_verb_path = any("auxiliary" in u.features.get("senses", []) for u in qr.units) or \
+        any("verb" in u.features.get("senses", []) and _key(u.surface) not in ("is", "are", "was", "were")
+            for u in qr.units)
+    _possessive_name = any(qr.units[qr.units.index(u) + 1].features.get("senses") == ["possessive"]
+                           for u in qnames if qr.units.index(u) + 1 < len(qr.units))
+    _covered = all(e in origin or e in known_idx for e in entities)
+    if _rps is None or not _has_interrogative or not _covered or _comparative_ask \
+            or _possessive_name or asked_measure is None or not _has_verb_path:
+        return scalar
+    _qverb_unit = next((u for u in qr.units if "verb" in u.features.get("senses", [])
+                        and _key(u.surface) not in ("is", "are", "was", "were")), None)
+    verb = _lemma(_qverb_unit.surface) if _qverb_unit is not None else "have"
+    values = dict(knowns)
+    values[free[0]] = pivot
+    progress = True
+    while progress:
+        progress = False
+        for e, (k, std) in rels.items():
+            if std in values and e not in values:
+                values[e] = _compute(f"{_num(k)} * ({_num(values[std])})")
+                progress = True
+    # the TOTAL clause is a CONSTRAINT, not any one entity's own fact — locate its premise index the same way
+    # `_affine_system`'s migration does (the same cue-word gate `_combined_total` used, matched by value).
+    tot_idx = None
+    for i, p in enumerate(premises):
+        if not any(w in p.lower() for w in ("combined", "total", "together", "between them", "in all",
+                                            "share", "shared", "altogether")):
+            continue
+        rp = _rps[i] if _rps is not None else analyze(p)
+        if any("comparative" in u.features.get("senses", []) for u in rp.units):
+            continue
+        tvals = [u for u in rp.units if "value" in u.features.get("senses", [])
+                 and u.features.get("value") is not None]
+        if any(v.features["value"] == total for v in tvals):
+            tot_idx = i
+            break
+    facts_by_premise = {}
+    for e in entities:
+        idxs = origin.get(e) or ([known_idx[e]] if e in known_idx else None)
+        if not idxs or e not in values:
+            continue                        # shouldn't happen (every entity has an origin premise and a
+            #                                  hop-walk value), but a defensive skip beats a mis-attributed fact
+        fact = Quantity(e, asked_measure, values[e], verb)
+        for i in idxs:
+            facts_by_premise.setdefault(i, []).append(fact)
+    if tot_idx is not None:
+        facts_by_premise.setdefault(tot_idx, [])
+    matched = []
+    for i, fs in facts_by_premise.items():
+        if fs:
+            matched.extend(_rps[i].units)
+    if tot_idx is not None:
+        matched.extend(_rps[tot_idx].units)
+    return SystemResult(facts_by_premise, matched)
 
 
 def _combined_total(premises: list, asked_measure, rel_mod, rel_desc):
@@ -25428,7 +25501,7 @@ def _age_equations_system(premises: list, question: str):
 # priority order — do NOT re-inline a branch in solve().
 _EARLY_SYSTEMS = [
     # N-UNKNOWN SUM+RATIO-CHAIN: "Amy/Jeremy/Chris combined 132 → Jeremy 66" (subsumes 2-entity Jean/Jane).
-    ("sum_ratio", lambda P, Q, R, _fn=_sum_ratio_system: _fn(P, Q)),
+    ("sum_ratio", lambda P, Q, R: _sum_ratio_system(P, Q, R)),   # MIGRATED
     # OFFSET SUM-system (affine twin): "Justin + Sabrina 50; Justin 8 more than twice Sabrina → Sabrina 14."
     ("offset_sum", lambda P, Q, R, _fn=_offset_sum_system: _fn(P, Q)),
     # PURE OFFSET SUM (no factor): "Anais 30 more toys than Kamari; 160 altogether → Kamari 65."

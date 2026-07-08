@@ -5890,6 +5890,28 @@ class TestAffineSystemReturnsSystemResult(unittest.TestCase):
         self.assertEqual(reading.solve(text), 28)
 
 
+class TestSumRatioSystemReturnsSystemResult(unittest.TestCase):
+    """#397 — `_sum_ratio_system` (pure-ratio-chain, total-pinned) migrated to `SystemResult`: emits one
+    `Quantity` fact per entity (ratio-tree entities computed hop-by-hop from the pivot, `knowns` entities
+    carrying their own stated value directly) instead of returning `coeff[asked]·pivot`, then lets
+    `answer()`'s plain single-entity fold resolve the ask. Same SAFE-path disqualifiers as `_affine_system`
+    (its closest sibling) — no new `answer()` capability needed."""
+
+    def test_sum_ratio_system_returns_system_result(self):
+        # amy = jeremy/3, chris = 2*amy; total = amy+jeremy+chris = 132 -> jeremy=66, amy=22, chris=44.
+        text = ("Amy has 132 stickers combined with Jeremy and Chris. Amy is a third of Jeremy. Chris is "
+                "twice as many as Amy. How many stickers does Jeremy have?")
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._sum_ratio_system(premises, question, rp)
+        self.assertIsInstance(result, reading.SystemResult)
+        all_facts = [f for fs in result.facts_by_premise.values() for f in fs]
+        amounts = {f.entity: f.amount for f in all_facts}
+        self.assertEqual(amounts, {"amy": 22, "jeremy": 66, "chris": 44})
+        self.assertEqual(reading.solve(text), 66)
+
+
 class TestIncrement146ContainerContentsSum(unittest.TestCase):
     """#146 — CONTAINER × CONTENTS product-sum (the count twin of revenue_product_sum): each container-count
     pairs with a following CONTENTS-count of the questioned item, Σ(container·contents), minus any stated item
