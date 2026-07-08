@@ -474,6 +474,48 @@ were (vocab_singles/mixed_singles/day-chain/rate-chain solvers are each their ow
 migrating any of those would need its own from-scratch assessment of whether a generic `answer()` consumer
 already exists for its output shape, not a mechanical repeat of this recipe.
 
+**Update (2026-07-08, same day): `_two_relation_system` migrated (named pair only); two more candidates
+investigated and correctly declined.** `_two_relation_system` (registry `two_relation`) is a standalone
+2×2 linear system (two affine relations on the SAME entity pair, no anchor/total — reuses `_affine_relation`
+directly, the same helper the mixed-affine family depends on) — not part of either family above, but close
+enough in shape to migrate with the same recipe, ONE new wrinkle:
+
+16. **When NEITHER entity is a free pivot, attribute BOTH facts to BOTH defining premises.** Unlike every
+    other migrated solver (which always has one entity anchored/pivoted and the rest derived from it), a 2×2
+    system's two premises JOINTLY constrain both values — there's no single premise that "defines" either
+    entity alone. Emit both `Quantity` facts and attribute the SAME pair to `facts_by_premise[0]` AND
+    `facts_by_premise[1]` — the over-determined-entity dedup `_solve_inner`'s SystemResult fold already does
+    (`if f not in context: context.append(f)`) makes this safe for free; no separate empty-fact placeholder
+    trick needed (unlike a TOTAL clause, both premises here get REAL non-empty fact lists, so GUARD 3/4 pass
+    without even needing the `pattern_consumed` exemption).
+17. **A solver can migrate ONLY PART of its input space when the rest has no `answer()` consumer.** This
+    solver handles BOTH a named-person pair (`_affine_system`'s already-proven shape) and a coordinate-noun
+    pair (e.g. "blue"/"red" marbles). The REAL dev-train hit is the coordinate-noun case, and its actual
+    GSM8K phrasing is a genuinely BARE noun-phrase question — "How many red marbles?", no subject, no verb,
+    no aux at all — which `answer()` has NO resolution path for (probed directly: feeding it an exact-measure
+    `Quantity` fact and asking exactly that phrase still returns "undetermined"). Building yet another new
+    `answer()` capability for a single solver's one real hit wasn't worth the regression risk of a THIRD new
+    fallback in one session; the fix was to gate the NEW path on `_is_named_pair` and let the coordinate-noun
+    case fall through to the unchanged legacy scalar computation unconditionally — a diff-neutral migration
+    that proves the mechanism on the shape it safely covers, same as `_noun_anchored_sum_system`'s deferral.
+
+**Two further candidates investigated and declined (not migrated):**
+- **`_target_contributions_system`** (TARGET − Σcontributions, "how many more should THEY collect") — the
+  ask is COLLECTIVE, no single named entity to attach a fact to. `answer()` has no generic consumer for a
+  group-goal ask; migrating would need an entirely new capability for one solver's own shape.
+- **`_total_between_residual_system`** (category TOTAL "in total between" named brand parts) — structurally
+  the closest cousin of `_residual_sum_system`'s already-migrated no-relation fallback (which even has a
+  reusable `_residual_system_result` builder), but the REAL example's brand-name entities parse unreliably:
+  probing `analyze()` directly on "Mars bars, Snickers, and Butterfingers" showed the tokenizer splitting
+  "Mars bars," into a stray "Mars" name-unit plus an orphaned "bars," noun, while "Snickers, and
+  Butterfingers." merged into ONE garbled unit. The solver's own docstring already explains why it reads
+  raw values with no entity keys at all ("the general fold can't attach the brand-name parts to the category
+  total") — forcing entity-keyed facts on top of an unreliable parse would be fragile, unlike the clean
+  person-name extraction every migrated family so far relied on. Lesson: **a structurally-similar candidate
+  can still be unsafe to migrate if its entity extraction itself is unreliable** — check with a direct
+  `analyze()` probe on the solver's own real example before assuming the "shared helper" similarity implies
+  a safe migration.
+
 ### A clause that is BOTH meta and data — read the recorded meta, don't fight the parse (#309)
 
 `_parse_problem` recognizes "there are N X in a Y" as a stated unit conversion (`_stated_conversion`),
