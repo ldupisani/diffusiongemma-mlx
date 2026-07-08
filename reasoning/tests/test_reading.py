@@ -5778,6 +5778,43 @@ class TestSystemResultMigration(unittest.TestCase):
         self.assertEqual(reading.solve(text), 3)
 
 
+class TestNounKeyedEntityFallback(unittest.TestCase):
+    """`answer()`'s NOUN-KEYED ENTITY FALLBACK: a system whose entities are common nouns ("goat"/"pig"),
+    not people, asks "How many goats does HE have?" — the grammatical subject is a pronoun/possessor that
+    is never itself a tracked entity. If the subject-resolved entities hold NO fact at all and exactly one
+    context entity shares the query's measure, resolve to that entity instead. Built to unlock the
+    noun-affine family's single-entity solvers (`_noun_affine_system`/`_noun_residual_sum_system`), gated
+    narrowly (no real name, no "each", not a TIME_UNITS query) to avoid preempting existing machinery that
+    already handles named-but-dataless subjects, per-member distribution, and age equations."""
+
+    def test_pronoun_subject_resolves_to_unique_noun_entity(self):
+        ctx = [reading.Quantity("goat", ("goat", frozenset()), 11)]
+        self.assertEqual(reading.answer("How many goats does he have?", ctx), 11)
+
+    def test_named_subject_with_no_data_still_declines(self):
+        # Mary has no data of her own -- must NOT hijack onto an unrelated entity's total.
+        ctx = [reading.Quantity("tom", ("apple", frozenset()), 3)]
+        self.assertEqual(reading.answer("How many apples does Mary have?", ctx), "undetermined")
+
+    def test_merged_name_list_subject_still_resolves_normally(self):
+        # "Mike and Rita" merges into one Unit whose own _entity() matches neither individual member --
+        # the fallback must recognize this IS still a real name (via .members) and not fire.
+        ctx = [reading.Quantity("box", ("bar", frozenset()), 12, "contain")]
+        self.assertEqual(reading.answer("How many bars did Mike and Rita get combined?", ctx),
+                         "undetermined")
+
+    def test_each_distributive_ask_not_hijacked(self):
+        ctx = [reading.Quantity("rita", ("apple", frozenset()), 24)]
+        result = reading.answer("How many apples does each person get?", ctx)
+        self.assertNotEqual(result, 24)
+
+    def test_time_unit_query_declines_for_age_domain(self):
+        # a TIME_UNITS query is the age domain's own turf (an equation to solve, not a raw stored value) --
+        # must decline here rather than hand back an entity's raw current value.
+        ctx = [reading.Quantity("melanie", ("year", frozenset()), 8, "be")]
+        self.assertEqual(reading.answer("How many years until her age doubles?", ctx), "undetermined")
+
+
 class TestIncrement146ContainerContentsSum(unittest.TestCase):
     """#146 — CONTAINER × CONTENTS product-sum (the count twin of revenue_product_sum): each container-count
     pairs with a following CONTENTS-count of the questioned item, Σ(container·contents), minus any stated item

@@ -5011,6 +5011,42 @@ def answer(question: str, context: list, discourse: list = None):
         #                                                  vacuous trailing verb ("get [back]"/"receive") has
         #                                                  no matching events, so skip the verb fold and take
         #                                                  the remainder path below (like "how much money is left").
+    # NOUN-KEYED ENTITY FALLBACK: the subject can resolve to a PRONOUN/POSSESSOR ("he", "the farmer") that
+    # is never itself a tracked entity in a system whose entities are COMMON NOUNS, not people — "How many
+    # GOATS does he have?" is keyed by 'goat' (the noun-entity family's own entity), not 'he'. If the
+    # subject-resolved `entities` hold NO fact at all (untracked — not merely lacking THIS measure), and
+    # exactly ONE entity in context shares the query's measure, ask about that one instead. Gated narrowly:
+    # (a) NONE of the resolved entities may be a real NAME — "How many apples does MARY have?" (Mary just
+    # has no data — an honest decline, not a hijack onto whichever unrelated entity happens to hold the
+    # asked measure — was a real regression this excludes) or "how much does SARAH make in an 8-hour day?"
+    # (Sarah needs a rate×duration computation via a DIFFERENT existing path, not this fallback preempting
+    # it); a PRONOUN/generic-noun subject is never itself in the system, so it's safe there. (b) no "each"
+    # quantifier anywhere in the question — a per-member distributive ask ("how many does EACH PERSON get?")
+    # has its own dedicated resolution elsewhere that must run instead (another real regression this
+    # excludes: 24 apples ÷ 5 people wrongly resolving to Rita's raw 24 before the split/remainder check).
+    # a comma/"and"-joined name list ("Mike and Rita") merges into ONE unit whose OWN `_entity()` is the
+    # whole merged surface ("mike and rita"), matching neither individual member — check `.members` too,
+    # or this subject-is-a-name check silently misses it (a real regression this fixed: "how many bars did
+    # MIKE AND RITA get combined?" wrongly fell through to the fallback and grabbed an unrelated container
+    # entity's total instead of correctly falling through to the REAL named-subset resolution).
+    _subject_is_name = entities and any("name" in u.features.get("senses", [])
+                                        and (_entity(u) in entities
+                                             or any(m in entities for m in u.features.get("members") or []))
+                                        for u in r.units)
+    # a TIME-typed query ("her AGE be thrice her present age" — query=('year', ...)) is the age domain's own
+    # turf: it needs an EQUATION solved (current + x = 3·current), not a raw stored value handed back — the
+    # unique-measure-owner heuristic below can't tell "the noun subject genuinely IS the wanted entity"
+    # (goats) from "the noun subject is a PROPERTY of an existing entity requiring further computation"
+    # (age); a real regression (confidently returning Melanie's raw current age, 8, instead of correctly
+    # declining and leaving the age-equation machinery to solve for 16) excludes it the same way the
+    # anchored-affine family already excludes age-typed systems elsewhere.
+    if query is not None and entities and not _subject_is_name and query[0] not in TIME_UNITS \
+            and not any(_key(u.surface) == "each" for u in r.units) \
+            and not any(isinstance(f, Quantity) and f.entity in entities for f in context):
+        _measure_owners = {f.entity for f in context if isinstance(f, Quantity) and f.measure == query
+                           and f.amount is not None}
+        if len(_measure_owners) == 1:
+            entities = [next(iter(_measure_owners))]
     if query is not None and entities is not None:
         if entities:
             terms = []                                   # each conjunct's contribution, summed once at the end
