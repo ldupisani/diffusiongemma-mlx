@@ -5867,6 +5867,29 @@ class TestNounKeyedEntityFallback(unittest.TestCase):
         self.assertEqual(reading.solve(text), 5)
 
 
+class TestAffineSystemReturnsSystemResult(unittest.TestCase):
+    """#395c — `_affine_system` (NAMED-entity twin of `_noun_affine_system`, total-pinned rather than
+    anchor-pinned) migrated to `SystemResult`: emits one `Quantity` fact per entity instead of computing
+    the asked entity's value directly, then lets `answer()`'s plain single-entity fold (the same consumer
+    `_anchored_single_system` already proved out) resolve the ask. No new `answer()` capability was needed
+    -- named entities already have a working subject-resolution path."""
+
+    def test_affine_system_returns_system_result(self):
+        # fresh synthetic numbers/nouns: mandy=m (free pivot), anna=3m, amanda=m+2;
+        # total = 3m + m + (m+2) = 5m+2 = 142 -> m=28.
+        text = ("Anna has 3 times as many stickers as Mandy. Mandy has 2 fewer stickers than Amanda. If "
+                "they have 142 stickers total, how many stickers does Mandy have?")
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._affine_system(premises, question, rp)
+        self.assertIsInstance(result, reading.SystemResult)
+        all_facts = [f for fs in result.facts_by_premise.values() for f in fs]
+        amounts = {f.entity: f.amount for f in all_facts}
+        self.assertEqual(amounts, {"anna": 84, "amanda": 30, "mandy": 28})
+        self.assertEqual(reading.solve(text), 28)
+
+
 class TestIncrement146ContainerContentsSum(unittest.TestCase):
     """#146 — CONTAINER × CONTENTS product-sum (the count twin of revenue_product_sum): each container-count
     pairs with a following CONTENTS-count of the questioned item, Σ(container·contents), minus any stated item

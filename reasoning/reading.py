@@ -6904,7 +6904,7 @@ def _affine_relation(rp: "Reading"):
     return None
 
 
-def _affine_system(premises: list, question: str):
+def _affine_system(premises: list, question: str, readings_prem: list = None):
     """An N-UNKNOWN MIXED AFFINE system — the generalization that subsumes both `_sum_ratio_system` (pure
     ratios) and `_offset_sum_system` (one 2-entity affine relation). Each entity is an AFFINE function of a
     single free PIVOT (value = A·pivot + B); relations may be ratio (X = k·Y), offset (X = Y ± c) OR combined
@@ -6915,7 +6915,18 @@ def _affine_system(premises: list, question: str):
     handled by INVERTING the second into a relation for the other entity (Amanda = Anna + 2). TIGHTLY gated:
     a combined total, ≥2 relations (a genuine system), a UNIQUE free pivot (one entity that is no relation's
     subject), every entity reducible to it (connected, acyclic), and the asked entity among them. None
-    otherwise."""
+    otherwise.
+
+    Migrated (see `_anchored_sum_system`'s docstring for the full recipe) when SAFE: instead of returning
+    `a_ask·pivot+b_ask` directly, emits one `Quantity` fact PER ENTITY (hop-by-hop over the raw `rels` graph,
+    not the flattened (A,B) coefficients — GUARD 14 needs each hop's own raw factor to stay audit-visible)
+    attributed back to the premise that defined it, and lets `answer()`'s plain single-entity fold (the SAME
+    consumer `_anchored_single_system` already proved out) resolve the ask. UNLIKE the noun-affine family,
+    every entity here is a NAMED PERSON sharing ONE measure — no new `answer()` capability was needed, only
+    the SAME single-entity SAFE-path disqualifiers `_anchored_single_system` already established (comparative
+    ask, possessive name, no verb-path, no queried measure) apply here too, since the consuming `answer()`
+    branch is identical. Falls back to the legacy scalar path whenever any of those hold, or when
+    `readings_prem` isn't available/aligned — byte-for-byte the pre-migration behavior."""
     qr = analyze(question)
     qnames = [u for u in qr.units if "name" in u.features.get("senses", [])]
     if not qnames:
@@ -6935,8 +6946,10 @@ def _affine_system(premises: list, question: str):
             return None
     rels = {}                                                          # subject → (k, std, c): subj = k·std + c
     rel_mod = rel_desc = None
-    for p in premises:
-        rp = analyze(p)
+    origin, origin_secondary = {}, {}
+    _rps = readings_prem if readings_prem is not None and len(readings_prem) == len(premises) else None
+    for i, p in enumerate(premises):
+        rp = _rps[i] if _rps is not None else analyze(p)
         if _name_count(rp) != 2:
             continue                       # not a genuine 2-name relation — may be `_affine_relation`'s
         rel = _affine_relation(rp)         # coordinate-noun fallback firing, a DIFFERENT family's turf
@@ -6949,8 +6962,12 @@ def _affine_system(premises: list, question: str):
             if std_e in rels:                                         # relation to define the OTHER entity;
                 return None                                           # both defined → over-constrained → bail
             rels[std_e] = (1.0 / k, subj_e, -c / k)                   # std = (subj − c)/k
+            _defined, _mentioned = std_e, subj_e
         else:
             rels[subj_e] = (k, std_e, c)
+            _defined, _mentioned = subj_e, std_e
+        origin.setdefault(_defined, []).append(i)
+        origin_secondary.setdefault(_mentioned, i)
         if asked_measure is not None and any(_descriptor(u)[0] == asked_measure[0] for u in rp.units):
             rel_mod = _measure_mod(rp, asked_measure[0])
             rel_desc = next((_descriptor(u) for u in rp.units
@@ -6987,7 +7004,72 @@ def _affine_system(premises: list, question: str):
     # T = Σ(A)·pivot + Σ(B)  ⇒  pivot = (T − ΣB)/ΣA;  answer = A[asked]·pivot + B[asked].
     pivot = _compute(f"({_num(total)} - ({_num(sum_b)})) / {_num(sum_a)}")
     a_ask, b_ask = coeff[asked]
-    return _compute(f"{_num(a_ask)} * {_num(pivot)} + ({_num(b_ask)})")
+    for e in entities:                     # finalize: an entity with no PRIMARY origin (the free/pivot entity,
+        if e not in origin and e in origin_secondary:   # when it isn't also the subject of ITS OWN relation)
+            origin[e] = [origin_secondary[e]]           # falls back to wherever it was merely MENTIONED.
+    _has_interrogative = any("interrogative" in u.features.get("senses", []) for u in qr.units)
+    # SAME single-entity SAFE-path disqualifiers `_anchored_single_system` already established (identical
+    # consumer — `answer()`'s plain single-entity fold, verb-matching): a comparative ask ("how many MORE
+    # does X have COMPARED TO Y") wants a difference, not a raw value; a possessive name mis-splits into two
+    # subjects; a bare "how much does X weigh" or a copula-only question has no `entities`-resolution path.
+    _comparative_ask = any("comparative" in u.features.get("senses", []) for u in qr.units)
+    _has_verb_path = any("auxiliary" in u.features.get("senses", []) for u in qr.units) or \
+        any("verb" in u.features.get("senses", []) and _key(u.surface) not in ("is", "are", "was", "were")
+            for u in qr.units)
+    _possessive_name = any(qr.units[qr.units.index(u) + 1].features.get("senses") == ["possessive"]
+                           for u in qnames if qr.units.index(u) + 1 < len(qr.units))
+    if _rps is None or not _has_interrogative or any(e not in origin for e in entities) or _comparative_ask \
+            or _possessive_name or asked_measure is None or not _has_verb_path:
+        return _compute(f"{_num(a_ask)} * {_num(pivot)} + ({_num(b_ask)})")
+    _qverb_unit = next((u for u in qr.units if "verb" in u.features.get("senses", [])
+                        and _key(u.surface) not in ("is", "are", "was", "were")), None)
+    verb = _lemma(_qverb_unit.surface) if _qverb_unit is not None else "have"
+    # HOP-BY-HOP values (not the flattened A/B coefficients) — GUARD 14 needs each hop's own raw factor to
+    # stay visible in its own `_compute()` call, exactly as `_anchored_sum_system`'s migration established.
+    values = {free[0]: pivot}
+    progress = True
+    while progress:
+        progress = False
+        for e, (k, std, c) in rels.items():
+            if std in values and e not in values:
+                values[e] = _compute(f"{_num(k)} * ({_num(values[std])}) + ({_num(c)})")
+                progress = True
+    # the TOTAL clause is a CONSTRAINT, not any one entity's own fact — it has no origin/entity to attribute
+    # to, so find its premise index by the SAME cue-word gate `_combined_total` used, matched by its own
+    # value (the exact number `_combined_total` already extracted) — mark it consumed (empty facts, but its
+    # units still added to `matched`) so GUARD 4's pattern_consumed exemption recognizes the stated total as
+    # accounted for, the same gap #395's noun-affine migration hit and fixed.
+    tot_idx = None
+    for i, p in enumerate(premises):
+        if not any(w in p.lower() for w in ("combined", "total", "together", "between them", "in all",
+                                            "share", "shared", "altogether")):
+            continue
+        rp = _rps[i] if _rps is not None else analyze(p)
+        if any("comparative" in u.features.get("senses", []) for u in rp.units):
+            continue
+        tvals = [u for u in rp.units if "value" in u.features.get("senses", [])
+                 and u.features.get("value") is not None]
+        if any(v.features["value"] == total for v in tvals):
+            tot_idx = i
+            break
+    facts_by_premise = {}
+    for e in entities:
+        idxs = origin.get(e)
+        if not idxs or e not in values:
+            continue                        # shouldn't happen (every entity has an origin premise and a
+            #                                  hop-walk value), but a defensive skip beats a mis-attributed fact
+        fact = Quantity(e, asked_measure, values[e], verb)
+        for i in idxs:
+            facts_by_premise.setdefault(i, []).append(fact)
+    if tot_idx is not None:
+        facts_by_premise.setdefault(tot_idx, [])
+    matched = []
+    for i, fs in facts_by_premise.items():
+        if fs:
+            matched.extend(_rps[i].units)
+    if tot_idx is not None:
+        matched.extend(_rps[tot_idx].units)
+    return SystemResult(facts_by_premise, matched)
 
 # --- system family: common-noun / coordinate-noun entities ----------------------------------
 
@@ -25352,7 +25434,7 @@ _EARLY_SYSTEMS = [
     # PURE OFFSET SUM (no factor): "Anais 30 more toys than Kamari; 160 altogether → Kamari 65."
     ("offset_sum_pure", lambda P, Q, R, _fn=_offset_sum_pure: _fn(P, Q)),
     # MIXED AFFINE (N entities, ratio+offset mixed, +total): "Anna=3·Mandy & 2 fewer than Amanda; 142 → Mandy 20."
-    ("affine", lambda P, Q, R, _fn=_affine_system: _fn(P, Q)),
+    ("affine", lambda P, Q, R: _affine_system(P, Q, R)),   # MIGRATED
     # COORDINATE/SUBTYPE-NOUN AFFINE (common-noun entities): "twice as many pigs as cows, 4 more cows than goats; 56 animals → goats 11."
     ("noun_affine", lambda P, Q, R: _noun_affine_system(P, Q, R)),   # MIGRATED
     # COORDINATE-NOUN ANCHORED-SUM (no total, one noun anchor, category-sum ask): "Hannah's family: 10 pigs … how many animals?" → 50.
