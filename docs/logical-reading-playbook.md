@@ -516,6 +516,40 @@ enough in shape to migrate with the same recipe, ONE new wrinkle:
   `analyze()` probe on the solver's own real example before assuming the "shared helper" similarity implies
   a safe migration.
 
+**Update (2026-07-08, same day): `_noun_anchored_sum_system` migrated, closing out the noun-affine family
+(3/3) — this required a genuinely NEW `answer()` capability, the CATEGORY-SUM FALLBACK.** "How many ANIMALS
+do they have?" sums per-entity `Quantity` facts (pig/cow/goat) none of which is itself named "animal" — a
+HYPERNYM sum, the one shape `_noun_anchored_sum_system`'s own docstring called out as "the hypernym check
+the older solvers explicitly route around." Two more lessons:
+
+18. **Check for existing classification machinery before building new membership logic.** The engine
+    already had a full semantic-category hierarchy (`WORD_CATEGORIES`/`CATEGORY_PARENTS`/
+    `CATEGORY_PREDICATES`, `_cat(word, category)`, `_register_category`/`_tag_word` — built for the
+    WHOLE-TEXT REGEX solver family's own category-sum shapes, e.g. "how many legs" from animals) with
+    "animal"/"vehicle"/"coin"/"cashtoken"/"journey" already seeded, pig/cow/goat already tagged "animal".
+    The new `answer()` fallback is a ~15-line reuse of `_cat()` — no new membership data structure, just a
+    new CONSUMER of one that already existed for a different solver family. Always check whether a
+    capability you're about to build already exists elsewhere in the engine under a different name before
+    designing new machinery from scratch.
+19. **Gate a new fallback on the SAME registration check its own membership test performs, not a looser
+    proxy.** The migrated solver's SAFE-path gate is `query[0] in CATEGORY_PARENTS` — the EXACT check
+    `answer()`'s category-sum fallback independently performs — so an unregistered category (e.g.
+    "children," not yet seeded) is guaranteed to cleanly fall through to the legacy scalar path rather than
+    risk a fold that's certain to decline. Verified directly: the solver's own pre-existing dev-holdout test
+    using "children" (unregistered) and "marbles" not-yellow (also unregistered) both correctly stayed on
+    the unchanged legacy path after migration, while the "animal" test (registered) took the new path — same
+    final answers either way, proving the gate discriminates correctly rather than by accident.
+    A genuine bug surfaced building the complement/negation form: the excluded token after "not"/"n't" is
+    matched from the QUESTION's raw surface ("goats," plural, with trailing punctuation already stripped by
+    `_key`), but `_cat_members` is keyed by the SINGULAR entity lemma ("goat") — without lemma-normalizing
+    the excluded token via `_noun_lemma()` first, no negated ask over a plural subtype ever matched at all
+    (silently declining every time, never actually reached during initial testing since the smoke-test used
+    the exact singular form by accident) — caught only by testing the plural form explicitly, a reminder to
+    test the ACTUAL surface form a real GSM8K question would use, not the singular the entity key happens to be.
+
+This closes the noun-affine family fully (`_noun_affine_system`/`_noun_residual_sum_system`/
+`_noun_anchored_sum_system`, all 3) and brings the running SystemResult migration total to 13 solvers.
+
 ### A clause that is BOTH meta and data — read the recorded meta, don't fight the parse (#309)
 
 `_parse_problem` recognizes "there are N X in a Y" as a stated unit conversion (`_stated_conversion`),
