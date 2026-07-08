@@ -2626,6 +2626,18 @@ LEXICON.update({
     "chewed": ["verb"], "string": ["noun"], "wicks": ["noun"], "conditioner": ["noun"],
     "kilowatts": ["noun"], "brew": ["verb"], "lb": ["noun"], "lbs": ["noun"],
     "divisible": ["noun"], "textbook": ["noun"], "bluebird": ["noun"], "traded": ["verb"],
+    # 45th wave (#386) — post-#385 blockersweep re-harvest: the #362–#385 structural wave made
+    # these problems vocab-only. 'stationery'/'sheep' EXCLUDED (known holdout-poison);
+    # 'like'/'look'/'clouds'/'dragons'/'funny' EXCLUDED (common polysemous words = the
+    # 'fit'/'placed' risk class; 1 dev gain not worth the unseen-TEST claim widening).
+    # Diff-FORCED drops (each unlocks a holdout DECL→WRONG): 'spider' (legs-group half-as-many
+    # commits 4, gold 112), 'bakery' (Antoine strawberry-supply 48≠72), 'fruit' (pound/ounce
+    # mixed-unit sum −29≠6); 'cafeteria' dropped with them (its only dev user also needs 'fruit',
+    # so it has no verified gain left — the add-only-with-a-dev-gain rule).
+    "sofa": ["noun"], "vacuumed": ["verb"], "preparing": ["verb"],
+    "planned": ["verb"], "indoor": ["adjective"], "outdoor": ["adjective"],
+    "differently": ["noun"], "perform": ["verb"], "bonsai": ["noun"],
+    "town": ["noun"],
 })
 PLURALS.update({
     "samosas": "samosa", "pakoras": "pakora", "vases": "vase", "pins": "pin", "boots": "boot",
@@ -2689,6 +2701,8 @@ PLURALS.update({
     "doughs": "dough", "garages": "garage", "peas": "pea", "eyes": "eye",
     # wave 39 (#252)
     "anthills": "anthill", "bagels": "bagel", "cartridges": "cartridge", "cellphones": "cellphone", "cases": "case", "creams": "cream", "pandas": "panda", "pineapples": "pineapple", "pines": "pine", "planks": "plank", "tires": "tire", "coronaviruses": "coronavirus", "halves": "half", "samples": "sample", "grasshoppers": "grasshopper", "laps": "lap", "clowns": "clown", "delegates": "delegate", "relatives": "relative", "redwoods": "redwood", "hops": "hop", "skips": "skip",
+    # wave 45 (#386)
+    "sofas": "sofa", "bonsais": "bonsai", "towns": "town",
 })
 VERB_LEMMA.update({
     "scored": "score", "scores": "score", "scoring": "score",
@@ -19970,6 +19984,112 @@ def _fraction_split_part_count(premises: list, question: str):
     return None
 
 
+def _ratio_chain_system(premises: list, question: str):
+    """RATIO CHAIN (#387): a chain of linear relations between NAMES — X = s·Y (scale forms:
+    "twice as old as", "3 times older than", "half the age of", "twice as many <n> as were in",
+    "twice the number of <n>") or X = Y ± c ("7 years older than") — with a single "if <name>
+    … N" ANCHOR clause; values propagate through the chain (forward AND inverted) to a fixpoint,
+    then a closed ask-set reads one name (or an age difference). "Kiarra 2×Bea; Job 3×Bea;
+    Figaro Job+7; Harry ½Figaro; Kiarra=30 → Harry 26"; same machinery reads crayon boxes and
+    countries-traveled (noun-agnostic — the noun slots are non-capturing). Gated hard: ≥2
+    multiplicative relations, an "if"-anchor, no money/percent, full digit accounting (anchor +
+    relation digits must cover every digit in the text), ask-name reached via ≥1 hop. Registered
+    LAST in _EARLY_SYSTEMS — every specific solver (and age_equations) wins first; this catches
+    only the residual all of them decline."""
+    N = _RS_N
+    W0 = r"(?:[a-z][a-z'’\-]*)"
+    stop = {"she", "he", "it", "they", "who", "that", "this", "which", "there", "the",
+            "and", "but", "if", "then", "them", "her", "his", "each", "one"}
+    ql = question.lower()
+    full = " . ".join(p.lower().rstrip(".") for p in premises) + " . " + ql
+    if "$" in full or "%" in full or "percent" in full:
+        return None
+
+    def f(t):
+        t = t.replace(",", "")
+        return float(t) if t.replace(".", "", 1).isdigit() else float(NUMBERS.get(t, 0) or 0)
+
+    rels = []          # (x, y, k, c): x = k·y + c
+    used_digits = set()
+
+    def add(x, s, y, c=0.0, sign=1):
+        x, y = x.strip("'’"), y.strip("'’")
+        if x in stop or y in stop or x == y:
+            return
+        if s is not None:
+            k = _scale(s)
+            if k is None:
+                return
+            used_digits.update(re.findall(r"\d+(?:\.\d+)?", s))
+            rels.append((x, y, k, 0.0))
+        else:
+            rels.append((x, y, 1.0, sign * c))
+
+    mult_pats = [
+        # NO "<scale> older/taller than" form here — "N times older" is gold-inconsistent
+        # corpus-wide (the documented ban, TestIncrement192/238): never read it as a relation.
+        rf"(\w+) is ({_SCALE_RE}) as (?:old|tall|big|long|heavy|fast) as (\w+)",
+        rf"(\w+)['’]s age is ({_SCALE_RE}) the age of (\w+)",
+        rf"(\w+)['’]s {W0} contain(?:s|ed)? ({_SCALE_RE}) as many {W0} as (?:were in )?(\w+)",
+        rf"(\w+) (?:has|had|contains?|contained) ({_SCALE_RE}) as many {W0} as (?:were in )?(\w+)",
+        rf"(\w+) (?:has |had )?\w+(?:ed|s)? to ({_SCALE_RE}) the number of {W0} (?:that )?(\w+)",
+        # severed-conjunct bridge (#343 style): "X had the … . containing SCALE as many … as were in Y's"
+        rf"(\w+) (?:has|had) [^.]{{0,60}} \. contain\w* ({_SCALE_RE}) as many {W0} as (?:were in )?(\w+)",
+    ]
+    seen_spans = []
+    for pat in mult_pats:
+        for m in re.finditer(pat, full):
+            span = (m.start(), m.end())
+            if any(s <= span[0] and span[1] <= e for s, e in seen_spans):
+                continue      # an inner re-match of a clause a wider pattern already read
+            add(*m.groups())
+            seen_spans.append(span)
+
+    for m in re.finditer(rf"(\w+) is (?:({N})|({_NUMWORD_RE})) years (older|younger) than (\w+)",
+                         full):
+        if m.group(2):
+            used_digits.add(m.group(2))
+        add(m.group(1), None, m.group(5), c=f(m.group(2) or m.group(3)),
+            sign=1 if m.group(4) == "older" else -1)
+
+    if sum(1 for _, _, k, c in rels if c == 0.0) < 2:
+        return None
+
+    anch = re.search(rf"if (\w+)(?:['’]s {W0})? (?:is|was|has|had|contained|traveled to) ({N})",
+                     full)
+    if not anch or anch.group(1) in stop:
+        return None
+    used_digits.add(anch.group(2))
+    # full digit accounting: every digit in the text must be an anchor or relation digit
+    if set(re.findall(r"\d+(?:,\d{3})*(?:\.\d+)?",
+                      " ".join(premises) + " " + question)) - used_digits:
+        return None
+
+    values = {anch.group(1): f(anch.group(2))}
+    for _ in range(len(rels) + 1):
+        changed = False
+        for x, y, k, c in rels:
+            if y in values and x not in values:
+                values[x] = k * values[y] + c
+                changed = True
+            elif x in values and y not in values and k != 0:
+                values[y] = (values[x] - c) / k
+                changed = True
+        if not changed:
+            break
+
+    m = re.search(r"how (?:old|tall) is (\w+)", ql) \
+        or re.search(rf"how many {W0} (?:were in|did|does|has) (\w+)", ql)
+    if m:
+        name = m.groups()[-1]
+        if name in values and name != anch.group(1):
+            return _rs_ret(values[name])
+    m = re.search(r"difference between the age of (\w+) and (\w+)", ql)
+    if m and m.group(1) in values and m.group(2) in values:
+        return _rs_ret(abs(values[m.group(1)] - values[m.group(2)]))
+    return None
+
+
 # ── PARTITION-CHAIN: a group split into disjoint parts, resolved by FACT SATURATION (#312) ──────────────
 # The general reformulation of the two-stage fraction chain (was a fixed formula in _cat_singles_a #35).
 # Instead of computing N·(1−f1)·(1−f2), it READS the text into GROUP facts — a universe split into disjoint
@@ -24763,6 +24883,10 @@ _EARLY_SYSTEMS = [
     # specific age solvers above win first; this answers determined asks over the residual
     # (underdetermined systems included — mom-at-birth is a determined DIFFERENCE).
     ("age_equations", _age_equations_system),
+    # RATIO CHAIN (#387) — linear name-chain (X = s·Y / X = Y ± c) with a single "if"-anchor,
+    # propagated to a fixpoint; noun-agnostic (ages, crayon boxes, countries traveled). After
+    # age_equations on purpose: it catches only chain shapes every age solver declines.
+    ("ratio_chain", _ratio_chain_system),
 ]
 
 # LATE systems run AFTER the read-synthesize fixpoint has built `context` (they consume derived

@@ -8484,5 +8484,104 @@ class TestQuestionRequirementsCorpus(unittest.TestCase):
         self.assertIn("second", d.message)
 
 
+class TestIncrement386VocabWave45(unittest.TestCase):
+    """#386 — post-#385 blockersweep re-harvest: the structural wave made these vocab-only.
+    'spider'/'bakery'/'fruit' were diff-FORCED drops (each unlocks a holdout DECL→WRONG);
+    'stationery'/'sheep' stay excluded (known holdout-poison)."""
+
+    def test_coin_enumeration_after_vacuuming(self):
+        # 10·0.25 + 3·0.10 + 3·0.05 + 5·0.01 = 3.00
+        self.assertEqual(reading.solve(
+            "When Harriett vacuumed the sofa and chair she found 10 quarters, 3 dimes, "
+            "3 nickels, and 5 pennies. How much money did Harriett find?"), 3)
+
+    def test_indoor_outdoor_table_chairs_total(self):
+        # 8·3 + 12·3 = 60
+        self.assertEqual(reading.solve(
+            "The restaurant has 8 indoor tables and 12 outdoor tables. Each indoor table has "
+            "3 chairs and each outdoor table has 3 chairs. How many chairs are there in "
+            "total?"), 60)
+
+    def test_priced_repairs_product_sum(self):
+        # 5·11 + 2·15 + 2·18 = 121
+        self.assertEqual(reading.solve(
+            "Care and Rick have a repair shop. Each repair is priced differently: phone "
+            "repair costs $11, laptop repair costs $15 and computer repair costs $18. If "
+            "they perform 5 phone repairs, 2 laptop repairs, and 2 computer repairs for "
+            "this week, how much did they earn for the week?"), 121)
+
+    def test_two_priced_sizes_revenue(self):
+        # 3·30 + 5·20 = 190
+        self.assertEqual(reading.solve(
+            "Lowry sells bonsai. A small bonsai costs $30 and a big bonsai costs $20. If "
+            "he sold 3 small bonsai and 5 big bonsai, how much did he earn?"), 190)
+
+
+class TestIncrement387RatioChain(unittest.TestCase):
+    """#387 — the ratio_chain system: linear relations between names (X = s·Y scale forms /
+    X = Y ± c years-older), one "if"-anchor, fixpoint propagation (forward AND inverted),
+    closed ask-set. Noun-agnostic: one solver reads ages, crayon boxes and countries."""
+
+    def test_age_chain_mixed_scales_and_offset(self):
+        # Bea 15; Figaro 22; Harry 11 — scale + years-offset + inverted first hop
+        self.assertEqual(reading.solve(
+            "Kiarra is twice as old as Bea. Figaro is 7 years older than Bea. Harry is "
+            "half as old as Figaro. If Kiarra is 30, how old is Harry?"), 11)
+
+    def test_banned_times_older_stays_declined(self):
+        # the full mined Kiarra problem contains "3 times older than" — the documented
+        # gold-inconsistent idiom ban (#192/#238) — so ratio_chain must NOT rescue it:
+        # the '3' stays unaccounted and the chain declines
+        self.assertNotIsInstance(reading.solve(
+            "Kiarra is twice as old as Bea. Job is 3 times older than Bea. Figaro is 7 "
+            "years older than Job. Harry is half as old as Figaro. If Kiarra is 30, how "
+            "old is Harry?"), (int, float))
+
+    def test_inverted_containment_chain(self):
+        # 128 / 2 / 2 / 4 = 8 — anchor at the TOP, propagation runs inverted
+        self.assertEqual(reading.solve(
+            "Karen had the giant box of crayons, containing twice as many crayons as were "
+            "in Beatrice's box. But Beatrice's box contained twice as many crayons as were "
+            "in Gilbert's box of crayons. And Gilbert had four times as many crayons as "
+            "were in Judah's box of crayons. If Karen's box contained 128 crayons, how "
+            "many crayons were in Judah's box?"), 8)
+
+    def test_number_of_chain_forward(self):
+        # George 6 → Joseph 3 → Patrick 9 → Zack 18
+        self.assertEqual(reading.solve(
+            "Zack has traveled to twice the number of countries Patrick traveled to. "
+            "Patrick traveled to three times the number of countries Joseph traveled to. "
+            "Joseph traveled to half the number of countries George traveled to. If George "
+            "traveled to 6 countries, how many countries did Zack travel to?"), 18)
+
+    def test_age_difference_ask(self):
+        # Rachel 16, Collete 4 → 12
+        self.assertEqual(reading.solve(
+            "Rachel is twice as old as Rona and Collete's age is half the age of Rona's. "
+            "If Rona is 8 years old, what is the difference between the age of Collete "
+            "and Rachel?"), 12)
+
+    def test_unseen_literals_generalize(self):
+        # Anna 20, Rose 10 — different names/noun than the mined problem
+        self.assertEqual(reading.solve(
+            "Mary had a box of pencils, containing three times as many pencils as were in "
+            "Anna's box. Anna's box contained twice as many pencils as were in Rose's box. "
+            "If Mary's box contained 60 pencils, how many pencils were in Rose's box?"), 10)
+
+    def test_stray_digit_declines_the_system(self):
+        # an unaccounted digit (3 apples) → full digit accounting declines the SYSTEM
+        # (other solvers may still answer; pin the system itself)
+        prem, q = reading._parse_problem(
+            "Tom is four times as old as Sam. Ben is twice as old as Sam. Sam ate 3 "
+            "apples. If Tom is 40, how old is Ben?")
+        self.assertIsNone(reading._ratio_chain_system(prem, q))
+
+    def test_money_shape_declines_the_system(self):
+        prem, q = reading._parse_problem(
+            "Tom has twice as many dollars as Sam. Ben has three times as many dollars "
+            "as Sam. If Tom has $40, how much money does Ben have?")
+        self.assertIsNone(reading._ratio_chain_system(prem, q))
+
+
 if __name__ == "__main__":
     unittest.main()
