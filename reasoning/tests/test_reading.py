@@ -5814,6 +5814,27 @@ class TestNounKeyedEntityFallback(unittest.TestCase):
         ctx = [reading.Quantity("melanie", ("year", frozenset()), 8, "be")]
         self.assertEqual(reading.answer("How many years until her age doubles?", ctx), "undetermined")
 
+    def test_existential_are_there_resolves_unique_measure(self):
+        # "are" is excluded from the verb search (usually a copula) and "there" can never be a subject, so
+        # entities is None for this construction unless the new existential fallback recovers it.
+        ctx = [reading.Quantity("green", ("ball", frozenset({"green"})), 7, "have")]
+        self.assertEqual(reading.answer("How many green balls are there?", ctx), 7)
+
+    def test_existential_are_there_declines_when_ambiguous(self):
+        ctx = [reading.Quantity("blue", ("ball", frozenset()), 7, "have"),
+               reading.Quantity("red", ("ball", frozenset()), 9, "have")]
+        self.assertEqual(reading.answer("How many balls are there?", ctx), "undetermined")
+
+    def test_existential_are_there_declines_for_bare_head_noun(self):
+        # a BARE head-noun ask ("how many students") must NOT resolve via this fallback even with exactly
+        # one exact-measure fact in context: that lone fact may belong to an unrelated SUBGROUP (e.g. a
+        # fraction-partition's "20 without a desktop"), not the population the bare ask actually means. A
+        # real TEST regression this excludes: a fraction-partition problem's subgroup count (20) was wrongly
+        # handed back for "how many students are there at that grade level?" instead of declining (the
+        # correct total, 80, needs the fraction machinery this fallback has no business preempting).
+        ctx = [reading.Quantity("without_desktop", ("student", frozenset()), 20, "have")]
+        self.assertEqual(reading.answer("How many students are there?", ctx), "undetermined")
+
     def test_noun_affine_system_returns_system_result(self):
         # fresh synthetic numbers (same nouns as the docstring example, to stay clear of vocabulary gaps):
         # goat=x (free pivot), cow=x+5, pig=3(x+5); total animals = x+(x+5)+3(x+5) = 5x+20 = 45 -> x=5.
@@ -5827,6 +5848,22 @@ class TestNounKeyedEntityFallback(unittest.TestCase):
         all_facts = [f for fs in result.facts_by_premise.values() for f in fs]
         amounts = {f.entity: f.amount for f in all_facts}
         self.assertEqual(amounts, {"goat": 5, "cow": 10, "pig": 30})
+        self.assertEqual(reading.solve(text), 5)
+
+    def test_noun_residual_sum_system_returns_system_result(self):
+        # fresh synthetic numbers/nouns (the "how many X are there?" existential ask — the phrasing this
+        # solver's own docstring uses, which needed answer()'s new existential entities-fallback to resolve
+        # at all): blue=15, red=2*15=30, total=50 -> green = 50-30-15 = 5.
+        text = ("A store has 50 marbles. There are twice as many red marbles as blue while the rest are "
+                "green. If there are 15 blue marbles, how many green marbles are there?")
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._noun_residual_sum_system(premises, question, rp)
+        self.assertIsInstance(result, reading.SystemResult)
+        all_facts = [f for fs in result.facts_by_premise.values() for f in fs]
+        amounts = {f.entity: f.amount for f in all_facts}
+        self.assertEqual(amounts, {"blue": 15, "red": 30, "green": 5})
         self.assertEqual(reading.solve(text), 5)
 
 

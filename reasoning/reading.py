@@ -5047,6 +5047,23 @@ def answer(question: str, context: list, discourse: list = None):
                            and f.amount is not None}
         if len(_measure_owners) == 1:
             entities = [next(iter(_measure_owners))]
+    # EXISTENTIAL "how many <qualified measure> ARE THERE?": "are" is excluded from `qverb_unit`'s own verb
+    # search (it's usually a copula, not the asked action) and "there" is 'existential'-sensed, never usable
+    # as a subject — so NEITHER `noaux_match` NOR the aux-subject branch above can populate `entities` for
+    # this construction, leaving it None even when the context holds an exact-measure fact (the noun-affine/
+    # coordinate-noun families' own docstring phrasing, e.g. "how many GREEN balls are there?"). Narrowly
+    # recover it: only when the question carries the "there" existential marker, the asked measure is
+    # QUALIFIED (a non-empty attribute set, e.g. {'green'}) — never a BARE head noun ("how many students are
+    # there?", a real regression this excludes: a bare head can match an unrelated SUBGROUP's fact, like a
+    # fraction-partition problem's "20 without a desktop" for a "students" query, and wrongly hand back that
+    # subgroup's count instead of the population total the bare ask actually means) — and EXACTLY one
+    # context fact states that precise measure; ambiguity (0 or 2+ holders) still declines rather than guessing.
+    if entities is None and query is not None and query[1] \
+            and any("existential" in u.features.get("senses", []) for u in r.units):
+        _exact = {f.entity for f in context if isinstance(f, Quantity) and f.measure == query
+                  and f.amount is not None}
+        if len(_exact) == 1:
+            entities, q_verb, q_time = [next(iter(_exact))], "have", None
     if query is not None and entities is not None:
         if entities:
             terms = []                                   # each conjunct's contribution, summed once at the end
@@ -7189,7 +7206,7 @@ def _noun_anchored_sum_system(premises: list, question: str):
     return _compute(total)
 
 
-def _noun_residual_sum_system(premises: list, question: str):
+def _noun_residual_sum_system(premises: list, question: str, readings_prem: list = None):
     """The SUBTYPE-PARTITION twin: adjective-qualified subtypes of ONE head noun ("red/blue/green BALLS"),
     where the total is stated directly in the SAME (bare, unqualified) head noun ("Ryan has 40 balls" — no
     hypernym/category guessing needed, unlike `_noun_affine_system`'s total), and the ASKED entity is the
@@ -7197,21 +7214,30 @@ def _noun_residual_sum_system(premises: list, question: str):
     balls. There are twice as many red balls as blue while the rest are green. If there are 11 blue balls,
     how many green balls are there?" → red=2·11=22, green=40−22−11=7. Same unused-given firewall (every
     premise must classify as the total, an anchor, a relation, or the "rest" marker) and 0-1-names-per-
-    premise safety check as the rest of the coordinate-noun family."""
+    premise safety check as the rest of the coordinate-noun family.
+
+    Migrated (see `_anchored_sum_system`'s docstring for the full recipe) when SAFE: emits a `Quantity`
+    fact for the residual entity (and every covered one, for completeness) instead of computing the
+    residual here, and lets `answer()`'s noun-keyed entity fallback (#395) resolve the ask — same
+    consumer as `_noun_affine_system`. Unlike that twin, every entity here is a SUBTYPE of the SAME head
+    noun ("ball"), so each fact's measure is `(head, {qualifier})`, not a bare noun-as-its-own-head."""
     if any(w in question.lower() for w in ("altogether", "in all", " total", "combined", "in total")):
         return None                                        # an explicit sum cue is a different shape
     for p in premises:
         if re.search(r"\btimes (more|less|fewer)\b", p.lower()):
             return None
     rels, anchors, residual, total = {}, {}, None, None
-    for p in premises:
+    origin, origin_secondary, anchor_idx, residual_idx, tot_idx = {}, {}, {}, None, None
+    _rps = readings_prem if readings_prem is not None and len(readings_prem) == len(premises) else None
+    for i, p in enumerate(premises):
         rest_m = re.match(r"^(the\s+)?rest\s+(are|is)\s+([a-z]+)", p.strip(), re.I)
         if rest_m:
             if residual is not None:
                 return None
             residual = _key(rest_m.group(3))
+            residual_idx = i
             continue
-        rp = analyze(p)
+        rp = _rps[i] if _rps is not None else analyze(p)
         if sum(1 for u in rp.units if "name" in u.features.get("senses", [])) == 2:
             return None                                     # a genuine 2-name relation is _affine_system's turf
         rel = _affine_relation(rp)
@@ -7223,8 +7249,12 @@ def _noun_residual_sum_system(premises: list, question: str):
                 if std_e in rels:
                     return None
                 rels[std_e] = (1.0 / k, subj_e, -c / k)
+                _defined, _mentioned = std_e, subj_e
             else:
                 rels[subj_e] = (k, std_e, c)
+                _defined, _mentioned = subj_e, std_e
+            origin.setdefault(_defined, []).append(i)
+            origin_secondary.setdefault(_mentioned, i)
             continue
         vals = [u for u in rp.units if "value" in u.features.get("senses", []) and u.features.get("value") is not None]
         qn = _follow(vals[0], "quantifies") if len(vals) == 1 else None
@@ -7234,10 +7264,12 @@ def _noun_residual_sum_system(premises: list, question: str):
                 if e in anchors:
                     return None
                 anchors[e] = vals[0].features["value"]
+                anchor_idx[e] = i
             else:                                             # a BARE noun — the head-noun TOTAL
                 if total is not None:
                     return None
                 total = vals[0].features["value"]
+                tot_idx = i
             continue
         return None                                          # unclassified premise — the same firewall as
         #                                                       the rest of the anchored family
@@ -7249,6 +7281,10 @@ def _noun_residual_sum_system(premises: list, question: str):
     anchor_e, anchor_v = next(iter(anchors.items()))
     if anchor_e not in entities:
         return None
+    for e in entities:
+        if e not in origin and e in origin_secondary:
+            origin[e] = [origin_secondary[e]]
+    origin.setdefault(anchor_e, []).append(anchor_idx[anchor_e])
     free = [e for e in entities if e not in rels]
     if len(free) != 1:
         return None
@@ -7270,7 +7306,35 @@ def _noun_residual_sum_system(premises: list, question: str):
         return None                                          # only the RESIDUAL entity — a covered entity
         #                                                       is a different (unbuilt) single-ask variant
     covered_sum = " + ".join(f"({_num(a)} * {_num(pivot)} + ({_num(b)}))" for a, b in coeff.values())
-    return _compute(f"{_num(total)} - ({covered_sum})")
+    _has_interrogative = any("interrogative" in u.features.get("senses", []) for u in qr.units)
+    if _rps is None or not _has_interrogative or any(e not in origin for e in entities):
+        return _compute(f"{_num(total)} - ({covered_sum})")
+    residual_amount = _compute(f"{_num(total)} - ({covered_sum})")
+    qm = _queried_measure(question)
+    head = qm[0] if qm is not None else residual
+    _qverb_unit = next((u for u in qr.units if "verb" in u.features.get("senses", [])
+                        and _key(u.surface) not in ("is", "are", "was", "were")), None)
+    verb = _lemma(_qverb_unit.surface) if _qverb_unit is not None else "have"
+    facts_by_premise = {}
+    for e, (a, b) in coeff.items():
+        amount = _compute(f"{_num(a)} * {_num(pivot)} + ({_num(b)})")
+        measure = qm if (e == asked and qm is not None) else (head, frozenset({e}))
+        fact = Quantity(e, measure, amount, verb)
+        for i in origin[e]:
+            facts_by_premise.setdefault(i, []).append(fact)
+    facts_by_premise.setdefault(residual_idx, []).append(
+        Quantity(residual, qm if qm is not None else (head, frozenset({residual})), residual_amount, verb))
+    if tot_idx is not None:
+        facts_by_premise.setdefault(tot_idx, [])
+    matched = []
+    for i, fs in facts_by_premise.items():
+        if fs:
+            matched.extend(_rps[i].units)
+    if tot_idx is not None:
+        matched.extend(_rps[tot_idx].units)   # the bare-noun TOTAL is a constraint, not a single entity's
+        #                                       own fact — mark it too so GUARD 4's pattern_consumed
+        #                                       exemption still recognizes the stated total as accounted for
+    return SystemResult(facts_by_premise, matched)
 
 # --- system family: anchored (no stated total — one entity has a bare absolute value) -------
 
@@ -25294,7 +25358,7 @@ _EARLY_SYSTEMS = [
     # COORDINATE-NOUN ANCHORED-SUM (no total, one noun anchor, category-sum ask): "Hannah's family: 10 pigs … how many animals?" → 50.
     ("noun_anchored_sum", lambda P, Q, R, _fn=_noun_anchored_sum_system: _fn(P, Q)),
     # SUBTYPE-PARTITION (adjective subtypes of one head noun, total in same noun, 'the rest' ask): "Ryan 40 balls … green balls?" → 7.
-    ("noun_residual_sum", lambda P, Q, R, _fn=_noun_residual_sum_system: _fn(P, Q)),
+    ("noun_residual_sum", lambda P, Q, R: _noun_residual_sum_system(P, Q, R)),   # MIGRATED
     # CHAIN-COUNT × UNIT-PRICE (money-spend total + per-item price over an anchored count chain): "Robert 4 pens, Julia 3×, Dorothy ½×; one pen $1.50; total spent?" → 22×1.50 = 33. BEFORE anchored_sum (which would commit the bare count 22).
     ("chain_count_price", lambda P, Q, R, _fn=_chain_count_price: _fn(P, Q)),
     # FRACTION-OF-BASE REMAINDER (single pool − Σ(fraction×pool | literal)): "148 peanuts; ate ¼ of the peanuts; ate 29; how many remain?" → 148−37−29 = 82. BEFORE the depletion fold (which drops the fraction → 119).
