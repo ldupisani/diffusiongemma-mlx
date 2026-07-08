@@ -5912,6 +5912,40 @@ class TestSumRatioSystemReturnsSystemResult(unittest.TestCase):
         self.assertEqual(reading.solve(text), 66)
 
 
+class TestOffsetSumSystemsReturnSystemResult(unittest.TestCase):
+    """#398 — `_offset_sum_pure` and `_offset_sum_system` (2-entity offset-sum, total-pinned) migrated to
+    `SystemResult`: both entities' values are attributed to the SAME single premise (the one offset relation
+    that defines them both) as `Quantity` facts, instead of returning one raw value directly. Same recipe
+    as `_affine_system`/`_sum_ratio_system` (this family's siblings)."""
+
+    def test_offset_sum_pure_returns_system_result(self):
+        # anais = kamari + 30, anais + kamari = 160 -> kamari = 65, anais = 95.
+        text = "Anais has 30 more toys than Kamari. There are 160 toys altogether. How many toys does Kamari have?"
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._offset_sum_pure(premises, question, rp)
+        self.assertIsInstance(result, reading.SystemResult)
+        all_facts = [f for fs in result.facts_by_premise.values() for f in fs]
+        amounts = {f.entity: f.amount for f in all_facts}
+        self.assertEqual(amounts, {"anais": 95, "kamari": 65})
+        self.assertEqual(reading.solve(text), 65)
+
+    def test_offset_sum_system_returns_system_result(self):
+        # marcus = 2*elena + 8, marcus + elena = 68 -> elena = 20, marcus = 48.
+        text = ("Marcus and Elena have 68 stickers combined. Marcus has 8 more than twice as many stickers "
+                "as Elena. How many stickers does Elena have?")
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._offset_sum_system(premises, question, rp)
+        self.assertIsInstance(result, reading.SystemResult)
+        all_facts = [f for fs in result.facts_by_premise.values() for f in fs]
+        amounts = {f.entity: f.amount for f in all_facts}
+        self.assertEqual(amounts, {"marcus": 48, "elena": 20})
+        self.assertEqual(reading.solve(text), 20)
+
+
 class TestIncrement146ContainerContentsSum(unittest.TestCase):
     """#146 — CONTAINER × CONTENTS product-sum (the count twin of revenue_product_sum): each container-count
     pairs with a following CONTENTS-count of the questioned item, Σ(container·contents), minus any stated item

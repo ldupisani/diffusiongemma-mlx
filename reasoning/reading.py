@@ -6755,12 +6755,18 @@ def _pure_offset_relation(rp: "Reading"):
     return _entity(subj), _entity(std), sign * off.features["value"]
 
 
-def _offset_sum_pure(premises: list, question: str):
+def _offset_sum_pure(premises: list, question: str, readings_prem: list = None):
     """A 2-ENTITY PURE additive offset + combined total → solve. "Anais has 30 more toys than Kamari; there
     are 160 toys altogether → Kamari = (160 − 30)/2 = 65." The NO-FACTOR twin of `_offset_sum_system` (which
     requires a multiplier). subj = std + c and subj + std = T ⇒ std = (T − c)/2, subj = T − std. TIGHTLY gated:
     EXACTLY one pure-offset relation, NO factor/ratio anywhere (else it's the factored or ratio shape), exactly
-    the two related entities, the asked one among them, and a measure-matched combined total. None otherwise."""
+    the two related entities, the asked one among them, and a measure-matched combined total. None otherwise.
+
+    Migrated (see `_anchored_sum_system`'s docstring for the full recipe; same SAFE-path disqualifiers and
+    TOTAL-clause attribution trick as `_affine_system`/`_sum_ratio_system`) when SAFE: emits a `Quantity`
+    fact for EACH of the two entities (both attributed to the SAME single premise — the one offset relation
+    that defines them both) instead of returning one raw value, letting `answer()`'s plain single-entity
+    fold resolve the ask."""
     qr = analyze(question)
     qnames = [u for u in qr.units if "name" in u.features.get("senses", [])]
     if not qnames:
@@ -6769,15 +6775,17 @@ def _offset_sum_pure(premises: list, question: str):
     asked_measure = _queried_measure(question)
     if asked_measure is not None and "verb" in analyze(asked_measure[0]).units[0].features.get("senses", []):
         asked_measure = RESULT_MEASURE.get(asked_measure[0])
-    offs, rel_mod, rel_desc = [], None, None
-    for p in premises:
-        rp = analyze(p)
+    _rps = readings_prem if readings_prem is not None and len(readings_prem) == len(premises) else None
+    offs, rel_mod, rel_desc, rel_idx = [], None, None, None
+    for i, p in enumerate(premises):
+        rp = _rps[i] if _rps is not None else analyze(p)
         if _name_count(rp) != 2:
             continue                       # not a genuine 2-name relation — may be `_pure_offset_relation`'s
         rr = _pure_offset_relation(rp)      # coordinate-noun fallback firing, a DIFFERENT family's turf
         if rr is None:
             continue
         offs.append(rr)
+        rel_idx = i
         if asked_measure is not None and any(_descriptor(u)[0] == asked_measure[0] for u in rp.units):
             rel_mod = _measure_mod(rp, asked_measure[0])
             rel_desc = next((_descriptor(u) for u in rp.units if _descriptor(u)[0] == asked_measure[0]), None)
@@ -6788,8 +6796,8 @@ def _offset_sum_pure(premises: list, question: str):
         return None                                            # scale gap — mixing them needs a conversion we
         #                                                        don't do ("$3 total, 50 cents more" → decline)
     measures = set()
-    for p in premises:                                                 # NO factor/ratio anywhere → pure only
-        rp = analyze(p)
+    for i, p in enumerate(premises):                                   # NO factor/ratio anywhere → pure only
+        rp = _rps[i] if _rps is not None else analyze(p)
         if any("multiplier" in u.features.get("senses", []) for u in rp.units) \
                 or any(_fraction_parts(u.surface) is not None for u in rp.units) \
                 or any(_key(u.surface) in ("times", "twice", "double", "triple", "half") for u in rp.units):
@@ -6810,17 +6818,57 @@ def _offset_sum_pure(premises: list, question: str):
         return None
     std_v = _compute(f"({_num(total)} - ({_num(c)})) / 2")
     subj_v = _compute(f"{_num(total)} - ({_num(std_v)})")
-    return subj_v if asked == subj_e else std_v
+    scalar = subj_v if asked == subj_e else std_v
+    qr_units = qr.units
+    _has_interrogative = any("interrogative" in u.features.get("senses", []) for u in qr_units)
+    _comparative_ask = any("comparative" in u.features.get("senses", []) for u in qr_units)
+    _has_verb_path = any("auxiliary" in u.features.get("senses", []) for u in qr_units) or \
+        any("verb" in u.features.get("senses", []) and _key(u.surface) not in ("is", "are", "was", "were")
+            for u in qr_units)
+    _possessive_name = any(qr_units[qr_units.index(u) + 1].features.get("senses") == ["possessive"]
+                           for u in qnames if qr_units.index(u) + 1 < len(qr_units))
+    if _rps is None or rel_idx is None or not _has_interrogative or _comparative_ask \
+            or _possessive_name or asked_measure is None or not _has_verb_path:
+        return scalar
+    _qverb_unit = next((u for u in qr_units if "verb" in u.features.get("senses", [])
+                        and _key(u.surface) not in ("is", "are", "was", "were")), None)
+    verb = _lemma(_qverb_unit.surface) if _qverb_unit is not None else "have"
+    facts_by_premise = {rel_idx: [Quantity(subj_e, asked_measure, subj_v, verb),
+                                   Quantity(std_e, asked_measure, std_v, verb)]}
+    tot_idx = None
+    for i, p in enumerate(premises):
+        if not any(w in p.lower() for w in ("combined", "total", "together", "between them", "in all",
+                                            "share", "shared", "altogether")):
+            continue
+        rp = _rps[i] if _rps is not None else analyze(p)
+        if any("comparative" in u.features.get("senses", []) for u in rp.units):
+            continue
+        tvals = [u for u in rp.units if "value" in u.features.get("senses", [])
+                 and u.features.get("value") is not None]
+        if any(v.features["value"] == total for v in tvals):
+            tot_idx = i
+            break
+    if tot_idx is not None:
+        facts_by_premise.setdefault(tot_idx, [])
+    matched = list(_rps[rel_idx].units)
+    if tot_idx is not None:
+        matched.extend(_rps[tot_idx].units)
+    return SystemResult(facts_by_premise, matched)
 
 
-def _offset_sum_system(premises: list, question: str):
+def _offset_sum_system(premises: list, question: str, readings_prem: list = None):
     """A 2-UNKNOWN OFFSET SUM-system: two entities, one AFFINE relation (subject = factor × standard + offset),
     and a COMBINED TOTAL → solve. "Justin + Sabrina have 50 pencils; Justin has 8 more than twice as many as
     Sabrina" → S = (50 − 8)/(2+1) = 14. The affine extension of `_sum_ratio_system`, which DECLINES any
     offset-tainted system (it can only fold pure ratios); kept SEPARATE to isolate the firewall-riskier offset
     shape from the mature pure-ratio path. TIGHTLY gated: EXACTLY ONE offset relation, NO pure-ratio relation
     alongside it (a mixed/3-way system is out of scope → let it decline), exactly the two related entities, the
-    asked entity among them, and the #3h measure/qualifier match on the total. None if the shape doesn't apply."""
+    asked entity among them, and the #3h measure/qualifier match on the total. None if the shape doesn't apply.
+
+    Migrated (see `_offset_sum_pure`'s docstring for the recipe — this is its factored twin) when SAFE: emits
+    a `Quantity` fact for EACH of the two entities (both attributed to the SAME single premise — the one
+    offset relation that defines them both) instead of returning one raw value, letting `answer()`'s plain
+    single-entity fold resolve the ask."""
     qr = analyze(question)
     qnames = [u for u in qr.units if "name" in u.features.get("senses", [])]
     if not qnames:
@@ -6829,15 +6877,17 @@ def _offset_sum_system(premises: list, question: str):
     asked_measure = _queried_measure(question)
     if asked_measure is not None and "verb" in analyze(asked_measure[0]).units[0].features.get("senses", []):
         asked_measure = RESULT_MEASURE.get(asked_measure[0])           # "how many did X PICK" → its measure
-    offs, rel_mod, rel_desc = [], None, None
-    for p in premises:
-        rp = analyze(p)                                                # carry over #3h's qualifier checks
+    _rps = readings_prem if readings_prem is not None and len(readings_prem) == len(premises) else None
+    offs, rel_mod, rel_desc, rel_idx = [], None, None, None
+    for i, p in enumerate(premises):
+        rp = _rps[i] if _rps is not None else analyze(p)               # carry over #3h's qualifier checks
         if _name_count(rp) != 2:
             continue                       # not a genuine 2-name relation — may be `_offset_ratio_relation`'s
         rr = _offset_ratio_relation(rp)     # coordinate-noun fallback firing, a DIFFERENT family's turf
         if rr is None:
             continue
         offs.append(rr)
+        rel_idx = i
         if asked_measure is not None and any(_descriptor(u)[0] == asked_measure[0] for u in rp.units):
             rel_mod = _measure_mod(rp, asked_measure[0])
             rel_desc = next((_descriptor(u) for u in rp.units if _descriptor(u)[0] == asked_measure[0]), None)
@@ -6854,7 +6904,42 @@ def _offset_sum_system(premises: list, question: str):
     # subj = k·std + c and subj + std = T  ⇒  std = (T − c)/(k+1),  subj = T − std.
     std_v = _compute(f"({_num(total)} - ({_num(c)})) / {_num(k + 1)}")
     subj_v = _compute(f"{_num(total)} - ({_num(std_v)})")
-    return subj_v if asked == subj_e else std_v
+    scalar = subj_v if asked == subj_e else std_v
+    qr_units = qr.units
+    _has_interrogative = any("interrogative" in u.features.get("senses", []) for u in qr_units)
+    _comparative_ask = any("comparative" in u.features.get("senses", []) for u in qr_units)
+    _has_verb_path = any("auxiliary" in u.features.get("senses", []) for u in qr_units) or \
+        any("verb" in u.features.get("senses", []) and _key(u.surface) not in ("is", "are", "was", "were")
+            for u in qr_units)
+    _possessive_name = any(qr_units[qr_units.index(u) + 1].features.get("senses") == ["possessive"]
+                           for u in qnames if qr_units.index(u) + 1 < len(qr_units))
+    if _rps is None or rel_idx is None or not _has_interrogative or _comparative_ask \
+            or _possessive_name or asked_measure is None or not _has_verb_path:
+        return scalar
+    _qverb_unit = next((u for u in qr_units if "verb" in u.features.get("senses", [])
+                        and _key(u.surface) not in ("is", "are", "was", "were")), None)
+    verb = _lemma(_qverb_unit.surface) if _qverb_unit is not None else "have"
+    facts_by_premise = {rel_idx: [Quantity(subj_e, asked_measure, subj_v, verb),
+                                   Quantity(std_e, asked_measure, std_v, verb)]}
+    tot_idx = None
+    for i, p in enumerate(premises):
+        if not any(w in p.lower() for w in ("combined", "total", "together", "between them", "in all",
+                                            "share", "shared", "altogether")):
+            continue
+        rp = _rps[i] if _rps is not None else analyze(p)
+        if any("comparative" in u.features.get("senses", []) for u in rp.units):
+            continue
+        tvals = [u for u in rp.units if "value" in u.features.get("senses", [])
+                 and u.features.get("value") is not None]
+        if any(v.features["value"] == total for v in tvals):
+            tot_idx = i
+            break
+    if tot_idx is not None:
+        facts_by_premise.setdefault(tot_idx, [])
+    matched = list(_rps[rel_idx].units)
+    if tot_idx is not None:
+        matched.extend(_rps[tot_idx].units)
+    return SystemResult(facts_by_premise, matched)
 
 
 def _percent_relation(rp: "Reading"):
@@ -25503,9 +25588,9 @@ _EARLY_SYSTEMS = [
     # N-UNKNOWN SUM+RATIO-CHAIN: "Amy/Jeremy/Chris combined 132 → Jeremy 66" (subsumes 2-entity Jean/Jane).
     ("sum_ratio", lambda P, Q, R: _sum_ratio_system(P, Q, R)),   # MIGRATED
     # OFFSET SUM-system (affine twin): "Justin + Sabrina 50; Justin 8 more than twice Sabrina → Sabrina 14."
-    ("offset_sum", lambda P, Q, R, _fn=_offset_sum_system: _fn(P, Q)),
+    ("offset_sum", lambda P, Q, R: _offset_sum_system(P, Q, R)),   # MIGRATED
     # PURE OFFSET SUM (no factor): "Anais 30 more toys than Kamari; 160 altogether → Kamari 65."
-    ("offset_sum_pure", lambda P, Q, R, _fn=_offset_sum_pure: _fn(P, Q)),
+    ("offset_sum_pure", lambda P, Q, R: _offset_sum_pure(P, Q, R)),   # MIGRATED
     # MIXED AFFINE (N entities, ratio+offset mixed, +total): "Anna=3·Mandy & 2 fewer than Amanda; 142 → Mandy 20."
     ("affine", lambda P, Q, R: _affine_system(P, Q, R)),   # MIGRATED
     # COORDINATE/SUBTYPE-NOUN AFFINE (common-noun entities): "twice as many pigs as cows, 4 more cows than goats; 56 animals → goats 11."
