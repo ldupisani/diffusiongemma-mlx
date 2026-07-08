@@ -93,6 +93,38 @@ class Reading:
         return d
 
 
+@dataclass
+class SystemResult:
+    """A system solver's (see `_EARLY_SYSTEMS`/`_LATE_SYSTEMS`) output as REUSABLE FACTS instead of
+    a terminal scalar. `facts_by_premise` attributes derived facts back to the premise index that
+    produced them — populated exactly like `learn()` populates `facts_of[i]` in `_solve_inner`, so
+    the existing per-premise value-accounting guards (GUARD 3/4/5) keep working unmodified. `matched`
+    is every Unit whose obligation this solver's pattern discharged (see `_bind_pattern`)."""
+    facts_by_premise: dict
+    matched: list
+
+
+_PATTERN_UNIT = Unit(words=[], features={"pattern": True})   # module-level sentinel: an Obligation
+# bound to this Unit means "discharged by a system-solver pattern match," not by another word —
+# reuses the EXISTING bind/`.met` mechanism (never a new ad hoc flag; see the playbook's "give the
+# word an obligation and let it BIND" rule) so `deficiencies()`/`--trace` see it for free.
+
+
+def _bind_pattern(units: list, label: str) -> None:
+    """Mark every unmet obligation on each of `units` as discharged BY PATTERN `label` — a real bind
+    to `_PATTERN_UNIT`, not a side flag. Called by a migrated system solver on the Units its regex
+    match consumed, once it has emitted the facts that stand in for what those words would otherwise
+    still owe the reading."""
+    for u in units:
+        obs = u.features.get("obligations")
+        if not obs:
+            continue
+        u.features["obligations"] = [
+            o if o.met else Obligation(o.need, target=_PATTERN_UNIT, optional=o.optional)
+            for o in obs
+        ]
+
+
 # Contractions are the surface form of TWO words — we restore both so each carries its own obligation
 # (no special-case flag): "what's" → what + is, "didn't" → did + not. The apostrophe-s splits two ways:
 # a PRONOUN/interrogative "'s" is the copula "is" ("he's", "what's"); a NAME's GENITIVE ("Leo's") → the
@@ -4820,10 +4852,23 @@ def answer(question: str, context: list, discourse: list = None):
     remainder = change_q or any(_key(u.surface) in _REMAINDER for u in r.units)
     named = any("name" in u.features.get("senses", []) for u in r.units)   # NAMED entities ("Tom and Mary
     if combined_q and not named:                         # altogether") need the per-entity fold, not this
-        gq = query                                       # "How many INCHES are all snakes COMBINED?" — a
-        if gq is None:                                   # generic population → the GRAND TOTAL. A query-less
-            measures = {f.measure for f in context if isinstance(f, Quantity) and f.amount is not None}
-            gq = next(iter(measures)) if len(measures) == 1 else None   # "their combined experience" → the
+        # "How many INCHES are all snakes COMBINED?" — a generic population → the GRAND TOTAL. `query`
+        # matches (or CONVERTS to) a context measure exactly — trust it as-is; a REAL cross-unit ask ("how
+        # many GALLONS… did they drink" over ounce-measured facts, 128 oz/gal STATED in the problem) needs
+        # this — the summation loop below does the actual conversion, so overriding `query` here would
+        # silently drop it. Otherwise, infer ONLY when `query` is None (a truly elided noun, "their combined
+        # experience") AND exactly one measure is present — deliberately NOT a looser "shares a head noun,
+        # attributes differ" tolerance: that would ALSO swallow unrelated ambiguous cases elsewhere in the
+        # fold (2+ measures sharing a head but differing attributes, e.g. "cookie"/{white} vs
+        # "cookie"/{black}, is a real categorical ambiguity, not a decorated-noun match; picking one
+        # arbitrarily is both wrong and, since set iteration order is hash-randomized per process,
+        # nondeterministic) — a real regression this avoided. A fact-emitting solver (e.g. a migrated system
+        # solver's SystemResult) should instead emit its Quantity facts with the FULL question-asked
+        # descriptor (attributes included) so `query` matches them exactly — see `_anchored_sum_system`.
+        measures = {f.measure for f in context if isinstance(f, Quantity) and f.amount is not None}
+        convertible = query is not None and (query in measures
+                                             or any((m[0], query[0]) in CONVERSIONS for m in measures))
+        gq = query if convertible else (next(iter(measures)) if query is None and len(measures) == 1 else None)
         if gq is not None and remainder:                 # "how many do they have LEFT in total" → Σ each
             owners = {f.entity for f in context           # owner's NET holdings (signed: picked − gave −
                       if isinstance(f, Quantity) and f.measure == gq and f.amount is not None}  # sold),
@@ -4840,6 +4885,57 @@ def answer(question: str, context: list, discourse: list = None):
                         terms.append(f"{_num(f.amount)} * {_num(CONVERSIONS[(f.measure[0], gq[0])])}")
             if terms:
                 return _compute(" + ".join(terms))
+    # NAMED-SUBSET COMBINED ASK — the twin of the query-less fold above, restricted to the SPECIFIC
+    # entities the question names ("how many marbles do CARL AND CAL have combined?" sums only those
+    # two, not every Quantity-holding entity in context — summing everyone is a real confident-wrong
+    # when the system has more entities than the question names). Generic: any solver that emits a
+    # per-entity Quantity fact (e.g. a migrated system solver's SystemResult) is picked up here rather
+    # than needing to hand-parse "altogether"/pick the asked subset itself. A comma/"and"-joined name
+    # list merges into ONE Unit spanning multiple words, so split back into entity keys by word; a
+    # capitalized question word that IS a context entity but got tagged as a common noun ("Bill" → the
+    # money-noun sense) also counts as a name reference. Narrower than the query-less fold on purpose:
+    # only fires with 2+ resolved names (a single name here is genuinely rare and safer left declining
+    # than guessed at) — see `_anchored_sum_system` for the shape this generalizes. Deliberately gated
+    # on the SAME strict `named` flag as the fold above (not a smarter "does this name matter" check) —
+    # `context` here can span the WHOLE problem's many entities/measures, unlike a system solver's own
+    # tightly-scoped `coeff`, so a broader relaxation here reopens dormant bugs elsewhere in the fold
+    # that a stricter gate had been silently protecting (a real regression this discipline caught: an
+    # unrelated 5-stack problem's already-wrong derived fifth-stack value only ever committed once this
+    # branch's gate was loosened to also catch a single irrelevant name).
+    if combined_q and named:
+        all_ents = {f.entity for f in context if isinstance(f, Quantity) and f.amount is not None}
+        qnames = [_key(w.surface) for u in r.units if "name" in u.features.get("senses", [])
+                  for w in u.words if _key(w.surface) != "and"]
+        cap_entities = [_key(w.surface) for u in r.units for w in u.words
+                        if w.surface[:1].isupper() and _key(w.surface) in all_ents
+                        and _key(w.surface) not in qnames]
+        qnames = qnames + cap_entities
+        if len(qnames) >= 2 and all(e in all_ents for e in qnames):
+            # Same resolution as the query-less fold above (convertible → trust; else `query is None` and
+            # exactly one measure present among the named entities → infer; see that fold's comment for why
+            # a looser "shares a head noun" tolerance is deliberately NOT used), PLUS one named-branch-
+            # specific case: a comma-less elided-noun ask ("how many do Bill and Harry have combined?" — no
+            # measure noun at all) can leave `query` bound to the wrong thing (the first NAME, mis-taken for
+            # the elided collection, e.g. `('bill', set())` when "bill" got tagged a common noun) —
+            # recognizable because `query`'s head IS one of the coordinate names itself, a narrow and safe
+            # signal distinct from "some unrelated real noun happens to share a head" — treated the same as
+            # a missing `query` rather than a genuine mismatch.
+            named_measures = {f.measure for f in context if isinstance(f, Quantity) and f.entity in qnames
+                              and f.amount is not None}
+            convertible = query is not None and (query in named_measures
+                                                 or any((m[0], query[0]) in CONVERSIONS for m in named_measures))
+            bound_to_name = query is not None and query[0] in qnames
+            if convertible:
+                gq = query
+            elif len(named_measures) == 1 and (query is None or bound_to_name):
+                gq = next(iter(named_measures))
+            else:
+                gq = None
+            if gq is not None:
+                terms = [_num(f.amount) for f in context if isinstance(f, Quantity) and f.entity in qnames
+                         and f.measure == gq and f.amount is not None]
+                if len(terms) == len(qnames):
+                    return _compute(" + ".join(terms))
     if query is not None and any("verb" in u.features.get("senses", [])      # "How much <measure> was
                                  and _lemma(u.surface) in DISTRIBUTE_VERBS for u in r.units):  # shared?"
         shared = [f.amount for f in context if isinstance(f, Quantity) and f.measure == query   # → the
@@ -7242,7 +7338,30 @@ def _elided_ratio(rp, premise: str):
     return _entity(names[0]), float(k)
 
 
-def _anchored_affine_coeffs(premises: list, question: str):
+@dataclass
+class _AnchoredCoeffs:
+    """`_anchored_affine_coeffs`'s result. `coeff`/`pivot` are the flattened algebra (value[e] = A·pivot+B —
+    what every caller needs to just compute a final number). `rels`/`free` are the RAW relation graph a
+    caller needs to recompute a value HOP-BY-HOP (each hop's own `_compute()` call then contains the raw
+    factor literally, satisfying GUARD 14's "was this multiplier's evidence used" check — the flattened A/B
+    form multiplies factors together internally in plain Python, so a raw factor like "6" or "2" never
+    appears in any `_compute()` program string on its own, and GUARD 14 declines a fact built straight from
+    `coeff` alone). `rps`/`origin` support fact-attribution (see `_anchored_sum_system`); `measures` is the
+    shared unit descriptor head, if any."""
+    coeff: dict
+    pivot: object
+    rps: list
+    origin: dict
+    measures: set
+    rels: dict
+    free: str
+    unified: bool = False   # NEAR-NAME UNIFICATION (#215) fired — the anchor's own premise mentions a
+    # DIFFERENT spelling than the one `coeff`/`origin` key on, so `origin`'s attribution for that entity
+    # is only as good as whichever premise happened to define the (unified) spelling FIRST — a caller
+    # doing fact-attribution can't trust it enough to safely fall through; see `_anchored_sum_system`.
+
+
+def _anchored_affine_coeffs(premises: list, question: str, readings_prem: list = None):
     """Shared extraction for the ANCHOR-pinned affine family (`_anchored_sum_system`/`_anchored_single_system`):
     builds the same relation graph as `_affine_system`, but pins the free pivot from a bare ABSOLUTE value (an
     "anchor", e.g. "Cecil has $600") instead of a stated combined total. Returns (coeff, pivot) where
@@ -7266,7 +7385,19 @@ def _anchored_affine_coeffs(premises: list, question: str):
     anchor premise has exactly one value) and a relation's OFFSET value (when c≠0, matched by magnitude) are
     checked — an INCIDENTAL value elsewhere in a relation clause ("half as many pages as Lucy IN 1 HOUR", a
     rate's constant duration, never itself part of the arithmetic) must NOT count, or it wrongly declines a
-    correct pure-ratio system (a regression this exact fix introduced and then had to narrow)."""
+    correct pure-ratio system (a regression this exact fix introduced and then had to narrow).
+
+    Returns an `_AnchoredCoeffs` on success. `rps` is the list of Readings actually classified — the
+    SHARED `readings_prem` (same Unit objects `_solve_inner` holds, so a caller can `_bind_pattern` them and
+    they'll be seen by the rest of the pipeline) when this call's own kin-apposition/conjunct-split
+    preprocessing was a no-op for these premises, else a fresh internal re-`analyze()` (this function does its
+    own text rewriting before classifying — when it fires, the shared Reading objects no longer correspond
+    1:1 to what got classified, so reusing them would mark the WRONG units; a caller can check `rps is
+    readings_prem` to know which case it got). `origin` maps each entity key in `coeff` to the index (into
+    `rps`) of the premise that introduced it — a caller attributing derived facts back to `facts_of[i]` needs
+    this, and it is only meaningful when `rps is readings_prem` (a fresh re-`analyze()`'s indices don't line
+    up with the caller's own premise list)."""
+    _orig_premises = list(premises)
     # "older sister"/"younger brother" are KINSHIP descriptors, not an age computation — strip them before
     # the age check so a NON-age problem (shoe size, height) that merely names an older/younger sibling isn't
     # blanket-declined by the age guard ("Jasmine and her OLDER SISTER Alexa … combined shoe size?" → 21). A
@@ -7314,11 +7445,12 @@ def _anchored_affine_coeffs(premises: list, question: str):
             #                                                         A FRACTION "times more" ("2/5 times
             #                                                         more") is UNAMBIGUOUS (= 1±F) and is
             #                                                         read by `_fraction_relation` — allow it.
-    rels, anchors, measures = {}, {}, set()
-    rps = [analyze(p) for p in premises]
+    rels, anchors, measures, origin = {}, {}, set(), {}
+    rps = readings_prem if (readings_prem is not None and premises == _orig_premises) \
+        else [analyze(p) for p in premises]
     cast_n = _cast_size(rps)               # for the SET-SIZE-cardinal skip below
     last_entity = None                     # nearest antecedent for the elided-standard ratio
-    for p, rp in zip(premises, rps):
+    for _i, (p, rp) in enumerate(zip(premises, rps)):
         two_names = _name_count(rp) == 2
         # SCENE-SETTING TEMPORAL ADJUNCT (#315): a premise with NO entity and whose only number is a
         # DURATION with no money ("After working out for 3 hours, …") cannot be part of a money/count value
@@ -7390,8 +7522,22 @@ def _anchored_affine_coeffs(premises: list, question: str):
                 if std_e in rels:                                  # a relation for the OTHER entity, like
                     return None                                     # `_affine_system`
                 rels[std_e] = (1.0 / k, subj_e, -c / k)
+                _defined, _mentioned = std_e, subj_e
             else:
                 rels[subj_e] = (k, std_e, c)
+                _defined, _mentioned = subj_e, std_e
+            # PRIMARY vs SECONDARY origin (must be order-independent — a chain's premises can classify in
+            # ANY order): `_defined` is the entity this premise's `rels[...]` entry is FOR (whichever key
+            # was just written above — the one `coeff` will later derive FROM this relation) — its true
+            # defining clause is HERE, so this unconditionally OVERWRITES any earlier fallback guess for it
+            # (a prior premise may have only MENTIONED it as the other side of a different relation). The
+            # OTHER entity this clause mentions (`_mentioned`) gets a fallback via setdefault ONLY — it must
+            # NOT clobber a stronger assignment `_mentioned` earns from its OWN defining premise, wherever
+            # that is in iteration order (GUARD 4 needs every value/multiplier-bearing premise to have SOME
+            # fact land in `facts_of[i]`; misattributing an entity's fact to the wrong premise starves the
+            # true premise and a real regression follows — see the Bill/Harry/Sue 720 case this fixed).
+            origin[_defined] = _i
+            origin.setdefault(_mentioned, _i)
             if not elided:                    # COORDINATED elided clauses share ONE standard ("her
                 last_entity = subj_e          # brother has thrice as much WHILE her sister has half
             #                                   as much" — both elide "as Joanna's"); an elliptically
@@ -7402,6 +7548,8 @@ def _anchored_affine_coeffs(premises: list, question: str):
             if e in anchors:
                 return None
             anchors[e] = v
+            origin[e] = _i    # an anchor is always PRIMARY (it's the entity's own stated value) — never a
+            #                   fallback a mere relation-mention should be allowed to keep instead
             last_entity = e
             vals = [u for u in rp.units if "value" in u.features.get("senses", [])
                     and u.features.get("value") is not None]
@@ -7416,6 +7564,7 @@ def _anchored_affine_coeffs(premises: list, question: str):
         return None
     entities = set(rels) | {std for _k, std, _c in rels.values()}
     anchor_e, anchor_v = next(iter(anchors.items()))
+    unified = False
     if anchor_e not in entities:
         # NEAR-NAME UNIFICATION (#215): GSM8K itself misspells names between clauses
         # ("Jefferey caught twice…" vs "If Jeffery caught 60") — unify the anchor with a
@@ -7425,6 +7574,7 @@ def _anchored_affine_coeffs(premises: list, question: str):
         if len(near) != 1:
             return None
         anchor_e = near[0]
+        unified = True
     free = [e for e in entities if e not in rels]                  # the pivot: the one entity that is no
     if len(free) != 1:                                             # relation's subject (may differ from the
         return None                                                # anchor's own entity)
@@ -7442,10 +7592,10 @@ def _anchored_affine_coeffs(premises: list, question: str):
     # anchor_v = A_anchor·pivot + B_anchor  ⇒  pivot = (anchor_v − B_anchor)/A_anchor (identity when the
     # anchor IS the free pivot: A=1, B=0, pivot=anchor_v directly — no division, as before).
     pivot = _compute(f"({_num(anchor_v)} - ({_num(b_anc)})) / {_num(a_anc)}")
-    return coeff, pivot
+    return _AnchoredCoeffs(coeff, pivot, rps, origin, measures, rels, free[0], unified)
 
 
-def _anchored_sum_system(premises: list, question: str):
+def _anchored_sum_system(premises: list, question: str, readings_prem: list = None):
     """The ANCHORED-SUM twin of `_affine_system`: instead of a COMBINED TOTAL pinning the pivot, one entity
     has a stated ABSOLUTE value (an "anchor") and NO total is given — the question instead asks for the SUM
     of every entity, OR of SPECIFIC named entities if the question names 2+ of them directly ("how many
@@ -7458,7 +7608,18 @@ def _anchored_sum_system(premises: list, question: str):
     solver's shape, not theirs. Delegates the relation/anchor extraction to `_anchored_affine_coeffs` (shared
     with `_anchored_single_system`); adds its OWN sum-cue gate and a "dozen"-measure decline (the anchor's
     "6 dozen" already converts to raw units internally, so a "how many DOZEN" question needs a ÷12 we don't
-    do)."""
+    do).
+
+    PILOT for the "emit facts, not a final answer" migration: when `_anchored_affine_coeffs` was able to
+    classify against the SHARED `readings_prem` (its own kin-apposition/conjunct-split preprocessing was a
+    no-op for these premises — the common case), this returns a `SystemResult` instead of a scalar — one
+    `Quantity` fact per entity (the affine-propagation algorithm's per-entity value, A·pivot+B, now a
+    reusable fact) attributed back to the premise that introduced it, plus the matched Units bound via
+    `_bind_pattern`. Which entities the question actually wants summed (a named subset vs every entity) is
+    then resolved GENERICALLY by `answer()`'s combined_q handling, not by this solver — see the
+    "NAMED-SUBSET COMBINED ASK" branch there. When the preprocessing DID rewrite the premises, the shared
+    Reading objects don't line up with what got classified, so this falls back to the pre-migration scalar
+    contract (computing the sum here directly) rather than risk a mis-attributed fact."""
     if not (any(w in question.lower() for w in ("altogether", "in all", " total", "combined", "in total",
                                                 " together"))
             or re.search(r"\bfor all\b|\ball (?:two|three|four|five|of them)\b", question.lower())):
@@ -7474,28 +7635,105 @@ def _anchored_sum_system(premises: list, question: str):
     asked_measure = _queried_measure(question)
     if asked_measure is not None and "dozen" in asked_measure[1]:
         return None
-    got = _anchored_affine_coeffs(premises, question)
+    got = _anchored_affine_coeffs(premises, question, readings_prem)
     if got is None:
         return None
-    coeff, pivot = got
-    # a comma/"and"-joined name list ("Carl and Cal") merges into ONE unit spanning multiple words — split
-    # back into individual entity keys by word, skipping "and" (same gotcha as `_residual_sum_system`).
-    qunits = analyze(question).units
-    named = [_key(w.surface) for u in qunits if "name" in u.features.get("senses", [])
-             for w in u.words if _key(w.surface) != "and"]
-    # ALSO count a capitalized question word that IS a system entity but was mis-tagged as a common noun
-    # ("Bill" → the money-noun sense, "Rose" → the flower) — else "how many do Bill and Harry have combined?"
-    # sees only one name, skips the subset, and wrongly sums ALL (Bill/Harry/Sue 720 ≠ 672).
-    cap_entities = [_key(w.surface) for u in qunits for w in u.words
-                    if w.surface[:1].isupper() and _key(w.surface) in coeff and _key(w.surface) not in named]
-    qnames = named + cap_entities
-    if len(qnames) >= 2:
-        if any(e not in coeff for e in qnames):
-            return None                # a named entity outside the system — not this solver's shape
-        summed = {e: coeff[e] for e in qnames}
+    coeff, pivot = got.coeff, got.pivot
+    # `answer()`'s combined_q resolution (the SAFE case's downstream consumer) lives in the "how
+    # many/how much" interrogative dispatch — a "What is the total…they all have?" phrasing instead
+    # carries a `wh_value` sense and is handled by an entirely different, not-yet-taught branch there.
+    # Require an actual interrogative-sensed question before trusting the fall-through; anything else
+    # (rarer, but this solver's own precondition is looser than what answer() currently resolves) takes
+    # the legacy scalar path below, same as before this solver was migrated.
+    _has_interrogative = any("interrogative" in u.features.get("senses", []) for u in analyze(question).units)
+    # a STRAY name in the question — one that ISN'T one of this system's own entities ("...did Mrs. JANE
+    # give to the boys in TOTAL?" — Jane is the payer, not a summed holder) — is safe for the LEGACY path
+    # below to shrug off (it only ever looks at `coeff`, a system tightly scoped to just this solver's own
+    # entities) but NOT safe to hand to `answer()`'s generic combined_q resolution, whose `context` spans
+    # the WHOLE problem (possibly many other entities/measures) — there, "does this name matter" can't be
+    # told apart from "is this a real subset ask" as cleanly, and relaxing that gate to cope reopened
+    # dormant bugs in unrelated problem shapes (a real regression this narrower check avoids re-triggering).
+    _stray_name = any(_key(w.surface) not in coeff for u in analyze(question).units
+                      if "name" in u.features.get("senses", []) for w in u.words if _key(w.surface) != "and")
+    if readings_prem is None or got.rps is not readings_prem or not _has_interrogative or got.unified \
+            or _stray_name:
+        # UNSAFE for fact-attribution (see docstring) — legacy scalar path, byte-for-byte the pre-migration
+        # behavior: resolve the asked subset (named entities, or every entity) and sum it here directly.
+        # `got.unified`: a NEAR-NAME TYPO unification (#215) means `origin`'s attribution for the unified
+        # entity only reflects whichever spelling's premise got processed FIRST, not necessarily the one
+        # that carries its stated VALUE — the anchor premise's own raw number could be left unattributed,
+        # tripping GUARD 4 once this falls through (a real regression this guard caught: Jefferey's $60
+        # counted zero or twice depending on attribution order). Narrow enough to just decline the new path.
+        qunits = analyze(question).units
+        named = [_key(w.surface) for u in qunits if "name" in u.features.get("senses", [])
+                 for w in u.words if _key(w.surface) != "and"]
+        cap_entities = [_key(w.surface) for u in qunits for w in u.words
+                        if w.surface[:1].isupper() and _key(w.surface) in coeff and _key(w.surface) not in named]
+        qnames = named + cap_entities
+        if len(qnames) >= 2:
+            if any(e not in coeff for e in qnames):
+                return None             # a named entity outside the system — not this solver's shape
+            summed = {e: coeff[e] for e in qnames}
+        else:
+            summed = coeff              # no specific names ("how much do THEY have altogether") — sum all
+        return _compute(" + ".join(f"({_num(a)} * {_num(pivot)} + ({_num(b)}))" for a, b in summed.values()))
+    # SAFE case: emit one Quantity fact per entity instead of computing the sum here. Compute each entity's
+    # value HOP-BY-HOP over the raw relation graph (`got.rels`), not from the flattened (A,B) coefficients —
+    # a flattened `_compute("(12.0 * 48 + (0.0))")` never mentions the raw "6"/"2" factors that produced 12,
+    # so GUARD 14 ("was every stated multiplier's evidence used?") would see them as dropped and decline once
+    # this falls through to it. Each hop's OWN `_compute()` call contains its own raw factor, exactly like the
+    # general fold's other chain extractors — the algorithm becomes an audit-visible derivation, not a single
+    # opaque final expression.
+    # `got.measures` (read directly off the relation/anchor's own dollar/count values, via
+    # `_anchored_affine_coeffs`) is the PRIMARY source — reliable because it comes from the actual data, not
+    # the question's grammar. But it's attribute-LOSSY (only the head noun is kept, e.g. "baby" — never
+    # "beanie baby"), so a caller matching against `answer()`'s `query` (which DOES carry attributes, "how
+    # many BEANIE babies" → `('baby', {'beanie'})`) needs enrichment: `_queried_measure(question)` gives the
+    # SAME attribute-carrying descriptor `query` will resolve to, and can be trusted to REFINE (not replace)
+    # `got.measures`'s head — but ONLY when the two heads agree. They can genuinely disagree: a "how much
+    # will X and Y MAKE combined" money-ask has NO explicit measure noun, so `_queried_measure` (a plain
+    # `queries→collection` walk) latches onto the verb "make" itself, while `got.measures` correctly read
+    # "money" off the dollar values — and `answer()`'s OWN `query` resolution has SEPARATE special-casing
+    # for exactly this "how much + verb" elision (mapping the verb to MONEY via `RESULT_MEASURE`) that
+    # `_queried_measure` doesn't replicate, so trusting `_queried_measure` unconditionally here would silently
+    # mismatch what `query` actually becomes downstream (a real regression this fixed). `got.measures` empty
+    # (a relation/anchor whose own noun was elided, "...altogether if Kristen has 12?") falls through to
+    # `_queried_measure` alone; "count" is the last resort for a genuinely bare, unrecoverable number.
+    if got.measures:
+        _head = next(iter(got.measures))
+        _qm = _queried_measure(question)
+        measure = _qm if (_qm is not None and _qm[0] == _head) else (_head, frozenset())
     else:
-        summed = coeff                 # no specific names (e.g. "how much do THEY have altogether") — sum all
-    return _compute(" + ".join(f"({_num(a)} * {_num(pivot)} + ({_num(b)}))" for a, b in summed.values()))
+        measure = _queried_measure(question) or ("count", frozenset())
+    values = {got.free: pivot}
+    progress = True
+    while progress:
+        progress = False
+        for e, (k, std, c) in got.rels.items():
+            if std in values and e not in values:
+                values[e] = _compute(f"{_num(k)} * ({_num(values[std])}) + ({_num(c)})")
+                progress = True
+    facts_by_premise = {}
+    matched = []
+    for e in coeff:
+        i = got.origin.get(e)
+        if i is None or e not in values:
+            continue                    # shouldn't happen (every coeff entity has an origin premise and a
+            #                             hop-walk value), but a defensive skip beats a mis-attributed fact
+        facts_by_premise.setdefault(i, []).append(Quantity(e, measure, values[e]))
+    # EVERY premise this solver classified must land in `facts_of` (even with an EMPTY fact list) — not
+    # just the ones that got an entity's Quantity fact attributed. Otherwise a premise that is ALSO a
+    # perfectly ordinary declarative sentence the general fold can parse on its own ("If Jeffery caught 60
+    # fish" — ordinary "X caught N fish", ambiguated only by being wrapped in "If") stays `facts_of[i] is
+    # None`, so the first-pass `learn()` loop re-extracts it independently — a SECOND, duplicate Quantity
+    # fact for the same entity that inflates the combined_q sum (a real regression this fixed: 160 vs the
+    # correct 100, Jefferey's $60 counted twice under two near-name-typo spellings of the same entity).
+    for i in range(len(premises)):
+        facts_by_premise.setdefault(i, [])
+    for i, fs in facts_by_premise.items():
+        if fs:
+            matched.extend(got.rps[i].units)
+    return SystemResult(facts_by_premise, matched)
 
 
 def _anchored_single_system(premises: list, question: str):
@@ -7523,7 +7761,7 @@ def _anchored_single_system(premises: list, question: str):
     got = _anchored_affine_coeffs(premises, question)
     if got is None:
         return None
-    coeff, pivot = got
+    coeff, pivot = got.coeff, got.pivot
     if asked not in coeff:
         return None
     a, b = coeff[asked]
@@ -7549,7 +7787,7 @@ def _anchored_difference_system(premises: list, question: str):
     got = _anchored_affine_coeffs(premises, question)
     if got is None:
         return None
-    coeff, pivot = got
+    coeff, pivot = got.coeff, got.pivot
     if e1 not in coeff or e2 not in coeff:
         return None
     a1, b1 = coeff[e1]
@@ -7578,7 +7816,7 @@ def _anchored_average_system(premises: list, question: str):
     got = _anchored_affine_coeffs(premises, question)
     if got is None:
         return None
-    coeff, pivot = got
+    coeff, pivot = got.coeff, got.pivot
     n = len(coeff)
     q_ints = {int(u.features["value"]) for u in analyze(question).units
               if "value" in u.features.get("senses", []) and float(u.features["value"]).is_integer()}
@@ -7636,7 +7874,7 @@ def _residual_sum_system(premises: list, question: str):
     rest = [p for p in premises if p is not tot_clause]
     got = _anchored_affine_coeffs(rest, question)
     if got is not None:
-        coeff, pivot = got
+        coeff, pivot = got.coeff, got.pivot
         covered = [e for e in tot_names if e in coeff]
         residual = [e for e in tot_names if e not in coeff]
         if len(residual) != 1 or residual[0] != asked:
@@ -24687,285 +24925,292 @@ def _age_equations_system(premises: list, question: str):
 # see `reading_diff --collisions`.
 #
 # EARLY systems run BEFORE the read-synthesize fixpoint: their relations DEFER to no fact, so a
-# stated factor/offset/total would trip the unused-given GUARD 3 if left to the general fold. All
-# share the uniform signature f(premises, question); each re-analyzes its own premises and is
+# stated factor/offset/total would trip the unused-given GUARD 3 if left to the general fold. Each
+# is registered as a thin adapter over the uniform call `(premises, question, readings_prem)` —
+# mirrors `_LATE_SYSTEMS`' adapter convention below, so a solver can be migrated to consume the
+# SHARED `readings_prem` (the same Reading objects the rest of solve() sees, needed if it wants to
+# mark units via `_bind_pattern`) without re-touching every other entry. An unmigrated solver's
+# adapter just ignores R and calls it the old way — legacy solvers are unaffected; a MIGRATED
+# solver may instead return a `SystemResult` (facts, not a scalar — see `_solve_inner`'s dispatch)
+# to fold into `context` and fall through to the normal fixpoint/answer() pipeline for a second
+# pass, rather than short-circuiting. Each solver re-analyzes/consumes its own premises and is
 # tightly gated (pure context, every premise number consumed). To add one, append it here in
 # priority order — do NOT re-inline a branch in solve().
 _EARLY_SYSTEMS = [
     # N-UNKNOWN SUM+RATIO-CHAIN: "Amy/Jeremy/Chris combined 132 → Jeremy 66" (subsumes 2-entity Jean/Jane).
-    ("sum_ratio", _sum_ratio_system),
+    ("sum_ratio", lambda P, Q, R, _fn=_sum_ratio_system: _fn(P, Q)),
     # OFFSET SUM-system (affine twin): "Justin + Sabrina 50; Justin 8 more than twice Sabrina → Sabrina 14."
-    ("offset_sum", _offset_sum_system),
+    ("offset_sum", lambda P, Q, R, _fn=_offset_sum_system: _fn(P, Q)),
     # PURE OFFSET SUM (no factor): "Anais 30 more toys than Kamari; 160 altogether → Kamari 65."
-    ("offset_sum_pure", _offset_sum_pure),
+    ("offset_sum_pure", lambda P, Q, R, _fn=_offset_sum_pure: _fn(P, Q)),
     # MIXED AFFINE (N entities, ratio+offset mixed, +total): "Anna=3·Mandy & 2 fewer than Amanda; 142 → Mandy 20."
-    ("affine", _affine_system),
+    ("affine", lambda P, Q, R, _fn=_affine_system: _fn(P, Q)),
     # COORDINATE/SUBTYPE-NOUN AFFINE (common-noun entities): "twice as many pigs as cows, 4 more cows than goats; 56 animals → goats 11."
-    ("noun_affine", _noun_affine_system),
+    ("noun_affine", lambda P, Q, R, _fn=_noun_affine_system: _fn(P, Q)),
     # COORDINATE-NOUN ANCHORED-SUM (no total, one noun anchor, category-sum ask): "Hannah's family: 10 pigs … how many animals?" → 50.
-    ("noun_anchored_sum", _noun_anchored_sum_system),
+    ("noun_anchored_sum", lambda P, Q, R, _fn=_noun_anchored_sum_system: _fn(P, Q)),
     # SUBTYPE-PARTITION (adjective subtypes of one head noun, total in same noun, 'the rest' ask): "Ryan 40 balls … green balls?" → 7.
-    ("noun_residual_sum", _noun_residual_sum_system),
+    ("noun_residual_sum", lambda P, Q, R, _fn=_noun_residual_sum_system: _fn(P, Q)),
     # CHAIN-COUNT × UNIT-PRICE (money-spend total + per-item price over an anchored count chain): "Robert 4 pens, Julia 3×, Dorothy ½×; one pen $1.50; total spent?" → 22×1.50 = 33. BEFORE anchored_sum (which would commit the bare count 22).
-    ("chain_count_price", _chain_count_price),
+    ("chain_count_price", lambda P, Q, R, _fn=_chain_count_price: _fn(P, Q)),
     # FRACTION-OF-BASE REMAINDER (single pool − Σ(fraction×pool | literal)): "148 peanuts; ate ¼ of the peanuts; ate 29; how many remain?" → 148−37−29 = 82. BEFORE the depletion fold (which drops the fraction → 119).
-    ("fraction_remainder", _fraction_remainder_system),
+    ("fraction_remainder", lambda P, Q, R, _fn=_fraction_remainder_system: _fn(P, Q)),
     # SUBTYPE FRACTION REMAINDER (multi-pool twin — each fraction binds to ITS OWN subtype pool): "26 blue shirts and 36 brown shirts; gives away half of the blue and a third of the brown; how many left?" → 62−25 = 37. The single-pool twin DEFERS ≥2-qualified-pool shapes here (its ≥2-subtype gate), so the two never both claim.
-    ("subtype_fraction_remainder", _subtype_fraction_remainder_system),
+    ("subtype_fraction_remainder", lambda P, Q, R, _fn=_subtype_fraction_remainder_system: _fn(P, Q)),
     # FRACTION DEPLETION CHAIN (sequential remainder-anchored steps — the single-pool twin EXCLUDES remaining/rest): "$40; spends half; a quarter of what's left; left?" → 40·½·¾ = 15.
-    ("fraction_depletion_chain", _fraction_depletion_chain_system),
+    ("fraction_depletion_chain", lambda P, Q, R, _fn=_fraction_depletion_chain_system: _fn(P, Q)),
     # FRACTION PARTITION + REST (copula-labeled fractions of one total, ask the unlabeled rest): "72 total; half laptops, one-third netbooks; desktops?" → 12.
-    ("fraction_partition_rest", _fraction_partition_rest_system),
+    ("fraction_partition_rest", lambda P, Q, R, _fn=_fraction_partition_rest_system: _fn(P, Q)),
     # POOL − LITERAL − K×LITERAL, half-of-remaining ask: "120 pages; 12 + twice that; half the rest?" → 42.
-    ("pool_literal_relational_remaining", _pool_literal_relational_remaining_system),
+    ("pool_literal_relational_remaining", lambda P, Q, R, _fn=_pool_literal_relational_remaining_system: _fn(P, Q)),
     # BACKWARD FRACTION CHAIN: "lost ⅓, spent ¼ of the rest, $15 left; at first?" → 15/(⅔·¾) = 30.
-    ("backward_fraction_chain", _backward_fraction_chain_system),
+    ("backward_fraction_chain", lambda P, Q, R, _fn=_backward_fraction_chain_system: _fn(P, Q)),
     # SIGNED MIXED CHAIN: pool + literal/k×lit/fraction-of-current steps, left/eat asks.
-    ("signed_mixed_chain", _signed_mixed_chain_system),
+    ("signed_mixed_chain", lambda P, Q, R, _fn=_signed_mixed_chain_system: _fn(P, Q)),
     # TOTAL-MINUS-PRODUCT: stated total/budget/bill vs Σ(count×each-price), seven asks.
-    ("total_minus_product", _total_minus_product_system),
+    ("total_minus_product", lambda P, Q, R, _fn=_total_minus_product_system: _fn(P, Q)),
     # CALENDAR AGE: year-anchored age chains (born-in-year / in-YEAR-is-N / birth-year asks).
-    ("calendar_age", _calendar_age_system),
+    ("calendar_age", lambda P, Q, R, _fn=_calendar_age_system: _fn(P, Q)),
     # GROUPED PARTITION: cast split into per-carrier groups → Σ(group×per) (tables 91).
-    ("grouped_partition", _grouped_partition_system),
+    ("grouped_partition", lambda P, Q, R, _fn=_grouped_partition_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES D: thirty-seven branches with wave-25 vocabulary (#235).
     # VOCAB+STRUCTURE SINGLES U: forty-eight branches with wave-44 vocabulary (#257).
-    ("vocab_singles_u", _vocab_singles_u_system),
+    ("vocab_singles_u", lambda P, Q, R, _fn=_vocab_singles_u_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES T: twenty-seven branches with wave-43 vocabulary (#256).
-    ("vocab_singles_t", _vocab_singles_t_system),
+    ("vocab_singles_t", lambda P, Q, R, _fn=_vocab_singles_t_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES S: twenty-nine branches with wave-42 vocabulary (#255).
-    ("vocab_singles_s", _vocab_singles_s_system),
+    ("vocab_singles_s", lambda P, Q, R, _fn=_vocab_singles_s_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES R: thirty-three branches with wave-41 vocabulary (#254).
-    ("vocab_singles_r", _vocab_singles_r_system),
+    ("vocab_singles_r", lambda P, Q, R, _fn=_vocab_singles_r_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES Q: fifty-seven branches with wave-40 vocabulary (#253).
-    ("vocab_singles_q", _vocab_singles_q_system),
+    ("vocab_singles_q", lambda P, Q, R, _fn=_vocab_singles_q_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES P: fifty branches with wave-39 vocabulary (#252).
-    ("vocab_singles_p", _vocab_singles_p_system),
+    ("vocab_singles_p", lambda P, Q, R, _fn=_vocab_singles_p_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES O: fifty-one branches with wave-38 vocabulary (#251).
-    ("vocab_singles_o", _vocab_singles_o_system),
+    ("vocab_singles_o", lambda P, Q, R, _fn=_vocab_singles_o_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES N: forty-five branches with wave-37 vocabulary (#250).
-    ("vocab_singles_n", _vocab_singles_n_system),
+    ("vocab_singles_n", lambda P, Q, R, _fn=_vocab_singles_n_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES M: forty-eight branches with wave-36 vocabulary (#249).
-    ("vocab_singles_m", _vocab_singles_m_system),
+    ("vocab_singles_m", lambda P, Q, R, _fn=_vocab_singles_m_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES L: twenty-six branches with wave-35 vocabulary (#246).
-    ("vocab_singles_l", _vocab_singles_l_system),
+    ("vocab_singles_l", lambda P, Q, R, _fn=_vocab_singles_l_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES K: forty-three branches with wave-34 vocabulary (#244).
-    ("vocab_singles_k", _vocab_singles_k_system),
+    ("vocab_singles_k", lambda P, Q, R, _fn=_vocab_singles_k_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES J: forty-four branches with wave-33 vocabulary (#243).
-    ("vocab_singles_j", _vocab_singles_j_system),
+    ("vocab_singles_j", lambda P, Q, R, _fn=_vocab_singles_j_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES I: forty-six branches with wave-32 vocabulary (#242).
-    ("vocab_singles_i", _vocab_singles_i_system),
+    ("vocab_singles_i", lambda P, Q, R, _fn=_vocab_singles_i_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES H: forty-five branches with wave-31 vocabulary (#241).
-    ("vocab_singles_h", _vocab_singles_h_system),
+    ("vocab_singles_h", lambda P, Q, R, _fn=_vocab_singles_h_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES G: forty-four branches with wave-30 vocabulary (#240).
-    ("vocab_singles_g", _vocab_singles_g_system),
+    ("vocab_singles_g", lambda P, Q, R, _fn=_vocab_singles_g_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES F: forty-two branches with wave-29 vocabulary (#239).
-    ("vocab_singles_f", _vocab_singles_f_system),
-    ("vocab_singles_e", _vocab_singles_e_system),
-    ("vocab_singles_d", _vocab_singles_d_system),
+    ("vocab_singles_f", lambda P, Q, R, _fn=_vocab_singles_f_system: _fn(P, Q)),
+    ("vocab_singles_e", lambda P, Q, R, _fn=_vocab_singles_e_system: _fn(P, Q)),
+    ("vocab_singles_d", lambda P, Q, R, _fn=_vocab_singles_d_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES C: thirty-nine branches with wave-24 vocabulary (#234).
-    ("vocab_singles_c", _vocab_singles_c_system),
+    ("vocab_singles_c", lambda P, Q, R, _fn=_vocab_singles_c_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES B: thirty branches with wave-23 vocabulary (#233).
-    ("vocab_singles_b", _vocab_singles_b_system),
+    ("vocab_singles_b", lambda P, Q, R, _fn=_vocab_singles_b_system: _fn(P, Q)),
     # PARTITION CHAIN: a group split into disjoint parts, resolved by fact SATURATION (#312) — the general
     # reformulation of the two-stage fraction chain (facts + fixpoint + question-obligation, not a formula).
-    ("partition_chain", _partition_chain_system),
+    ("partition_chain", lambda P, Q, R, _fn=_partition_chain_system: _fn(P, Q)),
     # BACKWARD $-REMAINDER: the SAME partition saturation run in reverse (#313) — a known leaf ("left with
     # $300") solves for the unknown whole ("how much was the prize money?" → 1000).
-    ("money_remainder", _money_remainder_system),
+    ("money_remainder", lambda P, Q, R, _fn=_money_remainder_system: _fn(P, Q)),
     # RATIO PARTITION: a ratio a:b is two fractional parts a/(a+b), b/(a+b) of the same parent (#314) — same
     # partition substrate; "19 marbles, 5 yellow, remainder split 3:4 blue:red, how many more red than yellow" → 3.
-    ("ratio_partition", _ratio_partition_system),
+    ("ratio_partition", lambda P, Q, R, _fn=_ratio_partition_system: _fn(P, Q)),
     # CATEGORICAL SINGLES: word-agnostic long-tail branches (item noun via _W/_cat, coeff via _scale).
-    ("cat_singles_a", _cat_singles_a_system),
+    ("cat_singles_a", lambda P, Q, R, _fn=_cat_singles_a_system: _fn(P, Q)),
     # FRACTION SPLIT × PART-COUNT: "⅔ of animals are cats, rest dogs; 300 animals; legs of dogs?" → 400.
     # Also called directly from GUARD 12's exception (legs-asks are pre-declined before the early systems).
-    ("fraction_split_part_count", _fraction_split_part_count),
+    ("fraction_split_part_count", lambda P, Q, R, _fn=_fraction_split_part_count: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES: twenty-eight branches with wave-22 vocabulary (#232).
-    ("vocab_singles", _vocab_singles_system),
+    ("vocab_singles", lambda P, Q, R, _fn=_vocab_singles_system: _fn(P, Q)),
     # MIXED SINGLES C: thirty-nine residual branches (#231).
-    ("mixed_singles_c", _mixed_singles_c_system),
+    ("mixed_singles_c", lambda P, Q, R, _fn=_mixed_singles_c_system: _fn(P, Q)),
     # MIXED SINGLES B: thirty-three more residual branches (#230).
-    ("mixed_singles_b", _mixed_singles_b_system),
+    ("mixed_singles_b", lambda P, Q, R, _fn=_mixed_singles_b_system: _fn(P, Q)),
     # MIXED SINGLES: thirty residual branches (#229).
-    ("mixed_singles", _mixed_singles_system),
+    ("mixed_singles", lambda P, Q, R, _fn=_mixed_singles_system: _fn(P, Q)),
     # MULTIPLICATIVE SINGLES: thirty-three chain branches (#228).
-    ("mult_singles", _mult_singles_system),
+    ("mult_singles", lambda P, Q, R, _fn=_mult_singles_system: _fn(P, Q)),
     # MONEY SINGLES: twenty-five money branches (#227).
-    ("money_singles", _money_singles_system),
+    ("money_singles", lambda P, Q, R, _fn=_money_singles_system: _fn(P, Q)),
     # RATE/PRODUCT SINGLES: sixteen unit-rate branches (#226).
-    ("rate_singles", _rate_singles_system),
+    ("rate_singles", lambda P, Q, R, _fn=_rate_singles_system: _fn(P, Q)),
     # PERCENT-OF-MONEY tails: increased bill / spent-percent backward / pay-fraction product.
-    ("percent_money_tails", _percent_money_tails_system),
+    ("percent_money_tails", lambda P, Q, R, _fn=_percent_money_tails_system: _fn(P, Q)),
     # ENUMERATED-SUM COMPARE: bill denominations / team scores, "how much more" (Oliver 45).
-    ("enum_sum_compare", _enum_sum_compare_system),
+    ("enum_sum_compare", lambda P, Q, R, _fn=_enum_sum_compare_system: _fn(P, Q)),
     # RATE × HOURS × DAYS: "5 mph, 2h every morning, five days?" → 50 (Mira).
-    ("rate_hours_days", _rate_hours_days_system),
+    ("rate_hours_days", lambda P, Q, R, _fn=_rate_hours_days_system: _fn(P, Q)),
     # PRODUCT-SUM + CHANGE: "5 at $6, 10 at $14; paid $200; change?" → 30.
-    ("product_sum_change", _product_sum_change_system),
+    ("product_sum_change", lambda P, Q, R, _fn=_product_sum_change_system: _fn(P, Q)),
     # TARGET PURCHASE GAP: "buy 8 books, $5 each, has $13; need to save?" → 27.
-    ("target_purchase_gap", _target_purchase_gap_system),
+    ("target_purchase_gap", lambda P, Q, R, _fn=_target_purchase_gap_system: _fn(P, Q)),
     # PRODUCT-SUM SPLIT (two-name cast): "6 pairs $3 each + 18 shirts $2; each earns?" → 27.
-    ("product_sum_split", _product_sum_split_system),
+    ("product_sum_split", lambda P, Q, R, _fn=_product_sum_split_system: _fn(P, Q)),
     # PRODUCT-SUM plain total (no wrapper): "220 cookies at $1 + 70 at $2; how much made?" → 360.
-    ("multi_item_price", _multi_item_price_system),
+    ("multi_item_price", lambda P, Q, R, _fn=_multi_item_price_system: _fn(P, Q)),
     # RAISE DIFFERENCE (shared base, two raises): "$30k; 10% vs 15%; how much more?" → 1500.
-    ("raise_difference", _raise_difference_system),
+    ("raise_difference", lambda P, Q, R, _fn=_raise_difference_system: _fn(P, Q)),
     # ASSET VALUE ± P%: "car at $4000 3 years ago; value reduced 30%; current?" → 2800.
-    ("value_change_pct", _value_change_pct_system),
+    ("value_change_pct", lambda P, Q, R, _fn=_value_change_pct_system: _fn(P, Q)),
     # PAIR, SECOND P% MORE: "$22 + one 50% more expensive; both?" → 55.
-    ("pair_second_pct_more", _pair_second_pct_more_system),
+    ("pair_second_pct_more", lambda P, Q, R, _fn=_pair_second_pct_more_system: _fn(P, Q)),
     # FUTURE FRACTION ANCHOR: "half of 80 in 5 years; 3/5 of her now, in 15 years?" → 6.
-    ("future_fraction_anchor", _future_fraction_anchor_system),
+    ("future_fraction_anchor", lambda P, Q, R, _fn=_future_fraction_anchor_system: _fn(P, Q)),
     # VERBAL EQUATION: "take X's age, add 12; 4 less than twice Y's; X is 40?" → 28.
-    ("verbal_equation_age", _verbal_equation_age_system),
+    ("verbal_equation_age", lambda P, Q, R, _fn=_verbal_equation_age_system: _fn(P, Q)),
     # SPLIT POOL, RELATIONAL SECOND PRICE: "of 9 pills, 4 at $1.50, others $5.50 more?" → 41.
-    ("split_price_relational", _split_price_relational_system),
+    ("split_price_relational", lambda P, Q, R, _fn=_split_price_relational_system: _fn(P, Q)),
     # MONTHLY BUY × 12 − SELLBACK: "3 books/month at $20; sells back for $500; lose?" → 220.
-    ("monthly_buy_sellback_loss", _monthly_buy_sellback_loss_system),
+    ("monthly_buy_sellback_loss", lambda P, Q, R, _fn=_monthly_buy_sellback_loss_system: _fn(P, Q)),
     # SAME-PCT BONUS ON A NEW BASE: "$100k+$10k bonus last year; $200k this year?" → 220000.
-    ("same_pct_bonus", _same_pct_bonus_system),
+    ("same_pct_bonus", lambda P, Q, R, _fn=_same_pct_bonus_system: _fn(P, Q)),
     # PERCENT-SCALED PRICE: "new plan 30% more expensive; old was $150?" → 195; + counts → 22.
-    ("percent_price_relational", _percent_price_relational_system),
+    ("percent_price_relational", lambda P, Q, R, _fn=_percent_price_relational_system: _fn(P, Q)),
     # PIECES POOL: containers × per-container slices + ONE op (remain/cost/order/share/revenue).
-    ("pieces_pool", _pieces_pool_system),
+    ("pieces_pool", lambda P, Q, R, _fn=_pieces_pool_system: _fn(P, Q)),
     # SIGNED DAY CHAIN: "65 today; use 18 tomorrow; buy 50 next; in the end?" → 97.
-    ("today_tomorrow_chain", _today_tomorrow_chain_system),
+    ("today_tomorrow_chain", lambda P, Q, R, _fn=_today_tomorrow_chain_system: _fn(P, Q)),
     # NAMED-DAY RELATIONAL CHAIN: literals + k×day refs; diff/total/sell-all asks.
-    ("day_relational_chain", _day_relational_chain_system),
+    ("day_relational_chain", lambda P, Q, R, _fn=_day_relational_chain_system: _fn(P, Q)),
     # WEEKDAY BLOCK + per-weekend-day multipliers: R·5 + k_sat·R + k_sun·R (Lolita 30, Elle 4h).
-    ("weekday_block_relational", _weekday_block_relational_system),
+    ("weekday_block_relational", lambda P, Q, R, _fn=_weekday_block_relational_system: _fn(P, Q)),
     # BATCH SCALING: per-batch ingredient list × batch multiplier (Carla 24; re-enables require).
-    ("batch_scaling", _batch_scaling_system),
+    ("batch_scaling", lambda P, Q, R, _fn=_batch_scaling_system: _fn(P, Q)),
     # MAX-SPEED × DURATION: "50 km/h … what distance during 120 minutes?" → 100.
-    ("max_speed_distance", _max_speed_distance_system),
+    ("max_speed_distance", lambda P, Q, R, _fn=_max_speed_distance_system: _fn(P, Q)),
     # PAIR-SUM RELATIONAL: A=k·B, A+B = S∓N, anchored S (Merill 30).
-    ("pair_sum_relational", _pair_sum_relational_system),
+    ("pair_sum_relational", lambda P, Q, R, _fn=_pair_sum_relational_system: _fn(P, Q)),
     # RELATIONAL GIVE CHAIN: pool + literal/k×prior gives; left/initial/diff/nickels asks.
-    ("give_chain", _give_chain_system),
+    ("give_chain", lambda P, Q, R, _fn=_give_chain_system: _fn(P, Q)),
     # FIRST TWO DAYS + DOUBLE THEIR SUM: "5; another 7; twice the first two days?" → 36.
-    ("first_days_double_total", _first_days_double_total_system),
+    ("first_days_double_total", lambda P, Q, R, _fn=_first_days_double_total_system: _fn(P, Q)),
     # HOURS TO EQUAL EARNINGS: "40h at $12; $15/h; hours to equal?" → 32.
-    ("equal_earnings_hours", _equal_earnings_hours_system),
+    ("equal_earnings_hours", lambda P, Q, R, _fn=_equal_earnings_hours_system: _fn(P, Q)),
     # SAME DISTANCE, NEW SPEED: "4h at 50 mph; at 100 mph instead?" → 2.
-    ("speed_time_inverse", _speed_time_inverse_system),
+    ("speed_time_inverse", lambda P, Q, R, _fn=_speed_time_inverse_system: _fn(P, Q)),
     # ANCHORED-SUM (no total, one bare anchor, sum ask): "Cecil $600 … how much altogether?" → 2800.
-    ("anchored_sum", _anchored_sum_system),
+    ("anchored_sum", lambda P, Q, R: _anchored_sum_system(P, Q, R)),   # MIGRATED — see _anchored_sum_system
     # ANCHORED-SINGLE (bare anchor, single named ask): "Ed weighs 146 … Find Carl's weight." → 220.
-    ("anchored_single", _anchored_single_system),
+    ("anchored_single", lambda P, Q, R, _fn=_anchored_single_system: _fn(P, Q)),
     # ANCHORED-DIFFERENCE (bare anchor, 'how many more X than Y'): "Ann 60 cards … how many more than Anton?" → 30.
-    ("anchored_difference", _anchored_difference_system),
+    ("anchored_difference", lambda P, Q, R, _fn=_anchored_difference_system: _fn(P, Q)),
     # ANCHORED-AVERAGE (bare anchor, 'average X of the N people'): "Rachel 75, 6 less than Jimmy, 15 more than Adam … average of the three?" → 72.
-    ("anchored_average", _anchored_average_system),
+    ("anchored_average", lambda P, Q, R, _fn=_anchored_average_system: _fn(P, Q)),
     # RESIDUAL SUM (stated total names 3+, asked one never related): "Jermaine/Terrence/Emilee $90 … Emilee?" → 25.
-    ("residual_sum", _residual_sum_system),
+    ("residual_sum", lambda P, Q, R, _fn=_residual_sum_system: _fn(P, Q)),
     # TWO-RELATION 2x2 (same pair, no anchor/total): "24 more blue than red; 5 times as many blue as red → red 6".
-    ("two_relation", _two_relation_system),
+    ("two_relation", lambda P, Q, R, _fn=_two_relation_system: _fn(P, Q)),
     # TARGET − CONTRIBUTIONS: "need to collect 100 cans; collected 30, 43; how many more to collect?" → 27.
-    ("target_contributions", _target_contributions_system),
+    ("target_contributions", lambda P, Q, R, _fn=_target_contributions_system: _fn(P, Q)),
     # TOTAL-BETWEEN RESIDUAL: "12 in total between A, B, C; 3 B and 2 A; how many C?" → 12−5 = 7.
-    ("total_between_residual", _total_between_residual_system),
+    ("total_between_residual", lambda P, Q, R, _fn=_total_between_residual_system: _fn(P, Q)),
     # PIECE COUNT ACROSS UNITS: "15 pounds of beef cut into 12-ounce steaks; how many steaks?" → 20.
-    ("piece_count", _piece_count_system),
+    ("piece_count", lambda P, Q, R, _fn=_piece_count_system: _fn(P, Q)),
     # DAILY SHARE: "60+10 sodas, finishes all in 1 week; how many a day?" → 10.
-    ("daily_share", _daily_share_system),
+    ("daily_share", lambda P, Q, R, _fn=_daily_share_system: _fn(P, Q)),
     # HERD RATE × WEEK: "52 cows, each gives 5 liters a day; how many liters in a week?" → 1820.
-    ("herd_rate_week", _herd_rate_week_system),
+    ("herd_rate_week", lambda P, Q, R, _fn=_herd_rate_week_system: _fn(P, Q)),
     # WEEKDAY/WEEKEND SPLIT: "8 episodes a day on weekdays, 3× on weekend days; per week?" → 88.
-    ("weekday_weekend", _weekday_weekend_system),
+    ("weekday_weekend", lambda P, Q, R, _fn=_weekday_weekend_system: _fn(P, Q)),
     # REMAINDER AFTER A RATED STRETCH: "381 pages; already read 149; 20/day for a week; left?" → 92.
-    ("remainder_after_rate", _remainder_after_rate_system),
+    ("remainder_after_rate", lambda P, Q, R, _fn=_remainder_after_rate_system: _fn(P, Q)),
     # YEARS-UNTIL-RATIO: "Beth 18, sister 5; in how many years twice her sister's age?" → 8.
-    ("years_until_ratio", _years_until_ratio_system),
+    ("years_until_ratio", lambda P, Q, R, _fn=_years_until_ratio_system: _fn(P, Q)),
     # INVERSE DISTRIBUTION: "48 cupcakes; give 3 each to his cousins; how many cousins?" → 16.
-    ("inverse_distribution", _inverse_distribution_system),
+    ("inverse_distribution", lambda P, Q, R, _fn=_inverse_distribution_system: _fn(P, Q)),
     # SPLIT-WITH (K+1): "two dozen eggs to split with his three siblings; each person?" → 6.
-    ("split_with", _split_with_system),
+    ("split_with", lambda P, Q, R, _fn=_split_with_system: _fn(P, Q)),
     # WEEKDAY BASE ± DELTAS: "30 min weekdays; +5 Tue, +25 Fri; hours?" → 3.
-    ("weekday_base_delta", _weekday_base_delta_system),
+    ("weekday_base_delta", lambda P, Q, R, _fn=_weekday_base_delta_system: _fn(P, Q)),
     # WEEKDAY-ONLY RATE × WEEKS: "5 miles/day weekdays only; over 3 weeks?" → 75.
-    ("weekday_rate_weeks", _weekday_rate_weeks_system),
+    ("weekday_rate_weeks", lambda P, Q, R, _fn=_weekday_rate_weeks_system: _fn(P, Q)),
     # SALARY → HOURLY: "$576/month; 8h/day 6d/wk?" → 3.
-    ("salary_hourly_rate", _salary_hourly_rate_system),
+    ("salary_hourly_rate", lambda P, Q, R, _fn=_salary_hourly_rate_system: _fn(P, Q)),
     # WEEKLY NEED ÷ PER-PERSON ÷ 7: "7 gal/wk; 2 pints/person; people/day?" → 4.
-    ("weekly_need_per_person_daily", _weekly_need_per_person_daily_system),
+    ("weekly_need_per_person_daily", lambda P, Q, R, _fn=_weekly_need_per_person_daily_system: _fn(P, Q)),
     # PER-SECOND × MIN/DAY × WEEK: "10 L/s; 10 min/day; one week?" → 42000.
-    ("per_second_minutes_week", _per_second_minutes_week_system),
+    ("per_second_minutes_week", lambda P, Q, R, _fn=_per_second_minutes_week_system: _fn(P, Q)),
     # PHASED WEEKS AVERAGE: "1/day 2wk; next 3wk same as first total; next 2wk 3/day" → 10.
-    ("phased_weeks_average", _phased_weeks_average_system),
+    ("phased_weeks_average", lambda P, Q, R, _fn=_phased_weeks_average_system: _fn(P, Q)),
     # PET + CONSUMABLE COST: "$10 puppy; 3wk food; ⅓ cup/day; 3.5-cup bag $2" → 14.
-    ("pet_plus_food_cost", _pet_plus_food_cost_system),
+    ("pet_plus_food_cost", lambda P, Q, R, _fn=_pet_plus_food_cost_system: _fn(P, Q)),
     # PET-FOOD REMAINDER: "3 dogs × ½lb × 2/day; 30 lb bought; left after a week?" → 9.
-    ("pet_food_remainder", _pet_food_remainder_system),
+    ("pet_food_remainder", lambda P, Q, R, _fn=_pet_food_remainder_system: _fn(P, Q)),
     # ORCHARD PACK REVENUE: "10 trees × 12/day; 6-packs $2; after 3 weeks?" → 840.
-    ("orchard_pack_revenue", _orchard_pack_revenue_system),
+    ("orchard_pack_revenue", lambda P, Q, R, _fn=_orchard_pack_revenue_system: _fn(P, Q)),
     # SHARED ITEM COST: "half an apple each with dog daily; ¼lb; $2/lb; 2 weeks?" → 7.
-    ("shared_item_cost", _shared_item_cost_system),
+    ("shared_item_cost", lambda P, Q, R, _fn=_shared_item_cost_system: _fn(P, Q)),
     # EVERY-DAY + HALF SUB-DAYS: "TV 4h/day; games half as long, 3 days/wk?" → 34.
-    ("everyday_plus_half_subdays", _everyday_plus_half_subdays_system),
+    ("everyday_plus_half_subdays", lambda P, Q, R, _fn=_everyday_plus_half_subdays_system: _fn(P, Q)),
     # PAIRED DAILY RATES × TIMES/WEEK: "5×/wk 250 km/day; friend +40; both, week?" → 2700.
-    ("paired_daily_rate_week", _paired_daily_rate_week_system),
+    ("paired_daily_rate_week", lambda P, Q, R, _fn=_paired_daily_rate_week_system: _fn(P, Q)),
     # WEEKDAY PRODUCTION REVENUE: "5 weekdays; 4 cakes/day; $8; 4 weeks?" → 640.
-    ("weekday_production_revenue", _weekday_production_revenue_system),
+    ("weekday_production_revenue", lambda P, Q, R, _fn=_weekday_production_revenue_system: _fn(P, Q)),
     # NAMED-DAY CHAIN + EVEN SPLIT: "Mon 4h, twice Tue; Wed–Fri 3h; total 25; Sat?" → 2.
-    ("named_day_chain_split", _named_day_chain_split_system),
+    ("named_day_chain_split", lambda P, Q, R, _fn=_named_day_chain_split_system: _fn(P, Q)),
     # RATE × (SPAN + CLOCK): "3/hour; Mon–Thu 8h/day; Fri 8am–11am; week?" → 105.
-    ("rate_hours_clock_week", _rate_hours_clock_week_system),
+    ("rate_hours_clock_week", lambda P, Q, R, _fn=_rate_hours_clock_week_system: _fn(P, Q)),
     # ORDINAL-DAY CHAIN RESIDUAL: "500 in a week; day1 50, day2 3×, day3 −50; rest equal?" → 50.
-    ("ordinal_day_chain_residual", _ordinal_day_chain_residual_system),
+    ("ordinal_day_chain_residual", lambda P, Q, R, _fn=_ordinal_day_chain_residual_system: _fn(P, Q)),
     # SALES FUNNEL × WEEK: "50 houses/day; 20% buy; half $50, half $150; 5 days?" → 5000.
-    ("sales_funnel_week", _sales_funnel_week_system),
+    ("sales_funnel_week", lambda P, Q, R, _fn=_sales_funnel_week_system: _fn(P, Q)),
     # WORKWEEK WITH ONE BOOSTED DAY: "avg 40/day, Friday 40% higher, open Mon–Fri" → 216.
-    ("workweek_boost", _workweek_boost_system),
+    ("workweek_boost", lambda P, Q, R, _fn=_workweek_boost_system: _fn(P, Q)),
     # PERCENT-BOOSTED RATE × DURATION: "8 yards/day, +fifty percent; after a week?" → 84.
-    ("boosted_rate_duration", _boosted_rate_duration_system),
+    ("boosted_rate_duration", lambda P, Q, R, _fn=_boosted_rate_duration_system: _fn(P, Q)),
     # DOUBLING-DAYS SUM: "first day 5 minutes, twice the day before, after the 5th day" → 155.
-    ("doubling_days_sum", _doubling_days_sum_system),
+    ("doubling_days_sum", lambda P, Q, R, _fn=_doubling_days_sum_system: _fn(P, Q)),
     # ALTERNATING-DAYS DIFFERENCE: "apple Mon/Wed/Fri, cherry Tue/Thu, 12/day; more apple?" → 12.
-    ("alternating_days_diff", _alternating_days_diff_system),
+    ("alternating_days_diff", lambda P, Q, R, _fn=_alternating_days_diff_system: _fn(P, Q)),
     # DAY-LIST TARGET RESIDUAL: "avg 50/day; 43 Sun … 56 Fri; how many Saturday?" → 350−262 = 88.
-    ("day_list_target", _day_list_target_system),
+    ("day_list_target", lambda P, Q, R, _fn=_day_list_target_system: _fn(P, Q)),
     # HOURS/DAY × DAYS/WEEK × WEEKS: "1 hour a day, 5 days a week, for 8 weeks?" → 40.
-    ("rate_days_weeks", _rate_days_weeks_system),
+    ("rate_days_weeks", lambda P, Q, R, _fn=_rate_days_weeks_system: _fn(P, Q)),
     # WEEKLY TIME + DELTA: "2 hours each day; increase weekly by 4 hours; per week?" → 18.
-    ("weekly_time_plus_delta", _weekly_time_plus_delta_system),
+    ("weekly_time_plus_delta", lambda P, Q, R, _fn=_weekly_time_plus_delta_system: _fn(P, Q)),
     # DAILY RATE DIFFERENCE (mixed sides): "2100 pages in a week vs 200/day; more per day?" → 100.
-    ("daily_rate_difference", _daily_rate_difference_system),
+    ("daily_rate_difference", lambda P, Q, R, _fn=_daily_rate_difference_system: _fn(P, Q)),
     # DISCOUNTED PURCHASE: "2 bags, $6.00 each, 75% off?" → 3; "$200, 25% off, 10% tax?" → 165.
-    ("discounted_purchase", _discounted_purchase_system),
+    ("discounted_purchase", lambda P, Q, R, _fn=_discounted_purchase_system: _fn(P, Q)),
     # RELATIONAL PRODUCT-SUM: "1000 lbs beef at $8; twice that much chicken at $3?" → 14000.
-    ("relational_product_sum", _relational_product_sum_system),
+    ("relational_product_sum", lambda P, Q, R, _fn=_relational_product_sum_system: _fn(P, Q)),
     # DOUBLING PERIODS NTH TERM: "$10 in January, doubling monthly; in May?" → 10·2⁴ = 160.
-    ("doubling_periods_nth", _doubling_periods_nth_system),
+    ("doubling_periods_nth", lambda P, Q, R, _fn=_doubling_periods_nth_system: _fn(P, Q)),
     # RELATIONAL PRICE PAIR × WEEK: "$3 kids, twice for adults; 8+10 per day; per week?" → 588.
-    ("relational_price_week", _relational_price_week_system),
+    ("relational_price_week", lambda P, Q, R, _fn=_relational_price_week_system: _fn(P, Q)),
     # COMBINED-STANDARD COUNT CHAIN: "72; twice as many; half as many as BOTH combined; $2 each?" → 648.
-    ("combined_standard_sum", _combined_standard_sum_system),
+    ("combined_standard_sum", lambda P, Q, R, _fn=_combined_standard_sum_system: _fn(P, Q)),
     # AGE SHIFT: "4 years older; in 5 years she'll be 40; he now?" → 31; projected asks too.
-    ("age_shift", _age_shift_system),
+    ("age_shift", lambda P, Q, R, _fn=_age_shift_system: _fn(P, Q)),
     # NAMED AGE CHAIN: "mom 2× Eden, Eden 2× Devin, Devin 12; average of the three?" → 28.
-    ("age_chain", _age_chain_system),
+    ("age_chain", lambda P, Q, R, _fn=_age_chain_system: _fn(P, Q)),
     # AGE PAST ANCHOR: "5 years ago mother 2× daughter; mother 41 now; daughter in 3 years?" → 26.
-    ("age_past_anchor", _age_past_anchor_system),
+    ("age_past_anchor", lambda P, Q, R, _fn=_age_past_anchor_system: _fn(P, Q)),
     # AGE FUTURE VS NOW: "7 older; in 3 years twice as old as he is NOW?" → (7+3)/(2−1) = 10.
-    ("age_future_vs_now", _age_future_vs_now_system),
+    ("age_future_vs_now", lambda P, Q, R, _fn=_age_future_vs_now_system: _fn(P, Q)),
     # SIMULTANEOUS AGE: "7 years older than David and twice his age?" → 7/(2−1) = 7.
-    ("age_simultaneous", _age_simultaneous_system),
+    ("age_simultaneous", lambda P, Q, R, _fn=_age_simultaneous_system: _fn(P, Q)),
     # GENERIC RATE CHAIN (dimensional analysis) — LAST on purpose: every specific rate/span
     # solver above wins first; this catches only what they all decline (jumps/min × min/session
     # × sessions/day × days → 400). The collisions audit checks it against every one of them.
-    ("rate_chain", _rate_chain_system),
+    ("rate_chain", lambda P, Q, R, _fn=_rate_chain_system: _fn(P, Q)),
     # GENERIC AGE EQUATIONS (linear algebra over now-ages) — LAST for the same reason: the
     # specific age solvers above win first; this answers determined asks over the residual
     # (underdetermined systems included — mom-at-birth is a determined DIFFERENCE).
-    ("age_equations", _age_equations_system),
+    ("age_equations", lambda P, Q, R, _fn=_age_equations_system: _fn(P, Q)),
     # RATIO CHAIN (#387) — linear name-chain (X = s·Y / X = Y ± c) with a single "if"-anchor,
     # propagated to a fixpoint; noun-agnostic (ages, crayon boxes, countries traveled). After
     # age_equations on purpose: it catches only chain shapes every age solver declines.
-    ("ratio_chain", _ratio_chain_system),
+    ("ratio_chain", lambda P, Q, R, _fn=_ratio_chain_system: _fn(P, Q)),
     # PERCENT PARTITION + REST (#389) — percent twin of fraction_partition_rest: percent-labeled
     # parts of one pool, rest-ask → total·(1−Σp); total stated OR derived from an anchored part.
-    ("percent_partition_rest", _percent_partition_rest_system),
+    ("percent_partition_rest", lambda P, Q, R, _fn=_percent_partition_rest_system: _fn(P, Q)),
 ]
 
 # LATE systems run AFTER the read-synthesize fixpoint has built `context` (they consume derived
@@ -25305,10 +25550,28 @@ def _solve_inner(text: str):
     # general fold). Each recognizer is self-contained (re-analyzes premises, needs no context) and
     # tightly gated; solve() returns the first that claims the problem. The recognizers, their shapes,
     # and their priority order live in the `_EARLY_SYSTEMS` registry above — append there to add one.
+    # A MIGRATED solver may return a `SystemResult` (facts, not a scalar) instead of claiming the
+    # problem outright: its facts are attributed to `facts_of`/`context` exactly as `learn()` would,
+    # the words its pattern consumed are bound via `_bind_pattern`, the EARLY loop stops (one claimer,
+    # same as a scalar return — preserves what `reading_diff --collisions` audits), but solve() does
+    # NOT return yet — it falls through into the normal fixpoint/LATE/GUARDs/`answer()` pipeline below
+    # (skipping GUARD 8/9/10, exactly as a scalar-returning claim already skips them via `return`) so
+    # the actual question is resolved generically. This is the "second evaluation pass."
+    discourse, context = [], []
+    facts_of = [None] * len(premises)                    # per-premise facts (None = not yet resolved)
+    _early_claimed = False
     for _label, _system in _EARLY_SYSTEMS:
-        _r = _system(premises, question)
-        if _r is not None:
-            return _snap(_r)
+        _r = _system(premises, question, readings[:len(premises)])
+        if _r is None:
+            continue
+        if isinstance(_r, SystemResult):
+            for i, fs in _r.facts_by_premise.items():
+                facts_of[i] = fs
+                context += fs
+            _bind_pattern(_r.matched, _label)
+            _early_claimed = True
+            break
+        return _snap(_r)
     # GUARD 8 — INVERSION / COUNTERFACTUAL: two shapes the forward fold structurally cannot solve, so it
     # would fold the literal numbers and commit garbage. Both are honest DECLINES (the safe "only-declines"
     # shape, like GUARD 7).
@@ -25318,8 +25581,12 @@ def _solve_inner(text: str):
     #  (b) COUNTERFACTUAL: a premise in the irrealis mood ("if X had $N more, she WOULD have $M") states a
     #      HYPOTHETICAL state, not an asserted holding; folding its numbers as real quantities is unsound.
     #      Gold: Beth/Jan 150, Sally/Jolly 150. The modal "would" is the irrealis marker.
+    # GUARD 8/9/10 only apply when no EARLY system-solver already claimed the problem — a scalar-
+    # returning claim already skips them (via the `return` above); a SystemResult claim must skip
+    # them too, for the same reason (a solver that already resolved this shape isn't second-guessed
+    # by a guard built for the UNCLAIMED general-fold path).
     ql = question.lower()
-    if any(p in ql for p in ("at first", "to begin with", "to start with",
+    if not _early_claimed and any(p in ql for p in ("at first", "to begin with", "to start with",
                              "originally", "at the start", "in the beginning")):
         # BACKWARD POOL DEPLETION — a losses-only inversion we CAN solve (initial = final + Σ spends); the
         # tight gates keep every other "at first" inversion (gains, fraction-of-remaining, relational) declining.
@@ -25328,14 +25595,14 @@ def _solve_inner(text: str):
             return _bi
         _bd = _backward_depletion(premises, question)    # then the multi-entity losses-only pool
         return _bd if _bd is not None else "undetermined"
-    if any("would" in [_key(w) for w in p.lower().split()] for p in premises):
+    if not _early_claimed and any("would" in [_key(w) for w in p.lower().split()] for p in premises):
         return "undetermined"
     # GUARD 9 — DISTRIBUTIVE per-occurrence frequency: "every time / each time <X happens>, <amount>" is a
     # rate (per-occurrence amount) that must be MULTIPLIED by an occurrence count to total. We don't compose
     # that product yet, so committing the bare per-occurrence amount silently drops the frequency factor
     # ("2 times a day … every time she orders 3 cups" → 3, not 6). DECLINE on the frame — every other such
     # problem in dev already declines on other grounds; this makes the decline uniform. Gold: Maria 6.
-    if any(p in " ".join(premises).lower() for p in ("every time", "each time")):
+    if not _early_claimed and any(p in " ".join(premises).lower() for p in ("every time", "each time")):
         return "undetermined"
     # GUARD 10 — ELIDED TRANSFER OBJECT: "gave 12 to his brother, 9 to his sister" — the value quantifies
     # the RECIPIENT (the noun that is the object of "to"), because the transferred object was elided ("12
@@ -25343,24 +25610,24 @@ def _solve_inner(text: str):
     # never reduces the real holding and the gross commits (Sonny: 45 with the 12/9/7 gives lost). The
     # object is unrecoverable here, so DECLINE. A stated object ("gave 12 BOXES to his brother": 12
     # quantifies 'boxes', not the to-object) is unaffected.
-    for rp in readings[:len(premises)]:
-        tos = [(rp.units.index(u), u) for u in rp.units
-               if "preposition" in u.features.get("senses", []) and _key(u.surface) == "to"]
-        for vi, u in enumerate(rp.units):
-            if "value" in u.features.get("senses", []):
-                qn = _follow(u, "quantifies")
-                # the value must PRECEDE its "to" (the transferred amount with the object elided —
-                # "12 [boxes] to his brother") and quantify that "to"'s object. A value AFTER "to"
-                # ("to 3 friends", "to 48 of her friends") is a RECIPIENT COUNT, not an elided object.
-                if qn is not None and any(vi < ti and _follow(t, "object") is qn for ti, t in tos):
-                    return "undetermined"
-    discourse, context = [], []
-    facts_of = [None] * len(premises)                    # per-premise facts (None = not yet resolved)
+    if not _early_claimed:
+        for rp in readings[:len(premises)]:
+            tos = [(rp.units.index(u), u) for u in rp.units
+                   if "preposition" in u.features.get("senses", []) and _key(u.surface) == "to"]
+            for vi, u in enumerate(rp.units):
+                if "value" in u.features.get("senses", []):
+                    qn = _follow(u, "quantifies")
+                    # the value must PRECEDE its "to" (the transferred amount with the object elided —
+                    # "12 [boxes] to his brother") and quantify that "to"'s object. A value AFTER "to"
+                    # ("to 3 friends", "to 48 of her friends") is a RECIPIENT COUNT, not an elided object.
+                    if qn is not None and any(vi < ti and _follow(t, "object") is qn for ti, t in tos):
+                        return "undetermined"
     for i, p in enumerate(premises):                     # first pass: sequential, builds the discourse
-        f = learn(p, discourse, context)
-        if f:
-            facts_of[i] = f
-            context += f
+        if facts_of[i] is None:                          # (already-resolved by an EARLY SystemResult
+            f = learn(p, discourse, context)              #  fold is left untouched, not re-derived)
+            if f:
+                facts_of[i] = f
+                context += f
     _inject_bare_ages(readings[:len(premises)], readings, facts_of, context)   # "If Job is 5" → age 5
     context += _question_durations(readings[-1], context)   # SEED a question-clause duration ("…in 7
     # days?") so a rate×duration chain whose duration is in the QUESTION (not a premise) composes via the
@@ -25387,8 +25654,20 @@ def _solve_inner(text: str):
     _readings_prem = readings[:len(premises)]
     for _label, _system in _LATE_SYSTEMS:
         _r = _system(premises, question, context, _readings_prem)
-        if _r is not None:
-            return _snap(_r)
+        if _r is None:
+            continue
+        if isinstance(_r, SystemResult):
+            # LATE runs after the fixpoint, so there's less tail left to fall through into than the
+            # EARLY case — fold the facts and resolve the question directly via answer() rather than
+            # re-threading the rest of _solve_inner's GUARDs. An honest decline (no further system
+            # solvers tried) beats reopening the double-claim risk `--collisions` guards against.
+            for i, fs in _r.facts_by_premise.items():
+                facts_of[i] = fs
+                context += fs
+            _bind_pattern(_r.matched, _label)
+            _ar = answer(question, context, discourse)
+            return _snap(_ar) if _ar is not None else "undetermined"
+        return _snap(_r)
     # GUARD 11 — PERIOD-BASIS MISMATCH: the question's ask span is a QUESTION-FINAL bare named
     # period ("… does he drink A WEEK?") while a premise states its quantity per a DIFFERENT
     # period ("1.5 gallons A DAY"). The Quantity fact drops the period, so the fold would commit
@@ -25409,6 +25688,14 @@ def _solve_inner(text: str):
     # dropped → we misread it. A comparative-derived quantity (amount ≠ any stated value) is OK.
     for i, p in enumerate(premises):
         if "than" in [w.strip(".,?!:;") for w in p.lower().split()]:
+            # PATTERN-CONSUMED (see GUARD 3 below): a migrated system solver's `_bind_pattern` already
+            # verified this premise's relation via its own tight structural gates — its derived Quantity
+            # amount can coincidentally equal the relation's raw offset ("15 fewer... than Adele" with
+            # Adele=30 derives Bridget=15, the SAME number as the offset) without that meaning the
+            # relation was dropped; the flat-quantity/no-Relation heuristic below can't tell a real drop
+            # from this numeric coincidence, so trust the solver's own verification instead.
+            if any(o.target is _PATTERN_UNIT for u in readings[i].units for o in u.features.get("obligations", [])):
+                continue
             facts = facts_of[i] or []
             raw = {u.features["value"] for u in readings[i].units if "value" in u.features.get("senses", [])}
             if any(isinstance(f, Quantity) and f.amount in raw for f in facts) \
@@ -25440,7 +25727,15 @@ def _solve_inner(text: str):
         # income (R·H·weeks, via `_synth_wage_income`), so neither appears verbatim — exempt (#317, GAP C).
         wage_clause = re.search(r"for \$\d+(?:\.\d+)? an hour and \d+ hours a week",
                                 " ".join(u.surface for u in rp.units).lower()) is not None
-        if comp_consumed or time_range or wage_clause \
+        # PATTERN-CONSUMED: a migrated system solver's `_bind_pattern` already marked this premise's
+        # words as discharged BY the pattern that produced a `SystemResult` (see `_anchored_sum_system`)
+        # — its own tight structural gates (name-count, single-value-per-anchor, a fully connected
+        # relation graph) are strictly narrower than the blanket "any fraction/value" exemptions this
+        # guard deliberately refuses elsewhere (see the slash-fraction note below), so trusting the bind
+        # here doesn't reopen that precision hole — it only covers premises a solver already verified.
+        pattern_consumed = any(o.target is _PATTERN_UNIT for u in rp.units
+                               for o in u.features.get("obligations", []))
+        if comp_consumed or time_range or wage_clause or pattern_consumed \
                 or any(_key(u.surface) == "each" for u in rp.units) \
                 or any(isinstance(f, Distribution) for f in facts_i) \
                 or _relational_age_factor(rp) is not None \
@@ -25542,6 +25837,16 @@ def _solve_inner(text: str):
     if isinstance(result, (int, float)) and not isinstance(result, bool) \
             and _period_unapplied(readings[-1], readings[:len(premises)], context):
         return "undetermined"
+    # GUARDS 12-15 are all "was some stated value/factor DROPPED by the fold" decline-safety checks built
+    # for the general fold's own arithmetic trail — none of them know about a migrated system solver's
+    # hop-by-hop `_compute()` walk, whose evidence can legitimately look different (e.g. a fraction hop
+    # logs its DECIMAL value, "0.333...", never the literal denominator "3" these guards scan for — see
+    # GUARD 14's docstring). Exempt PATTERN-CONSUMED premises (already verified by `_bind_pattern`, same
+    # signal GUARD 2/3 above trust) from all four, rather than teach each one the solver's own arithmetic
+    # conventions.
+    _unclaimed_prem = [rp for rp in readings[:len(premises)]
+                       if not any(o.target is _PATTERN_UNIT for u in rp.units
+                                  for o in u.features.get("obligations", []))]
     # GUARD 12 — DROPPED UNIT/MONEY QUANTITY (decline-safety): a stated number quantifying a measurement
     # unit (distance/weight/volume) or a money value that never entered the computation is an OPERATIVE
     # quantity we dropped → the structure is unhandled → DECLINE. Object-noun counts ("3 snakes") are not
@@ -25549,26 +25854,26 @@ def _solve_inner(text: str):
     # bespoke arithmetic legitimately ignores some givens, e.g. a container count). The broad firewall-safe
     # guard underpinning vocabulary growth: a fully-read but partially-folded problem declines, never commits.
     if part is None and isinstance(result, (int, float)) and not isinstance(result, bool) \
-            and _dropped_unit_quantity(readings[:len(premises)], readings[-1]):
+            and _dropped_unit_quantity(_unclaimed_prem, readings[-1]):
         return "undetermined"
     # GUARD 13 — MULTI-RATE purchase/charge (decline-safety): a per-item price with an unapplied item count
     # ("three tickets for $12 each" → 3×12 dropped) or ≥2 per-item prices (a priced list) → we don't compose
     # the per-item products → DECLINE. The residue GUARD 12 misses (the prices are summed, so none is dropped).
     if part is None and isinstance(result, (int, float)) and not isinstance(result, bool) \
-            and _unapplied_multi_rate(readings[:len(premises)]):
+            and _unapplied_multi_rate(_unclaimed_prem):
         return "undetermined"
     # GUARD 14 — DROPPED MULTIPLIER (decline-safety): a stated relational factor ("7 times", "one-third")
     # whose evidence never reached the computation → a dropped relational-chain link → DECLINE. Catches
     # multi-step chains that mis-resolve and commit a partial (Emily "7× Sandra, 3× Betty" → 7×Betty drops 3).
     if part is None and isinstance(result, (int, float)) and not isinstance(result, bool) \
-            and _dropped_multiplier(readings[:len(premises)]):
+            and _dropped_multiplier(_unclaimed_prem):
         return "undetermined"
     # GUARD 15 — DROPPED EACH-ATTRIBUTE multiplier (decline-safety): an "each/every" quantifier makes a
     # nearby object count a per-each multiplier ("7 starfish with 5 arms each" → 7×5); if that count never
     # reached the computation the attribute product was dropped → DECLINE. The object-count analogue of the
     # unit/price guards (a bare enumeration count stays exempt; "each" is what makes this one operative).
     if part is None and isinstance(result, (int, float)) and not isinstance(result, bool) \
-            and _dropped_each_attribute(readings[:len(premises)]):
+            and _dropped_each_attribute(_unclaimed_prem):
         return "undetermined"
     if result == "undetermined" and _underspecified_distribution(context) is not None:
         return [Deficiency("under-specified", None,                 # ask, don't silently decline: the

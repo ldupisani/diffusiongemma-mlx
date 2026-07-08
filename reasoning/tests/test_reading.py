@@ -5599,6 +5599,68 @@ class TestIncrement145AnchoredSumSubset(unittest.TestCase):
             "If Sue has 48 marbles, how many do they have altogether?"), 720)
 
 
+class TestSystemResultMigration(unittest.TestCase):
+    """The 'emit facts, not a final answer' pilot: `_anchored_sum_system` returns a `SystemResult` (one
+    Quantity fact per entity, attributed to its originating premise) instead of a scalar when it can safely
+    mark the SHARED reading Units, and `answer()`'s generic combined_q machinery resolves the actual sum —
+    see docs plan / reading-engine-handoff. These tests exercise the new mechanism directly, not just
+    end-to-end solve() outcomes already covered by the pre-existing anchored-sum test classes."""
+
+    def test_bind_pattern_marks_obligation_met_via_sentinel(self):
+        unit = reading.Unit(words=[reading.Word("Foo", 0)],
+                            features={"obligations": [reading.Obligation("predicate")]})
+        self.assertFalse(unit.features["obligations"][0].met)
+        reading._bind_pattern([unit], "test_label")
+        ob = unit.features["obligations"][0]
+        self.assertTrue(ob.met)
+        self.assertIs(ob.target, reading._PATTERN_UNIT)
+
+    def test_bind_pattern_leaves_already_met_obligations_alone(self):
+        target = reading.Unit(words=[reading.Word("bar", 1)])
+        unit = reading.Unit(words=[reading.Word("Foo", 0)],
+                            features={"obligations": [reading.Obligation("predicate", target=target)]})
+        reading._bind_pattern([unit], "test_label")
+        self.assertIs(unit.features["obligations"][0].target, target)
+
+    def test_safe_case_returns_system_result_not_scalar(self):
+        text = ("Priya has 5 stickers. Quinn has 4 times as many stickers as Priya, and Reese has 3 "
+                "more stickers than Quinn. How many stickers do they have altogether?")
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._anchored_sum_system(premises, question, rp)
+        self.assertIsInstance(result, reading.SystemResult)
+        all_facts = [f for fs in result.facts_by_premise.values() for f in fs]
+        amounts = {f.entity: f.amount for f in all_facts}
+        self.assertEqual(amounts, {"priya": 5, "quinn": 20, "reese": 23})
+
+    def test_named_subset_and_no_names_both_solve_via_system_result(self):
+        # fresh synthetic numbers (not the Bill/Harry/Sue case #145 already covers) — the two combined_q
+        # shapes (specific named subset vs every entity) both route through the SAME new answer() branch.
+        text = ("Priya has 5 stickers. Quinn has 4 times as many stickers as Priya, and Reese has 3 "
+                "more stickers than Quinn. How many stickers do {}?")
+        self.assertEqual(reading.solve(text.format("they have altogether")), 48)
+        self.assertEqual(reading.solve(text.format("Priya and Reese have combined")), 28)
+
+    def test_multiplier_chain_evidence_survives_guard14(self):
+        # GUARD 14 ("was every stated multiplier's evidence used?") scans ARITHMETIC_LOG program text for
+        # each raw factor — the flattened (A,B) coefficient form loses that (12 = 6*2 never mentions "6" or
+        # "2" on its own), so this regresses to "undetermined" without the hop-by-hop _compute() walk.
+        self.assertEqual(reading.solve(
+            "Bill has 6 times as many marbles as Harry, and Harry has twice as many marbles as Sue. "
+            "If Sue has 48 marbles, how many do they have altogether?"), 720)
+
+    def test_near_name_typo_falls_back_to_legacy_scalar_path(self):
+        # a NEAR-NAME UNIFICATION (#215) leaves `origin`'s attribution unreliable (see `_AnchoredCoeffs.
+        # unified`) — the solver must decline the new fact-emitting path and fall back to computing the
+        # sum directly, not silently mis-attribute or duplicate a fact.
+        self.assertEqual(reading.solve(
+            "Jason, Ryan, and Jeffery went fishing at the lake. Ryan caught three times "
+            "the number of fish that Jason caught. Jefferey caught twice the number of "
+            "fish that Ryan got. If Jeffery caught 60 fish, how many fish did all of "
+            "them catch in total?"), 100)
+
+
 class TestIncrement146ContainerContentsSum(unittest.TestCase):
     """#146 — CONTAINER × CONTENTS product-sum (the count twin of revenue_product_sum): each container-count
     pairs with a following CONTENTS-count of the questioned item, Σ(container·contents), minus any stated item

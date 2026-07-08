@@ -271,6 +271,86 @@ precisely because the admit-the-facts pattern was too loose. Put the generality 
 multi-step families (ratio partition, backward $-remainder) should REUSE this model: a ratio is two
 fractional parts; a backward chain is saturation solving for the universe given a known part.
 
+### System solvers emit FACTS, not a final answer — the `SystemResult` pattern (2026-07-08)
+
+Every `_EARLY_SYSTEMS`/`_LATE_SYSTEMS` solver historically returned a bare numeric scalar,
+short-circuiting `solve()` entirely — bypassing the fact/synthesize/answer pipeline the rest of the
+engine shares, and re-deriving its own arithmetic in an opaque `_compute()` call the general fold's
+decline-safety guards (GUARD 3/4/12-15) never see. This is the "extract facts, not an answer" principle
+(#312 above) applied to the system-solver registries: a MIGRATED solver can return a `SystemResult`
+(`facts_by_premise: dict[premise_index, list[fact]]`, `matched: list[Unit]`) instead of a scalar. Piloted
+on `_anchored_sum_system` (`reasoning/reading.py`); the recipe, in order:
+
+1. **The solver's algorithm becomes fact-emission, not final arithmetic.** Instead of computing the sum
+   directly, emit one `Quantity` fact PER ENTITY (the algorithm's own per-entity derived value), attributed
+   back to the premise index that introduced it (`facts_by_premise[i]`) — mirroring what `learn()` would
+   have produced for an ordinary premise. `_solve_inner` folds these into `context`/`facts_of` exactly like
+   `learn()`'s output, then falls through to the NORMAL fixpoint/`answer()` pipeline instead of returning —
+   the "second evaluation pass." Which entities the question actually wants (a named subset vs "everyone")
+   is then resolved GENERICALLY by `answer()`'s `combined_q` machinery, not hand-parsed by the solver.
+2. **Attribute EVERY premise the solver classified, even with an empty fact list**, not just premises that
+   got an entity's fact. A premise that is ALSO an ordinary declarative sentence the general fold can parse
+   on its own ("If Jeffery caught 60 fish" is plain "X caught N fish") stays `facts_of[i] is None` otherwise,
+   so the first-pass `learn()` loop re-extracts it independently — a SECOND, duplicate fact for the same
+   entity that silently inflates a sum (a real confident-wrong this caught: 160 vs correct 100, one entity's
+   value counted twice under two near-name-typo spellings).
+3. **"Mask the matched words"** — reuse the engine's EXISTING obligation-bind mechanism (`Obligation.target`/
+   `.met`), never a new side flag: `_bind_pattern(units, label)` binds each unit's unmet obligations to a
+   module-level sentinel `_PATTERN_UNIT`, so `deficiencies()`/`--trace` see them as discharged "by pattern."
+   This is necessary but NOT sufficient on its own — GUARD 3 ("unused given") and GUARD 2 ("than"-collapse)
+   are VALUE-based, not obligation-based, so they need an EXPLICIT `pattern_consumed` exemption (checking
+   `any(o.target is _PATTERN_UNIT for u in rp.units for o in u.features.get("obligations", []))`) added to
+   their own exemption chains — the bind alone doesn't make them trust the premise. Likewise GUARD 12-15
+   ("dropped multiplier/unit/rate") scan `ARITHMETIC_LOG` for literal evidence a value was used; a migrated
+   solver's arithmetic style can legitimately not match what they expect (next point) — filter their input
+   `readings` list to exclude pattern-consumed premises rather than teach each guard the solver's own
+   conventions.
+4. **Compute HOP-BY-HOP over the raw relation graph, not the flattened algebra**, when a downstream guard
+   audits raw-value evidence. `_anchored_affine_coeffs` flattens a relation chain into `coeff[e] = (A, B)`
+   pairs (`value[e] = A·pivot + B`) for efficient final computation — but `_compute("12.0 * 48 + 0.0")` never
+   mentions the raw factors "6"/"2" that produced the flattened `12.0`, so GUARD 14 (scans `ARITHMETIC_LOG`
+   for each stated multiplier's literal value) sees them as dropped and declines. Walk the RAW `rels` dict
+   (`entity -> (k, std_entity, c)`) instead, one `_compute()` call per hop, so each hop's own program string
+   contains its own raw factor — audit-visible, exactly like the general fold's own chain extractors.
+5. **A migrated fact's `measure` must match what `answer()`'s `query` will independently resolve to, or
+   `combined_q` correctly (and unhelpfully) declines rather than guess.** Two measure sources exist and
+   neither alone is reliable: the solver's own relation/anchor data (`got.measures` — correct but
+   attribute-LOSSY, just the head noun, e.g. "baby" not "beanie baby") and the question's own asked
+   descriptor (`_queried_measure(question)` — attribute-complete but can mis-resolve an ELIDED-noun "how
+   much will X and Y MAKE combined" money-ask onto the verb itself, "make", since it doesn't replicate
+   `answer()`'s own separate "how much + verb → `RESULT_MEASURE`" special-casing). Use `got.measures` as
+   the base (trustworthy head) and let `_queried_measure` REFINE it with attributes only when the two heads
+   AGREE — never let the question's grammar override a disagreeing, data-derived head.
+   **Do NOT "fix" a resulting mismatch by relaxing `answer()`'s OWN measure-matching** (e.g. "same head,
+   different attributes → use the fact's form anyway") — that machinery is shared by EVERY combined-question
+   in the engine, not just migrated solvers, and a real regression surfaced from exactly this: loosening it
+   let one coincidental head-match ("cookie") silently sum only ONE of three same-category-but-different-head
+   sub-types ("oatmeal raisin cookies" head=raisin, "chocolate chip cookies" head=chip, "sugar cookies"
+   head=cookie — all "cookies" to a person, three different heads to the parser), and separately let it paper
+   over an unrelated pre-existing extraction bug elsewhere in the fold instead of correctly declining. Fix
+   the mismatch at the SOURCE (the solver's own fact-emission), not by loosening shared, heavily-relied-on
+   matching logic — the blast radius of the latter is the whole engine, not one solver.
+6. **`next(iter(some_set))` is a NONDETERMINISM trap** unless the set is PROVABLY a singleton (e.g. gated by
+   `len(s) == 1`) — Python's string hashing (and therefore set iteration order) is randomized per process by
+   default, so picking an "arbitrary" element from a multi-item set gives a different, silently wrong answer
+   on every fresh run. Caught by running `reading_diff`'s snapshot TWICE (fresh processes) and diffing them
+   against each other, not just against the pre-change baseline — a single before/after diff can pass by
+   coincidence if both runs happen to draw the same random order.
+7. **A diff-neutral (0 SOLVED, 0 BROKE, 0 DECL→WRONG) dev result is the CORRECT outcome for a pure
+   architecture migration** — it proves the new mechanism reproduces the old behavior exactly, which is the
+   goal when the point is proving a MECHANISM, not adding coverage. Still run the full gate (unit tests +
+   `reading_diff` + `--collisions` + a TEST checkpoint per `test-checkpoint-cadence`, since this touches
+   genuinely shared dispatch machinery) — several of this migration's regressions (5 initially, then a further
+   9 introduced-and-fixed across three more rounds of the SAME gate) were dev-train/holdout-clean but visible
+   only there, or only on the TEST slice (one dev-clean regression, `_anchored_affine_coeffs`'s "$450 more in
+   a year" money-elision, only ever showed up on TEST — underscoring why the checkpoint is mandatory, not
+   optional, for a change of this shape).
+
+Only `_anchored_sum_system` is migrated so far — the sibling `_anchored_single_system`/
+`_anchored_difference_system`/`_residual_sum_system`/noun-affine family (all consumers of the now-
+`readings_prem`-aware `_anchored_affine_coeffs`) are natural next candidates, each its own diff-verified
+increment. See `reading-engine-handoff` memory for the session log.
+
 ### A clause that is BOTH meta and data — read the recorded meta, don't fight the parse (#309)
 
 `_parse_problem` recognizes "there are N X in a Y" as a stated unit conversion (`_stated_conversion`),
