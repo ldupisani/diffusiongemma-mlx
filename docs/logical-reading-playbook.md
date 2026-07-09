@@ -550,6 +550,53 @@ the older solvers explicitly route around." Two more lessons:
 This closes the noun-affine family fully (`_noun_affine_system`/`_noun_residual_sum_system`/
 `_noun_anchored_sum_system`, all 3) and brings the running SystemResult migration total to 13 solvers.
 
+**Update (2026-07-09): `_percent_population` migrated — the ONE `_LATE_SYSTEMS` solver with genuine
+per-entity structure, found only by individually re-examining a registry class earlier written off as
+"out of scope."** Earlier triage assumed `_LATE_SYSTEMS` was categorically out of scope for `SystemResult`
+because it's "already fact-consuming" — but `_solve_inner`'s LATE dispatch already fully supports
+`SystemResult` (built in the original #390 pilot: fold the facts, call `answer()` directly, since the
+fixpoint already ran and there's less tail to fall through into) and several LATE solvers ARE genuinely
+obligation-parsing. On individual inspection, every one of them except `_percent_population` computes a
+single implicit-pool scalar with no entity to attribute a fact to (self-multiple sums, backward inversions,
+equal shares, rate extrapolations) — but `_percent_population` splits a population into two COMPLEMENTARY
+groups (boys/girls, men/women) and answers for whichever is asked, structurally identical in shape to the
+residual family. Required a new capability, the COMPLEMENTARY-GROUP FALLBACK: a bare-copula question ("how
+many girls are AT THE MEETING?" / "...are there?" — no aux, no non-copula verb at all) is safe to resolve
+generically ONLY because the group-word vocabulary (`_GROUP_WORDS`) is a small, closed, enumerable set —
+unlike a general bare-head noun, which the fraction-partition regression (#395) already proved unsafe.
+
+20. **Lesson: don't write off an entire registry class from ONE structural label — individually verify.**
+    "LATE_SYSTEMS = already fact-consuming = out of scope" was true for most of them but not all; the
+    single exception (`_percent_population`) was found only by reading each LATE solver's actual final-value
+    shape rather than trusting the registry-level generalization. The same caution applies going forward:
+    a categorical exclusion is a useful FIRST filter, never a substitute for checking the individual case.
+21. **A new fallback's gate and its emitting solver's SAFE-path gate must check the SAME thing, or the
+    solver can commit to a path the fallback can't actually complete.** Two real regressions surfaced by
+    the diff-verify gate (invisible to unit tests, caught only by the dev-holdout diff), both from this
+    exact mismatch:
+    - The solver's SAFE-path gate checked "is this a category-sum-shaped ask" but NOT "will `answer()`'s
+      OWN query resolution actually land on the asked group's bare measure" — a relative-clause phrasing
+      ("how many friends does he have WHO ARE girls?") resolves `_queried_measure` to 'friend' (the
+      relative clause is dropped), so the fallback's own gate (`query[0]` must literally be a group word)
+      correctly never fires — but the SOLVER had already committed to emitting ONLY group facts, with
+      nothing for 'friend', guaranteeing a decline where the legacy scalar (27) was correct. Fixed by
+      having the solver independently call `_queried_measure` and verify it resolves to the asked group's
+      OWN bare measure before choosing the new path — literally re-running the fallback's own gate logic
+      from the solver side, since that's the exact question "will the consumer actually succeed."
+    - The fallback's OWN gate matched on "is `query[0]` a group word," but a COMPOUND ask ("how many BOYS
+      AND GIRLS are left?") has `query[0]` fixed at just the FIRST conjunct's head ("boy") — `_descriptor`
+      silently drops "and girls" — so the fallback hijacked a two-group combined ask as a single-group one,
+      committing a wrong number where the (unrelated, pre-existing) remainder machinery should have summed
+      both. Fixed by declining whenever any OTHER group word is literally present anywhere in the question
+      — a compound ask always mentions both members of the pair, a genuine single-group ask never does.
+    General lesson: when a solver hands off to a NEW fallback (rather than an already-proven consumer), the
+    solver's own SAFE gate should re-derive or directly call the fallback's key precondition, not just
+    approximate it — "will this specific downstream check pass" is a stronger, more accurate question than
+    "does this look like the right shape."
+
+This brings the running SystemResult migration total to 14 solvers, closing out a systematic one-by-one
+assessment of every remaining obligation-parsing solver in both registries.
+
 ### A clause that is BOTH meta and data — read the recorded meta, don't fight the parse (#309)
 
 `_parse_problem` recognizes "there are N X in a Y" as a stated unit conversion (`_stated_conversion`),
