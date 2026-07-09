@@ -8329,10 +8329,13 @@ class TestRateSinglesSystemResultPilot(unittest.TestCase):
         rp = readings[:len(premises)]
         result = reading._rate_singles_system(premises, question, rp)
         self.assertIsInstance(result, reading.SystemResult)
-        all_facts = [f for fs in result.facts_by_premise.values() for f in fs]
+        # the SAME fact attributes to every premise index (_singles_result doesn't know which
+        # premise it came from), so dedupe by identity before checking there's exactly one.
+        all_facts = {id(f): f for fs in result.facts_by_premise.values() for f in fs}
         self.assertEqual(len(all_facts), 1)
-        self.assertEqual(all_facts[0].entity, "nadia")
-        self.assertEqual(all_facts[0].amount, 15 + 4 * 6 + 3)
+        fact = next(iter(all_facts.values()))
+        self.assertEqual(fact.entity, "nadia")
+        self.assertEqual(fact.amount, 15 + 4 * 6 + 3)
         self.assertEqual(reading.solve(text), 42)
 
     def test_named_subject_returns_system_result(self):
@@ -8421,6 +8424,82 @@ class TestRateSinglesSystemResultPilot(unittest.TestCase):
             "Leo had 80 marbles. He gave 20 marbles to his cousin and then gave 1/4 of "
             "his marbles to his sister. How many marbles does Leo have left?"),
             "undetermined")
+
+
+class TestMoneySinglesSystemResultBatch2(unittest.TestCase):
+    """#403 — obligation-absorption batch 2: 9 of `_money_singles_system`'s 24 active branches
+    (2,3,5,6,8,18,21,24,25) now emit `Quantity` fact(s) instead of a bare scalar. #3 (shirts)
+    was also GENERALIZED first (hardcoded literal "shirts" -> the existing `clothing` category),
+    per the standing rule that a solver must be generalized before absorption. Fresh synthetic
+    numbers per branch, distinct from any GSM8K-sourced text. See the function's own docstring
+    for why the other 15 branches (including two NEW gap classes this batch discovered: a
+    `_parse_problem` question-selection bug from a "Use X to represent" trailer, and GUARD 12
+    seeing a singles branch's arithmetic for the first time once it falls through to it) stay
+    unconverted."""
+
+    def test_named_pair_purchase_returns_system_result(self):
+        # branch 2: two count x unit-price purchases, named subject.
+        text = ("Priya bought 3 pounds of coffee and 4 gallons of milk. A pound of coffee "
+                "costs $4 and a gallon of milk costs $2. How much will Priya pay in all?")
+        self.assertEqual(reading.solve(text), 20)
+
+    def test_generalized_clothing_category_returns_two_facts(self):
+        # branch 3: "shorts" (a DIFFERENT clothing member than the original hardcoded "shirts")
+        # -- proves the _cat_re('clothing') generalization actually fires for other garments.
+        text = ("Wren buys 3 shorts. The first pair costs $4 more than the second pair. If the "
+                "first pair costs $12, how much, in dollars, did the shorts cost in total?")
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._money_singles_system(premises, question, rp)
+        self.assertIsInstance(result, reading.SystemResult)
+        seen = {(f.entity, f.amount) for fs in result.facts_by_premise.values() for f in fs}
+        self.assertEqual(seen, {("first", 12), ("second", 8)})
+        self.assertEqual(reading.solve(text), 20)
+
+    def test_comparative_pair_returns_four_signed_facts(self):
+        # branch 6: two holders, signed have/spend facts, answer()'s comparative fold.
+        text = ("Elan has $60. He spends $10 on lunch for himself, $8 for lunch for his dad, "
+                "and $2 on more lunch for himself. His brother Milo has $70 and only spends "
+                "$5 on lunch for his mom. How much more money does Milo have left than Elan?")
+        self.assertEqual(reading.solve(text), 25)
+
+    def test_tip_change_returns_two_signed_facts(self):
+        # branch 8: two signed facts (paid-with / spent), the change_q remainder fold.
+        text = "Uma orders a $12 meal and a drink for 3.  She gives a 20% tip.  She pays with a $25 bill.  How much does she get in change?"
+        self.assertEqual(reading.solve(text), 7)
+
+    def test_month_save_spend_chain_returns_signed_facts(self):
+        # branch 25: N signed "save" facts + a "spend" fact, the remainder fold.
+        text = ("Priya saved $40 in June. She saved $15 in July and $5 in August. Then Priya "
+                "spent $20 on a gift. How much money does Priya have left?")
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._money_singles_system(premises, question, rp)
+        self.assertIsInstance(result, reading.SystemResult)
+        self.assertEqual(reading.solve(text), 40)
+
+    def test_deferred_fused_if_clause_stays_on_legacy_scalar_path(self):
+        # branch 23: a real TEST-adjacent gap -- the "if" clause fuses to the question, so its
+        # own stated values sit in the question's reading; GUARD 12 (seeing a singles branch's
+        # arithmetic for the first time via the SystemResult fall-through) has no audit-log
+        # evidence for them (_rs_ret logs only the final scalar). Must stay a bare scalar.
+        text = "Sana buys 6 kg of rice at the market. If 3 kg of rice costs $9, how much will she pay?"
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._money_singles_system(premises, question, rp)
+        self.assertNotIsInstance(result, reading.SystemResult)
+        self.assertEqual(result, 18)
+        self.assertEqual(reading.solve(text), 18)
+
+    def test_deferred_question_shatter_stays_on_legacy_scalar_path(self):
+        # branch 4: a "Use X to represent..." trailer steals the question slot from
+        # _parse_problem, burying the real question as a premise -- must stay a bare scalar.
+        text = ("Priya earned 3 fewer dollars than Omar. Together they earned $21. How many "
+                "dollars did Priya earn? Use O to represent how many dollars Omar earned.")
+        self.assertEqual(reading.solve(text), 9)
 
 
 class TestIncrement237GenericRateChain(unittest.TestCase):

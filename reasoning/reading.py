@@ -12987,17 +12987,24 @@ def _singles_result(readings_prem: list, premises: list, facts: list):
     sub-premise/char-offset mapping — deliberately out of scope for the pilot): the branch's own
     `dok()` gate already GLOBALLY verifies every numeric literal in the whole problem text was
     referenced before ever reaching this call, the same level of trust the pre-migration
-    scalar-return already implicitly relied on. All facts attribute to premise 0 (an arbitrary
-    single point of truth — the underlying regex, unlike the per-Unit family, doesn't know WHICH
-    premise a match came from); the rest get an empty (but still pattern-bound) entry, mirroring
-    the established "constraint premise" pattern elsewhere in this file. Falls through to
+    scalar-return already implicitly relied on.
+
+    ALL facts attribute to EVERY premise index (not just one) — the underlying regex, unlike the
+    per-Unit family, doesn't know WHICH premise a match came from, so this is the SAME
+    over-determined-entity trick the anchored family uses (attribute one fact to every premise
+    that COULD have produced it; `context`'s own dedup, `if f not in context: context.append(f)`,
+    means this never double-counts). This is load-bearing, not just generous: GUARD 5(a)
+    ("temporal safety" — a TIME-tagged premise stating a value/percent/multiplier with NO
+    Quantity in ITS OWN `facts_of[i]` declines) has NO `_PATTERN_UNIT` exemption, unlike GUARD
+    2/3/4 — attributing facts to only ONE premise index left every OTHER time-and-value-bearing
+    premise (e.g. "She saved $20 in February") looking unaccounted to GUARD 5(a) specifically,
+    a real regression a single-index version of this helper hit and this fixed. Falls through to
     `answer()` for the actual question resolution — `answer()`'s own generic capabilities may
     decline where the legacy scalar always committed; that's expected and accepted for this
     family (see docs/logical-reading-playbook.md), not a bug to chase."""
     if readings_prem is None or len(readings_prem) != len(premises):
         return None
-    facts_by_premise = {i: [] for i in range(len(premises))}
-    facts_by_premise[0] = list(facts)
+    facts_by_premise = {i: list(facts) for i in range(len(premises))}
     matched = [u for rp in readings_prem for u in rp.units]
     return SystemResult(facts_by_premise, matched)
 
@@ -23217,7 +23224,7 @@ def _mult_singles_system(premises: list, question: str):
     return None
 
 
-def _money_singles_system(premises: list, question: str):
+def _money_singles_system(premises: list, question: str, readings_prem: list = None):
     """MONEY SINGLES (#227) — twenty-five tightly-gated branches over the money bucket:
     total-minus-enumerated (Olivia), two count×price purchases (Jasmine), first-costs-more
     pair (shirts), together-minus-offset halves (Markese), debt residual (Jerry), two-holder
@@ -23229,7 +23236,44 @@ def _money_singles_system(premises: list, question: str):
     weekday-multiple tickets (Glenn), lunch thirds, kg unit-scale (Daphney), monthly wage −
     bike (Carrie), months-saved − spent (Norris). Compound facts probed INDEPENDENTLY (the
     splitter severs them); asks searched in FULL when the question shatters ("Use E to
-    represent…" steals the question slot). Every branch digit-accounted; positive."""
+    represent…" steals the question slot). Every branch digit-accounted; positive.
+
+    OBLIGATION-ABSORPTION BATCH 2 (see `_rate_singles_system`'s docstring for the recipe, and
+    `_singles_result`): 9 of the 24 active branches (2,3,5,6,8,18,21,24,25 — #22 was already
+    deleted in a prior increment, generalized via `_anchored_sum_system`) now emit `Quantity`
+    fact(s) instead of a bare scalar. #3 (shirts) also GENERALIZED first, per the standing rule
+    ("a solver that hasn't gone through a generalization step should be generalized before
+    absorption"): its garment capture was hardcoded to the literal word "shirts" — now reads any
+    member of the existing `clothing` category (`_cat_re('clothing')`), so it fires for
+    shorts/pants/dresses/etc. too, not just shirts.
+    The other 15 branches (1,4,7,9,10,11,12,13,14,15,16,17,19,20,23) stay unconverted bare-scalar
+    returns; each was individually verified against a real dev-set problem — 8 hit REAL,
+    previously-unknown parsing/guard gaps this batch surfaced (not paper-only reasoning): #1 and
+    #16 hit sense-disambiguation bugs ("did"/"cost" mistagged noun-not-verb for #1; the modal
+    "can" mistagged noun-not-auxiliary for #16); #4's real GSM8K text ends with a "Use E to
+    represent…" trailer sentence that `_parse_problem` picks as the QUESTION (it's the LAST
+    sentence), burying the real "How many dollars did Markese earn?" as a PREMISE instead — the
+    SAME class of gap as branch #14 in `_rate_singles_system`, here from a variable-definition
+    trailer rather than a comma-heavy clause; #7 is an untaught "What is the total cost..."
+    `wh_value` phrasing (the same gap `_anchored_sum_system`'s docstring already flagged); #11,
+    #14, #19 all hit the SAME structural gap — a bare "how much did/is X have/worth" with NO
+    explicit measure noun for "much" to bind to has no elided-measure inference path in
+    `answer()` (unlike "how many", which does — a real, recurring class worth a future increment
+    if it turns out to matter at scale); #20 has no clean single entity at all (an impersonal
+    "how much will it cost to buy a table and 4 chairs" has no subject/holder); #23's real text
+    ("If 2 kg of potatoes costs $6, how much will she pay?") keeps the "if" clause FUSED to the
+    question rather than split into its own premise, so its own stated values sit inside the
+    question's own reading — GUARD 12 ("dropped unit/money quantity") scans the QUESTION too, and
+    since `_rs_ret` logs only the FINAL scalar to `_compute()` (never the individual factors),
+    there's no audit-log evidence those numbers were used; converting ANY branch is what exposes
+    this pre-existing characteristic of every singles branch's arithmetic (Python does the real
+    math, `_compute()` just re-validates the final number) to GUARDs 12-15 for the first time —
+    they never ran at all before a branch could fall through into them. #9/#13/#15 are
+    rate/quotient asks (cents-per-page, price-per-liter, pounds-from-a-price) with no existing
+    `answer()` consumer that inverts a rate from raw facts; #10 is a count/decomposition ask
+    (how many bills, by denomination); #12/#17 can't safely infer an entity from their own
+    captures (no name at all, or the asked entity is a DIFFERENT person than the one the
+    branch's regex ties the value to)."""
     N = _RS_N
 
     def f(t):
@@ -23252,17 +23296,43 @@ def _money_singles_system(premises: list, question: str):
     a = re.search(rf"bought ({N}) pounds of [\w ]+? and ({N}) gallons of \w+", full)
     p1 = re.search(rf"pound of [\w ]+? costs \$({N})", full)
     p2 = re.search(rf"gallon of \w+ costs \$({N})", full)
-    if a and p1 and p2 and "pay in all" in ql:
+    subj2 = re.search(r"(?:will|did|does) (\w+) pay in all", ql)
+    if a and p1 and p2 and subj2:
         if dok({a.group(1), a.group(2), p1.group(1), p2.group(1)}):
-            return _rs_ret(f(a.group(1)) * f(p1.group(1)) + f(a.group(2)) * f(p2.group(1)))
+            v = _rs_ret(f(a.group(1)) * f(p1.group(1)) + f(a.group(2)) * f(p2.group(1)))
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(subj2.group(1)), MONEY, v, "pay")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 3. John shirts: first costs $D more than second; first $F → F + (F−D)
+    # GENERALIZED first, per the standing rule: was hardcoded to the literal word "shirts" —
+    # now reads any member of the existing `clothing` category, so it fires for
+    # shorts/pants/dresses/etc. bought in the same "buys N <garment>" frame, not just shirts.
     dm = re.search(rf"first \w+ costs \$({N}) more than the second", full)
     fm = re.search(rf"first \w+ costs \$({N})\b", full.replace(dm.group(0), " ") if dm else full)
-    jn = re.search(rf"buys ({N}) shirts", full)
+    jn = re.search(rf"buys ({N}) {_cat_re('clothing')}", full)
     if dm and fm and jn and re.search(r"cost in total", ql):
         if dok({dm.group(1), fm.group(1), jn.group(1)}):
-            return _rs_ret(f(fm.group(1)) + (f(fm.group(1)) - f(dm.group(1))))
+            first_v = f(fm.group(1))
+            second_v = f(fm.group(1)) - f(dm.group(1))
+            v = _rs_ret(first_v + second_v)
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity("first", MONEY, first_v, "cost"),
+                    Quantity("second", MONEY, second_v, "cost")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 4. Markese: earned $D fewer than E; together $T → (T−D)/2
+    # NOT converted: the real GSM8K text ends with a "Use E to represent how many dollars Evan
+    # earned." trailer sentence, which `_parse_problem` picks as the QUESTION (it's the LAST
+    # sentence) — the REAL "How many dollars did Markese earn?" ends up as a PREMISE instead, so
+    # `answer()` is handed the WRONG sentence and can never see the real question, regardless of
+    # what facts exist. The SAME class of gap as `_rate_singles_system`'s branch #14 (a
+    # `_parse_problem` question-selection bug), here caused by a trailing "Use X to represent"
+    # variable-definition sentence rather than a comma-heavy clause.
     km = re.search(rf"earned ({N}) fewer dollars than", full)
     gm = re.search(rf"together they earned \$({N})", full)
     if km and gm and re.search(r"how many dollars did \w+ earn", full):
@@ -23275,6 +23345,7 @@ def _money_singles_system(premises: list, question: str):
         a2 = re.search(rf"paid \$({N}) more", full)
         am = (a1, a2) if a1 and a2 and a1.group(1) != a2.group(1) or (a1 and a2) else None
     dtm = re.search(rf"debt was \$({N}) in all", full)
+    subj5 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
     if am and dtm and re.search(r"how much does (?:he|she) still have to pay", ql):
         if isinstance(am, tuple):
             a_, b_ = f(am[0].group(1)), f(am[1].group(1))
@@ -23283,7 +23354,13 @@ def _money_singles_system(premises: list, question: str):
             a_, b_ = f(am.group(1)), f(am.group(2))
             toks = {am.group(1), am.group(2)}
         if dok(toks | {dtm.group(1)}):
-            return _rs_ret(f(dtm.group(1)) - a_ - (a_ + b_))
+            v = _rs_ret(f(dtm.group(1)) - a_ - (a_ + b_))
+            if v is not None and subj5:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(subj5.group(1)), MONEY, v, "pay")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 6. Derek/Dave compare: two holders, enumerated spends, "how much more does X have left than Y"
     m6 = re.search(r"how much more money does (\w+) have left than (\w+)", ql)
     if m6:
@@ -23310,7 +23387,19 @@ def _money_singles_system(premises: list, question: str):
         if a_ in holders and b_ in holders and dok(toks):
             va = holders[a_][0] - spends.get(a_, 0.0)
             vb = holders[b_][0] - spends.get(b_, 0.0)
-            return va - vb if va > vb else None
+            if va > vb:
+                # SIGNED facts (have + spend) per holder, not one precomputed difference — lets
+                # answer()'s comparative fold genuinely re-derive each side's net holdings itself.
+                facts = []
+                for name in (a_, b_):
+                    facts.append(Quantity(name, MONEY, holders[name][0], "have"))
+                    if spends.get(name):
+                        facts.append(Quantity(name, MONEY, spends[name], "spend"))
+                _sr = _singles_result(readings_prem, premises, facts)
+                if _sr is not None:
+                    return _sr
+                return va - vb
+            return None
     # 7. Luisa gas: Σ miles / mpg × $per-gallon
     miles = re.findall(rf"({N}) miles", full)
     gm2 = re.search(rf"one gallon of gas can be used to drive ({N}) miles", full)
@@ -23325,9 +23414,21 @@ def _money_singles_system(premises: list, question: str):
     ma = (ma0, ma1) if ma0 and ma1 else None
     tp = re.search(rf"gives a ({N})% tip", full)
     pb = re.search(rf"pays with a \$({N})", full)
+    subj8 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
     if ma and tp and pb and "how much does she get in change" in ql:
         if dok({ma[0].group(1), ma[1].group(1), tp.group(1), pb.group(1)}):
-            return _rs_ret(f(pb.group(1)) - (f(ma[0].group(1)) + f(ma[1].group(1))) * (1 + f(tp.group(1)) / 100))
+            spend8 = _compute(f"({_num(f(ma[0].group(1)))} + {_num(f(ma[1].group(1)))}) * "
+                              f"(1 + {_num(f(tp.group(1)))} / 100)")
+            v = _rs_ret(f(pb.group(1)) - spend8)
+            if v is not None and subj8:
+                # two SIGNED facts (paid-with/spent), not one precomputed net — the change_q
+                # remainder fold genuinely re-derives the difference itself.
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(subj8.group(1)), MONEY, f(pb.group(1)), "have"),
+                    Quantity(_key(subj8.group(1)), MONEY, spend8, "spend")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 9. James pages→cents: n notebooks × p pages; pays $D → D·100/(n·p)
     nb = re.search(rf"buys ({N}) notebooks with ({N}) pages each", full)
     pd = re.search(rf"pays \$({N})", full)
@@ -23398,9 +23499,16 @@ def _money_singles_system(premises: list, question: str):
     rs = re.search(rf"spends ({N}) dollars? every time", full)
     rt = re.search(rf"makes ({N}) trips to the store every month", full)
     rl = re.search(rf"had \$({N}) dollars? left [\w ]*?after a year", full)
+    subj18 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
     if rs and rt and rl and re.search(r"how much money ?,? (?:in dollars ?,? )?did (?:he|she) have", full):
         if dok({rs.group(1), rt.group(1), rl.group(1)}):
-            return _rs_ret(f(rl.group(1)) + f(rs.group(1)) * f(rt.group(1)) * 12)
+            v = _rs_ret(f(rl.group(1)) + f(rs.group(1)) * f(rt.group(1)) * 12)
+            if v is not None and subj18:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(subj18.group(1)), MONEY, v, "have")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 19. crayons: has a packs + buys b; $p per pack → (a+b)·p
     ca0 = re.search(rf"has ({N}) packs of \w+", full)
     ca1 = re.search(rf"buy ({N}) more", full)
@@ -23423,6 +23531,7 @@ def _money_singles_system(premises: list, question: str):
     #     "tickets $5 on Monday, twice as much Wednesday, 5× Monday on Saturday; goes Wed + Sat" → 2·5+5·5=35.
     _dre = r"(monday|tuesday|wednesday|thursday|friday|saturday|sunday)"
     bm = re.search(rf"\$({N}) (?:each )?on an? {_dre}\b", full)
+    subj21 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
     if bm and re.search(r"how much does \w+ spend", ql):
         base_day, base_price = bm.group(2), f(bm.group(1))
         prices = {base_day: base_price}
@@ -23441,10 +23550,32 @@ def _money_singles_system(premises: list, question: str):
         vm = re.search(r"(?:goes|go|went|attends?|visits?)\b[^.]*", full)
         goes = set(re.findall(_dre, vm.group(0)) if vm else []) | set(re.findall(_dre, ql))
         if goes and all(d in prices for d in goes) and dok({bm.group(1)}):
-            return _rs_ret(sum(prices[d] for d in goes))
+            v = _rs_ret(sum(prices[d] for d in goes))
+            if v is not None and subj21:
+                # one SIGNED spend fact per visited day, not one precomputed sum.
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(subj21.group(1)), MONEY, prices[d], "spend") for d in goes])
+                if _sr is not None:
+                    return _sr
+            return v
     # 22. lunch thirds — DELETED (#315): now the generic `_anchored_sum_system` claims it, via the shared
     #     `_equality_relation` ("Rick and Jose … the same price" → Rick = Jose) + the "for all three" sum cue.
     # 23. Daphney potatoes: buys a kg; b kg costs $c → a·c/b
+    # NOT converted: the real GSM8K text is "If 2 kg of potatoes costs $6, how much will she
+    # pay?" — the "if" clause stays FUSED to the question (not split into its own premise), so
+    # its own stated values ("2", "$6") sit inside `readings[-1]` (the question's own reading).
+    # GUARD 12 ("dropped unit/money quantity") scans the QUESTION too, not just premises — and
+    # since `_rs_ret` logs only the FINAL scalar to `_compute()` (never the individual factors
+    # "5 * 6 / 2"), there is genuinely no audit-log evidence those two numbers were used, so
+    # GUARD 12 (correctly, by its own contract) declines. This is a NEW, distinct gap from
+    # `_rate_singles_system`'s deferred branches: GUARD 12-15 never used to run for ANY singles
+    # branch at all (a bare-scalar return exits before they're ever reached) — converting a
+    # branch is what exposes this pre-existing characteristic (arithmetic done in Python, not
+    # via an audited expression string) to a guard seeing it for the first time. Fixing this
+    # would mean rebuilding every branch's arithmetic as a literal `_compute()` expression string
+    # instead of a pre-computed Python scalar — real, broader work, deliberately out of scope
+    # here; flagged as a recurring risk for future singles-conversion batches whenever a real
+    # example's QUESTION carries its own stated value.
     dp = re.search(rf"buys ({N}) kg of \w+", full)
     dc = re.search(rf"({N}) kg of \w+ costs \$({N})", full)
     if dp and dc and "how much will she pay" in ql and dp.group(1) != dc.group(1):
@@ -23453,16 +23584,36 @@ def _money_singles_system(premises: list, question: str):
     # 24. Carrie: $r/hour × h/week × 4 weeks − bike $B
     cr = re.search(rf"works for \$({N}) an hour and ({N}) hours a week", full)
     cb = re.search(rf"bike for \$({N})", full)
+    subj24 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
     if cr and cb and "a month since she started" in full and "left over" in ql:
         if dok({cr.group(1), cr.group(2), cb.group(1)}):
-            return _rs_ret(f(cr.group(1)) * f(cr.group(2)) * 4 - f(cb.group(1)))
+            earn24 = _compute(f"{_num(f(cr.group(1)))} * {_num(f(cr.group(2)))} * 4")
+            v = _rs_ret(_compute(f"{_num(earn24)} - {_num(f(cb.group(1)))}"))
+            if v is not None and subj24:
+                # SIGNED facts (earn/spend), not one precomputed net — the remainder fold
+                # genuinely re-derives the difference itself.
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(subj24.group(1)), MONEY, earn24, "earn"),
+                    Quantity(_key(subj24.group(1)), MONEY, f(cb.group(1)), "spend")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 25. Norris: saved months + spent → left
     ns = re.findall(rf"\$({N}) in (?:january|february|march|april|may|june|july|august|september|october|november|december)", full)
     nx = re.search(rf"spent \$({N}) on an? [\w ]+", full)
-    if len(ns) >= 3 and nx and re.search(r"how much money does \w+ have left", ql):
+    subj25 = re.search(r"how much money does (\w+) have left", ql)
+    if len(ns) >= 3 and nx and subj25:
         if dok(set(ns) | {nx.group(1)}):
             r = sum(f(x) for x in ns) - f(nx.group(1))
-            return r if r > 0 else None
+            if r > 0:
+                # one signed "save" fact per month plus the "spend" fact, not one precomputed net.
+                facts = [Quantity(_key(subj25.group(1)), MONEY, f(x), "save") for x in ns]
+                facts.append(Quantity(_key(subj25.group(1)), MONEY, f(nx.group(1)), "spend"))
+                _sr = _singles_result(readings_prem, premises, facts)
+                if _sr is not None:
+                    return _sr
+                return r
+            return None
     return None
 
 
@@ -25997,7 +26148,7 @@ _EARLY_SYSTEMS = [
     # MULTIPLICATIVE SINGLES: thirty-three chain branches (#228).
     ("mult_singles", lambda P, Q, R, _fn=_mult_singles_system: _fn(P, Q)),
     # MONEY SINGLES: twenty-five money branches (#227).
-    ("money_singles", lambda P, Q, R, _fn=_money_singles_system: _fn(P, Q)),
+    ("money_singles", lambda P, Q, R: _money_singles_system(P, Q, R)),   # MIGRATED (9/24 branches)
     # RATE/PRODUCT SINGLES: sixteen unit-rate branches (#226).
     ("rate_singles", lambda P, Q, R: _rate_singles_system(P, Q, R)),   # MIGRATED (8/16 branches)
     # PERCENT-OF-MONEY tails: increased bill / spent-percent backward / pay-fraction product.
