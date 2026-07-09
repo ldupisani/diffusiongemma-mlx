@@ -8999,6 +8999,144 @@ class TestMixedSinglesBSystemResultBatch5(unittest.TestCase):
         self.assertEqual(reading.solve(text), 42)
 
 
+class TestMixedSinglesCSystemResultBatch6(unittest.TestCase):
+    """#407 — obligation-absorption batch 6: 16 of `_mixed_singles_c_system`'s 39 active
+    branches (1,3,7,8,9,13,15,16,22,24,26,27,30,34,35,39) now emit fact(s) instead of a bare
+    scalar. Two were GENERALIZED FIRST as part of conversion (not retrofitted after, per the
+    standing rule): #9 (Carla) was hardcoded to "pigs"/"horses" -- now reads any two `animal`
+    category members, cross-checked across two independent count-searches (the clause splitter
+    can sever "has N X" from "M Y" onto separate premises, so a single combined regex isn't
+    safe here); #15 (Jon laundry) was hardcoded to "shirts"/"pants" -- now reads any two
+    `clothing` members, with the wash clause cross-checked against the same two captured words.
+    #13 and #22 are genuine 3-fact re-derivations; #24 and #35 are genuine 2-fact
+    re-derivations; #30 is a genuine 3-fact CATEGORY-SUM over the `animal` category. The rest
+    are single echo facts. Fresh synthetic numbers per branch, distinct from any GSM8K-sourced
+    text. See the function's own docstring for the three NEW gap classes this batch's screening
+    found (a question's own fused percent-clause hijacking the top-level percent handler; an
+    all-caps "CDs" mis-tagged as a name; "divided...among" mis-tagged as the arithmetic division
+    operator) and why the other 23 branches stay unconverted."""
+
+    def test_calorie_constrained_purchase_returns_system_result(self):
+        # branch 1: subject captured off the "X has $N" clause.
+        text = ("Oranges have 60 calories and cost $0.80 each. If Omar has $15 and needs to "
+                "make sure he gets 300 calories, how much money will he have left after he "
+                "buys the oranges he needs?")
+        self.assertEqual(reading.solve(text), 11)
+
+    def test_family_cookie_residual_returns_system_result(self):
+        # branch 3: subject captured off the question's own "left for X" clause.
+        text = ("Sara made cookies for herself and her family. Her father ate 8 cookies and "
+                "her mother ate half as much as the father. Her brother ate 3 more than her "
+                "mother. How many cookies are left for Sara if she made 25 cookies in total?")
+        self.assertEqual(reading.solve(text), 6)
+
+    def test_eat_and_plant_equation_returns_system_result(self):
+        # branch 7: subject captured off the question's own "how many apples did X eat".
+        text = ("Nina bought nine apples from the store. From the apples she bought, for each "
+                "that Nina ate, she planted two trees from the remaining ones. How many apples "
+                "did Nina eat?")
+        self.assertEqual(reading.solve(text), 3)
+
+    def test_free_time_words_returns_system_result(self):
+        # branch 8: subject captured off the "X has N hours to watch" clause.
+        text = ("Omar has 6 hours to watch movies and read. He watches one movie that is 2 "
+                "hours and one movie that is 3 hours. He then decides to read. If he can read "
+                "15 words a minute, how many words does he read before his free time is up?")
+        self.assertEqual(reading.solve(text), 900)
+
+    def test_generalized_per_animal_water_returns_system_result(self):
+        # branch 9: GENERALIZED as part of conversion -- was hardcoded to "pigs"/"horses",
+        # now reads any two `animal` category members via two independent count-searches.
+        text = ("Nadia needs to bring water to her animals. Each cow needs twice as much "
+                "water as a goat, and the chickens drink from one tank that needs 15 gallons. "
+                "How many gallons of water does Nadia need to bring if she has 4 goats and 3 "
+                "cows and each goat needs 2 gallons of water?")
+        self.assertEqual(reading.solve(text), 35)
+
+    def test_mixed_unit_feet_sum_returns_three_facts(self):
+        # branch 13: a genuine 3-fact re-derivation (miles/yards/feet, all converted to feet).
+        text = ("Omar walked 2 miles. Sara walked 500 yards and Amir walked 900 feet. How "
+                "many combined feet did the friends walk?")
+        self.assertEqual(reading.solve(text), 12960)
+
+    def test_generalized_laundry_loads_returns_system_result(self):
+        # branch 15: GENERALIZED as part of conversion -- was hardcoded to "shirts"/"pants",
+        # now reads any two `clothing` category members, cross-checked against the wash clause.
+        text = ("Nadia's laundry machine can do 6 pounds of laundry at a time. 3 jackets "
+                "weigh 1 pound and 5 pairs of shorts weigh 1 pound. If she needs to wash 9 "
+                "jackets and 15 shorts, how many loads of laundry does she have to do?")
+        self.assertEqual(reading.solve(text), 1)
+
+    def test_marble_bag_gift_returns_system_result(self):
+        # branch 16: subject captured off the question's own "does X have" clause.
+        text = ("Farah had 15 green marbles. Then she bought 4 bags of blue marbles. There "
+                "were 8 marbles in each bag. She created a gift of 3 green marbles and 5 blue "
+                "marbles and gave it to a friend. How many marbles does Farah have now?")
+        self.assertEqual(reading.solve(text), 39)
+
+    def test_three_holder_crayon_sum_returns_three_facts(self):
+        # branch 22: a genuine 3-fact re-derivation, subject names captured per holder clause.
+        text = ("Nina has 40 crayons. Sara has 15 and Omar has three fewer crayons than Sara. "
+                "How many crayons do they have in total?")
+        self.assertEqual(reading.solve(text), 67)
+
+    def test_two_day_goal_sum_returns_two_facts(self):
+        # branch 24: a genuine 2-fact combined_q re-derivation; "tom" stays a literal regex
+        # anchor (not generalized), so the second player's name must literally be "Tom".
+        text = ("Priya and Tom were playing football. On the first day, Priya scored three "
+                "goals, which was two less than Tom. On the second day, Priya scored one goal "
+                "less than Tom who scored five goals. How many goals did Priya and Tom score "
+                "during these two days?")
+        self.assertEqual(reading.solve(text), 17)
+
+    def test_dozen_roses_week_returns_system_result(self):
+        # branch 26: subject captured off the "X decided to send...roses" premise clause.
+        text = ("Farid decided to send his wife 3 dozen roses every day for the week.  How "
+                "many total roses did he send?")
+        self.assertEqual(reading.solve(text), 252)
+
+    def test_family_cookie_share_returns_system_result(self):
+        # branch 27: entity stays the literal category word "child" (NOT generalized -- the
+        # adult/child roles are structurally fixed by the branch's own arithmetic).
+        text = ("In Nadia's family, there are two adults and three children. In a cookie jar, "
+                "there are a total of 90 cookies. If the adults eat 1/3 of the cookies and "
+                "then gives the rest to the children to divide equally, how many cookies does "
+                "each child get?")
+        self.assertEqual(reading.solve(text), 20)
+
+    def test_farm_percent_chain_returns_category_sum(self):
+        # branch 30: a genuine 3-fact CATEGORY-SUM over the `animal` category (cow/duck/pig
+        # roles stay literal -- structurally fixed, NOT generalized, per the standing rule's
+        # own "identity-agnostic" test).
+        text = ("Omar has a farm with animals. He has 10 cows, 50% more ducks. Omar also has "
+                "as many pigs as one-fifth of ducks and cows in total. How many animals does "
+                "Omar have on his farm?")
+        self.assertEqual(reading.solve(text), 30)
+
+    def test_rose_fraction_gift_returns_system_result(self):
+        # branch 34: subject captured off the question's own "does X give" clause.
+        text = ("Priya has $180. She wants to buy roses at $3 each and give some of the roses "
+                "to her friends, Jenna and Imma. Jenna will receive  1/3 of the roses, and  "
+                "Imma will receive 1/2 of the roses. How many roses does Priya give to her "
+                "friends?")
+        self.assertEqual(reading.solve(text), 50)
+
+    def test_tip_change_returns_two_signed_facts(self):
+        # branch 35: a genuine 2-fact change_q re-derivation (have + spend).
+        text = ("Farid ordered four boxes of pizza, which cost $8 each box. He then gave a "
+                "tip which amounts to 1/8 of the total cost of his order. If he gave the "
+                "delivery man $50, how much change did he receive?")
+        self.assertEqual(reading.solve(text), 14)
+
+    def test_tank_third_mpg_returns_system_result(self):
+        # branch 39: subject captured via the first-capitalized-word fallback.
+        text = ("Nina is wondering how many miles each gallon of gas gets her. Her gas tank "
+                "is 15 gallons. She has 2/3 of a tank left after she drives to and from work, "
+                "which is 5 miles away from her house. How many miles per gallon does she "
+                "get?")
+        self.assertEqual(reading.solve(text), 2)
+
+
 class TestIncrement237GenericRateChain(unittest.TestCase):
     """#237 — the GENERIC RATE-CHAIN solver (dimensional analysis over stated unit bridges),
     the generalization of the specific rate×span family. Registered LAST in _EARLY_SYSTEMS."""

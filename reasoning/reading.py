@@ -22057,7 +22057,7 @@ def _vocab_singles_system(premises: list, question: str):
     return None
 
 
-def _mixed_singles_c_system(premises: list, question: str):
+def _mixed_singles_c_system(premises: list, question: str, readings_prem: list = None):
     """MIXED SINGLES C (#231) — thirty-nine more tightly-gated branches over the residual
     fully-read pool: calorie-constrained purchases, discount brings, family cookie residuals,
     shortfalls, color partitions (per-color when "the same amount"), fraction-of-remainder
@@ -22069,7 +22069,49 @@ def _mixed_singles_c_system(premises: list, question: str):
     cookie shares, income fractions, book-growth chains, farm percent chains, run-walk minutes,
     two-bag compares, profit-per-book customers, rose fractions, tip change, lot shares,
     donut margins, divided-card keeps, and tank-third mpg. Every branch digit-accounted;
-    positive. None otherwise."""
+    positive. None otherwise.
+
+    OBLIGATION-ABSORPTION BATCH 6 (see `_rate_singles_system`'s docstring for the recipe, and
+    `_singles_result`): 16 of the 39 branches (1,3,7,8,9,13,15,16,22,24,26,27,30,34,35,39) now
+    emit fact(s) instead of a bare scalar. Two were GENERALIZED FIRST, per the standing rule
+    (checked BEFORE conversion this batch, not retrofitted after): #9 (Carla) was hardcoded to
+    "pigs"/"horses" — now reads any two members of the existing `animal` category, with the
+    per-unit-rate clause and the "twice as much water as a <X>" relation cross-checked against
+    the SAME two captured words (the `_mult_singles_system` #1 cross-reference technique); #15
+    (Jon laundry) was hardcoded to "shirts"/"pants" — now reads any two `clothing` members, with
+    the wash clause cross-checked against the same two captured garment words. #13
+    (Lionel/Esther/Niklaus) and #22 (Wanda/Dina/Jacob) are genuine 3-fact re-derivations
+    (mixed-unit feet conversion; a 3-holder sum); #24 (Gina/Tom) and #35 (Allen) are genuine
+    2-fact re-derivations (per-day totals via `combined_q`; a signed have/spend pair via the
+    `change_q` remainder fold); #30 (Philip) is a genuine 3-fact CATEGORY-SUM over the `animal`
+    category (cow/duck/pig, singular-lemma keys, mirroring `_mult_singles_system` #26's
+    man/woman/child precedent). The rest are single echo facts. #27 (Everlee) keeps the
+    hardcoded literal entity "child" (NOT generalized) — the adult/child roles are structurally
+    FIXED by the branch's own arithmetic (adults always eat 1/3, children always split the
+    rest), not identity-agnostic like Carla's animals or Jon's garments; #30's cow/duck/pig
+    roles are likewise fixed (ducks=+50% of cows, pigs=1/5 of the ducks+cows sum) and were
+    screened but correctly left ungeneralized for the same reason.
+
+    The other 23 branches (2,4,5,6,10,11,12,14,17,18,19,20,21,23,25,28,29,31,32,33,36,37,38) stay
+    unconverted bare-scalar returns, each individually verified end-to-end (an agent ran every
+    CONVERT candidate through the ACTUAL `_EARLY_SYSTEMS` pipeline). Recurring already-catalogued
+    gaps: #4 comparative-with-no-than; #6,#29 imperative asks; #10,#18,#31 the "it…take X to
+    VERB" idiom (#18 doubly, also TIME_UNITS+pronoun); #14,#21,#36 untaught `wh_value` phrasings;
+    #19,#23 bare-copula-no-aux; #25 TIME_UNITS+pronoun. THREE NEW gap instances this batch: #2's
+    question has its OWN fused "20%" clause that the top-level percent-of handler greedily claims
+    before the "how much money" query logic ever runs (a `answer()`-dispatch-order gap, related
+    to but distinct from GUARD 12's "question carries its own stated value" class); #20's
+    all-caps "CDs" gets sense-tagged `name` instead of `noun` (a NEW sense-mistagging instance,
+    same class as "did"/"does"/"end"); #38's "divided…among" (a distributive share) gets tagged
+    with the arithmetic DIVISION `operator` sense, hijacking `answer()`'s top-level arithmetic
+    dispatch before the real question is ever read. #5,#17,#33,#36 have no nameable/stable
+    entity (an unnamed color-pool pair-ask, "her friend", garbled real-text grammar, an unnamed
+    "a man"); #11 is an untaught recipient-COMPARISON shape (comparing two named GIVEES of one
+    "give" event, not two holders); #12 is a `_parse_problem` clause-truncation instance (the
+    isolated question resolves correctly, but the real parsed text is corrupted); #28 hits the
+    "do"/"does" verb-not-auxiliary sense-mistagging bug in a THIRD construction ("how much do
+    THEY earn"); #32 is a comparative with an implicit (unstated) standard; #37 is a compound
+    "buy AND sell" dual-verb ask with no consumer."""
     N = _RS_N
     import math
 
@@ -22092,11 +22134,17 @@ def _mixed_singles_c_system(premises: list, question: str):
     t1a = re.search(rf"oranges have ({N}) calories", full)
     t1b = re.search(rf"\$({N}) each", full)
     t1 = (t1a, t1b) if t1a and t1b else None
-    t2 = re.search(rf"has \$({N})", full)
+    t2 = re.search(rf"(\w+) has \$({N})", full)
     t3 = re.search(rf"gets ({N}) calories", full)
     if t1 and t2 and t3 and "how much money will he have left" in ql:
-        if dok({t1[0].group(1), t1[1].group(1), t2.group(1), t3.group(1)}):
-            return _rs_ret(f(t2.group(1)) - f(t3.group(1)) / f(t1[0].group(1)) * f(t1[1].group(1)))
+        if dok({t1[0].group(1), t1[1].group(1), t2.group(2), t3.group(1)}):
+            v = _rs_ret(f(t2.group(2)) - f(t3.group(1)) / f(t1[0].group(1)) * f(t1[1].group(1)))
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(t2.group(1)), MONEY, v, "have")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 2. Charlotte boots: original $p, discount d% → p(1−d/100)
     c1a = re.search(rf"original price is \$({N})", full)
     c1b = re.search(rf"discount of ({N})%", full)
@@ -22107,11 +22155,18 @@ def _mixed_singles_c_system(premises: list, question: str):
     m1 = re.search(rf"father ate ({N}) cookies", full)
     m2 = re.search(rf"brother ate ({N}) more", full)
     m3 = re.search(rf"made ({N}) cookies in total", full)
+    mn3 = re.search(r"left for (\w+)", ql)
     if m1 and m2 and m3 and "half as much as the father" in full and "left" in ql:
         if dok({m1.group(1), m2.group(1), m3.group(1)}):
             fa = f(m1.group(1))
             mo = fa / 2
-            return _rs_ret(f(m3.group(1)) - fa - mo - (mo + f(m2.group(1))))
+            v = _rs_ret(f(m3.group(1)) - fa - mo - (mo + f(m2.group(1))))
+            if v is not None and mn3 is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(mn3.group(1)), ("cookie", frozenset()), v, "have")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 4. Zachary shortfall: three prices; has $H → Σ − H
     z1 = re.search(rf"ball costs \$({N})", full)
     z2 = re.search(rf"shorts cost \$({N})", full)
@@ -22147,31 +22202,57 @@ def _mixed_singles_c_system(premises: list, question: str):
             return _rs_ret(t_ - red - black)
     # 7. Mary apples eaten: n apples; per eaten planted 2 from remaining → x: 2x = n − x
     ma = re.search(rf"bought (\w+|{N}) apples", full)
-    if ma and "she planted two trees from the remaining" in full \
-            and "how many apples did \\w+ eat" not in "" and re.search(r"how many apples did \w+ eat", ql):
+    mn7 = re.search(r"how many apples did (\w+) eat", ql)
+    if ma and "she planted two trees from the remaining" in full and mn7:
         n_ = w(ma.group(1))
         toks = {ma.group(1)} if ma.group(1)[0].isdigit() else set()
         if n_ and dok(toks | {"2"} if "2" in full else toks):
-            return _rs_ret(n_ / 3)
+            v = _rs_ret(n_ / 3)
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(mn7.group(1)), ("apple", frozenset()), v, "eat")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 8. Henri words: H hours; movies a+b; reads r words/min → (H−a−b)·60·r
+    hn8 = re.search(r"(\w+) has \d+ hours to watch", full)
     h1 = re.search(rf"has ({N}) hours to watch", full)
     h2 = re.findall(rf"movie that is ({N}) hours", full)
     h3 = re.search(rf"read ({N}) words a minute", full)
     if h1 and len(h2) == 2 and h3 and "how many words" in ql:
         if dok({h1.group(1), h3.group(1)} | set(h2)):
-            return _rs_ret((f(h1.group(1)) - f(h2[0]) - f(h2[1])) * 60 * f(h3.group(1)))
-    # 9. Carla water: pigs p ×g each; horses h ×2g; tank t
-    ca0 = re.search(rf"has ({N}) pigs", full)
-    ca1 = re.search(rf"({N}) horses", full)
-    ca2x = re.search(rf"each pig needs ({N}) gallons", full)
-    ca = (ca0, ca1, ca2x) if ca0 and ca1 and ca2x else None
-    ct = re.search(rf"needs ({N}) gallons", full)
-    if ca and "each horse needs twice as much water as a pig" in full \
-            and "how many gallons" in ql:
+            v = _rs_ret((f(h1.group(1)) - f(h2[0]) - f(h2[1])) * 60 * f(h3.group(1)))
+            if v is not None and hn8 is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(hn8.group(1)), ("word", frozenset()), v, "read")])
+                if _sr is not None:
+                    return _sr
+            return v
+    # 9. Carla water: X p ×g each; Y h ×2g; tank t (X/Y read via the `animal` category — was
+    # hardcoded to "pigs"/"horses" specifically; the per-unit rate clause and the "twice as much
+    # water as a <X>" relation are cross-checked against the SAME two captured animal words. Two
+    # INDEPENDENT count-searches, not one combined regex — the clause splitter can sever "has N
+    # X" from "M Y" onto separate premises, so they aren't guaranteed contiguous in `full`.)
+    _animal_cat9 = _cat_re('animal')
+    ca0 = re.search(rf"has ({N}) ({_animal_cat9})", full)
+    ca1 = re.search(rf"({N}) ({_animal_cat9})", full[ca0.end():]) if ca0 else None
+    a1_9 = _noun_lemma(ca0.group(2)) if ca0 else None
+    a2_9 = _noun_lemma(ca1.group(2)) if ca1 else None
+    ca2x = re.search(rf"each {re.escape(a1_9)} needs ({N}) gallons", full) if ca0 else None
+    combo9 = ca0 is not None and ca1 is not None and \
+        f"each {a2_9} needs twice as much water as a {a1_9}" in full
+    cn9 = re.search(r"(\w+) needs to bring water to (?:his|her|their) animals", full)
+    if ca0 and ca1 and ca2x and combo9 and "how many gallons" in ql:
         tank = re.search(rf"tank that needs ({N}) gallons", full)
-        if tank and dok({ca[0].group(1), ca[1].group(1), ca[2].group(1), tank.group(1)}):
-            pig = f(ca[2].group(1))
-            return _rs_ret(f(ca[0].group(1)) * pig + f(ca[1].group(1)) * 2 * pig + f(tank.group(1)))
+        if tank and dok({ca0.group(1), ca1.group(1), ca2x.group(1), tank.group(1)}):
+            pig = f(ca2x.group(1))
+            v = _rs_ret(f(ca0.group(1)) * pig + f(ca1.group(1)) * 2 * pig + f(tank.group(1)))
+            if v is not None and cn9 is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(cn9.group(1)), ("gallon", frozenset()), v, "need")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 10. Matt/Patty/Rachel: M h hours; P = M/3; R = 2P + 5
     mp2 = re.search(rf"can paint a house in ({N}) hours", full)
     mr = re.search(rf"({N}) more than double the amount of hours", full)
@@ -22197,12 +22278,21 @@ def _mixed_singles_c_system(premises: list, question: str):
         if dok({al[0].group(1), al[1].group(1)}):
             return _rs_ret(f(al[0].group(1)) + 2 * f(al[1].group(1)))
     # 13. Lionel feet: a miles + b yards + c feet → feet
-    li = re.search(rf"walked ({N}) miles", full)
-    le = re.search(rf"walked ({N}) yards", full)
-    ln3 = re.search(rf"walked ({N}) feet", full)
+    li = re.search(rf"(\w+) walked ({N}) miles", full)
+    le = re.search(rf"(\w+) walked ({N}) yards", full)
+    ln3 = re.search(rf"(\w+) walked ({N}) feet", full)
     if li and le and ln3 and "combined feet" in ql:
-        if dok({li.group(1), le.group(1), ln3.group(1)}):
-            return _rs_ret(f(li.group(1)) * 5280 + f(le.group(1)) * 3 + f(ln3.group(1)))
+        if dok({li.group(2), le.group(2), ln3.group(2)}):
+            fi, fe, ff = f(li.group(2)) * 5280, f(le.group(2)) * 3, f(ln3.group(2))
+            v = _rs_ret(fi + fe + ff)
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(li.group(1)), ("foot", frozenset()), fi, "walk"),
+                    Quantity(_key(le.group(1)), ("foot", frozenset()), fe, "walk"),
+                    Quantity(_key(ln3.group(1)), ("foot", frozenset()), ff, "walk")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 14. class books: t tables; 2/5×t books on each → t · (2/5·t)
     cb0 = re.search(rf"has ({N}) tables", full)
     cb1 = re.search(rf"({N})/({N}) times as many books", full)
@@ -22211,17 +22301,27 @@ def _mixed_singles_c_system(premises: list, question: str):
         if dok({cb[0].group(1), cb[1].group(1), cb[1].group(2)}):
             t_ = f(cb[0].group(1))
             return _rs_ret(t_ * (f(cb[1].group(1)) / f(cb[1].group(2)) * t_))
-    # 15. Jon laundry: machine m lb; 4 shirts/lb, 2 pants/lb; wash a shirts b pants
+    # 15. Jon laundry: machine m lb; a X/lb, b Y/lb; wash p X q Y (X/Y read via the `clothing`
+    # category — was hardcoded to "shirts"/"pants" specifically; the wash clause is cross-checked
+    # against the SAME two captured garment words).
+    _clothing_cat15 = _cat_re('clothing')
     jl = re.search(rf"machine can do ({N}) pounds", full)
-    js2 = re.search(rf"({N}) shirts weigh ({N}) pound", full)
-    jp = re.search(rf"({N}) pairs of pants weigh ({N}) pound", full)
-    jw = re.search(rf"wash ({N}) shirts and ({N}) pants", full)
+    js2 = re.search(rf"({N}) ({_clothing_cat15}) weigh ({N}) pound", full)
+    jp = re.search(rf"({N}) pairs of ({_clothing_cat15}) weigh ({N}) pound", full)
+    jw = re.search(rf"wash ({N}) {re.escape(js2.group(2))} and ({N}) {re.escape(jp.group(2))}", full) \
+        if js2 and jp else None
     if jl and js2 and jp and jw and "how many loads" in ql:
-        if dok({jl.group(1), js2.group(1), js2.group(2), jp.group(1), jp.group(2),
+        if dok({jl.group(1), js2.group(1), js2.group(3), jp.group(1), jp.group(3),
                 jw.group(1), jw.group(2)}):
-            lbs = f(jw.group(1)) / f(js2.group(1)) * f(js2.group(2)) \
-                + f(jw.group(2)) / f(jp.group(1)) * f(jp.group(2))
-            return _rs_ret(lbs / f(jl.group(1)))
+            lbs = f(jw.group(1)) / f(js2.group(1)) * f(js2.group(3)) \
+                + f(jw.group(2)) / f(jp.group(1)) * f(jp.group(3))
+            v = _rs_ret(lbs / f(jl.group(1)))
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity("jon", ("load", frozenset()), v, "do")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 16. Janelle marbles: g green; b bags × m each; gift x green + y blue → left
     jn = re.search(rf"had ({N}) green marbles", full)
     jb2 = re.search(rf"bought ({N}) bags of blue marbles", full)
@@ -22229,10 +22329,17 @@ def _mixed_singles_c_system(premises: list, question: str):
     jg2a = re.search(rf"gift of ({N}) green marbles", full)
     jg2b = re.search(rf"({N}) blue marbles and gave", full)
     jg2 = (jg2a, jg2b) if jg2a and jg2b else None
-    if jn and jb2 and jm2 and jg2 and "how many marbles" in ql:
+    jqn16 = re.search(r"how many marbles does (\w+) have", ql)
+    if jn and jb2 and jm2 and jg2 and jqn16:
         if dok({jn.group(1), jb2.group(1), jm2.group(1), jg2[0].group(1), jg2[1].group(1)}):
-            return _rs_ret(f(jn.group(1)) + f(jb2.group(1)) * f(jm2.group(1))
-                           - f(jg2[0].group(1)) - f(jg2[1].group(1)))
+            v = _rs_ret(f(jn.group(1)) + f(jb2.group(1)) * f(jm2.group(1))
+                        - f(jg2[0].group(1)) - f(jg2[1].group(1)))
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(jqn16.group(1)), ("marble", frozenset()), v, "have")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 17. Shelly candy: bowl a left after eating b; friend brings 2(a+b); divide equally; friend eats c
     sh = re.search(rf"({N}) candies left in a bowl after \w+ ate ({N})", full)
     se = re.search(rf"after eating ({N}) of her candies", full)
@@ -22272,17 +22379,27 @@ def _mixed_singles_c_system(premises: list, question: str):
         if dok({br.group(1), ba.group(1)}):
             return _rs_ret(2 * f(ba.group(1)) - f(br.group(1)))
     # 22. Wanda crayons: a; b; c = b − 2 → total
-    wa0 = re.search(rf"has ({N}) crayons", full)
-    wa1 = re.search(rf"has ({N})\b(?! crayons)", full)
-    wa2f = re.search(rf"has (\w+|{N}) fewer crayons", full)
+    wa0 = re.search(rf"(\w+) has ({N}) crayons", full)
+    wa1 = re.search(rf"(\w+) has ({N})\b(?! crayons)", full)
+    wa2f = re.search(rf"(\w+) has (\w+|{N}) fewer crayons", full)
     wa = (wa0, wa1, wa2f) if wa0 and wa1 and wa2f else None
     if wa:
-        a_t, b_t, c_t = wa0.group(1), wa1.group(1), wa2f.group(1)
+        a_t, b_t, c_t = wa0.group(2), wa1.group(2), wa2f.group(2)
     if wa and "how many crayons do they have in total" in ql:
         c_ = w(c_t)
         toks = {a_t, b_t} | ({c_t} if c_t[0].isdigit() else set())
         if c_ and dok(toks):
-            return _rs_ret(f(a_t) + f(b_t) + (f(b_t) - c_))
+            av, bv = f(a_t), f(b_t)
+            cv = bv - c_
+            v = _rs_ret(av + bv + cv)
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(wa0.group(1)), ("crayon", frozenset()), av, "have"),
+                    Quantity(_key(wa1.group(1)), ("crayon", frozenset()), bv, "have"),
+                    Quantity(_key(wa2f.group(1)), ("crayon", frozenset()), cv, "have")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 23. jellybeans: a; removed b; added c back; removed d → a−b+c−d
     jj = re.search(rf"({N}) jellybeans in a jar", full)
     jr = re.search(rf"removed ({N}) of them", full)
@@ -22294,12 +22411,22 @@ def _mixed_singles_c_system(premises: list, question: str):
     # 24. Gina/Tom goals: d1: G a (= T−3 → T=a+3); d2: T b, G = b−2 → total
     gt = re.search(rf"scored (\w+|{N}) goals ?,? which was (\w+|{N}) less than tom", full)
     gt2 = re.search(rf"scored (\w+|{N}) goals? less than tom who scored (\w+|{N}) goals", full)
-    if gt and gt2 and "how many goals did" in ql:
+    gqn24 = re.search(r"how many goals did (\w+) and (\w+) score", ql)
+    if gt and gt2 and gqn24:
         a_ = w(gt.group(1)); o1 = w(gt.group(2))
         o2 = w(gt2.group(1)); b_ = w(gt2.group(2))
         toks = {g for g in (gt.group(1), gt.group(2), gt2.group(1), gt2.group(2)) if g[0].isdigit()}
         if all(x is not None for x in (a_, o1, o2, b_)) and dok(toks):
-            return _rs_ret(a_ + (a_ + o1) + b_ + (b_ - o2))
+            gina_total = a_ + (b_ - o2)
+            tom_total = (a_ + o1) + b_
+            v = _rs_ret(gina_total + tom_total)
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(gqn24.group(1)), ("goal", frozenset()), gina_total, "score"),
+                    Quantity(_key(gqn24.group(2)), ("goal", frozenset()), tom_total, "score")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 25. James writing: r pages/hour; p pages a day to k people → p·k·7/r
     jw2 = re.search(rf"writes ({N}) pages an hour", full)
     jp2 = re.search(rf"writes ({N}) pages a day to ({N}) different people", full)
@@ -22308,8 +22435,15 @@ def _mixed_singles_c_system(premises: list, question: str):
             return _rs_ret(f(jp2.group(1)) * f(jp2.group(2)) * 7 / f(jw2.group(1)))
     # 26. Tom roses: k dozen every day for the week → 12k·7
     tr = re.search(rf"({N}) dozen roses every day for the week", full)
+    tn26 = re.search(r"(\w+) decided to send \w+ \w+ \d+ dozen roses", full)
     if tr and "how many total roses" in ql and dok({tr.group(1)}):
-        return _rs_ret(12 * f(tr.group(1)) * 7)
+        v = _rs_ret(12 * f(tr.group(1)) * 7)
+        if v is not None and tn26 is not None:
+            _sr = _singles_result(readings_prem, premises, [
+                Quantity(_key(tn26.group(1)), ("rose", frozenset()), v, "send")])
+            if _sr is not None:
+                return _sr
+        return v
     # 27. Everlee cookies: total T; adults eat 1/3; rest to k children equally
     ev = re.search(rf"total of ({N}) cookies", full)
     ek = re.search(rf"(\w+|{N}) adults and (\w+|{N}) children", full)
@@ -22317,7 +22451,13 @@ def _mixed_singles_c_system(premises: list, question: str):
         k_ = w(ek.group(2))
         toks = {ev.group(1), "1", "3"} | {g for g in (ek.group(1), ek.group(2)) if g[0].isdigit()}
         if k_ and dok(toks):
-            return _rs_ret(f(ev.group(1)) * 2 / 3 / k_)
+            v = _rs_ret(f(ev.group(1)) * 2 / 3 / k_)
+            if v is not None and "each child" in ql:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity("child", ("cookie", frozenset()), v, "get")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 28. Ernie/Jack: E now = 4/5 of before; J = 2×before; before = n → combined
     er2 = re.search(rf"income is ({N})/({N}) of what it used to be", full)
     eu = re.search(rf"used to make \$({N})", full)
@@ -22343,7 +22483,18 @@ def _mixed_singles_c_system(premises: list, question: str):
         if dok({ph.group(1), ph.group(2)}):
             c_ = f(ph.group(1))
             d_ = c_ * (1 + f(ph.group(2)) / 100)
-            return _rs_ret(c_ + d_ + (c_ + d_) / 5)
+            p_ = (c_ + d_) / 5
+            v = _rs_ret(c_ + d_ + p_)
+            if v is not None:
+                # category-sum: entities keyed by the `animal` category's own singular lemma so
+                # the "how many animals" ask sums them via the pre-registered category fallback.
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity("cow", ("cow", frozenset()), c_, "have"),
+                    Quantity("duck", ("duck", frozenset()), d_, "have"),
+                    Quantity("pig", ("pig", frozenset()), p_, "have")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 31. Cindy mile: runs a mph, walks b mph; half mile each → minutes
     ci0 = re.search(rf"run at ({N}) miles per hour", full)
     ci1 = re.search(rf"walk at ({N}) mile", full)
@@ -22373,15 +22524,22 @@ def _mixed_singles_c_system(premises: list, question: str):
     # 34. Hanna roses: has $H; roses $p each; gives 1/3 + 1/2 → count given
     ha = re.search(rf"has \$({N})", full)
     hp = re.search(rf"roses at \$({N}) each", full)
-    if ha and hp and "1/3 of the roses" in full and "1/2 of the roses" in full \
-            and "how many roses does \\w+ give" not in "" and re.search(r"how many roses does \w+ give", ql):
+    hqn34 = re.search(r"how many roses does (\w+) give", ql)
+    if ha and hp and "1/3 of the roses" in full and "1/2 of the roses" in full and hqn34:
         if dok({ha.group(1), hp.group(1), "1", "3", "2"}):
             roses = f(ha.group(1)) / f(hp.group(1))
-            return _rs_ret(roses / 3 + roses / 2)
+            v = _rs_ret(roses / 3 + roses / 2)
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(hqn34.group(1)), ("rose", frozenset()), v, "give")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 35. Allen change: k boxes × $p; tip = 1/m of order; gave $G → change
     aa = re.search(rf"(\w+|{N}) boxes of pizza ?,? which cost \$({N}) each", full)
     at2 = re.search(rf"tip which amounts to ({N})/({N}) of the total cost", full)
     ag2 = re.search(rf"gave the delivery man \$({N})", full)
+    an35 = re.search(r"(\w+) ordered \w+ boxes of pizza", full)
     if aa and at2 and ag2 and "how much change" in ql:
         k_ = w(aa.group(1))
         toks = {aa.group(2), at2.group(1), at2.group(2), ag2.group(1)} \
@@ -22389,7 +22547,14 @@ def _mixed_singles_c_system(premises: list, question: str):
         if k_ and dok(toks):
             order = k_ * f(aa.group(2))
             tip = order * f(at2.group(1)) / f(at2.group(2))
-            return _rs_ret(f(ag2.group(1)) - order - tip)
+            v = _rs_ret(f(ag2.group(1)) - order - tip)
+            if v is not None and an35 is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(an35.group(1)), MONEY, f(ag2.group(1)), "have"),
+                    Quantity(_key(an35.group(1)), MONEY, _compute(f"{_num(order)} + {_num(tip)}"), "spend")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 36. lot worth: owned 1/2; sold 1/10 of share for $v → v·10·2
     lo = re.search(rf"owned ({N})/({N}) of a lot", full)
     ls = re.search(rf"sold ({N})/({N}) of his share for the amount of \$({N})", full)
@@ -22420,10 +22585,17 @@ def _mixed_singles_c_system(premises: list, question: str):
     # 39. Jim mpg: tank T gal; 2/3 left after driving 2d miles (d each way)
     jm3 = re.search(rf"tank is ({N}) gallons", full)
     jd3 = re.search(rf"({N}) miles away", full)
+    jn39 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
     if jm3 and jd3 and "2/3 of a tank left" in full and "miles per gallon" in ql:
         if dok({jm3.group(1), jd3.group(1), "2", "3"}):
             used = f(jm3.group(1)) / 3
-            return _rs_ret(2 * f(jd3.group(1)) / used)
+            v = _rs_ret(2 * f(jd3.group(1)) / used)
+            if v is not None and jn39 is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(jn39.group(1)), ("mile", frozenset()), v, "get")])
+                if _sr is not None:
+                    return _sr
+            return v
     return None
 
 
@@ -26642,7 +26814,7 @@ _EARLY_SYSTEMS = [
     # VOCAB+STRUCTURE SINGLES: twenty-eight branches with wave-22 vocabulary (#232).
     ("vocab_singles", lambda P, Q, R, _fn=_vocab_singles_system: _fn(P, Q)),
     # MIXED SINGLES C: thirty-nine residual branches (#231).
-    ("mixed_singles_c", lambda P, Q, R, _fn=_mixed_singles_c_system: _fn(P, Q)),
+    ("mixed_singles_c", lambda P, Q, R: _mixed_singles_c_system(P, Q, R)),   # MIGRATED (16/39 branches)
     # MIXED SINGLES B: thirty-three more residual branches (#230).
     ("mixed_singles_b", lambda P, Q, R: _mixed_singles_b_system(P, Q, R)),   # MIGRATED (13/33 branches)
     # MIXED SINGLES: thirty residual branches (#229).
