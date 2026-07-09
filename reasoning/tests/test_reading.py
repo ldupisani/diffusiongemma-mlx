@@ -8425,6 +8425,14 @@ class TestRateSinglesSystemResultPilot(unittest.TestCase):
             "his marbles to his sister. How many marbles does Leo have left?"),
             "undetermined")
 
+    def test_generalized_animal_pair_returns_system_result(self):
+        # branch 10 GENERALIZED (post-hoc audit): was hardcoded to the literal words
+        # "cats"/"dogs" -- now reads any two members of the existing `animal` category, so
+        # it fires for rabbits/goats too, not just cats and dogs.
+        text = ("Derek has 4 rabbits and 6 goats. He needs to pay a friend to watch them, "
+                "who charges $7 a night per animal. How much does Derek have to pay?")
+        self.assertEqual(reading.solve(text), 70)
+
 
 class TestMoneySinglesSystemResultBatch2(unittest.TestCase):
     """#403 — obligation-absorption batch 2: 9 of `_money_singles_system`'s 24 active branches
@@ -8456,6 +8464,24 @@ class TestMoneySinglesSystemResultBatch2(unittest.TestCase):
         seen = {(f.entity, f.amount) for fs in result.facts_by_premise.values() for f in fs}
         self.assertEqual(seen, {("first", 12), ("second", 8)})
         self.assertEqual(reading.solve(text), 20)
+
+    def test_generalized_vehicle_category_returns_system_result(self):
+        # branch 24 GENERALIZED (post-hoc audit): was hardcoded to the literal word "bike" --
+        # now reads any member of the existing `vehicle` category. solve() declines this
+        # branch's shape both before and after (a pre-existing tolerated BROKE, same as batches
+        # 3-4's Janine/Larry/Emma -- unrelated to the generalization); verify at the branch
+        # level that the SystemResult itself carries the right facts for a DIFFERENT vehicle
+        # than the original hardcoded "bike".
+        text = ("Nadia works for $8 an hour and 35 hours a week. She wants to buy a scooter "
+                "for $400. How much money will she have left over a month since she started "
+                "working?")
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._money_singles_system(premises, question, rp)
+        self.assertIsInstance(result, reading.SystemResult)
+        seen = {(f.entity, f.amount, f.verb) for fs in result.facts_by_premise.values() for f in fs}
+        self.assertEqual(seen, {("nadia", 1120, "earn"), ("nadia", 400, "spend")})
 
     def test_comparative_pair_returns_four_signed_facts(self):
         # branch 6: two holders, signed have/spend facts, answer()'s comparative fold.
@@ -8542,6 +8568,23 @@ class TestMultSinglesSystemResultBatch3(unittest.TestCase):
         seen = {(f.entity, f.amount) for fs in result.facts_by_premise.values() for f in fs}
         self.assertEqual(seen, {("priya", 216)})
         self.assertNotEqual(reading.solve(text), 216)
+
+    def test_generalized_animal_triple_returns_system_result(self):
+        # branch 1 GENERALIZED (post-hoc audit): was hardcoded to the literal words
+        # "dogs"/"cats"/"fish" -- now reads any three members of the existing `animal`
+        # category (the "combined" clause cross-checked against the same two captured words),
+        # so it fires for rabbits/goats/cows too, not just dogs/cats/fish.
+        text = ("Farid has 3 rabbits, 2 goats and twice as many cows as goats and rabbits "
+                "combined. How many pets does Farid have in total?")
+        self.assertEqual(reading.solve(text), 15)
+
+    def test_generalized_vehicle_word_returns_system_result(self):
+        # branch 29 GENERALIZED (post-hoc audit): was hardcoded to the literal word "cars" --
+        # now reads any member of the existing `vehicle` category, cross-checked against the
+        # question's own "how many toy <word>" ask.
+        text = ("A toy truck factory made 40 trucks yesterday. Today, they made twice the "
+                "number of trucks than yesterday. How many toy trucks did the factory make?")
+        self.assertEqual(reading.solve(text), 120)
 
     def test_garden_pair_returns_two_signed_facts(self):
         # branch 10: a genuine 2-fact re-derivation (have + give), the change_q remainder fold.
@@ -8677,6 +8720,30 @@ class TestMixedSinglesSystemResultBatch4(unittest.TestCase):
                 "tall. The third wall is 6 meters wide and 3 meters tall. The final wall is 5 "
                 "meters wide and 3 meters tall. If each can of paint covers 3 square meters, "
                 "how many cans of paint does Priya need?")
+        self.assertEqual(reading.solve(text), 19)
+
+    def test_generalized_wall_area_frame_returns_system_result(self):
+        # branch 5 GENERALIZED (post-hoc audit): was hardcoded on six axes — "cans" (item
+        # noun), "meters" (unit), "two" (count word), "her" (owner pronoun), "walls"
+        # (surface noun), "painting" (premise verb). Now every axis is captured: the unit
+        # is measure-category-gated and consistency-checked against the coverage clause,
+        # the item noun is anchored in the "each <item> … covers" premise and matched back
+        # to the question's "how many <items>" via _number_variants, the emitted fact
+        # carries the question's own verb, and a count word may prefix ANY dimensions
+        # clause (here BOTH). All-admitted vocabulary, different member on every axis:
+        # feet/bucket/three+two/his/panels/cleaning, question verb "use".
+        text = ("Marcus is cleaning his room. Three of his panels are 4 feet wide and 2 feet "
+                "tall. Two of his panels are 6 feet wide and 2 feet tall. If each bucket of "
+                "paint covers 3 square feet, how many buckets of paint does Marcus use?")
+        self.assertEqual(reading.solve(text), 16)
+
+    def test_generalized_wall_area_pronoun_question_falls_back_to_premise_subject(self):
+        # branch 5 GENERALIZED: a pronoun question-subject ("does she need") falls back to
+        # the "<Name> is <verb>ing" premise clause for the fact's entity.
+        text = ("Priya is painting her room. Two of her walls are 4 meters wide and 3 meters "
+                "tall. The third wall is 6 meters wide and 3 meters tall. The final wall is 5 "
+                "meters wide and 3 meters tall. If each can of paint covers 3 square meters, "
+                "how many cans of paint does she need?")
         self.assertEqual(reading.solve(text), 19)
 
     def test_page_residual_returns_system_result(self):
@@ -8839,6 +8906,16 @@ class TestMixedSinglesBSystemResultBatch5(unittest.TestCase):
         text = ("Mrs. Kade bought 3 bags of 2-pound bag of cat food and another 3 bags of dog "
                 "food that each weigh 1 more pounds than each bag of cat food. There are 16 "
                 "ounces in each pound. How many ounces of pet food did Mrs. Kade buy?")
+        self.assertEqual(reading.solve(text), 240)
+
+    def test_generalized_pet_food_animal_pair_returns_system_result(self):
+        # branch 8 GENERALIZED (post-hoc audit): was hardcoded to the literal words
+        # "cat"/"dog" -- now reads any two members of the existing `animal` category, with
+        # the second animal's per-bag weight still read RELATIVE to the first's (the
+        # problem's own base+delta structure), so it fires for rabbit/goat too.
+        text = ("Mrs. Kade bought 3 bags of 2-pound bag of rabbit food and another 3 bags of "
+                "goat food that each weigh 1 more pounds than each bag of rabbit food. There "
+                "are 16 ounces in each pound. How many ounces of pet food did Mrs. Kade buy?")
         self.assertEqual(reading.solve(text), 240)
 
     def test_four_person_average_returns_four_facts(self):

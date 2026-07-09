@@ -13042,7 +13042,12 @@ def _rate_singles_system(premises: list, question: str, readings_prem: list = No
     the emitted fact IS correct, `answer()` just never receives the real question); #15's real
     question is an IMPERATIVE ("calculate her total income") with no interrogative sense at all
     — `answer()` declines EVERY imperative by design, so converting this branch would guarantee a
-    pure regression with zero possible upside."""
+    pure regression with zero possible upside.
+
+    POST-HOC GENERALIZATION AUDIT (2026-07-09, user-directed review of all converted branches
+    across every batch): #10 was hardcoded to the literal words "cats"/"dogs" — now reads any two
+    members of the existing `animal` category via `_cat_re('animal')`, verified to still fire for
+    the original words and for a DIFFERENT pair (rabbits/goats)."""
     N = _RS_N
 
     def f(tok):
@@ -13155,8 +13160,10 @@ def _rate_singles_system(premises: list, question: str, readings_prem: list = No
     if len(runs) == 2 and "total length of time" in ql:
         if dok({x for pr in runs for x in pr}):
             return _rs_ret(sum(f(a) * f(b) for a, b in runs))
-    # 10. Michael animals: (a cats + b dogs) × $c a night per animal
-    am2 = re.search(rf"has ({N}) cats and ({N}) dogs", full)
+    # 10. Michael animals: (a X + b Y) × $c a night per animal — X/Y read via the `animal`
+    # category (was hardcoded to the literal words "cats"/"dogs"), so it fires for any two
+    # animal words, not just cats and dogs.
+    am2 = re.search(rf"has ({N}) {_cat_re('animal')} and ({N}) {_cat_re('animal')}", full)
     nm = re.search(rf"\$({N}) a night per animal", full)
     subj10 = re.search(r"how much does (\w+) have to pay", ql)
     if am2 and nm and subj10:
@@ -22466,7 +22473,14 @@ def _mixed_singles_b_system(premises: list, question: str, readings_prem: list =
     consumer exists at all (only a forward "what is N% of X" handler); #32 is a NEW gap — an
     all-loss-verb fact set with no baseline "have" makes `_holdings` return a NEGATIVE net amount
     (the loss-verb sign convention), flipping a comparative fold's sign and tripping the
-    negative-answer decline guard."""
+    negative-answer decline guard.
+
+    POST-HOC GENERALIZATION AUDIT (2026-07-09, user-directed review of all converted branches
+    across every batch): #8 was hardcoded to "cat"/"dog" (the two pet-food animals) — now reads
+    any two members of the existing `animal` category, with the second animal's per-bag weight
+    still read RELATIVE to the first's (the problem's own base+delta structure preserved, not
+    just the literal words swapped). Verified to still fire for the original words and for a
+    different pair (rabbit/goat)."""
     N = _RS_N
 
     def f(t):
@@ -22566,18 +22580,21 @@ def _mixed_singles_b_system(premises: list, question: str, readings_prem: list =
             need = tot * f(bw.group(1)) / 100
             won = f(bp[0].group(1)) * f(bp[1].group(1)) / 100
             return _rs_ret(f(bl.group(1)) - (need - won))
-    # 8. Anderson pet food: 2 bags of c-pound cat + 2 bags dog each c+2 lb; ×16 oz
-    ad = re.search(rf"({N}) bags of ({N})-pound bag of cat food", full)
-    ag = re.search(rf"({N}) bags of dog food that each weigh ({N}) more pounds", full)
+    # 8. Anderson pet food: 2 bags of c-pound X + 2 bags Y each c+2 lb; ×16 oz (X/Y read via the
+    # `animal` category — was hardcoded to "cat"/"dog" specifically; Y's per-bag weight stays
+    # relative to X's, matching the problem's own base+delta structure).
+    _animal_cat8 = _cat_re('animal')
+    ad = re.search(rf"({N}) bags of ({N})-pound bag of ({_animal_cat8}) food", full)
+    ag = re.search(rf"({N}) bags of ({_animal_cat8}) food that each weigh ({N}) more pounds", full)
     ao = re.search(rf"({N}) ounces in each pound", full)
     ao_v = f(ao.group(1)) if ao else _STATED_CONV.get(("pound", "ounce"))
     an8 = re.search(r"(\w+) bought \d+ bags of", full)
     if ad and ag and ao_v and "how many ounces" in ql:
-        toks = {ad.group(1), ad.group(2), ag.group(1), ag.group(2)} | ({ao.group(1)} if ao else set())
+        toks = {ad.group(1), ad.group(2), ag.group(1), ag.group(3)} | ({ao.group(1)} if ao else set())
         if dok(toks):
-            cat = f(ad.group(1)) * f(ad.group(2))
-            dog = f(ag.group(1)) * (f(ad.group(2)) + f(ag.group(2)))
-            v = _rs_ret((cat + dog) * ao_v)
+            first_total = f(ad.group(1)) * f(ad.group(2))
+            second_total = f(ag.group(1)) * (f(ad.group(2)) + f(ag.group(3)))
+            v = _rs_ret((first_total + second_total) * ao_v)
             if v is not None and an8 is not None:
                 _sr = _singles_result(readings_prem, premises, [
                     Quantity(_key(an8.group(1)), ("ounce", frozenset()), v, "buy")])
@@ -22885,7 +22902,14 @@ def _mixed_singles_system(premises: list, question: str, readings_prem: list = N
     clause, which structurally declines regardless of facts (the same gap already catalogued for
     money asks); #27 additionally hits a proper-noun tokenizer mis-parse on the multi-word org
     name "Cat Cafe Meow" (same class as `_money_singles_system` batch 2's team-name gap); #30 is
-    a pure arithmetic riddle with no premises/entity structure at all to bind a fact to."""
+    a pure arithmetic riddle with no premises/entity structure at all to bind a fact to.
+
+    GENERALIZED (per the standing "generalize before absorbing" rule): #5 (Lucille walls) was
+    hardcoded to the literal words "walls"/"cans"/"meters" and a fixed "two of her walls are"
+    subject frame — now reads the surface noun, the length unit (measure-category-gated), the
+    answer item noun, and the count word all directly from the text (see the branch's own inline
+    comment for the full read-back mechanism), so it fires for fence panels/bottles/feet just as
+    well as walls/cans/meters."""
     N = _RS_N
 
     def f(t):
@@ -22954,23 +22978,45 @@ def _mixed_singles_system(premises: list, question: str, readings_prem: list = N
             if _sr is not None:
                 return _sr
         return v
-    # 5. Lucille walls: Σ(w×h) walls / coverage → cans
-    walls = re.findall(rf"({N}) meters wide and ({N}) meters tall", full)
-    cv = re.search(rf"covers ({N}) square meters", full)
-    two = re.search(r"two of her walls are", full)
-    ln5 = re.search(r"(\w+) is painting", full)
-    if walls and cv and two and "how many cans" in ql:
-        toks = {x for pr in walls for x in pr} | {cv.group(1)}
-        if dok(toks):
+    # 5. Σ(count × w×h) surfaces / per-item coverage → items needed (generic dimensions
+    #    frame; batch-2 standing rule "generalize before absorbing" applied to what began
+    #    as the Lucille-walls single). Every incidental word is captured, not hardcoded:
+    #    the surface noun (walls / fence panels / …) and its count word ("two of her X
+    #    are" — any NUMBERS word or digit, any owner pronoun), the LENGTH UNIT (measure-
+    #    category-gated, and the SAME surface must appear on every dimension AND on the
+    #    coverage clause), and the answer ITEM noun (can / bottle / …), anchored in the
+    #    "each <item> … covers" premise and matched back — via _number_variants, so
+    #    singular/plural unify — to the question's "how many <items>". The emitted fact
+    #    carries the question's OWN verb (lesson: the aux fold needs an exact lemma match
+    #    for any verb other than have/own) and the question's named subject, falling back
+    #    to the "<Name> is <verb>ing" premise subject when the question uses a pronoun.
+    dims = re.findall(
+        rf"(?:(\w+) of (?:his|her|their|its) \w+ are )?({N}) (\w+) wide and ({N}) (\w+) tall",
+        full)
+    cv = re.search(rf"each (\w+)(?: of \w+)? covers ({N}) square (\w+)", full)
+    qm = re.search(r"how many (\w+)(?: of \w+)? (?:do|does|did|will|would|should) (\w+) (\w+)", ql)
+    if dims and cv and qm:
+        unit_surfaces = {_key(u) for d in dims for u in (d[2], d[4])} | {_key(cv.group(3))}
+        unit_ok = len(unit_surfaces) == 1 and _cat(cv.group(3), "measure")
+        item_ok = _key(qm.group(1)) in _number_variants(cv.group(1))
+        counts_ok = all((not d[0]) or d[0] in NUMBERS or d[0].isdigit() for d in dims)
+        toks = {x for d in dims for x in (d[1], d[3])} | {cv.group(2)} \
+            | {d[0] for d in dims if d[0] and d[0].isdigit()}
+        if unit_ok and item_ok and counts_ok and dok(toks):
             area = 0.0
-            for i, (w, h) in enumerate(walls):
-                mult = 2 if i == 0 else 1
+            for cnt, w, _u1, h, _u2 in dims:
+                mult = (float(cnt) if cnt.isdigit() else float(NUMBERS[cnt])) if cnt else 1.0
                 area += mult * f(w) * f(h)
-            r = area / f(cv.group(1))
+            r = area / f(cv.group(2))
             v = _rs_ret(r) if r == int(r) else None
-            if v is not None and ln5 is not None:
+            agent = qm.group(2)
+            if agent in {"he", "she", "they", "it", "we", "i", "you"}:
+                ln5 = re.search(r"(\w+) is \w+ing (?:his|her|their|its)", full)
+                agent = ln5.group(1) if ln5 else None
+            if v is not None and agent is not None:
                 _sr = _singles_result(readings_prem, premises, [
-                    Quantity(_key(ln5.group(1)), ("can", frozenset()), v, "need")])
+                    Quantity(_key(agent), (_noun_lemma(cv.group(1)), frozenset()), v,
+                             qm.group(3))])
                 if _sr is not None:
                     return _sr
             return v
@@ -23316,7 +23362,20 @@ def _mult_singles_system(premises: list, question: str, readings_prem: list = No
     complement, an each-quantified distributive explicitly excluded, a Frequency/Quantity type
     mismatch, the TIME-typed age domain, a subset-meeting-a-criterion count) — left unconverted on
     that structural reasoning rather than individually run against `answer()`, since leaving a
-    branch's existing bare-scalar behavior untouched carries no regression risk either way."""
+    branch's existing bare-scalar behavior untouched carries no regression risk either way.
+
+    POST-HOC GENERALIZATION AUDIT (2026-07-09, user-directed review of all converted branches
+    across every batch): #1 was hardcoded to "dogs"/"cats"/"fish" — now reads any three members
+    of the existing `animal` category (the "combined" clause cross-checked against the SAME two
+    words the count-clause captured, in either order, so an unrelated sentence elsewhere can't
+    hijack it). #29 was hardcoded to "cars" — now reads any `vehicle` category member, with the
+    "twice the number of…"/"how many toy…" clauses cross-checked against the same captured word.
+    Both re-verified to still fire for the original words and for different category members.
+    #22 (Jen ducks/chickens → a "bird" total) was SCREENED but NOT generalized: the `animal`
+    category has no registered "bird" subcategory, and the emitted fact's measure noun ("bird")
+    would need to be derived from whichever two words are matched — a correct generalization here
+    needs a NEW subcategory (or a word→hypernym lookup) more than a simple `_cat_re` swap, real
+    design work deliberately left for a future increment rather than attempted here."""
     N = _RS_N
 
     def f(t):
@@ -23329,11 +23388,21 @@ def _mult_singles_system(premises: list, question: str, readings_prem: list = No
         return all(dd in used for dd in re.findall(r"\d+(?:,\d{3})*(?:\.\d+)?",
                                                    " ".join(premises) + " " + question))
 
-    # 1. Ed pets: a dogs + b cats + 2×(a+b) fish → total
-    m = re.search(rf"(\w+) has ({N}) dogs ?,? ({N}) cats", full)
-    if m and "twice as many fish as cats and dogs combined" in full \
-            and "how many pets" in ql and dok({m.group(2), m.group(3)}):
-        a, b = f(m.group(2)), f(m.group(3))
+    # 1. Ed pets: a X + b Y + 2×(a+b) Z → total (X/Y/Z read via the `animal` category — was
+    # hardcoded to "dogs"/"cats"/"fish" specifically; the "combined" clause's third animal is
+    # cross-checked against the SAME two words the count-clause captured, in either order, so a
+    # stray unrelated "twice as many … combined" sentence elsewhere in the text can't hijack it).
+    _animal_cat = _cat_re('animal')
+    m = re.search(rf"(\w+) has ({N}) ({_animal_cat}) ?,? ({N}) ({_animal_cat})", full)
+    combo = None
+    if m:
+        combo = re.search(
+            rf"twice as many {_animal_cat} as {re.escape(m.group(3))} and {re.escape(m.group(5))} combined",
+            full) or re.search(
+            rf"twice as many {_animal_cat} as {re.escape(m.group(5))} and {re.escape(m.group(3))} combined",
+            full)
+    if m and combo and "how many pets" in ql and dok({m.group(2), m.group(4)}):
+        a, b = f(m.group(2)), f(m.group(4))
         v = _rs_ret((a + b) * 3)
         if v is not None:
             _sr = _singles_result(readings_prem, premises, [
@@ -23585,14 +23654,17 @@ def _mult_singles_system(premises: list, question: str, readings_prem: list = No
     ck = re.search(rf"to ({N}) miles", ql)
     if cl and ck and "twice as fast" in full and dok({cl.group(2), ck.group(1)}):
         return _rs_ret(f(cl.group(2)) / 2 * f(ck.group(1)))
-    # 29. factory: n yesterday; today twice → 3n
-    fy = re.search(rf"made ({N}) cars yesterday", full)
-    if fy and "twice the number of cars" in full and "how many toy cars" in ql \
-            and dok({fy.group(1)}):
+    # 29. factory: n yesterday; today twice → 3n (vehicle word read via the `vehicle` category —
+    # was hardcoded to "cars" specifically; the "twice the number of…" and "how many toy…"
+    # clauses are cross-checked against the SAME captured word).
+    _vehicle_cat = _cat_re('vehicle')
+    fy = re.search(rf"made ({N}) ({_vehicle_cat}) yesterday", full)
+    if fy and f"twice the number of {fy.group(2)}" in full \
+            and f"how many toy {fy.group(2)}" in ql and dok({fy.group(1)}):
         v = _rs_ret(3 * f(fy.group(1)))
         if v is not None:
             _sr = _singles_result(readings_prem, premises, [
-                Quantity("factory", ("car", frozenset({"toy"})), v, "make")])
+                Quantity("factory", (_noun_lemma(fy.group(2)), frozenset({"toy"})), v, "make")])
             if _sr is not None:
                 return _sr
         return v
@@ -23695,7 +23767,14 @@ def _money_singles_system(premises: list, question: str, readings_prem: list = N
     `answer()` consumer that inverts a rate from raw facts; #10 is a count/decomposition ask
     (how many bills, by denomination); #12/#17 can't safely infer an entity from their own
     captures (no name at all, or the asked entity is a DIFFERENT person than the one the
-    branch's regex ties the value to)."""
+    branch's regex ties the value to).
+
+    POST-HOC GENERALIZATION AUDIT (2026-07-09, user-directed review of all converted branches
+    across every batch): #24 was hardcoded to the literal word "bike" — now reads any member of
+    the existing `vehicle` category. `solve()` still declines this branch's shape both before and
+    after (a pre-existing tolerated BROKE, unrelated to the generalization — verified via a
+    direct pre-change check); the `SystemResult`/fact-level correctness was verified with a
+    DIFFERENT vehicle (scooter) instead of the original hardcoded "bike"."""
     N = _RS_N
 
     def f(t):
@@ -24003,9 +24082,10 @@ def _money_singles_system(premises: list, question: str, readings_prem: list = N
     if dp and dc and "how much will she pay" in ql and dp.group(1) != dc.group(1):
         if dok({dp.group(1), dc.group(1), dc.group(2)}):
             return _rs_ret(f(dp.group(1)) * f(dc.group(2)) / f(dc.group(1)))
-    # 24. Carrie: $r/hour × h/week × 4 weeks − bike $B
+    # 24. Carrie: $r/hour × h/week × 4 weeks − vehicle $B (was hardcoded to "bike" specifically —
+    # now reads any member of the existing `vehicle` category).
     cr = re.search(rf"works for \$({N}) an hour and ({N}) hours a week", full)
-    cb = re.search(rf"bike for \$({N})", full)
+    cb = re.search(rf"{_cat_re('vehicle')} for \$({N})", full)
     subj24 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
     if cr and cb and "a month since she started" in full and "left over" in ql:
         if dok({cr.group(1), cr.group(2), cb.group(1)}):
