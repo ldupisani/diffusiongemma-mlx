@@ -846,6 +846,61 @@ remaining ~982 branches across ~26 other singles functions (`_mixed_singles_b_sy
 `_mixed_singles_c_system`, `_cat_singles_a_system`, the `_vocab_singles_a..u` letter groups, etc.)
 are still an open scope, worked through incrementally.
 
+**Update (2026-07-09): batch 5, `_mixed_singles_b_system` (13/33 branches) — a PERFECTLY clean
+diff-verify (the first batch with zero tolerated BROKE cases), and three more new gap classes
+found by testing through the ACTUAL pipeline instead of a bare `answer()` call.**
+
+39. **Testing a candidate fact model through the real `_EARLY_SYSTEMS` pipeline (a monkeypatched
+    registry entry + `solve()`) catches gaps a standalone `answer()` call cannot.** This batch's
+    survey agent ran every CONVERT candidate end-to-end rather than hand-building a `context` list
+    and calling `answer()` directly — and it paid off: two of the three new gap classes below
+    (GUARD 11, the fact-tuple dedup) only manifest once a `SystemResult` actually flows through
+    `_solve_inner`'s fixpoint/GUARD sequence, which a bare `answer()` test skips entirely. Worth
+    promoting to the default verification step for future batches over the cheaper
+    `answer()`-only check, now that the pipeline has enough migrated branches for these
+    pipeline-only interactions to actually occur.
+40. **GUARD 11 ("period not applied") has NO `_PATTERN_UNIT` exemption at all — unlike GUARDs
+    12-15.** A branch whose real question carries an "in N weeks/days" period phrase alongside a
+    recurring-cue premise ("every"/"per"/"each") declines even with a CORRECT fact, because
+    `_rs_ret` only ever logs the FINAL scalar to `ARITHMETIC_LOG` — never the intermediate period
+    factor GUARD 11 is looking for. The same structural characteristic already flagged for GUARD
+    12 (lesson 27) applies here too: converting a branch is what exposes this guard to singles
+    arithmetic for the first time, since a bare-scalar return always exited before it could run.
+41. **The mere WORD "average" in a question force-routes it into the dedicated average fold,
+    REGARDLESS of whether the ask is actually a mean.** "average height" can be a genuine
+    aggregation cue (branch 9, four distinct heights → their mean) OR a purely DESCRIPTIVE
+    residual-count phrase ("the class average height" meaning "the remaining/typical-height
+    students," not "compute a mean") — `answer()` cannot tell these apart from the word alone, and
+    the average fold unconditionally declines whenever the shape isn't a genuine ≥2-term mean.
+    Two branches (12, 20) hit this from the DESCRIPTIVE side. Separately, branch 26 confirmed the
+    average fold IS real and DOES work for genuine means, but is FORWARD-ONLY — it cannot solve
+    backward for a missing term that would hit a stated target average, a real but narrower
+    capability than "any average question."
+42. **`_singles_result`'s fact-tuple dedup (`if f not in context: context.append(f)`) silently
+    collapses two facts that are EXACT DUPLICATES, not just facts describing the same
+    entity/measure with different amounts.** This is a NEW failure mode distinct from lesson 26's
+    GUARD 5(a) bug: when a branch's own arithmetic happens to produce the SAME value twice for
+    different logical steps (Clayton's derived 4th-game score coincidentally equals his 1st-game
+    score; four of Maria's five daily attendance counts are all 10), emitting both as separate
+    `Quantity(entity, measure, amount, verb)` facts means the second is bytewise identical to the
+    first and gets silently dropped by the dedup check — undercounting a sum/average fold that
+    needed all N terms. Neither branch in this batch (17, 22) was converted as a result; a future
+    fix would need `_singles_result` (or the caller) to tag facts with a distinguishing field
+    (e.g. a synthetic `time`/step marker) when a branch is KNOWN to produce repeatable values, but
+    that's real new design work, not attempted here.
+43. **A genuine multi-fact re-derivation can span FOUR entities from a single branch, not just
+    two or three.** Branch 9 (Itzayana/Zora/Zara/Brixton) needed FOUR separate name captures from
+    three different premise clauses (one clause's captured "shorter than X" object doubles as a
+    fourth entity's name) — more regex surgery than any prior branch, but the underlying recipe
+    (capture every literal name the branch's own arithmetic already computes a value for, emit one
+    fact per name) scales without needing new machinery.
+
+Running total: 62/136 branches converted across 5 functions (`_rate_singles_system` 8/16,
+`_money_singles_system` 9/24, `_mult_singles_system` 14/33, `_mixed_singles_system` 18/30,
+`_mixed_singles_b_system` 13/33) — the remaining ~987 branches across ~25 other singles functions
+(`_mixed_singles_c_system`, `_cat_singles_a_system`, the `_vocab_singles_a..u` letter groups, etc.)
+are still an open scope, worked through incrementally.
+
 ### A clause that is BOTH meta and data — read the recorded meta, don't fight the parse (#309)
 
 `_parse_problem` recognizes "there are N X in a Y" as a stated unit conversion (`_stated_conversion`),
