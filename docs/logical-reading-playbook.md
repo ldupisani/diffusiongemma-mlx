@@ -666,6 +666,63 @@ Scoped as a pilot only, per the project's `working-method-piecemeal-annotate` di
 automatically in motion. `_singles_result` is written generically enough to reuse as-is for any future
 singles function that follows the same recipe.
 
+**Update (2026-07-09): batch 2, `_money_singles_system` (9/24 branches) — a real bug in the shared
+`_singles_result` helper, and a new standing rule (generalize before absorbing).** The user's direction for
+continuing: "When encountering a solver that has not gone through a generalization step (words are not
+being words in general way, using for instance category searches), first solve that problem, then absorb
+it into the obligation system" — i.e. before converting a branch, check whether it hardcodes a specific
+word where an EXISTING semantic category (`_cat_re`) already generalizes it, and fix that first. Branch 3
+(shirts) hardcoded the literal word "shirts" where the `clothing` category already existed
+(shirt/short/pant/sock/dress/etc.) — generalized to `_cat_re('clothing')` before converting, so it now
+fires for any garment in that "buys N <garment>" frame, not just shirts specifically (verified with a
+"shorts" synthetic test, a DIFFERENT clothing member than the original hardcoded word, to prove the
+generalization actually works and isn't just cosmetic).
+
+26. **A real bug found and fixed in the shared `_singles_result` helper: GUARD 5(a) has NO
+    `_PATTERN_UNIT` exemption, unlike GUARD 2/3/4.** The pilot's original design attributed every emitted
+    fact to premise 0 only (an arbitrary "single point of truth," since the regex family doesn't know which
+    premise a match came from). This broke on `_money_singles_system`'s Norris/Kate-style branch (multiple
+    "$X in <month>" premises + one "spent $Y" premise): GUARD 5(a) ("temporal safety" — a TIME-tagged
+    premise stating a value with NO `Quantity` in its OWN `facts_of[i]` declines) checks per-premise fact
+    coverage directly, with no bind-based exemption at all — so every premise OTHER than premise 0 (each
+    still time-and-value-bearing, e.g. "She saved $20 in February") looked unaccounted to it, even though
+    ALL premises were correctly pattern-bound. Fixed by attributing every fact to EVERY premise index (the
+    same over-determined-entity dedup trick the anchored family already relies on — `context`'s own dedup
+    prevents double-counting) instead of just one. This ALSO retroactively fixed a latent risk in the
+    already-shipped `_rate_singles_system` migration (which happened not to have any branch with this exact
+    premise shape, so the bug never surfaced there) — re-verified all 8 of its branches still pass after
+    the fix. Lesson: when a shared helper's design makes an arbitrary simplifying choice (single point of
+    attribution) to avoid building more precise infrastructure, VERIFY it against a branch whose premise
+    shape is meaningfully different from the pilot's own branches — "it worked for 8/16 branches" doesn't
+    prove the simplification is safe for a different shape until something actually tests that shape.
+27. **Converting a branch is what exposes GUARD 12-15 to a singles branch's arithmetic for the FIRST
+    TIME — they never ran for ANY singles branch before, at all.** A bare-scalar return exits `solve()`
+    immediately, before GUARDs 2-15 ever execute. Once a branch falls through via `SystemResult`, EVERY
+    guard downstream gets a look — including ones whose contract the singles family's arithmetic style was
+    never designed to satisfy: `_rs_ret(v)` computes the branch's arithmetic in PLAIN PYTHON, then passes
+    only the FINAL scalar to `_compute()` (`_compute(f"{_num(v)}")`) — a trivial identity call that logs NO
+    evidence of the individual factors that produced `v`. GUARD 12 ("dropped unit/money quantity") scans
+    for literal evidence in `ARITHMETIC_LOG` — including for the QUESTION's own stated values, not just
+    premises. Branch 23 (Daphney)'s real text keeps an "if" clause FUSED to the question ("If 2 kg of
+    potatoes costs $6, how much will she pay?"), so its "2"/"$6" sit in the question's own reading; with no
+    audit trail for them, GUARD 12 (correctly, by its own contract) declines. Not a bug in the migration —
+    a genuine, pre-existing characteristic of every singles branch's arithmetic that a bare-scalar return
+    always hid from every downstream guard. Flagged as a recurring risk for future batches: any branch
+    whose real dev-set QUESTION carries its own stated value is unsafe to convert without first restructuring
+    its arithmetic into a literal `_compute()` expression string (real, separate work, not attempted here).
+28. **A `_parse_problem` question-selection bug recurs in a NEW form.** `_rate_singles_system`'s branch 14
+    found a comma-heavy question truncated mid-clause; `_money_singles_system`'s branch 4 found a DIFFERENT
+    trigger for the same underlying failure mode — a trailing "Use E to represent how many dollars Evan
+    earned." sentence (GSM8K's own "define a variable" convention) gets picked as THE question (it's the
+    LAST sentence), burying the real "How many dollars did Markese earn?" as a premise instead. Two
+    independent real examples of the same class of gap in two batches — worth watching for as a THIRD
+    recurring category (alongside the TIME_UNITS exclusion and the bare-"how much" elided-measure gap) when
+    triaging future singles batches.
+
+Running total: 17/40 branches converted across 2 functions (`_rate_singles_system` 8/16,
+`_money_singles_system` 9/24), continuing in batches per the user's direction — the remaining ~1045
+branches across ~28 other singles functions are still an open scope, worked through incrementally.
+
 ### A clause that is BOTH meta and data — read the recorded meta, don't fight the parse (#309)
 
 `_parse_problem` recognizes "there are N X in a Y" as a stated unit conversion (`_stated_conversion`),
