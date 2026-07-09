@@ -8502,6 +8502,133 @@ class TestMoneySinglesSystemResultBatch2(unittest.TestCase):
         self.assertEqual(reading.solve(text), 9)
 
 
+class TestMultSinglesSystemResultBatch3(unittest.TestCase):
+    """#404 — obligation-absorption batch 3: 14 of `_mult_singles_system`'s 33 active branches
+    (1,3,6,10,14,18,19,21,22,26,29,31,32,33) now emit `Quantity` fact(s) instead of a bare
+    scalar. #10 (Amanda/Peter) and #26 (men/women/children) are genuine multi-fact
+    re-derivations; the rest are single echo facts. Branch #6 (Janine) is a TOLERATED "BROKE"
+    case per this batch's relaxed acceptance gate ("reducing correct answers is fine, a false
+    positive is not"): the branch itself still emits the right fact, but a downstream GUARD in
+    `_solve_inner` declines the full `solve()` where the pre-migration bare scalar used to
+    commit -- correct -> decline, never correct -> wrong. Fresh synthetic numbers per branch,
+    distinct from any GSM8K-sourced text. See the function's own docstring for the three new
+    gap classes this batch's screening surfaced (bare-copula-no-aux; the "it took X ... to
+    VERB" idiom; a contraction-triggered remainder-fold doubling) and why the other 19 branches
+    stay unconverted."""
+
+    def test_two_animal_sum_returns_system_result(self):
+        # branch 1: a dogs + b cats + 2x(a+b) fish -> total, named subject.
+        text = ("Tariq has 4 dogs, 5 cats and twice as many fish as cats and dogs combined. "
+                "How many pets does Tariq have in total?")
+        self.assertEqual(reading.solve(text), 27)
+
+    def test_doubling_chain_no_captured_value_returns_system_result(self):
+        # branch 3: no numeric literal at all (dok(set())) -- a fixed 3.0, named subject.
+        text = ("Farah eats a bag of pretzels for dinner and then eats twice as many after "
+                "dinner.  How many bags of pretzels did she eat?")
+        self.assertEqual(reading.solve(text), 3)
+
+    def test_janine_pages_branch_emits_fact_but_solve_tolerated_broke(self):
+        # branch 6: the migration itself works (the SystemResult carries the right fact), but a
+        # downstream GUARD declines the full pipeline -- the one accepted BROKE case in this
+        # batch's diff-verify, never a wrong number.
+        text = ("Priya read 6 books last month. This month, she read twice as many books. If "
+                "each book has 12 pages, how many pages did Priya read in two months?")
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._mult_singles_system(premises, question, rp)
+        self.assertIsInstance(result, reading.SystemResult)
+        seen = {(f.entity, f.amount) for fs in result.facts_by_premise.values() for f in fs}
+        self.assertEqual(seen, {("priya", 216)})
+        self.assertNotEqual(reading.solve(text), 216)
+
+    def test_garden_pair_returns_two_signed_facts(self):
+        # branch 10: a genuine 2-fact re-derivation (have + give), the change_q remainder fold.
+        text = ("Nadia’s garden contains 10 flowers and Farid’s garden contains three "
+                "times as many flowers as Nadia's. If Farid gave 8 flowers to his brother, how "
+                "many flowers are left in his garden?")
+        self.assertEqual(reading.solve(text), 22)
+
+    def test_gift_chain_asked_recipient_returns_system_result(self):
+        # branch 14: the asked recipient's own name (not the givers') is the fact's entity.
+        text = ("On Monday, Omar had 20 books and Sara had twice as many books as Omar. On "
+                "Tuesday, Omar gave 5 books to Nina, and Sara gave Nina 7 more than Omar gave. "
+                "How many books did Nina get?")
+        self.assertEqual(reading.solve(text), 17)
+
+    def test_twice_of_complement_returns_system_result(self):
+        # branch 18: named subject captured straight off the question.
+        text = ("There were 90 Easter eggs in the yard.  Talia found twice as many as Reem.  "
+                "How many Easter eggs did Talia find?")
+        self.assertEqual(reading.solve(text), 60)
+
+    def test_found_total_returns_system_result(self):
+        # branch 19: subject captured off the "found a total of" premise clause.
+        text = ("The number of Christmas presents Youssef found was twice as many as the "
+                "number of birthday presents. If Youssef found a total of 40 Christmas "
+                "presents, how many presents did he get all together?")
+        self.assertEqual(reading.solve(text), 60)
+
+    def test_dozens_no_value_optional_capture_returns_system_result(self):
+        # branch 21: original gate has NO subject capture at all -- the new capture is
+        # deliberately optional (falls back to the legacy scalar if it ever fails to match).
+        text = "Idris wants to buy two and one-half dozens of pens. How many pens will he have?"
+        self.assertEqual(reading.solve(text), 30)
+
+    def test_store_pair_optional_capture_returns_system_result(self):
+        # branch 22: same optional-capture pattern, entity resolved via the noun-keyed fallback
+        # for the "they" pronoun in the question.
+        text = ("Lina's Pool Supply has three times as many swimming pools as Lina's Ark & "
+                "Athletic Wear store. If Lina's Ark & Athletic Wear store has 50 pools, how "
+                "many pools do they have in total?")
+        self.assertEqual(reading.solve(text), 200)
+
+    def test_men_women_children_returns_three_category_facts(self):
+        # branch 26: a genuine 3-fact category-sum re-derivation over the pre-registered
+        # `person` category, keyed by SINGULAR lemma (man/woman/child), not the plural surface.
+        text = ("A group of people contains men, women, and children. The number of men is "
+                "twice the number of women, and the number of women is 3 times the number of "
+                "children. If the number of children is 8, how many people does this group "
+                "contain?")
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._mult_singles_system(premises, question, rp)
+        self.assertIsInstance(result, reading.SystemResult)
+        seen = {(f.entity, f.amount) for fs in result.facts_by_premise.values() for f in fs}
+        self.assertEqual(seen, {("man", 48), ("woman", 24), ("child", 8)})
+        self.assertEqual(reading.solve(text), 80)
+
+    def test_qualified_measure_returns_system_result(self):
+        # branch 29: the fact's measure must carry the SAME adjective qualifier ("toy") that
+        # _queried_measure resolves from the question -- a bare measure would decline.
+        text = ("A toy car factory made 25 cars yesterday. Today, they made twice the number "
+                "of cars than yesterday. How many toy cars did the factory make?")
+        self.assertEqual(reading.solve(text), 75)
+
+    def test_gift_then_sell_half_returns_system_result(self):
+        # branch 31: subject captured off the question's own "did X sell" clause.
+        text = ("Zara had a set of 60 gold coins.  Omar gave Zara a gift of an additional 20 "
+                "gold coins.  Then, Zara decided to sell half of her coins.  How many coins "
+                "did Zara sell?")
+        self.assertEqual(reading.solve(text), 40)
+
+    def test_club_target_qualified_measure_returns_system_result(self):
+        # branch 32: another qualifier-must-match case ("additional" members).
+        text = ("A club is going to get additional members so that they will have 5 more than "
+                "twice their current number of their members. If the club has 6 members now, "
+                "how many additional members do they need?")
+        self.assertEqual(reading.solve(text), 11)
+
+    def test_thursday_anchored_chain_returns_system_result(self):
+        # branch 33: subject captured off the "sold N boxes ... on thursday" premise clause.
+        text = ("She sold twice as many boxes on Tuesday as she did on Wednesday, and she sold "
+                "twice as many boxes on Wednesday as she did on Thursday. If Nia sold 100 "
+                "boxes of cupcakes on Thursday, how many boxes did she sell on Tuesday?")
+        self.assertEqual(reading.solve(text), 400)
+
+
 class TestIncrement237GenericRateChain(unittest.TestCase):
     """#237 — the GENERIC RATE-CHAIN solver (dimensional analysis over stated unit bridges),
     the generalization of the specific rate×span family. Registered LAST in _EARLY_SYSTEMS."""

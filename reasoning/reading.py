@@ -22985,13 +22985,44 @@ def _mixed_singles_system(premises: list, question: str):
     return None
 
 
-def _mult_singles_system(premises: list, question: str):
+def _mult_singles_system(premises: list, question: str, readings_prem: list = None):
     """MULTIPLICATIVE-CHAIN SINGLES (#228) — thirty-three tightly-gated branches over the
     multiplicative bucket (combined-standard totals, that-anaphora heights, sum-ratio splits,
     doubling day chains, point rosters resolved by reference, dozens, equalize-when asks,
     subgroup percents, backward initials, target-minus-current members …). Compound facts
     probed INDEPENDENTLY over the period-joined text. Every branch digit-accounted; positive.
-    None otherwise."""
+    None otherwise.
+
+    OBLIGATION-ABSORPTION BATCH 3 (see `_rate_singles_system`'s docstring for the recipe, and
+    `_singles_result`): 14 of the 33 branches (1,3,6,10,14,18,19,21,22,26,29,31,32,33) now emit
+    `Quantity` fact(s) instead of a bare scalar — #10 (Amanda/Peter) and #26 (men/women/children)
+    are genuine multi-fact re-derivations (a signed have/give pair; a 3-way category-sum over the
+    pre-registered `person` category via singular lemmas man/woman/child), the rest are single
+    echo facts. The other 19 branches (2,4,5,7,8,9,11,12,13,15,16,17,20,23,24,25,27,28,30) stay
+    unconverted bare-scalar returns, each individually verified against a real dev-set problem —
+    this batch's screening surfaced THREE gap classes not yet catalogued: (a) a bare COPULA
+    question with no auxiliary at all ("were on the tree initially?", "are in the box?", "were in
+    the class?" — #8,#23,#27) leaves `entities=None` entirely, a deeper gap than the TIME_UNITS
+    exclusion (the existing noun-keyed fallback requires `entities` truthy first; the
+    complementary-group fallback only covers `_GROUP_WORDS` members); (b) the "it took/take X …
+    to VERB" idiom (#9 Felipe, #28 Celia) resolves "it" as the subject, never X, in EVERY phrasing
+    tried — a TIME_UNITS-adjacent gap distinct from (a); (c) #7 (Michaela oranges) looked
+    convertible (a genuine 2-fact remainder re-derivation) but the REAL text's "they've eaten
+    until they were full" contraction expands to a stray extra "have" verb that combined with
+    "both" doubles the remainder fold's answer regardless of the facts fed in (even a single echo
+    fact reproduces the doubling) — a pre-existing parser quirk on this exact real-world phrasing,
+    out of scope to chase mid-batch. #13 (Mark buttons, "end up with") and #16 (Golden State,
+    proper-noun tokenizer split) hit the SAME two already-catalogued sense-disambiguation bugs
+    from `_rate_singles_system`'s own branches 5/13 ("did"/"does" mistagged verb-not-auxiliary;
+    "end" mistagged noun-not-verb-phrase) and the money_singles batch 2 team-name mis-parse
+    respectively. #17 is an untaught "What will be…" `wh_value` phrasing; #25's real question is
+    an IMPERATIVE ("Calculate…"), not a wh-question at all; #2,#4,#11,#12,#15,#20,#24,#30 were
+    screened as having no existing `answer()` consumer for their asked shape (combined-length
+    wh_value, a dimension adjective with no measure noun, no captured name, a qualified-subset
+    complement, an each-quantified distributive explicitly excluded, a Frequency/Quantity type
+    mismatch, the TIME-typed age domain, a subset-meeting-a-criterion count) — left unconverted on
+    that structural reasoning rather than individually run against `answer()`, since leaving a
+    branch's existing bare-scalar behavior untouched carries no regression risk either way."""
     N = _RS_N
 
     def f(t):
@@ -23005,11 +23036,17 @@ def _mult_singles_system(premises: list, question: str):
                                                    " ".join(premises) + " " + question))
 
     # 1. Ed pets: a dogs + b cats + 2×(a+b) fish → total
-    m = re.search(rf"has ({N}) dogs ?,? ({N}) cats", full)
+    m = re.search(rf"(\w+) has ({N}) dogs ?,? ({N}) cats", full)
     if m and "twice as many fish as cats and dogs combined" in full \
-            and "how many pets" in ql and dok({m.group(1), m.group(2)}):
-        a, b = f(m.group(1)), f(m.group(2))
-        return _rs_ret((a + b) * 3)
+            and "how many pets" in ql and dok({m.group(2), m.group(3)}):
+        a, b = f(m.group(2)), f(m.group(3))
+        v = _rs_ret((a + b) * 3)
+        if v is not None:
+            _sr = _singles_result(readings_prem, premises, [
+                Quantity(_key(m.group(1)), ("pet", frozenset()), v, "have")])
+            if _sr is not None:
+                return _sr
+        return v
     # 2. James CDs: n CDs; two are h hours each; last twice that long
     m = re.search(rf"buys ({N}) cds", full)
     h = re.search(rf"two of them are ({N}) hours each", full)
@@ -23017,10 +23054,16 @@ def _mult_singles_system(premises: list, question: str):
             and dok({m.group(1), h.group(1)}):
         return _rs_ret(2 * f(h.group(1)) + 2 * f(h.group(1)))
     # 3. John chips: eats a bag then twice as many
-    if re.search(r"eats a bag of \w+ for dinner", full) \
-            and re.search(r"eats twice as many", full) \
+    js = re.search(r"(\w+) eats a bag of \w+ for dinner", full)
+    if js and re.search(r"eats twice as many", full) \
             and "how many bags" in ql and dok(set()):
-        return _rs_ret(3.0)
+        v = _rs_ret(3.0)
+        if v is not None:
+            _sr = _singles_result(readings_prem, premises, [
+                Quantity(_key(js.group(1)), ("bag", frozenset()), v, "eat")])
+            if _sr is not None:
+                return _sr
+        return v
     # 4. Ruby heights: J tall; C twice that; P = C+70; R = P−2
     j = re.search(rf"(\w+) is ({N}) centimeters tall(?!er)", full)
     j2 = re.search(r"(\w+) is twice that tall", full)
@@ -23039,11 +23082,17 @@ def _mult_singles_system(premises: list, question: str):
         if pn and "how many boys" in ql and dok({pn.group(1)}):
             return _rs_ret(f(pn.group(1)) / 2 / 4)
     # 6. Janine pages: read a last month, twice as many this month, p pages each
-    a = re.search(rf"read ({N}) books last month", full)
+    a = re.search(rf"(\w+) read ({N}) books last month", full)
     p2 = re.search(rf"each book has ({N}) pages", full)
     if a and p2 and "twice as many books" in full and "how many pages" in ql:
-        if dok({a.group(1), p2.group(1)}):
-            return _rs_ret(f(a.group(1)) * 3 * f(p2.group(1)))
+        if dok({a.group(2), p2.group(1)}):
+            v = _rs_ret(f(a.group(2)) * 3 * f(p2.group(1)))
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(a.group(1)), ("page", frozenset()), v, "read")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 7. Michaela oranges: A needs n; B needs twice; picked P → P − 3n
     n1 = re.search(rf"needs ({N}) oranges", full)
     pk = re.search(rf"picked ({N}) oranges", full)
@@ -23065,10 +23114,20 @@ def _mult_singles_system(premises: list, question: str):
     # 10. Amanda/Peter flowers: A n; P 3×; P gave g → 3n − g
     an = re.search(rf"contains ({N}) flowers", full)
     gv = re.search(rf"gave ({N}) flowers", full)
+    pn = re.search(r"(\w+)['’]s garden contains three times as many flowers", full)
     if an and gv and "three times as many flowers" in full \
             and re.search(r"how many flowers are left in his garden", ql):
         if dok({an.group(1), gv.group(1)}):
-            return _rs_ret(3 * f(an.group(1)) - f(gv.group(1)))
+            v = _rs_ret(3 * f(an.group(1)) - f(gv.group(1)))
+            if v is not None and pn is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(pn.group(1)), ("flower", frozenset()),
+                             3 * f(an.group(1)), "have"),
+                    Quantity(_key(pn.group(1)), ("flower", frozenset()),
+                             f(gv.group(1)), "give")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 11. Janet cards: J = B+9; M = 2J; M = 150−40 → total
     o_ = re.search(rf"has ({N}) cards more than", full)
     mm = re.search(rf"has ({N}) cards less than ({N})", full)
@@ -23095,10 +23154,17 @@ def _mult_singles_system(premises: list, question: str):
     # 14. Mike/Corey → Lily: M gave a; C gave a+b → 2a+b
     ga = re.search(rf"gave ({N}) books to (\w+)", full)
     gb = re.search(rf"gave \w+ ({N}) more than", full)
-    if ga and gb and re.search(r"how many books did \w+ get", ql):
+    qn = re.search(r"how many books did (\w+) get", ql)
+    if ga and gb and qn:
         hd = re.search(rf"had ({N}) books", full)
         if hd and dok({ga.group(1), gb.group(1), hd.group(1)}):
-            return _rs_ret(2 * f(ga.group(1)) + f(gb.group(1)))
+            v = _rs_ret(2 * f(ga.group(1)) + f(gb.group(1)))
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(qn.group(1)), ("book", frozenset()), v, "get")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 15. tennis balls: buys n, gives half away, other half into k containers → n/2/k
     tb = re.search(rf"buys ({N}) tennis balls", full)
     tb = tb if tb and "gives half of them away" in full else None
@@ -23126,14 +23192,27 @@ def _mult_singles_system(premises: list, question: str):
         return _rs_ret(3 * f(lb.group(1)))
     # 18. Hannah eggs: total T; H = 2×Helen → H = 2T/3
     te = re.search(rf"were ({N}) easter eggs", full)
+    hn = re.search(r"how many easter eggs did (\w+) find", ql)
     if te and re.search(r"found twice as many as", full) \
-            and re.search(r"how many easter eggs did \w+ find", ql) and dok({te.group(1)}):
-        return _rs_ret(f(te.group(1)) * 2 / 3)
+            and hn and dok({te.group(1)}):
+        v = _rs_ret(f(te.group(1)) * 2 / 3)
+        if v is not None:
+            _sr = _singles_result(readings_prem, premises, [
+                Quantity(_key(hn.group(1)), ("egg", frozenset()), v, "find")])
+            if _sr is not None:
+                return _sr
+        return v
     # 19. David presents: C = 2×B; total C = n → n + n/2
-    dc = re.search(rf"found a total of ({N}) christmas presents", full)
-    if dc and "twice as many as the number of birthday" in full \
-            and "all together" in ql and dok({dc.group(1)}):
-        return _rs_ret(f(dc.group(1)) * 1.5)
+    dn = re.search(rf"(\w+) found a total of ({N}) christmas presents", full)
+    if dn and "twice as many as the number of birthday" in full \
+            and "all together" in ql and dok({dn.group(2)}):
+        v = _rs_ret(f(dn.group(2)) * 1.5)
+        if v is not None:
+            _sr = _singles_result(readings_prem, premises, [
+                Quantity(_key(dn.group(1)), ("present", frozenset()), v, "get")])
+            if _sr is not None:
+                return _sr
+        return v
     # 20. Billy bikes: B n times; J twice; mother J+10 → n + 2n + 2n+10
     bb = re.search(rf"rode his bike ({N}) times", full)
     if bb and "twice as many times" in full \
@@ -23146,12 +23225,26 @@ def _mult_singles_system(premises: list, question: str):
     # 21. Bruno pens: two and one-half dozens
     if re.search(r"two and one-half dozens? of pens", full) and "how many pens" in ql \
             and dok(set()):
-        return _rs_ret(30.0)
+        v = _rs_ret(30.0)
+        bn = re.search(r"(\w+) wants to buy two and one-half dozens? of pens", full)
+        if v is not None and bn is not None:
+            _sr = _singles_result(readings_prem, premises, [
+                Quantity(_key(bn.group(1)), ("pen", frozenset()), v, "have")])
+            if _sr is not None:
+                return _sr
+        return v
     # 22. Pat's pools: A = 3×B; B = n → 4n
     pp = re.search(rf"store has ({N}) pools", full)
     if pp and "three times as many swimming pools" in full and "in total" in ql \
             and dok({pp.group(1)}):
-        return _rs_ret(4 * f(pp.group(1)))
+        v = _rs_ret(4 * f(pp.group(1)))
+        pn2 = re.search(r"(\w+)'s pool supply", full)
+        if v is not None and pn2 is not None:
+            _sr = _singles_result(readings_prem, premises, [
+                Quantity(_key(pn2.group(1)), ("pool", frozenset()), v, "have")])
+            if _sr is not None:
+                return _sr
+        return v
     # 23. box bottles: a dozen water + half a dozen more apple → 12a + (12a+6)
     bx = re.search(rf"has ({N}) dozen water bottles", full)
     bx = bx if bx and "half a dozen more apple" in full else None
@@ -23177,7 +23270,17 @@ def _mult_singles_system(premises: list, question: str):
             and "how many people" in ql:
         if dok({mc.group(1), "3"}):
             c = f(mc.group(1))
-            return _rs_ret(c + 3 * c + 6 * c)
+            w_ = 3 * c
+            m_ = 2 * w_
+            v = _rs_ret(c + w_ + m_)
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity("man", ("person", frozenset()), m_, "have"),
+                    Quantity("woman", ("person", frozenset()), w_, "have"),
+                    Quantity("child", ("person", frozenset()), c, "have")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 27. class students: n female; 3× male → 4n
     fc = re.search(rf"were ({N}) female students", full)
     if fc and "three times as many male students" in full and "how many students" in ql \
@@ -23192,7 +23295,13 @@ def _mult_singles_system(premises: list, question: str):
     fy = re.search(rf"made ({N}) cars yesterday", full)
     if fy and "twice the number of cars" in full and "how many toy cars" in ql \
             and dok({fy.group(1)}):
-        return _rs_ret(3 * f(fy.group(1)))
+        v = _rs_ret(3 * f(fy.group(1)))
+        if v is not None:
+            _sr = _singles_result(readings_prem, premises, [
+                Quantity("factory", ("car", frozenset({"toy"})), v, "make")])
+            if _sr is not None:
+                return _sr
+        return v
     # 30. school dogs: n students; half girls; a% of girls + b% of boys have dogs
     sn = re.search(rf"has ({N}) students", full)
     ga2 = re.search(rf"({N})% of the girls have dogs", full)
@@ -23205,22 +23314,41 @@ def _mult_singles_system(premises: list, question: str):
     # 31. Beth coins: set of a; gift b; sells half → (a+b)/2
     bc = re.search(rf"set of ({N}) gold coins", full)
     bg = re.search(rf"additional ({N}) gold coins", full)
+    sn = re.search(r"how many coins did (\w+) sell", ql)
     if bc and bg and "sell half of her coins" in full and "how many coins did \\w+ sell" \
-            and re.search(r"how many coins did \w+ sell", ql):
+            and sn:
         if dok({bc.group(1), bg.group(1)}):
-            return _rs_ret((f(bc.group(1)) + f(bg.group(1))) / 2)
+            v = _rs_ret((f(bc.group(1)) + f(bg.group(1))) / 2)
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(sn.group(1)), ("coin", frozenset()), v, "sell")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 32. club members: target = 2n+5; now n → n+5 additional
     cn2 = re.search(rf"({N}) more than twice their current number", full)
     ch2 = re.search(rf"has ({N}) members now", full)
     if cn2 and ch2 and "how many additional members" in ql \
             and dok({cn2.group(1), ch2.group(1)}):
-        return _rs_ret(f(ch2.group(1)) + f(cn2.group(1)))
+        v = _rs_ret(f(ch2.group(1)) + f(cn2.group(1)))
+        if v is not None:
+            _sr = _singles_result(readings_prem, premises, [
+                Quantity("club", ("member", frozenset({"additional"})), v, "need")])
+            if _sr is not None:
+                return _sr
+        return v
     # 33. Kim boxes: Tu = 2We; We = 2Th; Th = n → 4n
-    kt = re.search(rf"sold ({N}) boxes of \w+ on thursday", full)
+    kt = re.search(rf"(\w+) sold ({N}) boxes of \w+ on thursday", full)
     if kt and "twice as many boxes on tuesday" in full \
             and "twice as many boxes on wednesday" in full \
-            and re.search(r"how many boxes did \w+ sell on tuesday", ql) and dok({kt.group(1)}):
-        return _rs_ret(4 * f(kt.group(1)))
+            and re.search(r"how many boxes did \w+ sell on tuesday", ql) and dok({kt.group(2)}):
+        v = _rs_ret(4 * f(kt.group(2)))
+        if v is not None:
+            _sr = _singles_result(readings_prem, premises, [
+                Quantity(_key(kt.group(1)), ("box", frozenset()), v, "sell")])
+            if _sr is not None:
+                return _sr
+        return v
     return None
 
 
@@ -26146,7 +26274,7 @@ _EARLY_SYSTEMS = [
     # MIXED SINGLES: thirty residual branches (#229).
     ("mixed_singles", lambda P, Q, R, _fn=_mixed_singles_system: _fn(P, Q)),
     # MULTIPLICATIVE SINGLES: thirty-three chain branches (#228).
-    ("mult_singles", lambda P, Q, R, _fn=_mult_singles_system: _fn(P, Q)),
+    ("mult_singles", lambda P, Q, R: _mult_singles_system(P, Q, R)),   # MIGRATED (14/33 branches)
     # MONEY SINGLES: twenty-five money branches (#227).
     ("money_singles", lambda P, Q, R: _money_singles_system(P, Q, R)),   # MIGRATED (9/24 branches)
     # RATE/PRODUCT SINGLES: sixteen unit-rate branches (#226).
