@@ -8798,6 +8798,130 @@ class TestMixedSinglesSystemResultBatch4(unittest.TestCase):
         self.assertEqual(reading.solve(text), 28)
 
 
+class TestMixedSinglesBSystemResultBatch5(unittest.TestCase):
+    """#406 — obligation-absorption batch 5: 13 of `_mixed_singles_b_system`'s 33 active
+    branches (1,4,5,8,9,11,15,24,27,28,29,31,33) now emit fact(s) instead of a bare scalar.
+    #9 (Itzayana/Zora/Zara/Brixton) is a genuine 4-fact re-derivation (the `answer()` average
+    fold sums ANY Quantity facts sharing the asked measure, not just literally-named entities);
+    #27/#28 (Javier/Sanda, Natasha/Esteban) are genuine 2-fact `combined_q` NAMED-subset
+    re-derivations; #24 is a genuine 3-fact `combined_q` NOT-NAMED bare-sum on a shared generic
+    "crayons" entity (three DISTINCT values, no dedup risk). The rest are single echo facts.
+    Diff-verify came back PERFECTLY clean this batch (0 SOLVED/0 BROKE/0 DECL->WRONG on 2
+    independent snapshot pairs) -- unlike batches 3-4, no branch landed in the tolerated
+    correct->decline bucket. Fresh synthetic numbers per branch, distinct from any GSM8K-sourced
+    text. See the function's own docstring for the three NEW gap classes this batch's agent
+    survey found (GUARD 11 has no _PATTERN_UNIT exemption; the word "average" force-routes a
+    question into the average fold even when it's not a real mean; `_singles_result`'s fact
+    dedup collapses coincidentally-equal facts) and why the other 20 branches stay unconverted."""
+
+    def test_pie_slice_residual_returns_system_result(self):
+        # branch 1: subject captured off the "had N birthday cookie pies" clause.
+        text = ("Farah had 4 birthday cookie pies to share with her 19 classmates and her "
+                "teacher, Mr. Lee.   If each of the cookie pies were cut into 8 slices and "
+                "Farah, her classmates, and Mr. Lee all had 1 piece, how many slices are left?")
+        self.assertEqual(reading.solve(text), 11)
+
+    def test_bogo_purchase_returns_system_result(self):
+        # branch 4: subject captured off the "buys steaks for buy one get one free" clause.
+        text = ("Omar buys steaks for buy one get one free.  The price is $10 per pound and "
+                "he buys 12 pounds.  How much did he pay for the steaks?")
+        self.assertEqual(reading.solve(text), 60)
+
+    def test_road_trip_elimination_returns_system_result(self):
+        # branch 5: subject captured off the question's own "how many miles does X drive".
+        text = ("Nina, Sara, and Lina take a road trip that is a total of 500 miles.  Nina "
+                "drives 10 miles more than twice Sara, and Sara drives 3 times the amount "
+                "that Lina drives. How many miles does Sara drive?")
+        self.assertEqual(reading.solve(text), 147)
+
+    def test_pet_food_ounce_conversion_returns_system_result(self):
+        # branch 8: subject captured off the "X bought N bags of" clause.
+        text = ("Mrs. Kade bought 3 bags of 2-pound bag of cat food and another 3 bags of dog "
+                "food that each weigh 1 more pounds than each bag of cat food. There are 16 "
+                "ounces in each pound. How many ounces of pet food did Mrs. Kade buy?")
+        self.assertEqual(reading.solve(text), 240)
+
+    def test_four_person_average_returns_four_facts(self):
+        # branch 9: a genuine 4-fact re-derivation, the answer() average fold.
+        text = ("Amara is 5 inches taller than Bela, who is 6 inches shorter than Coen. If "
+                "Dara is 60 inches tall and has the same height as Coen, calculate the "
+                "average height of the four people.")
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._mixed_singles_b_system(premises, question, rp)
+        self.assertIsInstance(result, reading.SystemResult)
+        seen = {(f.entity, f.amount) for fs in result.facts_by_premise.values() for f in fs}
+        self.assertEqual(seen, {("amara", 59), ("bela", 54), ("dara", 60), ("coen", 60)})
+        self.assertEqual(reading.solve(text), 58.25)
+
+    def test_bonus_points_qualified_measure_returns_system_result(self):
+        # branch 11: the fact's measure must carry the "bonus" qualifier.
+        text = ("In a certain company, for every customer served, an employee gets as many "
+                "bonus points, as 25% of the number of customers served. On Monday, Lina "
+                "served 5 customers per hour for 4 hours. How many bonus points did Lina earn "
+                "that day?")
+        self.assertEqual(reading.solve(text), 5)
+
+    def test_dozen_plus_free_returns_system_result(self):
+        # branch 15: subject captured off the "wants to buy N dozens flowers" clause; measure
+        # must be "piece" (the literal question noun), not "flower".
+        text = ("For every one dozen flowers bought, a customer gets 3 free flowers. If Nadia "
+                "wants to buy 2 dozens flowers, how many pieces of flowers will she have in "
+                "all?")
+        self.assertEqual(reading.solve(text), 30)
+
+    def test_crayon_box_sum_returns_three_facts(self):
+        # branch 24: a genuine 3-fact combined_q NOT-NAMED bare-sum on a shared generic entity.
+        text = ("There are 4 boxes of crayons that hold 6 orange crayons. There are 3 boxes "
+                "of crayons that have 7 blue crayons. There is 1 box of 9 red crayons. How "
+                "many crayons are there in total?")
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._mixed_singles_b_system(premises, question, rp)
+        self.assertIsInstance(result, reading.SystemResult)
+        seen = {id(f): f for fs in result.facts_by_premise.values() for f in fs}
+        amounts = sorted(f.amount for f in seen.values())
+        self.assertEqual(amounts, [9, 21, 24])
+        self.assertEqual(reading.solve(text), 54)
+
+    def test_exercise_minutes_returns_two_named_facts(self):
+        # branch 27: a genuine 2-fact combined_q NAMED-subset re-derivation.
+        text = ("Omar exercised for 40 minutes every day for one week. Rina exercised for 60 "
+                "minutes on each of two days. How many minutes did Omar and Rina exercise in "
+                "total?")
+        self.assertEqual(reading.solve(text), 400)
+
+    def test_exercise_hours_returns_two_named_facts(self):
+        # branch 28: same shape as 27 but the measure is TIME_UNITS ("hour") -- safe here since
+        # both subjects are NAMED, not pronouns (the TIME_UNITS exclusion only bites pronouns).
+        text = ("Lina exercised for 30 minutes every day for one week. Tomas exercised for 30 "
+                "minutes on each of two days. How many hours did Lina and Tomas exercise in "
+                "total?")
+        self.assertEqual(reading.solve(text), 4.5)
+
+    def test_round_trip_steps_returns_system_result(self):
+        # branch 29: subject captured off the "X's house is just a walking distance" clause.
+        text = ("Priya's house is just a walking distance from her school. It takes her 200 "
+                "steps to walk to the school. How many steps does she take walking to and "
+                "from school in three days?")
+        self.assertEqual(reading.solve(text), 1200)
+
+    def test_picked_residual_returns_system_result(self):
+        # branch 31: subject captured off the question's own "how many oranges did X pick".
+        text = ("A total of 90 oranges are picked by Omar and Lina. Omar picked 15 on each of "
+                "2 days and Lina picked the rest. How many oranges did Lina pick?")
+        self.assertEqual(reading.solve(text), 60)
+
+    def test_triple_tuesday_pencils_returns_system_result(self):
+        # branch 33: subject captured off the "X buys N pencils on Monday" clause.
+        text = ("Nina buys 10 pencils on Monday. Then she buys 8 more pencils on Tuesday. On "
+                "Wednesday she buys triple the number of pencils she did on Tuesday. How many "
+                "pencils does she have?")
+        self.assertEqual(reading.solve(text), 42)
+
+
 class TestIncrement237GenericRateChain(unittest.TestCase):
     """#237 — the GENERIC RATE-CHAIN solver (dimensional analysis over stated unit bridges),
     the generalization of the specific rate×span family. Registered LAST in _EARLY_SYSTEMS."""
