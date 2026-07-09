@@ -901,6 +901,80 @@ Running total: 62/136 branches converted across 5 functions (`_rate_singles_syst
 (`_mixed_singles_c_system`, `_cat_singles_a_system`, the `_vocab_singles_a..u` letter groups, etc.)
 are still an open scope, worked through incrementally.
 
+**Update (2026-07-09): a post-hoc generalization audit across all 5 completed batches — 4 more
+branches generalized, one prior generalization recovered from an accidental stash, and a real
+process lesson about `git stash` hygiene mid-session.**
+
+44. **A "generalize before absorbing" check is worth re-running RETROACTIVELY across already-
+    shipped batches, not just at conversion time.** The user asked to go back through all 62
+    already-converted branches and check each for a hardcoded category member an existing
+    `_cat_re` mask could have generalized — a check that's easy to skip mid-batch when focused on
+    empirical verification of the CONVERT/DEFER call itself. Systematically re-reading every
+    converted branch's regex (not just the ones flagged during original conversion) surfaced 4
+    branches across 3 functions that hardcoded a specific `animal`/`vehicle` category member where
+    the branch's own arithmetic was IDENTITY-AGNOSTIC (it doesn't matter WHICH two animals are
+    being counted, just their quantities) — the exact shape the `clothing`/shirts precedent from
+    batch 2 was meant to generalize, just missed at conversion time because the screening focus
+    was elsewhere (empirical CONVERT/DEFER correctness, not word-level hardcoding).
+45. **A "combined"/relative-reference clause tied to a generalized multi-word regex must
+    cross-check against the SAME captured words, not just re-run the category mask independently.**
+    `_mult_singles_system`'s branch 1 (Ed pets) has THREE animal references: two counted directly
+    ("N dogs, M cats") and a third computed as a multiplier ("twice as many FISH as CATS and DOGS
+    combined"). Generalizing only the count clause to `_cat_re('animal')` while leaving the
+    "combined" clause as an independent `_cat_re('animal')` search (not required to match the SAME
+    two words) would let an UNRELATED sentence elsewhere in the text ("Sam has twice as many X as Y
+    and Z combined") falsely satisfy the gate. Fixed by re-searching for the "combined" clause with
+    the FIRST regex's two captured words spliced in via `re.escape(...)`, tried in both orders. The
+    general lesson: when a branch has multiple regex probes over the SAME semantic entity, a
+    category-mask generalization of one probe must keep them cross-referenced, not just independently
+    "any category member" — otherwise the gate widens more than the original hardcoded literal did.
+46. **A category can be tagged (mask-visible) without being LEXICON-admitted — and a synthetic test
+    picking a tagged-but-inert word fails for a reason UNRELATED to the generalization.** Testing the
+    `animal`-generalized branch 1 with "sheep" (a real `animal` category member per the tagging list)
+    produced `entities=None`/decline downstream — not a bug in the generalization, but the SAME
+    documented "#348 pattern" already used elsewhere in the codebase: `sheep`/`spider`/`motorcycle`
+    etc. are deliberately category-tagged WITHOUT a LEXICON entry (GUARD-1-inert until admitted, to
+    avoid known holdout-poison risk). `_cat_re()` matches on the CATEGORY TAG alone, so the regex
+    itself matches "sheep" fine — the failure is entirely downstream in `analyze()`'s word-sense
+    lookup. Lesson: when writing a synthetic test for a category generalization, pick a
+    LEXICON-ADMITTED member (check `word in reading.LEXICON`), not just any tagged member — a
+    project-consistent set of admitted `animal` words is `cat/dog/cow/goat/rabbit/horse/pig/bird/
+    duck/chicken/fish/bear/camel/elephant/fox/frog/kangaroo/koala/lion/monkey/rooster/snail/snake`.
+47. **`git stash` used for a quick "check pre-change behavior" diagnostic mid-session is a real risk
+    to uncommitted work if a second stash/pop cycle follows before the first is confirmed clean.**
+    Two back-to-back `git stash && <check> && git stash pop` cycles (used to verify two separate
+    branches' PRE-generalization behavior, a legitimate and previously-used technique for diff-
+    verify baselining) left the working tree's `reading.py` silently reverted to HEAD — the
+    generalization edits vanished from the file with no error, no conflict, nothing to indicate
+    anything had gone wrong, until a later `git status`/`git diff` showed zero changes where 5
+    branches' worth of edits should have been. The actual cause was never fully root-caused (the
+    stash list only ever showed ONE stranded entry, `stash@{0}`, which — when diffed against HEAD
+    via `git diff HEAD stash@{0}` rather than trusted via `git stash pop`'s conflict detection —
+    turned out to contain ALL the missing edits, safely recoverable). Lesson: for a quick "what did
+    this look like before" check, prefer `git show HEAD:<path>` or `git diff` reasoning over a
+    stash/pop round-trip when there's already uncommitted work in progress — a stash round-trip is
+    for TEMPORARILY clearing the tree, not for point-in-time comparison, and doing it twice in a
+    row without verifying `git status` is clean after each pop is exactly the failure mode here.
+    When something does go missing, `git stash list` + `git diff HEAD stash@{N}` (not `git stash
+    pop`, which can conflict and abort) is the recovery path — apply the diff via `git apply`,
+    reconcile any overlapping hand-written changes made in the meantime, then `git stash drop`.
+48. **A previously-uncommitted generalization can silently ride through an entire batch's
+    diff-verify gate undetected, because it's present in BOTH the before and after snapshots.**
+    `_mixed_singles_system`'s branch 5 (Lucille walls → a fully-generic dimensions/coverage
+    read-back) turned out to already be generalized in the WORKING TREE before this audit began,
+    but was never actually committed — it silently passed through batch 4's AND batch 5's
+    `git stash`-based diff-verify baselining (since stashing/restoring uncommitted work equally
+    affects both the "before" and "after" snapshot, an already-uncommitted change is invisible to
+    the diff either way) until this audit's own stash mishap surfaced it. Recovered and folded into
+    this audit's commit rather than lost a second time. Lesson: an uncommitted "bonus" change sitting
+    in the tree across several unrelated commits is a real risk — `git status`/`git diff --stat`
+    before EVERY commit (not just before starting new work) would have caught this immediately.
+
+Running total: 62/136 branches converted (unchanged — this was a generalization pass over already-
+converted branches, not new conversions) across the same 5 functions, plus one recovered
+generalization (`_mixed_singles_system` #5). Continuing with the next singles function per the
+user's standing batching instruction.
+
 ### A clause that is BOTH meta and data — read the recorded meta, don't fight the parse (#309)
 
 `_parse_problem` recognizes "there are N X in a Y" as a stated unit conversion (`_stated_conversion`),
