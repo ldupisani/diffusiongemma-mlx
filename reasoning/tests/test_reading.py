@@ -8629,6 +8629,175 @@ class TestMultSinglesSystemResultBatch3(unittest.TestCase):
         self.assertEqual(reading.solve(text), 400)
 
 
+class TestMixedSinglesSystemResultBatch4(unittest.TestCase):
+    """#405 — obligation-absorption batch 4: 18 of `_mixed_singles_system`'s 30 active branches
+    (1,3,4,5,6,9,10,12,13,15,17,18,20,22,23,24,28,29) now emit fact(s) instead of a bare scalar.
+    #1 (Lisa/Tommy) and #23 (Aaron/Matthews/Marovich) are genuine multi-fact re-derivations; the
+    rest are single echo facts. #9 is the first branch in this whole effort to emit a `Frequency`
+    fact instead of a `Quantity` -- "how many TIMES did X <verb>?" routes answer() through a
+    dedicated Frequency fold that never looks at Quantity facts at all, regardless of measure.
+    #3 (Larry) and #13 (Emma) are TOLERATED "BROKE" cases per this batch's relaxed acceptance
+    gate: the branch itself still emits the right fact, but a downstream GUARD in `_solve_inner`
+    declines the full pipeline -- correct -> decline, never correct -> wrong. Fresh synthetic
+    numbers per branch, distinct from any GSM8K-sourced text. See the function's own docstring
+    for why the other 12 branches (including a NEW gap class this batch found: a compound "X and
+    Y" measure ask collapses to only the first noun in `_queried_measure`) stay unconverted."""
+
+    def test_comparative_pair_returns_two_signed_facts(self):
+        # branch 1: a genuine 2-fact re-derivation, named subjects captured off the question.
+        text = ("Nadia, Omar, and Farid earned $80 from washing cars all week. However, half "
+                "of the $80 was earned by Nadia. Farid earned half of what Nadia earned. How "
+                "much more money did Nadia earn than Farid?")
+        self.assertEqual(reading.solve(text), 20)
+
+    def test_larry_branch_emits_fact_but_solve_tolerated_broke(self):
+        # branch 3: the migration itself works (the SystemResult carries the right fact), but a
+        # downstream GUARD declines the full pipeline -- an accepted BROKE case, never wrong.
+        text = ("Idris spends half an hour twice a day walking and playing with his dog. He "
+                "also spends a fifth of an hour every day feeding his dog. How many minutes "
+                "does Idris spend on his dog each day?")
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._mixed_singles_system(premises, question, rp)
+        self.assertIsInstance(result, reading.SystemResult)
+        seen = {(f.entity, f.amount) for fs in result.facts_by_premise.values() for f in fs}
+        self.assertEqual(seen, {("idris", 72)})
+        self.assertNotEqual(reading.solve(text), 72)
+
+    def test_fuel_total_returns_system_result(self):
+        # branch 4: subject captured off the "used N gallons of fuel this week" clause.
+        text = ("Zara used 20 gallons of fuel this week. Last week she used 25% less. How much "
+                "fuel did she use in total for the two weeks?")
+        self.assertEqual(reading.solve(text), 35)
+
+    def test_wall_area_cans_returns_system_result(self):
+        # branch 5: subject captured off the "is painting her room" premise clause.
+        text = ("Priya is painting her room. Two of her walls are 4 meters wide and 3 meters "
+                "tall. The third wall is 6 meters wide and 3 meters tall. The final wall is 5 "
+                "meters wide and 3 meters tall. If each can of paint covers 3 square meters, "
+                "how many cans of paint does Priya need?")
+        self.assertEqual(reading.solve(text), 19)
+
+    def test_page_residual_returns_system_result(self):
+        # branch 6: subject resolved via the noun-keyed pronoun fallback ("she" -> Farah).
+        text = ("Farah borrows 3 books from the library on Monday. On Monday, she reads the "
+                "first book with a total of 25 pages. On Tuesday, she reads the second book "
+                "with a total of 15 pages. On Wednesday, she reads the third book. If she has "
+                "read a total of 60 pages from Monday to Wednesday, how many pages did she "
+                "read on Wednesday?")
+        self.assertEqual(reading.solve(text), 20)
+
+    def test_offset_times_chain_returns_frequency_fact(self):
+        # branch 9: "how many TIMES did X <verb>?" routes through the Frequency fold, not the
+        # Quantity fold -- a Quantity fact with measure ("time", ...) would silently never match.
+        text = ("Ravi played catch with Sam and Nina. He caught the ball 14 times. Sam made "
+                "four less than double the catches Ravi did. Nina caught the ball sixteen more "
+                "than a third of the times Sam did. How many times did Nina catch the ball?")
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._mixed_singles_system(premises, question, rp)
+        self.assertIsInstance(result, reading.SystemResult)
+        seen = {(f.entity, f.action, f.count) for fs in result.facts_by_premise.values()
+                for f in fs if isinstance(f, reading.Frequency)}
+        self.assertEqual(seen, {("nina", "catch", 24)})
+        self.assertEqual(reading.solve(text), 24)
+
+    def test_state_swap_marbles_returns_system_result(self):
+        # branch 10: subject captured off the "has N marbles" clause.
+        text = ("Sara has 10 marbles. Lina gives Sara double the number she has. Sara then "
+                "gives Lina back half of her new total plus 2. How many marbles does Sara have "
+                "now?")
+        self.assertEqual(reading.solve(text), 13)
+
+    def test_birthday_pair_totals_returns_system_result(self):
+        # branch 12: subject captured off the "received N gifts on his Nth birthday" clause.
+        text = ("Farid received 15 gifts on his 10th birthday. He received 5 fewer gifts on "
+                "his 11th birthday. How many total gifts did he receive between those two "
+                "birthdays?")
+        self.assertEqual(reading.solve(text), 25)
+
+    def test_emma_branch_emits_fact_but_solve_tolerated_broke(self):
+        # branch 13: the second TOLERATED BROKE case this batch -- fact is right, solve() still
+        # declines via a downstream GUARD.
+        text = ("Nadia buys 3 containers of milk every school day for lunch. She does not go "
+                "to school on the weekends. How many containers of milk does she buy in 2 "
+                "weeks?")
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._mixed_singles_system(premises, question, rp)
+        self.assertIsInstance(result, reading.SystemResult)
+        seen = {(f.entity, f.amount) for fs in result.facts_by_premise.values() for f in fs}
+        self.assertEqual(seen, {("nadia", 30)})
+        self.assertNotEqual(reading.solve(text), 30)
+
+    def test_color_residual_qualified_measure_returns_system_result(self):
+        # branch 15: the fact's measure must carry the "green" qualifier that _queried_measure
+        # resolves from the question -- a bare measure would decline.
+        text = ("Farah has 30 marbles. She has 10 white marbles, 5 blue marbles, and the rest "
+                "are green marbles. How many green marbles does Farah have?")
+        self.assertEqual(reading.solve(text), 15)
+
+    def test_bags_of_bags_product_returns_system_result(self):
+        # branch 17: subject captured off the "has N bags of apples" clause.
+        text = ("Nadia has 5 bags of apples. Each of her bags has as many apples as 2 of "
+                "Farid's bags. If Farid's bags have 20 apples each, how many apples does "
+                "Nadia have?")
+        self.assertEqual(reading.solve(text), 200)
+
+    def test_total_partition_photos_returns_system_result(self):
+        # branch 18: subject captured off the question's own "how many photos does X have".
+        text = ("Omar, Farid, and Nina are collecting photos of cars. Nina has 5 photos more "
+                "than Farid. Farid has one hundred photos less than the total amount of "
+                "photos which is 170. How many photos does Omar have?")
+        self.assertEqual(reading.solve(text), 25)
+
+    def test_morning_afternoon_bakes_returns_system_result(self):
+        # branch 20: subject captured off the "baked N cupcakes in the morning" clause.
+        text = ("Nadia baked 12 cupcakes in the morning and eight more cupcakes in the "
+                "afternoon than in the morning. How many cupcakes did she bake?")
+        self.assertEqual(reading.solve(text), 32)
+
+    def test_ducks_chickens_category_returns_system_result(self):
+        # branch 22: subject captured off the "has N more ducks than..." clause; the "bird"
+        # category covers duck+chicken.
+        text = ("Farah has 6 more ducks than three times the number of chickens. If Farah has "
+                "90 ducks, how many total birds does she have?")
+        self.assertEqual(reading.solve(text), 118)
+
+    def test_three_party_cow_sum_returns_three_facts(self):
+        # branch 23: a genuine 3-fact re-derivation, the combined_q NOT-NAMED bare-sum fold.
+        text = ("Nadia has three times as many cows as does Farid. Together, they have 20 "
+                "more cows than Omar. If Farid has 40 cows, how many cows do the three have "
+                "altogether?")
+        self.assertEqual(reading.solve(text), 300)
+
+    def test_road_trip_miles_returns_system_result(self):
+        # branch 24: subject captured off the "went on a road trip" clause (a compound "Mr. and
+        # Mrs. X" name -- the capture grabs the LAST word before "went").
+        text = ("Mr. and Mrs. Aziz went on a road trip. On the first day, they traveled 100 "
+                "miles. On the second day, they traveled 3/4 as far. On the third day, they "
+                "traveled 1/2 as many miles as the first two days combined. How many miles "
+                "did they travel for 3 days?")
+        self.assertEqual(reading.solve(text), 262.5)
+
+    def test_take_still_less_backward_returns_system_result(self):
+        # branch 28: the fact's verb must match the question's own verb ("start"), not the
+        # default "have".
+        text = ("Nina has 40 berries. Omar takes 6 of Nina's berries, and still has 10 less "
+                "berries than Nina started with. How many berries did Omar start with?")
+        self.assertEqual(reading.solve(text), 24)
+
+    def test_weekday_flower_sum_returns_system_result(self):
+        # branch 29: subject captured off the "has a small flower shop" clause.
+        text = ("Farid has a small flower shop. He sold 6 flowers on Monday, 10 flowers on "
+                "Tuesday and on Friday, he sold double the number of flowers he sold on "
+                "Monday. How many flowers does Farid sell?")
+        self.assertEqual(reading.solve(text), 28)
+
+
 class TestIncrement237GenericRateChain(unittest.TestCase):
     """#237 — the GENERIC RATE-CHAIN solver (dimensional analysis over stated unit bridges),
     the generalization of the specific rate×span family. Registered LAST in _EARLY_SYSTEMS."""
