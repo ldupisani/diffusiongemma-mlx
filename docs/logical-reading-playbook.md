@@ -723,6 +723,68 @@ Running total: 17/40 branches converted across 2 functions (`_rate_singles_syste
 `_money_singles_system` 9/24), continuing in batches per the user's direction — the remaining ~1045
 branches across ~28 other singles functions are still an open scope, worked through incrementally.
 
+**Update (2026-07-09): batch 3, `_mult_singles_system` (14/33 branches) — three new gap classes,
+and one genuinely TOLERATED "BROKE" case (the first time this batch's relaxed gate actually paid
+off).**
+
+29. **A bare COPULA question with no auxiliary at all is a DEEPER gap than the TIME_UNITS
+    exclusion, and needs its own name.** "were on the tree initially?", "are in the box?", "were in
+    the class?" have no auxiliary verb — only a copula ("were"/"are") explicitly excluded from
+    `qverb_unit` search — so `entities` resolves to `None` entirely, not even an untracked pronoun.
+    The existing noun-keyed entity fallback requires `entities` to be truthy before it even looks;
+    the complementary-group fallback only covers `_GROUP_WORDS` members (boy/girl/man/woman/etc.),
+    not arbitrary nouns like "banana"/"bottle"/"student". Confirmed via direct `answer()` testing on
+    three independent branches (8, 23, 27) that this declines regardless of what facts are fed in —
+    a real, recurring class (not yet fixed; flagged for a future increment if it turns out to matter
+    at scale).
+30. **The "it took/take X … to VERB" idiom never resolves X as the subject, in every phrasing
+    tried.** Branch 9 (Felipe, "how many months did it take Felipe to build his house?") and branch
+    28 (Celia, "how long, in minutes, will it take Celia to run 30 miles?") both looked like clean
+    TIME_UNITS echo branches with a real NAME subject (not a pronoun, so the TIME_UNITS-vs-pronoun
+    exclusion shouldn't apply) — but even the cleanest rephrasing ("How many minutes will Celia take
+    to run 30 miles?") still declined. The construction's grammatical subject is "it" ("it will take
+    Celia…"); Celia sits in an object-like position the aux fold never reads as the holder. Distinct
+    from gap #29 — there IS an auxiliary ("will"/"did") here, it just binds the wrong noun. Both
+    branches deferred; this is the reason a "convertible on paper, TIME_UNITS-flagged" branch still
+    needs the SAME empirical-verification discipline as everything else, not a rubber stamp.
+31. **A branch that looked like the batch's best example of "genuine multi-fact re-derivation"
+    (branch 7, Michaela oranges — pick 90, two people eat their needed share, remainder) failed for
+    a reason that has NOTHING to do with the facts.** The real GSM8K text's "they've eaten until they
+    were full" contraction expands to a STRAY EXTRA "have" verb sense alongside "eaten" (`analyze()`
+    shows both `'have'` and `'eaten'` as separate verb units) — combined with the quantifier "both",
+    this doubles whatever the remainder fold computes, REGARDLESS of what facts are fed in (even a
+    single already-correct echo fact of 30 came back as 60). Isolated by testing progressively
+    shorter fragments of the real question ("would remain?" → 30 correct; "…after they've both
+    eaten…" → 30 correct; adding back "until they were full" → 60, wrong) — a clean bisection that
+    pinned the exact clause responsible without needing to read `answer()`'s remainder-fold internals
+    line by line. A pre-existing parser quirk on this specific contraction+quantifier combination,
+    surfaced by conversion but not caused by it; out of scope to chase mid-batch, so the branch stays
+    on the legacy scalar path.
+32. **The batch's ONE branch to land in the explicitly-tolerated "correct → decline" bucket, and it
+    validates the relaxed gate was the right call.** Branch 6 (Janine pages) converts cleanly on
+    paper and in isolation — `_mult_singles_system` emits the right `SystemResult`/fact, and a
+    standalone `answer()` call on the exact question resolves it correctly. But the FULL `solve()`
+    pipeline still declines: some GUARD downstream of the EARLY dispatch (not yet localized — out of
+    scope to chase, since the outcome is already within the accepted gate) rejects it before
+    `answer()` ever gets called with the real `context`. Diff-verify confirmed this is the ONLY
+    change across the whole dev set, deterministically, on two independent snapshot pairs: 0 SOLVED,
+    1 BROKE, 0 DECL→WRONG — exactly what the user's stated tolerance ("I don't really mind if
+    singles reduce the count of correct answers so much as that it shouldn't lead to an increase of
+    false positives") was designed to allow. Shipped as-is per the plan; a real example (not just a
+    hypothetical) that the relaxed gate matters in practice, not only in theory.
+33. **Screening discipline: an agent-classified DEFER doesn't need empirical testing to defer, only
+    a CONVERT needs it.** Leaving a branch's existing bare-scalar behavior untouched carries zero
+    regression risk regardless of whether the DEFER reasoning was empirically confirmed or just
+    structurally sound (e.g. "no existing `answer()` consumer for a comparative 'how many more X per
+    month' ask" needs no test to know it's out of scope). This cut the batch's testing budget roughly
+    in half compared to batches 1-2, where every branch (convert AND defer) was individually run
+    against `answer()` — reserve that full discipline for CONVERT candidates, where a wrong answer
+    is the one outcome the gate can never tolerate.
+
+Running total: 31/73 branches converted across 3 functions (`_rate_singles_system` 8/16,
+`_money_singles_system` 9/24, `_mult_singles_system` 14/33) — the remaining ~1012 branches across
+~27 other singles functions are still an open scope, worked through incrementally.
+
 ### A clause that is BOTH meta and data — read the recorded meta, don't fight the parse (#309)
 
 `_parse_problem` recognizes "there are N X in a Y" as a stated unit conversion (`_stated_conversion`),
