@@ -32,6 +32,59 @@ target; a global flag cannot.
 > verb fixed the design and the bug at the same time. When a fact comes out wrong, suspect a word
 > that isn't carrying (or binding) its obligation.
 
+### THE MINIMUM-STRUCTURE RULE — a pattern may only hardcode its skeleton
+
+User's phrasing, verbatim — the test for every literal token in every pattern: *"I only ever want
+to keep the minimum words needed to keep a structure. We gate against specific categories and
+senses, but still keep things as general as possible."*
+
+When a branch/solver matches text, the only LITERAL words allowed in its patterns are the ones
+that ARE the structure — the frame's grammatical skeleton (`of`, `each`, `more … than`, `in each`,
+`wide and … tall`, `how many`). Every CONTENT word is a hardcode-in-waiting and must instead be:
+
+1. **CAPTURED, not matched** — nouns, units, containers, verbs, count words, pronouns, genders
+   all come out of the text as groups (`_W`, `(\w+)`, `NUMBERS` words, `(?:his|her|their|its)`),
+   never as literals.
+2. **GATED by category/sense, not vocabulary** — `_cat(w, 'measure'|'noun'|'verb')`,
+   `_cat_re('animal')`, `NUMBERS` membership. The gate says *what kind of word* belongs in the
+   slot; it never enumerates which word.
+3. **GATED by internal consistency** — the same unit lemma on every clause that mentions it
+   (dimensions AND coverage; the `-pound` cast AND the `more pounds` delta AND the `in each
+   pound` conversion), the same container/stuff noun across both halves of a paired frame.
+   Consistency between captures is the structural signal that literal words used to fake.
+4. **ECHOED premise↔question** — the asked noun must match back to the premise's anchor
+   (`_number_variants` so singular/plural unify), and the emitted fact must CARRY the captured
+   noun (as its measure, via `_noun_lemma`) and the question's OWN verb. Keeping track of the
+   actual noun is part of the logic, not an optional refinement.
+
+A branch that names a specific incidental word ("cans", "meters", "two", "her", "walls",
+"painting", "bags", "pounds", "food", "bought") is a single waiting to be reduced. The batch-2
+standing rule ("generalize before absorbing") is the ORDERING; this rule is the TARGET STATE.
+Worked examples: `_mixed_singles_system` branch 5 (wall-area frame, six axes generalized) and
+`_mixed_singles_b_system` branch 8 (pet-food frame: container, both units, stuff noun, verb).
+The reach of a generalized frame is bounded by GUARD 1's lexicon admission — a captured word
+still needs a LEXICON entry to pass — so generalization and vocabulary growth compound, which is
+exactly why frames must not re-restrict what the lexicon already admits.
+
+**A hard-won corollary: REGISTERING A NEW CATEGORY is not a local change — it exposes every
+EXISTING generic fallback that gates on `CATEGORY_PARENTS` membership to a whole new surface of
+text, and each fallback's own assumptions must be re-audited, not just the branch being
+generalized.** Registering `pet` (a subcategory of `animal`, for `_mixed_singles_system` branch
+1's "how many pets" ask) silently activated the PRE-EXISTING category-sum fallback in `answer()`
+for a real dev-train problem it was never designed to handle: "Karen works at an animal shelter
+with 30 dogs, 28 cats, and 20 lizards... 50% of the dogs are adopted..." — the fallback summed
+the "dogs ADOPTED" and "cats ADOPTED" facts (15 + 7 = 22) as if they were the shelter's total
+holdings, turning a correct DECLINE into a CONFIDENT WRONG (gold 65) — the single worst outcome
+this whole effort's acceptance gates exist to prevent. The fallback's existing guard only checked
+that the fact's ENTITY was a category member; it never checked the fact's VERB, because every
+PRIOR example feeding it used "have". Fixed by restricting the fallback to `STATE_VERBS`
+(have/be) facts only — an EVENT verb ("adopted"/"sold"/"lost") is never a holdings statement.
+Caught only because the diff-verify gate is run over the FULL dev-train set, not just the
+branches being touched — a category addition's blast radius is invisible from reading the new
+branch's own code alone. Lesson: after registering ANY new category, run the full diff-verify
+gate (not just targeted tests for the branch being converted) — a category is global state, and
+every fallback keyed on `CATEGORY_PARENTS`/`_cat`/`_cat_re` is a potential collision site.
+
 ### Architectural corollary — the arithmetic system-solvers are a REGISTRY, and a shared discriminator isolates families
 
 The word-problem arithmetic layer (GSM8K) grew a family of *system solvers* — `_affine_system`,

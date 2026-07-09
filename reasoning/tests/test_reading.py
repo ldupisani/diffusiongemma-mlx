@@ -5890,6 +5890,18 @@ class TestNounKeyedEntityFallback(unittest.TestCase):
         ctx = [reading.Quantity("pig", ("pig", frozenset()), 10, "have")]
         self.assertEqual(reading.answer("How many animals do they have?", ctx), "undetermined")
 
+    def test_category_sum_fallback_ignores_event_verb_facts(self):
+        # a real dev-train confident-wrong this guard fixed: registering a new `pet` category
+        # exposed this fallback to facts whose ENTITY happens to be a category member but whose
+        # VERB is an EVENT ("50% of the dogs are ADOPTED"), not a holdings statement -- a
+        # shelter's per-species adoption counts must NOT be summed as if they were its total
+        # holdings. Only STATE_VERBS ("have"/"be") facts may enter the category sum -- the
+        # "sold" goat fact must be excluded from the total, not added in.
+        ctx = [reading.Quantity("pig", ("pig", frozenset()), 10, "have"),
+               reading.Quantity("cow", ("cow", frozenset()), 17, "have"),
+               reading.Quantity("goat", ("goat", frozenset()), 5, "sell")]
+        self.assertEqual(reading.answer("How many animals do they have?", ctx), 27)
+
     def test_category_sum_fallback_declines_unregistered_category(self):
         # "children" is not a registered semantic category -- must decline, not silently sum unrelated facts.
         ctx = [reading.Quantity("daughter", ("daughter", frozenset()), 18, "have"),
@@ -8570,13 +8582,25 @@ class TestMultSinglesSystemResultBatch3(unittest.TestCase):
         self.assertNotEqual(reading.solve(text), 216)
 
     def test_generalized_animal_triple_returns_system_result(self):
-        # branch 1 GENERALIZED (post-hoc audit): was hardcoded to the literal words
-        # "dogs"/"cats"/"fish" -- now reads any three members of the existing `animal`
-        # category (the "combined" clause cross-checked against the same two captured words),
-        # so it fires for rabbits/goats/cows too, not just dogs/cats/fish.
-        text = ("Farid has 3 rabbits, 2 goats and twice as many cows as goats and rabbits "
+        # branch 1 GENERALIZED, now via the MINIMUM-STRUCTURE frame: reads any three members
+        # of the existing `animal` category (the "combined"/"together"/"altogether"/"in total"
+        # clause cross-checked against the same two captured words), any scale word (not just
+        # "twice"), and the question's OWN collective noun as the hypernym every captured
+        # animal must belong to -- "pets" is the `pet` subcategory (dog/cat/fish/bird/rabbit/
+        # etc.), which farm animals like goats/cows are NOT members of, so the animal words here
+        # must actually be pets, not just any `animal` category member.
+        text = ("Farid has 3 rabbits, 2 birds and twice as many fish as birds and rabbits "
                 "combined. How many pets does Farid have in total?")
         self.assertEqual(reading.solve(text), 15)
+
+    def test_minimum_structure_scale_collective_and_hypernym_all_vary(self):
+        # branch 1's MINIMUM-STRUCTURE frame, exercised on every axis at once: a scale word
+        # OTHER than "twice" ("three times"), a collective marker OTHER than "combined"
+        # ("together"), and a hypernym OTHER than "pets" ("animals", the `animal` category
+        # itself rather than its `pet` subcategory) -- none of these are hardcoded literals.
+        text = ("Ed has 2 dogs, 3 cats and three times as many fish as cats and dogs "
+                "together. How many animals does Ed have in total?")
+        self.assertEqual(reading.solve(text), 20)
 
     def test_generalized_vehicle_word_returns_system_result(self):
         # branch 29 GENERALIZED (post-hoc audit): was hardcoded to the literal word "cars" --

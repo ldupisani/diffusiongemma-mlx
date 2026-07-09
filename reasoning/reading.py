@@ -5081,8 +5081,14 @@ def answer(question: str, context: list, discourse: list = None):
     # silently return the full (wrong) sum.
     if query is not None and not query[1] and query[0] in CATEGORY_PARENTS \
             and not any(isinstance(f, Quantity) and f.entity in (entities or []) for f in context):
+        # STATE_VERBS only: a category-sum ask is fundamentally a HOLDINGS question ("how many
+        # ANIMALS do they HAVE"), not an events one. Without this, a fact whose entity happens to
+        # be a category member but whose VERB is an EVENT ("50% of the dogs are ADOPTED") gets
+        # wrongly folded in — a real dev-train confident-wrong this guard fixed (a shelter's
+        # per-species adoption counts, entity="dog"/"cat", summed as if they were the shelter's
+        # total holdings).
         _cat_members = {f.entity: f.amount for f in context if isinstance(f, Quantity)
-                        and f.amount is not None and _cat(f.entity, query[0])}
+                        and f.amount is not None and f.verb in STATE_VERBS and _cat(f.entity, query[0])}
         if len(_cat_members) >= 2:
             _excluded = _cat_unresolved = None
             if any("negation" in u.features.get("senses", []) for u in r.units):
@@ -12637,6 +12643,16 @@ for _a in ("lion lions snake snakes giraffe giraffes cow cows pig pigs goat goat
            "gorilla gorillas snail snails frog frogs bat bats owl owls fox foxes wolf wolves").split():
     _tag_word(_a, "animal")
 
+# PET, a PROPERTY subcategory of `animal` — the household hypernym a question sums over
+# ("how many PETS does Ed have?" over dogs + cats + fish). Lets a branch read the question's
+# own collective noun AS a category name (`_cat(word, _noun_lemma(asked))`) instead of
+# hardcoding "pets": asked "animals" resolves through the parent category the same way.
+# Tagging an un-admitted word (hamster/goldfish) is harmless — inert without a LEXICON entry.
+_register_category("pet", "animal")
+for _p in ("dog dogs cat cats fish bird birds rabbit rabbits hamster hamsters goldfish "
+           "snail snails frog frogs").split():
+    _tag_word(_p, "pet")
+
 # VEHICLE (#272), a subcategory of noun — cars/trucks/buses/… are all "vehicles". Seeding the category
 # only teaches the hierarchy; a vehicle word still needs a LEXICON entry to pass GUARD 1, so admit the
 # common vehicle nouns (+ their plurals) here too.
@@ -13627,6 +13643,13 @@ def _vocab_singles_u_system(premises: list, question: str):
     askc = re.search(rf"how many {_W} (?:in|are|were|does|did|do|will|remain|left|combined|altogether|total)\b", ql)
     cat = _noun_lemma(askc.group(1)) if askc else None
     mem = _cat_re(cat) if cat else None
+    # a relational clause naming a member with NO digit of its own ("twice as many fish as cats
+    # and dogs combined") has no member count for its scale word to multiply, so `allnum`
+    # under-counts the true term total — the digit-completeness check alone can't catch this;
+    # decline explicitly whenever such a clause is present (this shape belongs to a solver that
+    # reads the relation, not a bare count sum).
+    if mem and mem != r"(?!)" and re.search(rf"{_SCALE_RE} as many (?:{mem}) as", full):
+        mem = None
     if mem and mem != r"(?!)":
         counts = re.findall(rf"({N}) ({mem})", full)
         allnum = re.findall(r"\d+(?:,\d{3})*(?:\.\d+)?", " ".join(premises) + " " + question)
@@ -22752,24 +22775,45 @@ def _mixed_singles_b_system(premises: list, question: str, readings_prem: list =
             need = tot * f(bw.group(1)) / 100
             won = f(bp[0].group(1)) * f(bp[1].group(1)) / 100
             return _rs_ret(f(bl.group(1)) - (need - won))
-    # 8. Anderson pet food: 2 bags of c-pound X + 2 bags Y each c+2 lb; ×16 oz (X/Y read via the
-    # `animal` category — was hardcoded to "cat"/"dog" specifically; Y's per-bag weight stays
-    # relative to X's, matching the problem's own base+delta structure).
+    # 8. Anderson pet food, MINIMUM-STRUCTURE frame: n₁ <container> of w-<unitA> <container>
+    # of <X> <stuff> + n₂ <container> of <Y> <stuff> each weighing d more <unitA>, × the
+    # stated <unitB>-per-<unitA> conversion → total <unitB>. X/Y read via the `animal`
+    # category (was "cat"/"dog"); the container (bags/boxes/…), BOTH units (pound/ounce →
+    # any measure-category pair, lemma-consistent across every clause and echoed by the
+    # question's "how many <unitB>"), the <stuff> noun (food/treats/…, same surface in both
+    # halves), and the buyer (question's named subject + its OWN verb, premise-anchored
+    # fallback when the question uses a pronoun) are all captured, never hardcoded. Y's
+    # per-container weight stays relative to X's (the problem's own base+delta structure).
     _animal_cat8 = _cat_re('animal')
-    ad = re.search(rf"({N}) bags of ({N})-pound bag of ({_animal_cat8}) food", full)
-    ag = re.search(rf"({N}) bags of ({_animal_cat8}) food that each weigh ({N}) more pounds", full)
-    ao = re.search(rf"({N}) ounces in each pound", full)
-    ao_v = f(ao.group(1)) if ao else _STATED_CONV.get(("pound", "ounce"))
-    an8 = re.search(r"(\w+) bought \d+ bags of", full)
-    if ad and ag and ao_v and "how many ounces" in ql:
-        toks = {ad.group(1), ad.group(2), ag.group(1), ag.group(3)} | ({ao.group(1)} if ao else set())
-        if dok(toks):
-            first_total = f(ad.group(1)) * f(ad.group(2))
-            second_total = f(ag.group(1)) * (f(ad.group(2)) + f(ag.group(3)))
+    ad = re.search(rf"({N}) (\w+) of ({N})-(\w+) (\w+) of ({_animal_cat8}) (\w+)", full)
+    ag = re.search(rf"({N}) (\w+) of ({_animal_cat8}) (\w+) that each weigh ({N}) more (\w+)", full)
+    qm8 = re.search(r"how many (\w+)[^?]*?(?:do|does|did|will|would|should) (?:\w+\.\s*)?(\w+) (\w+)\?", ql)
+    if ad and ag and qm8:
+        unit_a = _noun_lemma(ad.group(4))
+        unit_b = _noun_lemma(qm8.group(1))
+        ao = re.search(rf"({N}) (\w+) in each (\w+)", full)
+        container_ok = (_noun_lemma(ad.group(2)) == _noun_lemma(ad.group(5)) == _noun_lemma(ag.group(2))
+                        and _cat(ad.group(5), "noun"))
+        stuff_ok = ad.group(7) == ag.group(4) and _cat(ad.group(7), "noun")
+        units_ok = (_cat(ad.group(4), "measure") and _cat(qm8.group(1), "measure")
+                    and _noun_lemma(ag.group(6)) == unit_a
+                    and (ao is None or (_noun_lemma(ao.group(3)) == unit_a
+                                        and _noun_lemma(ao.group(2)) == unit_b)))
+        ao_v = f(ao.group(1)) if ao else _STATED_CONV.get((unit_a, unit_b))
+        toks = {ad.group(1), ad.group(3), ag.group(1), ag.group(5)} | ({ao.group(1)} if ao else set())
+        if container_ok and stuff_ok and units_ok and ao_v and dok(toks):
+            first_total = f(ad.group(1)) * f(ad.group(3))
+            second_total = f(ag.group(1)) * (f(ad.group(3)) + f(ag.group(5)))
             v = _rs_ret((first_total + second_total) * ao_v)
-            if v is not None and an8 is not None:
+            agent = qm8.group(2)
+            if agent in {"he", "she", "they", "it", "we", "i", "you"}:
+                # Premise fallback, anchored by the frame's own first clause ("<Name> <verb>
+                # n₁ <container> of") so no verb needs to be named.
+                an8 = re.search(rf"(\w+)\S* \w+ {re.escape(ad.group(1))} {re.escape(ad.group(2))} of", full)
+                agent = an8.group(1) if an8 else None
+            if v is not None and agent is not None:
                 _sr = _singles_result(readings_prem, premises, [
-                    Quantity(_key(an8.group(1)), ("ounce", frozenset()), v, "buy")])
+                    Quantity(_key(agent), (unit_b, frozenset()), v, qm8.group(3))])
                 if _sr is not None:
                     return _sr
             return v
@@ -23560,28 +23604,44 @@ def _mult_singles_system(premises: list, question: str, readings_prem: list = No
         return all(dd in used for dd in re.findall(r"\d+(?:,\d{3})*(?:\.\d+)?",
                                                    " ".join(premises) + " " + question))
 
-    # 1. Ed pets: a X + b Y + 2×(a+b) Z → total (X/Y/Z read via the `animal` category — was
-    # hardcoded to "dogs"/"cats"/"fish" specifically; the "combined" clause's third animal is
-    # cross-checked against the SAME two words the count-clause captured, in either order, so a
-    # stray unrelated "twice as many … combined" sentence elsewhere in the text can't hijack it).
+    # 1. Ed pets, MINIMUM-STRUCTURE frame: a <X> + b <Y> + k×(a+b) <Z> → (1+k)(a+b) total
+    # <hypernym>. X/Y/Z read via the `animal` category (was "dogs"/"cats"/"fish"); the scale
+    # k via _SCALE_RE/_scale — "twice"/"three times"/"1.5 times" all read, never a hardcoded
+    # 2; the collective marker via (?:combined|together|altogether|in total); the possession
+    # verb sense-gated, not named; and the question's OWN collective noun is read as a
+    # CATEGORY NAME every captured animal must belong to ("how many pets" → the `pet`
+    # category; "how many animals" → its parent) then carried into the fact's measure with
+    # the question's own verb — the asked hypernym is tracked, never assumed. The combined
+    # clause's third animal is cross-checked against the SAME two words the count clause
+    # captured (either order) so a stray unrelated scale sentence can't hijack it.
     _animal_cat = _cat_re('animal')
-    m = re.search(rf"(\w+) has ({N}) ({_animal_cat}) ?,? ({N}) ({_animal_cat})", full)
+    _coll = r"(?:combined|together|altogether|in total)"
+    m = re.search(rf"(\w+) (\w+) ({N}) ({_animal_cat}) ?,? ({N}) ({_animal_cat})", full)
     combo = None
-    if m:
+    if m and _cat(m.group(2), "verb"):
         combo = re.search(
-            rf"twice as many {_animal_cat} as {re.escape(m.group(3))} and {re.escape(m.group(5))} combined",
+            rf"({_SCALE_RE}) as many ({_animal_cat}) as {re.escape(m.group(4))} and {re.escape(m.group(6))} {_coll}",
             full) or re.search(
-            rf"twice as many {_animal_cat} as {re.escape(m.group(5))} and {re.escape(m.group(3))} combined",
+            rf"({_SCALE_RE}) as many ({_animal_cat}) as {re.escape(m.group(6))} and {re.escape(m.group(4))} {_coll}",
             full)
-    if m and combo and "how many pets" in ql and dok({m.group(2), m.group(4)}):
-        a, b = f(m.group(2)), f(m.group(4))
-        v = _rs_ret((a + b) * 3)
-        if v is not None:
-            _sr = _singles_result(readings_prem, premises, [
-                Quantity(_key(m.group(1)), ("pet", frozenset()), v, "have")])
-            if _sr is not None:
-                return _sr
-        return v
+    qn1b = re.search(r"how many (\w+)[^?]*?(?:do|does|did|will|would|should) (?:\w+\.\s*)?(\w+) (\w+)", ql)
+    if m and combo and qn1b:
+        hyper = _noun_lemma(qn1b.group(1))
+        k = _scale(combo.group(1))
+        hyper_ok = all(_cat(w, hyper) for w in (m.group(4), m.group(6), combo.group(2)))
+        toks = {m.group(3), m.group(5)} | set(re.findall(r"\d+(?:,\d{3})*(?:\.\d+)?", combo.group(1)))
+        if hyper_ok and k is not None and dok(toks):
+            a, b = f(m.group(3)), f(m.group(5))
+            v = _rs_ret((a + b) * (1 + k))
+            agent = qn1b.group(2)
+            if agent in {"he", "she", "they", "it", "we", "i", "you"}:
+                agent = m.group(1)
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(agent), (hyper, frozenset()), v, qn1b.group(3))])
+                if _sr is not None:
+                    return _sr
+            return v
     # 2. James CDs: n CDs; two are h hours each; last twice that long
     m = re.search(rf"buys ({N}) cds", full)
     h = re.search(rf"two of them are ({N}) hours each", full)
