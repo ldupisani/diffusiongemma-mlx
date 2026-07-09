@@ -975,6 +975,64 @@ converted branches, not new conversions) across the same 5 functions, plus one r
 generalization (`_mixed_singles_system` #5). Continuing with the next singles function per the
 user's standing batching instruction.
 
+**Update (2026-07-09): batch 6, `_mixed_singles_c_system` (16/39 branches) — generalization
+applied DURING conversion for the first time (not retrofitted afterward), and a new technique
+for when a category-generalized match can't assume contiguous text.**
+
+49. **Generalizing a two-entity regex must use TWO INDEPENDENT searches, not one combined
+    pattern, whenever the clause splitter can separate the two entities onto different
+    premises.** Batch 6's first attempt at generalizing branch 9 (Carla: "pigs"/"horses") used a
+    single combined regex, `has (N) (animal) and (N) (animal)`, mirroring the `_mult_singles_
+    system` #1 precedent exactly. It worked in isolated regex testing (against a hand-built
+    `full` string) but FAILED end-to-end via `solve()` — `_parse_problem`'s clause splitter had
+    severed "she has 8 pigs" from "10 horses and each pig needs..." onto TWO separate premises,
+    so in the REAL joined `full` string (with `" . "` between premises) the two animal mentions
+    are no longer contiguous text the combined regex expects. Fixed by reverting to TWO
+    independent `re.search` calls (mirroring the ORIGINAL pre-generalization branch's own
+    two-separate-regex structure, which already tolerated this) — search for the first "has N
+    (animal)" match, then search for the SECOND "(N) (animal)" match in the REMAINDER of `full`
+    (`full[ca0.end():]`). Lesson: when generalizing a branch that has MULTIPLE regex probes for
+    what looks like "the same clause," check whether the ORIGINAL branch already split them into
+    separate searches — if it did, that's very likely because the text isn't guaranteed
+    contiguous once `_parse_problem` runs, and a "cleaner" combined regex is a real regression
+    risk that passes isolated testing but fails the full pipeline.
+50. **A category-generalized fact needs its OWN subject captured too — don't leave a
+    person-entity hardcoded as a literal string just because the ORIGINAL branch did.** The first
+    draft of branch 9's fact emission kept `Quantity("carla", ...)` — a literal string carried
+    over unexamined from the pre-generalization code (which itself hardcoded "carla" as a
+    stand-in, matching a pattern used by some genuinely-unnamed-entity branches elsewhere). Once
+    the ANIMAL words were generalized, testing with a DIFFERENT subject name (not "Carla")
+    surfaced the bug immediately: `answer()` resolved correctly under the real subject's name but
+    the emitted fact still claimed to be about "carla," a name that no longer appeared in the
+    text at all. Fixed by capturing the subject name dynamically (`re.search(r"(\w+) needs to
+    bring water to (?:his|her|their) animals", full)`). General lesson: whenever a branch is
+    generalized (whether the DOMAIN NOUN or anything else), re-examine every OTHER hardcoded
+    piece the branch emits — a stale literal can hide behind a passing test that happens to reuse
+    the original example's specific words.
+51. **A "generalize before absorbing" screen must also correctly identify when NOT to
+    generalize — a role-specific arithmetic relationship is not the same shape as an
+    identity-agnostic count.** Two branches this batch (#27 Everlee's adult/child cookie split,
+    #30 Philip's cow/duck/pig farm count) both reference `animal`/`person` category members, but
+    were correctly left UNgeneralized: #27's arithmetic treats "adults" and "children" as fixed
+    ROLES (adults always eat exactly 1/3, children always split the remainder) — swapping in
+    arbitrary person-category words would produce a nonsensical branch (e.g. "how many cookies
+    does each GUEST get" when the text says nothing about guests). #30's ducks/pigs are similarly
+    role-bound by the arithmetic itself (ducks = cows×1.5, pigs = ⅕ of ducks+cows) — a correct
+    generalization would need the RELATIONSHIP read from the text too, not just the animal words,
+    real design work beyond a `_cat_re` swap. Contrast with Carla's pigs/horses (batch 6) and Ed's
+    dogs/cats/fish (batch 3's audit): those are TRUE identity-agnostic counts — the arithmetic
+    doesn't care WHICH animal is which, only their relative multipliers, which is what makes a
+    mechanical `_cat_re` swap safe. The distinguishing question going forward: "if I swapped in a
+    different category member, would the SENTENCE still make sense with no other changes?" — if
+    yes (Carla, Ed), generalize; if the role is baked into the meaning (Everlee's adults, Philip's
+    ducks/pigs), don't force it.
+
+Running total: 78/175 branches converted across 6 functions (`_rate_singles_system` 8/16,
+`_money_singles_system` 9/24, `_mult_singles_system` 14/33, `_mixed_singles_system` 18/30,
+`_mixed_singles_b_system` 13/33, `_mixed_singles_c_system` 16/39) — the remaining ~1027 branches
+across ~24 other singles functions (`_cat_singles_a_system`, the `_vocab_singles_a..u` letter
+groups, etc.) are still an open scope, worked through incrementally.
+
 ### A clause that is BOTH meta and data — read the recorded meta, don't fight the parse (#309)
 
 `_parse_problem` recognizes "there are N X in a Y" as a stated unit conversion (`_stated_conversion`),
