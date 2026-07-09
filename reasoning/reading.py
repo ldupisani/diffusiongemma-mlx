@@ -5096,6 +5096,37 @@ def answer(question: str, context: list, discourse: list = None):
             if not _cat_unresolved:
                 _summed = {e: v for e, v in _cat_members.items() if e != _excluded}
                 return _compute(" + ".join(_num(v) for v in _summed.values()))
+    # COMPLEMENTARY-GROUP FALLBACK: "how many GIRLS are AT THE MEETING?" / "...are there?" is a BARE COPULA
+    # question ("are", no aux, no other verb) asking about ONE of a population's two COMPLEMENTARY groups
+    # (boys/girls, men/women, … — the SAME closed `_GROUP_WORDS` set `_percent_population` already uses).
+    # Unlike the existential "are there" fallback above (which requires the literal word "there" AND a
+    # QUALIFIED measure), this fires on ANY bare-copula phrasing — "at the meeting"/"in the class"/"there"
+    # all lack an aux or non-copula verb alike — but is narrowed a DIFFERENT way: `query[0]` must be a
+    # member of the closed, enumerable group-word set, never an arbitrary noun. This is what makes it safe
+    # where a general bare-head resolution wasn't (the fraction-partition regression #395 excluded): an
+    # arbitrary bare noun CAN coincidentally match an unrelated subgroup's count, but "girl"/"boy" are a
+    # small, fixed vocabulary with no such ambiguity risk. `query`'s head resolves to the SINGULAR lemma
+    # ("girl"), so an emitting solver must key its facts' entity/measure the same way (the established
+    # per-entity self-measure convention, `(_noun_lemma(group), frozenset())`) for the exact match below
+    # to find them — matching by lemma on both sides in this fallback ITSELF was tried and rejected: the
+    # downstream per-entity fold a few lines below does its OWN exact `f.measure == query` comparison, so
+    # normalizing only here still declines once execution reaches that fold; fixing it at the SOURCE (the
+    # solver's own fact convention) is simpler than teaching every consumer to lemma-match.
+    # a COMPOUND ask ("how many BOYS AND GIRLS are left?") mentions the group's own COMPLEMENT word too —
+    # `_descriptor(collection)` only captures the FIRST conjunct's head ("boy"), silently dropping "and
+    # girls", so this fallback would otherwise hijack a two-group combined ask as if it were a single-group
+    # one (a real regression: "14 boys, 10 girls, 4/3 drop out, how many boys AND GIRLS are left?" wrongly
+    # committed boy's raw 14 instead of correctly falling through to the remainder machinery for 10+7=17).
+    # Any OTHER group word literally present in the question — not just the asked one — signals this.
+    _other_group_word = query is not None and not query[1] and any(
+        _noun_lemma(_key(w.surface)) in _GROUP_WORDS and _noun_lemma(_key(w.surface)) != _noun_lemma(query[0])
+        for u in r.units for w in u.words)
+    if query is not None and not query[1] and _noun_lemma(query[0]) in _GROUP_WORDS and not _other_group_word \
+            and not any(isinstance(f, Quantity) and f.entity in (entities or []) for f in context):
+        _group_owners = {f.entity for f in context if isinstance(f, Quantity) and f.measure == query
+                         and f.amount is not None}
+        if len(_group_owners) == 1:
+            entities, q_verb, q_time = [next(iter(_group_owners))], "have", None
     if query is not None and entities is not None:
         if entities:
             terms = []                                   # each conjunct's contribution, summed once at the end
@@ -9040,6 +9071,17 @@ def _group_relation(a: str, b: str):
     return "comp" if any({a, b} == {x, y} for x, y in _GROUP_PAIRS) else None
 
 
+def _group_complement(g: str):
+    """The OTHER member of `g`'s complementary pair (boys<->girls, men<->women, …), or None if `g` isn't
+    a recognized group word at all."""
+    for x, y in _GROUP_PAIRS:
+        if g == x:
+            return y
+        if g == y:
+            return x
+    return None
+
+
 def _group_after_copula(r: "Reading"):
     """The first partition-group word (boys/girls/…) appearing after a copula in a reading — the predicate
     of "P% … ARE boys". None if there's no such group noun."""
@@ -9051,25 +9093,38 @@ def _group_after_copula(r: "Reading"):
     return None
 
 
-def _percent_population(premises: list, question: str):
+def _percent_population(premises: list, question: str, readings_prem: list = None):
     """A TWO-GROUP population partition — a percent splits a population into complementary groups (boys/girls,
     men/women); recover the asked group. Every group's count is total × fraction, where fraction = P if the
     group is the percent's group, else 1−P (the complement). Two entry points share the formula: a TOTAL is
     given ("50 people, 30% are boys → girls = 50 × 0.70 = 35"), or ONE GROUP'S COUNT is given ("60% are girls,
     boys = 300 → girls = 300 × 0.6/0.4 = 450", since total = C/f_base). TIGHTLY gated — exactly one number +
     one percent in the premises (nothing in the question), the percent's group and the question's group both
-    resolvable to same/complement of each other, and a recognized base. None otherwise."""
-    readings = [analyze(p) for p in premises]
-    pcts = [(r, u) for r in readings for u in r.units if "percent" in u.features.get("senses", [])]
-    vals = [(r, u) for r in readings for u in r.units if "value" in u.features.get("senses", [])
+    resolvable to same/complement of each other, and a recognized base. None otherwise.
+
+    Migrated (see `_anchored_sum_system`'s docstring for the full recipe) when SAFE: instead of computing
+    only the asked group's value, emits a `Quantity` fact for BOTH complementary groups (keyed by the
+    SINGULAR lemma, e.g. 'girl' — matching what `answer()`'s new COMPLEMENTARY-GROUP FALLBACK independently
+    resolves its `query` to) and lets that fallback pick the asked one. Like `_two_relation_system`, neither
+    group's value is a free pivot on its own — the percent premise and the value premise are JOINTLY needed
+    to compute either — so both facts attribute to BOTH premise indices (may be the SAME index when one
+    premise states both, e.g. "30% of the 50 people are boys"). This is the ONE `_LATE_SYSTEMS` solver found
+    to have genuine per-entity structure; every other `_LATE_SYSTEMS` solver computes a single implicit-pool
+    scalar with no entity to attribute a fact to."""
+    _rps = readings_prem if readings_prem is not None and len(readings_prem) == len(premises) else None
+    readings = _rps if _rps is not None else [analyze(p) for p in premises]
+    pcts = [(i, r, u) for i, r in enumerate(readings) for u in r.units if "percent" in u.features.get("senses", [])]
+    vals = [(i, u) for i, r in enumerate(readings) for u in r.units if "value" in u.features.get("senses", [])
             and u.features.get("value") is not None]
     if len(pcts) != 1 or len(vals) != 1:
         return None
     qr = analyze(question)
     if any("value" in u.features.get("senses", []) and u.features.get("value") is not None for u in qr.units):
         return None
-    P = pcts[0][1].features["value"]
-    G1 = _group_after_copula(pcts[0][0])                 # the percent's group ("… are boys")
+    pct_idx, rp_pct, punit = pcts[0]
+    val_idx, val_u = vals[0]
+    P = punit.features["value"]
+    G1 = _group_after_copula(rp_pct)                     # the percent's group ("… are boys")
     Gq = next((_key(u.surface) for u in qr.units if _key(u.surface) in _GROUP_WORDS), None)   # asked group
     if G1 is None or Gq is None:
         return None
@@ -9081,17 +9136,41 @@ def _percent_population(premises: list, question: str):
     fq = frac(Gq)
     if fq is None or not 0 < fq < 1:
         return None
-    val_r, val_u = vals[0]
     C = val_u.features["value"]
-    Gc = next((_key(u.surface) for u in val_r.units if _key(u.surface) in _GROUP_WORDS), None)
+    val_rp = readings[val_idx]
+    Gc = next((_key(u.surface) for u in val_rp.units if _key(u.surface) in _GROUP_WORDS), None)
     if Gc is None:                                        # the number is the TOTAL population → group = N × f
         r = _compute(f"{_num(C)} * {_num(fq)}")
+        total = C
     else:                                                 # the number is ONE group's count → total = C / f_base
         fc = frac(Gc)
         if fc is None or fc <= 0:
             return None
         r = _compute(f"{_num(C)} * {_num(fq)} / {_num(fc)}")
-    return round(r, 9) if isinstance(r, float) else r
+        total = _compute(f"{_num(C)} / {_num(fc)}")
+    scalar = round(r, 9) if isinstance(r, float) else r
+    G2 = _group_complement(G1)
+    _has_interrogative = any("interrogative" in u.features.get("senses", []) for u in qr.units)
+    # `answer()`'s COMPLEMENTARY-GROUP FALLBACK only fires when its OWN `query` resolution (the SAME
+    # `queries→collection` walk `_queried_measure` performs) lands EXACTLY on the asked group's bare
+    # measure — a relative-clause phrasing ("how many FRIENDS does he have WHO ARE girls?") resolves the
+    # collection to "friend" instead, silently dropping the "girls" qualifier, and `answer()` has no fact
+    # for a bare "friend" measure at all (a real regression this excludes: fell through to a fold guaranteed
+    # to decline instead of the correct scalar, 27). Verify the SAME resolution the fallback depends on
+    # before committing to the new path, exactly as the fallback's own gate requires.
+    _qm = _queried_measure(question)
+    if _rps is None or not _has_interrogative or G2 is None \
+            or _qm is None or _qm[1] or _noun_lemma(_qm[0]) != _noun_lemma(Gq):
+        return scalar
+    g1_amt = _compute(f"{_num(total)} * {_num(P)}")
+    g2_amt = _compute(f"{_num(total)} * {_num(1 - P)}")
+    g1_amt = round(g1_amt, 9) if isinstance(g1_amt, float) else g1_amt
+    g2_amt = round(g2_amt, 9) if isinstance(g2_amt, float) else g2_amt
+    fact1 = Quantity(_noun_lemma(G1), (_noun_lemma(G1), frozenset()), g1_amt)
+    fact2 = Quantity(_noun_lemma(G2), (_noun_lemma(G2), frozenset()), g2_amt)
+    facts_by_premise = {pct_idx: [fact1, fact2], val_idx: [fact1, fact2]}
+    matched = list(_rps[pct_idx].units) + list(_rps[val_idx].units)
+    return SystemResult(facts_by_premise, matched)
 
 
 def _percent_original(premises: list, question: str):
@@ -26011,7 +26090,7 @@ _LATE_SYSTEMS = [
     # PERCENT ORIGINAL (inverse) — "$15000 is 40% of the original. Original?" → 37500.
     ("percent_original", lambda P, Q, C, R: _percent_original(P, Q)),
     # PERCENT POPULATION — "50 people, 30% boys. Girls?" → 35; "60% girls, 300 boys → girls?" → 450.
-    ("percent_population", lambda P, Q, C, R: _percent_population(P, Q)),
+    ("percent_population", lambda P, Q, C, R: _percent_population(P, Q, R)),   # MIGRATED
     # BACKWARD INVERSION (general) — "spent $1.75 + $1.25; $6 left. Had?" → 9 (any phrasing, not just "at first").
     ("backward_inversion", lambda P, Q, C, R: _backward_inversion(P, Q)),
     # POOL-AND-REDISTRIBUTE — "combine their candies and share equally, how many EACH?" → Σ/N.

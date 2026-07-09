@@ -3899,6 +3899,35 @@ class TestPercentPopulation(unittest.TestCase):
             "60% of the students are girls and the number of boys is 200. "
             "How many girls are there?"), 300)
 
+    def test_returns_system_result_with_both_group_facts(self):
+        # #400b -- migrated to SystemResult: both complementary groups' facts, not just the asked one.
+        text = "At a meeting there are 40 people. 30% of them are boys. How many girls are at the meeting?"
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._percent_population(premises, question, rp)
+        self.assertIsInstance(result, reading.SystemResult)
+        seen = {}
+        for fs in result.facts_by_premise.values():
+            for f in fs:
+                seen[f.entity] = f.amount
+        self.assertEqual(seen, {"boy": 12, "girl": 28})
+        self.assertEqual(reading.solve(text), 28)
+
+    def test_relative_clause_ask_stays_on_legacy_scalar_path(self):
+        # a real TEST regression: "how many friends does he have WHO ARE girls?" resolves answer()'s own
+        # query to 'friend' (the relative clause "who are girls" is dropped), not 'girl' -- the new
+        # SystemResult path would guarantee a decline, so this must stay on the legacy scalar path.
+        text = ("55% of Toby's friends are boys and the rest are girls. If he has 33 friends who are boys, "
+                "how many friends does he have who are girls?")
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._percent_population(premises, question, rp)
+        self.assertNotIsInstance(result, reading.SystemResult)
+        self.assertEqual(result, 27)
+        self.assertEqual(reading.solve(text), 27)
+
 
 class TestPercentOriginal(unittest.TestCase):
     """PERCENT ORIGINAL (inverse) — a money value is a % of an unknown original; recover it by division. Frame
@@ -5866,6 +5895,40 @@ class TestNounKeyedEntityFallback(unittest.TestCase):
         ctx = [reading.Quantity("daughter", ("daughter", frozenset()), 18, "have"),
                reading.Quantity("son", ("son", frozenset()), 3, "have")]
         self.assertEqual(reading.answer("How many children does he have?", ctx), "undetermined")
+
+    def test_complementary_group_fallback_resolves_bare_copula_ask(self):
+        # "are AT THE MEETING" has no aux and no non-copula verb -- a deeper gap than the existential "are
+        # there" fallback (#395), which requires the literal word "there".
+        ctx = [reading.Quantity("boy", ("boy", frozenset()), 12, "have"),
+               reading.Quantity("girl", ("girl", frozenset()), 28, "have")]
+        self.assertEqual(reading.answer("How many girls are at the meeting?", ctx), 28)
+        self.assertEqual(reading.answer("How many boys are there?", ctx), 12)
+
+    def test_complementary_group_fallback_declines_ambiguous_owners(self):
+        ctx = [reading.Quantity("boy_a", ("boy", frozenset()), 12, "have"),
+               reading.Quantity("boy_b", ("boy", frozenset()), 5, "have")]
+        self.assertEqual(reading.answer("How many boys are there?", ctx), "undetermined")
+
+    def test_complementary_group_fallback_declines_non_group_word(self):
+        # "apple" isn't a registered group word -- must decline, not accidentally match via some other path.
+        ctx = [reading.Quantity("apple", ("apple", frozenset()), 10, "have")]
+        self.assertEqual(reading.answer("How many apples are there?", ctx), "undetermined")
+
+    def test_complementary_group_fallback_declines_compound_ask(self):
+        # a real TEST regression: "how many BOYS AND GIRLS are left?" mentions BOTH group words -- must
+        # decline, not hijack it as a single-group ask onto whichever entity `_descriptor` happened to
+        # capture first ("boy"'s raw 14, dropping "and girls").
+        ctx = [reading.Quantity("boy", ("boy", frozenset()), 14, "have"),
+               reading.Quantity("girl", ("girl", frozenset()), 10, "have")]
+        self.assertEqual(reading.answer("How many boys and girls are there?", ctx), "undetermined")
+
+    def test_complementary_group_fallback_regression_real_dropout_problem(self):
+        # the actual dev-holdout text this regressed on, end to end through solve() (the isolated answer()
+        # repro above can't reproduce the full drop-out fold's interaction with OTHER answer() machinery) --
+        # must decline (matching pre-migration behavior), not commit a wrong number.
+        text = ("The school has 14 boys and 10 girls. If 4 boys and 3 girls drop out, how many boys and "
+                "girls are left?")
+        self.assertEqual(reading.solve(text), "undetermined")
 
     def test_noun_affine_system_returns_system_result(self):
         # fresh synthetic numbers (same nouns as the docstring example, to stay clear of vocabulary gaps):
