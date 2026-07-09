@@ -785,6 +785,67 @@ Running total: 31/73 branches converted across 3 functions (`_rate_singles_syste
 `_money_singles_system` 9/24, `_mult_singles_system` 14/33) — the remaining ~1012 branches across
 ~27 other singles functions are still an open scope, worked through incrementally.
 
+**Update (2026-07-09): batch 4, `_mixed_singles_system` (18/30 branches) — the FIRST `Frequency`
+fact in this whole effort, and a new "compound measure" gap class.**
+
+34. **"How many TIMES did X <verb>?" is not a `Quantity` question at all — it's a dedicated
+    `Frequency` fold, and a `Quantity` fact with measure `("time", ...)` silently never matches
+    it.** `answer()` has a self-contained branch (`if aux is not None and query is not None and
+    query[0] == "time":`) that, once it fires, ONLY ever looks at `Frequency(entity, action,
+    count)` facts in `context` — never `Quantity`. This was invisible on paper: `_queried_measure`
+    happily resolves "how many times" to `('time', frozenset())` just like any other countable
+    noun, so a `Quantity` echo fact LOOKS like it should work, and only empirical testing against
+    `answer()` (not just `_queried_measure`) caught it. Branch 9 (Tammy) converts cleanly once
+    switched to `Frequency(_key(name), lemma, count)` — this is the first `Frequency` fact emitted
+    anywhere in the singles-absorption effort, proving `_singles_result`'s generic `facts: list`
+    parameter already supports non-`Quantity` fact types with no changes needed. Branch 25 (John,
+    "how many times DOES HE use the bathroom") hits the SAME Frequency-routing behavior but with a
+    PRONOUN subject — unlike the `Quantity` aux fold, the Frequency branch has NO noun-keyed
+    fallback for an unresolved pronoun at all, so it declines regardless; deferred rather than
+    chasing a second new mechanism mid-batch.
+35. **A NEW gap class: a compound "X and Y" measure ask collapses to only the FIRST noun in
+    `_queried_measure`.** Branch 8 ("how many pens and pencils did she have left?") and branch 26
+    ("how many notebooks and pens, does he have altogether?") both ask for the SUM of two distinct
+    measures in one question — `_queried_measure` has no representation for a compound ask, so it
+    silently resolves to just the bare first noun (`('pen', ∅)` for both). There's no existing
+    `answer()` consumer that could sum two measures for a "X and Y" ask even if a fact WERE
+    correctly matched to the first noun alone, so both branches are structural DEFERs, not
+    something a different fact model could route around.
+36. **Verb-must-match-the-question's-own-verb bites again, in a new construction.** Branch 28
+    ("How many berries did Steve START WITH?") declined with the default `have` verb but resolved
+    correctly once the fact's verb was changed to `"start"` — a re-discovery of the rule already
+    documented for `_rate_singles_system`'s branch 13: the aux fold only defaults to the have/own
+    fold when the QUESTION's own verb is have/own; any other verb (start/receive/earn/etc.)
+    requires the fact's verb to match that verb's lemma exactly. Worth internalizing as a checklist
+    item for every future CONVERT candidate — read the question's verb before picking the fact's
+    verb, don't default to "have" out of habit.
+37. **A quick survey pass matched the WRONG dev-set problem for one branch — caught only by
+    re-running the branch function itself, not by eyeballing the regex.** An initial loose search
+    for branch 15 ("Eric marbles: white/blue/rest-green") used the search term "rest are green",
+    which matched a DIFFERENT, unrelated GSM8K problem (Ryan/balls, not Eric/marbles) that happens
+    to share that phrase but not the branch's actual regex (which requires the literal word
+    "marbles", not "balls"). Running `_mixed_singles_system(premises, question)` directly against
+    the wrongly-matched text returned `None` — the tell that the "real dev-set text" wasn't real
+    for THIS branch at all. Lesson: after a keyword search finds candidate dev-set text, VERIFY it
+    by running the branch's own raw function against it and checking the value matches gold, not
+    just by eyeballing that the topic sounds right — a loose keyword can silently match a sibling
+    problem in the same domain.
+38. **Two branches (3, 13) landed in the tolerated "correct → decline" bucket again, same pattern
+    as batch 3's Janine.** Larry (branch 3, dog-walking minutes) and Emma (branch 13, milk
+    containers) both emit the right `SystemResult` fact and resolve correctly via a standalone
+    `answer()` call, but the full `solve()` pipeline still declines via some downstream GUARD (not
+    localized, same as batch 3 — out of scope to chase since the outcome is already within the
+    accepted gate). Two occurrences in two consecutive batches suggests this isn't a one-off
+    coincidence but a systematic characteristic of a subset of migrated branches; still safely
+    within the user's stated tolerance, and not worth a dedicated investigation unless a future
+    batch needs those specific branches to actually commit (e.g. if TEST coverage depended on one).
+
+Running total: 49/103 branches converted across 4 functions (`_rate_singles_system` 8/16,
+`_money_singles_system` 9/24, `_mult_singles_system` 14/33, `_mixed_singles_system` 18/30) — the
+remaining ~982 branches across ~26 other singles functions (`_mixed_singles_b_system`,
+`_mixed_singles_c_system`, `_cat_singles_a_system`, the `_vocab_singles_a..u` letter groups, etc.)
+are still an open scope, worked through incrementally.
+
 ### A clause that is BOTH meta and data — read the recorded meta, don't fight the parse (#309)
 
 `_parse_problem` recognizes "there are N X in a Y" as a stated unit conversion (`_stated_conversion`),
