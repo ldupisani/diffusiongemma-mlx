@@ -597,6 +597,75 @@ unlike a general bare-head noun, which the fraction-partition regression (#395) 
 This brings the running SystemResult migration total to 14 solvers, closing out a systematic one-by-one
 assessment of every remaining obligation-parsing solver in both registries.
 
+### System solvers, part 2 — extending SystemResult to the WHOLE-TEXT REGEX "singles" family (2026-07-09)
+
+Everything above migrated the per-Unit "obligation-parsing" solver class (calls `analyze(p)`, reads
+`Reading.units`). The OTHER, much larger class — `_vocab_singles_a`..`_u`, `_mixed_singles`/`_b`/`_c`,
+`_mult_singles_system`, `_money_singles_system`, `_rate_singles_system`, `_cat_singles_a_system`, etc.,
+~1085 branches across ~30 functions, ~10,000 lines — is structurally different: WHOLE-TEXT REGEX over
+`full = " . ".join(p.lower() for p in premises) + " . " + ql`, no `Reading`/`Unit` objects at all. The
+user's ask: these should ALSO follow the obligation-absorption rule — "any words that are matched by the
+regex becomes subordinate to the fact/value it provided" — with an explicitly LOOSER acceptance criterion
+than every migration above: "I don't really mind if singles reduce the count of correct answers so much as
+that it shouldn't lead to an increase of false positives." `BROKE` (correct → decline) is tolerated;
+`0 CORRECT→WRONG` / `0 DECL→WRONG` / TEST wrong-count-must-not-increase are the hard requirements.
+
+Piloted on `_rate_singles_system` (16 branches, the smallest sibling function) — 8 converted
+(1,2,3,4,6,10,11,16), 8 individually verified NOT to convert cleanly and left as unconverted bare-scalar
+branches (see the function's own docstring for each one's specific reason). Key findings:
+
+22. **A GLOBAL text-level check (`dok()`) can stand in for per-premise fact-attribution, when the
+    granularity cost of building precise attribution isn't worth it yet.** Every singles branch is gated by
+    a `dok(used)` check verifying every numeric literal in the WHOLE problem text was referenced by the
+    branch's own captured groups BEFORE it ever computes a value — the exact guarantee `facts_of[i]`
+    attribution exists to provide, just scoped to the whole text instead of one premise. Rather than build
+    new match-span → premise → `Unit` mapping infrastructure (character-offset bucketing against `full`'s
+    join boundaries, never previously needed since the per-Unit family never had this problem), the pilot
+    reused this EXISTING guarantee: bind every premise's ENTIRE `Reading.units` wholesale
+    (`_singles_result`), attributing all emitted facts to a single premise index (0) and leaving the rest as
+    empty-but-bound entries — the same "constraint premise" pattern the `tot_idx`/anchor families already
+    established. This is a strictly WEAKER attribution guarantee than the per-Unit family's (a single
+    coincidentally-matching digit elsewhere in the SAME premise as a captured one would slip through
+    unnoticed, where true per-Unit attribution would not) — accepted as a known, explicit limitation of the
+    pilot, not silently glossed over. If a future increment needs tighter precision, the mapping is worth
+    building then, not preemptively.
+23. **Keep the branch's own arithmetic completely unchanged; only change what happens to the result.**
+    Unlike every per-Unit migration (which restructured the ALGORITHM itself into per-entity fact
+    propagation), a singles branch's regex matching and arithmetic needed ZERO changes — only the FINAL
+    step changed, from `return _rs_ret(v)` to emitting `v` as a `Quantity` fact and falling through. This
+    kept the diff small and the risk contained to "does `answer()` independently re-derive the same value,"
+    not "did the arithmetic get subtly rewritten."
+24. **Test every branch against a REAL dev-set problem text before converting it — paper analysis of
+    which branch "should" convert is not reliable enough on its own.** An initial per-branch classification
+    (grounded in reading `answer()`'s code and reasoning about which capability SHOULD apply) predicted
+    14/16 convertible; empirically testing each one end-to-end against its real dev-train/holdout text
+    found only 8 actually worked, surfacing FIVE distinct real gaps a paper read couldn't have predicted:
+    a pre-existing aux/verb sense-disambiguation bug ("does" tags as a plain verb, not an auxiliary, before
+    another verb — "does she GET paid"), the noun-keyed fallback's own deliberate TIME_UNITS exclusion
+    (built earlier this session specifically to protect the age-equation domain — "how many HOURS"/"how
+    many WEEKS" trip it), an untaught "What is the total length of time that X runs?" `wh_value` phrasing
+    (the SAME documented gap `_anchored_sum_system`'s own docstring already flagged), a phrasal-verb parsing
+    confusion ("end up paying" — "end" tags as a noun, not part of the verb), and — the most surprising —
+    a `_parse_problem` CLAUSE-SPLITTING bug: a comma-heavy question ("how much money, IN DOLLARS, did Mike
+    receive...") gets truncated to just "how much money," with the rest of the clause misclassified as an
+    extra PREMISE rather than staying part of the question, so `answer()` never even sees who or what is
+    actually asked — invisible to a standalone `answer()` test (which bypasses `_parse_problem` entirely by
+    passing the full, correct question text directly) but fatal end-to-end through `solve()`. Lesson: ALWAYS
+    verify end-to-end through `solve()` on the real text, never just against a hand-built `answer()` call —
+    the intermediate parsing pipeline can independently break things a direct capability check won't catch.
+25. **The result can beat the tolerance the plan explicitly granted — don't be surprised when it does.**
+    The acceptance gate for this pilot explicitly tolerated `BROKE` (correct → decline). The actual
+    diff-verify came back completely clean — 0 SOLVED, 0 BROKE, 0 DECL→WRONG — because every branch that
+    LOOKED convertible on paper but didn't verify cleanly was caught and deferred BEFORE landing (point 24),
+    rather than shipped and discovered as a regression. Rigorous per-branch empirical verification during
+    implementation is what earned the stronger-than-required outcome; it wasn't the looser gate doing the
+    work.
+
+Scoped as a pilot only, per the project's `working-method-piecemeal-annotate` discipline — the remaining
+~1070 branches across ~29 other singles functions are an explicit, separate scope decision, not
+automatically in motion. `_singles_result` is written generically enough to reuse as-is for any future
+singles function that follows the same recipe.
+
 ### A clause that is BOTH meta and data — read the recorded meta, don't fight the parse (#309)
 
 `_parse_problem` recognizes "there are N X in a Y" as a stated unit conversion (`_stated_conversion`),
