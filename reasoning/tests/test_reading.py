@@ -8310,6 +8310,88 @@ class TestIncrement219SignedMixedChain(unittest.TestCase):
             "with a speed of 10 pages per day, and the second half with a speed of 5 "
             "pages a day. How many days did Jane spend reading this book?"), 75)
 
+
+class TestRateSinglesSystemResultPilot(unittest.TestCase):
+    """#402 — the WHOLE-TEXT REGEX obligation-absorption pilot: 8 of `_rate_singles_system`'s
+    16 branches (1,2,3,4,6,10,11,16) now emit a `Quantity` fact instead of returning the
+    computed value directly, letting `answer()` independently re-derive it (see
+    `_singles_result`'s docstring for the full recipe and the function's own docstring for why
+    the other 8 branches were individually verified NOT to convert cleanly). Fresh synthetic
+    numbers per branch, distinct from the GSM8K-sourced `test_rate_singles_representatives`."""
+
+    def test_pronoun_subject_pool_returns_system_result(self):
+        # branch 1: subject introduced in an EARLIER sentence than any captured value.
+        text = ("Nadia collects marbles. She had 15 marbles before she went on a trip. On "
+                "the trip, she found 4 marbles per day for 6 days. Then he found 3 marbles "
+                "on the fifth day. How many marbles does she have now?")
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._rate_singles_system(premises, question, rp)
+        self.assertIsInstance(result, reading.SystemResult)
+        all_facts = [f for fs in result.facts_by_premise.values() for f in fs]
+        self.assertEqual(len(all_facts), 1)
+        self.assertEqual(all_facts[0].entity, "nadia")
+        self.assertEqual(all_facts[0].amount, 15 + 4 * 6 + 3)
+        self.assertEqual(reading.solve(text), 42)
+
+    def test_named_subject_returns_system_result(self):
+        # branch 10: named subject, no fallback needed.
+        text = ("Derek has 4 cats and 6 dogs. He needs to pay a friend to watch them, who "
+                "charges $7 a night per animal. How much does Derek have to pay?")
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._rate_singles_system(premises, question, rp)
+        self.assertIsInstance(result, reading.SystemResult)
+        all_facts = [f for fs in result.facts_by_premise.values() for f in fs]
+        self.assertEqual(all_facts[0].entity, "derek")
+        self.assertEqual(all_facts[0].amount, (4 + 6) * 7)
+        self.assertEqual(reading.solve(text), 70)
+
+    def test_combined_named_pair_returns_two_facts(self):
+        # branch 4: a genuine two-fact re-derivation via the combined_q sum fold, not an echo.
+        text = ("Priya has 20 grams of gold that cost $12 per gram. Omar has 40 grams of "
+                "gold for the cost of $9 per gram. How much is the cost of their gold "
+                "combined?")
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._rate_singles_system(premises, question, rp)
+        self.assertIsInstance(result, reading.SystemResult)
+        all_facts = [f for fs in result.facts_by_premise.values() for f in fs]
+        seen = {f.entity: f.amount for f in all_facts}
+        self.assertEqual(seen, {"priya": 240, "omar": 360})
+        self.assertEqual(reading.solve(text), 600)
+
+    def test_change_ask_returns_two_signed_facts(self):
+        # branch 6: two SIGNED facts (have/spend), not one precomputed net.
+        text = ("Two sisters go to the fair. Fair tickets are $6 per person. If the sisters "
+                "brought $20 with them, how much change will they receive after buying the "
+                "tickets?")
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._rate_singles_system(premises, question, rp)
+        self.assertIsInstance(result, reading.SystemResult)
+        all_facts = [f for fs in result.facts_by_premise.values() for f in fs]
+        self.assertEqual({(f.verb, f.amount) for f in all_facts}, {("have", 20), ("spend", 12)})
+        self.assertEqual(reading.solve(text), 8)
+
+    def test_deferred_branch_stays_on_legacy_scalar_path(self):
+        # branch 15's real question is an IMPERATIVE ("calculate...") -- answer() declines every
+        # imperative by design, so this branch must stay on the unchanged legacy scalar path.
+        text = ("Priya earns $400 if she works for 30 hours a week and gets an extra $15 for "
+                "every hour of overtime. If she worked 35 hours last week, calculate her "
+                "total income.")
+        premises, question = reading._parse_problem(text)
+        readings = [reading.analyze(c) for c in premises + [question]]
+        rp = readings[:len(premises)]
+        result = reading._rate_singles_system(premises, question, rp)
+        self.assertNotIsInstance(result, reading.SystemResult)
+        self.assertEqual(result, 475)
+        self.assertEqual(reading.solve(text), 475)
+
     def test_money_singles_representatives(self):
         # #227 — four of the twenty-five branches (the rest are diff-verified)
         self.assertEqual(reading.solve(
