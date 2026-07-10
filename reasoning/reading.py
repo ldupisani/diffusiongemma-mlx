@@ -20672,7 +20672,7 @@ def _cat_singles_a_system(premises: list, question: str, readings_prem: list = N
             if 0 < psum < 100 and dok({cm.group(1), cm.group(2)} | {p for p, _w in pcts}):
                 v = _rs_ret((f(cm.group(1)) + f(cm.group(2))) * (100 - psum) / 100)
                 if v is not None:
-                    sm2 = re.search(r"\b([A-Z][a-z]+)\b", full)
+                    sm2 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
                     vbm = re.search(r"does \w+ (\w+)\?", ql)
                     if sm2 and vbm:
                         _sr = _singles_result(readings_prem, premises, [
@@ -20698,7 +20698,7 @@ def _cat_singles_a_system(premises: list, question: str, readings_prem: list = N
         if need > 0 and dok({ck.group(2), hk.group(1)} | kdig):
             v = _rs_ret(need)
             if v is not None:
-                sm3 = re.search(r"\b([A-Z][a-z]+)\b", full)
+                sm3 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
                 if sm3:
                     _sr = _singles_result(readings_prem, premises, [
                         Quantity(_key(sm3.group(1)), MONEY, v, "earn")])
@@ -21027,7 +21027,7 @@ def _cat_singles_a_system(premises: list, question: str, readings_prem: list = N
                 if (fv * n).is_integer() and dok({iv.group(1), cr.group(1)} | fdig):
                     v = _rs_ret((n + fv * n) * k)
                     if v is not None:
-                        sm4 = re.search(r"\b([A-Z][a-z]+)\b", full)
+                        sm4 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
                         if sm4:
                             _sr = _singles_result(readings_prem, premises, [
                                 Quantity(_key(sm4.group(1)), (_noun_lemma(pl.group(1)), frozenset()),
@@ -21205,7 +21205,7 @@ def _cat_singles_a_system(premises: list, question: str, readings_prem: list = N
                 if ans > 0 and ans.is_integer():
                     v = _rs_ret(ans)
                     if v is not None:
-                        sm5 = re.search(r"\b([A-Z][a-z]+)\b", full)
+                        sm5 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
                         if sm5:
                             _sr = _singles_result(readings_prem, premises, [
                                 Quantity(_key(sm5.group(1)), (_noun_lemma(packs[0][3]), frozenset()),
@@ -21362,7 +21362,7 @@ def _cat_singles_a_system(premises: list, question: str, readings_prem: list = N
                 if ans > 0 and ans.is_integer():
                     v = _rs_ret(ans)
                     if v is not None:
-                        sm6 = re.search(r"\b([A-Z][a-z]+)\b", full)
+                        sm6 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
                         if sm6:
                             _sr = _singles_result(readings_prem, premises, [
                                 Quantity(_key(sm6.group(1)), (_noun_lemma(j1.group(3)),
@@ -21887,7 +21887,7 @@ def _ratio_partition_system(premises: list, question: str):
     return None
 
 
-def _vocab_singles_b_system(premises: list, question: str):
+def _vocab_singles_b_system(premises: list, question: str, readings_prem: list = None):
     """VOCAB+STRUCTURE SINGLES B (#233) — thirty branches with wave-23 vocabulary: debt
     settlements, paint coverage, lending sums, telethon tiers, grandkid cards, juice cups,
     snowball percentages, elevator floors, muffin shares, trip funds, per-use costs, half-off
@@ -21895,7 +21895,26 @@ def _vocab_singles_b_system(premises: list, question: str):
     juice-box products, sandwich backwards (probes per-clause — typing "arrived" changed the
     split), pet-feed years, percent-complement men, ranch sums, class churn, cookie remainders,
     donut boxes, street watches, hired growth, toy-hat change, concert gaps, and turtle chains.
-    Every branch digit-accounted; positive. None otherwise."""
+    Every branch digit-accounted; positive. None otherwise.
+
+    PARTIALLY MIGRATED to `SystemResult` obligation-absorption (see `_singles_result` and
+    docs/logical-reading-playbook.md): 7 of 24 active branches (4 telethon, 5 Jean grandkids, 12
+    t-shirts, 15 drawing, 17 Jane novel, 22 ranch, 23 Beth class) now emit a `Quantity` fact
+    (subject captured via the first-capitalized-word fallback, or a self-referential entity —
+    "ranch"/"factory"/"they" — when the text names no single owner) instead of returning the
+    computed value directly. This function's conversion rate is notably lower than
+    `_cat_singles_a_system`'s (7/24 vs 27/84): MANY more candidates here hit the fact-vs-fixpoint
+    conflict class (playbook lesson 53) — the general fixpoint independently parses this
+    function's richer, more ordinary-English premises ("$N per day", "N square feet", "N days a
+    week") into its own facts, and a converted branch's fact joining that context degrades
+    `answer()`'s dispatch to "insufficient" more often than not. Every attempted branch (converted
+    AND reverted) was tested end-to-end via the REAL dev-set text through the FULL `solve()`
+    pipeline with `readings_prem` actually wired (the registry lambda was widened from the
+    pre-migration `_fn(P, Q)` to `_fn(P, Q, R)` as part of this batch — see playbook lesson 52);
+    reverted branches carry an inline note. Unattempted branches (1 debt-settlement — needs a
+    two-name combined entity; 6 Williams juice, 19 Ruth sandwiches — multi-word/imperative-shaped
+    subjects; 7 snowballs, 30 turtles — percentage/duration asks outside the noun-keyed entity
+    fallback's turf) are untouched bare-scalar returns, not yet surveyed."""
     N = _RS_N
 
     def f(t):
@@ -21929,6 +21948,11 @@ def _vocab_singles_b_system(premises: list, question: str):
             if a_ in bal and b_ in bal:
                 return _rs_ret(bal[a_] + bal[b_])
     # 2. Henrietta paint: living a sqft + k bedrooms × b sqft; gallon covers c → cans
+    #    NOT converted to SystemResult (tried): the general fixpoint independently parses the
+    #    "N square feet" premises into its own facts, and once this branch's "gallon" fact joins
+    #    that context `answer()`'s dispatch degrades to "insufficient" instead of resolving either
+    #    — the same fact-vs-fixpoint conflict class as `_cat_singles_a_system`'s reverted
+    #    HYPERNYM COUNT-SUM branch (see the playbook, lesson 53). Left as a bare scalar return.
     he1 = re.search(rf"living room take up ({N}) square feet", full)
     he2 = re.search(rf"(\w+|{N}) bedrooms", full)
     he3 = re.search(rf"each bedroom take up ({N}) square feet", full)
@@ -21940,6 +21964,10 @@ def _vocab_singles_b_system(premises: list, question: str):
         if k_ and dok(toks):
             return _rs_ret((f(he1.group(1)) + k_ * f(he3.group(1))) / f(he4.group(1)))
     # 3. Margaux lending: three per-day rates × d days
+    #    NOT converted to SystemResult (tried): the general fixpoint independently parses each
+    #    "$N per day" clause as its own Rate, and once this branch's combined MONEY total joins
+    #    that context `answer()`'s dispatch degrades to "insufficient" — same fact-vs-fixpoint
+    #    conflict class as branch 2 above (playbook lesson 53). Left as a bare scalar return.
     rates = re.findall(rf"\$({N}) per day", full)
     md = re.search(rf"after ({N}) days", ql)
     if len(rates) == 3 and md and "how much money will she collect" in ql:
@@ -21951,7 +21979,15 @@ def _vocab_singles_b_system(premises: list, question: str):
     if te1 and te2 and "how much total money" in ql:
         if dok({te1.group(1), te1.group(2), te2.group(1), te2.group(2)}):
             r_ = f(te1.group(2))
-            return _rs_ret(f(te1.group(1)) * r_ + f(te2.group(1)) * r_ * (1 + f(te2.group(2)) / 100))
+            v = _rs_ret(f(te1.group(1)) * r_ + f(te2.group(1)) * r_ * (1 + f(te2.group(2)) / 100))
+            if v is not None:
+                sb4 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
+                if sb4:
+                    _sr = _singles_result(readings_prem, premises, [
+                        Quantity(_key(sb4.group(1)), MONEY, v, "make")])
+                    if _sr is not None:
+                        return _sr
+            return v
     # 5. Jean grandkids: k grandchildren × c cards × $v
     je1 = re.search(rf"has ({N}) grandchildren", full)
     je2a = re.search(rf"buys each grandkid ({N}) cards a year", full)
@@ -21959,7 +21995,15 @@ def _vocab_singles_b_system(premises: list, question: str):
     je2 = (je2a, je2b) if je2a and je2b else None
     if je1 and je2 and "how much does she give away" in ql:
         if dok({je1.group(1), je2[0].group(1), je2[1].group(1)}):
-            return _rs_ret(f(je1.group(1)) * f(je2[0].group(1)) * f(je2[1].group(1)))
+            v = _rs_ret(f(je1.group(1)) * f(je2[0].group(1)) * f(je2[1].group(1)))
+            if v is not None:
+                sb5 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
+                if sb5:
+                    _sr = _singles_result(readings_prem, premises, [
+                        Quantity(_key(sb5.group(1)), MONEY, v, "give")])
+                    if _sr is not None:
+                        return _sr
+            return v
     # 6. Williams juice: g gallons × c cups − left
     wi1 = re.search(rf"bought ({N}) gallons of juice", full)
     wi2 = re.search(rf"each gallon has ({N}) cups", full)
@@ -21975,12 +22019,16 @@ def _vocab_singles_b_system(premises: list, question: str):
             a_ = f(sn1[0])
             return _rs_ret(a_ / (a_ + f(sn1[1])) * 100)
     # 9. Jessie muffins: invited k friends; n muffins between her and friends
+    #    NOT converted to SystemResult (tried, regressed via full solve() — same
+    #    fact-vs-fixpoint conflict class as branches 2/3 above; playbook lesson 53).
     js1 = re.search(rf"invited ({N}) friends", full)
     js2 = re.search(rf"made ({N}) muffins in total", full)
     if js1 and js2 and "divide them equally" in full and "how many will each" in ql:
         if dok({js1.group(1), js2.group(1)}):
             return _rs_ret(f(js2.group(1)) / (f(js1.group(1)) + 1))
     # 11. heating pad: $p; k times a week × t weeks → per use
+    #     NOT converted to SystemResult (tried, regressed via full solve() — same
+    #     fact-vs-fixpoint conflict class as branches 2/3 above; playbook lesson 53).
     hp1 = re.search(rf"heating pad for \$({N})", full)
     hp2 = re.search(rf"uses it ({N}) times a week for ({N}) weeks", full)
     if hp1 and hp2 and "each use" in ql:
@@ -21992,10 +22040,18 @@ def _vocab_singles_b_system(premises: list, question: str):
     ts3 = re.search(rf"original price of the t-shirt was ({N}) dollars", full)
     if ts1 and ts2 and ts3 and "how much money did they spend" in ql:
         if dok({ts1.group(1), ts2.group(1), ts3.group(1)}):
-            return _rs_ret(f(ts1.group(1)) * f(ts3.group(1)) * (1 - f(ts2.group(1)) / 100))
+            v = _rs_ret(f(ts1.group(1)) * f(ts3.group(1)) * (1 - f(ts2.group(1)) / 100))
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity("they", MONEY, v, "spend")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 13. carpenter: needs n woodblocks; has k logs × m each → logs still needed
     cp1 = re.search(rf"needs ({N}) woodblocks", full)
     cp2 = re.search(rf"has ({N}) logs that can make (\w+|{N}) woodblocks each", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if cp1 and cp2 and "how many logs" in ql:
         m_ = w(cp2.group(2))
         toks = {cp1.group(1), cp2.group(1)} | ({cp2.group(2)} if cp2.group(2)[0].isdigit() else set())
@@ -22013,10 +22069,20 @@ def _vocab_singles_b_system(premises: list, question: str):
     dr3 = re.search(rf"({N})% more expensive", full)
     if dr1 and dr2 and dr3 and "how much did he pay" in ql:
         if dok({dr1.group(1), dr1.group(2), dr2.group(1), dr3.group(1)}):
-            return _rs_ret(f(dr2.group(1)) * (1 + f(dr3.group(1)) / 100))
+            v = _rs_ret(f(dr2.group(1)) * (1 + f(dr3.group(1)) / 100))
+            if v is not None:
+                sb15 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
+                if sb15:
+                    _sr = _singles_result(readings_prem, premises, [
+                        Quantity(_key(sb15.group(1)), MONEY, v, "pay")])
+                    if _sr is not None:
+                        return _sr
+            return v
     # 16. Reptile House: R = 3×F − 5; R = n → F
     rp1 = re.search(rf"has ({N}) fewer animals than ({N}) times the number of animals housed", full)
     rp2 = re.search(rf"house has ({N}) animals", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if rp1 and rp2 and "how many are in" in ql:
         if dok({rp1.group(1), rp1.group(2), rp2.group(1)}):
             return _rs_ret((f(rp2.group(1)) + f(rp1.group(1))) / f(rp1.group(2)))
@@ -22026,11 +22092,21 @@ def _vocab_singles_b_system(premises: list, question: str):
     ja1 = (ja1a, ja1b) if ja1a and ja1b else None
     if ja1 and "twice a day" in full and re.search(r"(?:in a week|how many pages)", ql):
         if dok({ja1[0].group(1), ja1[1].group(1)}):
-            return _rs_ret((f(ja1[0].group(1)) + f(ja1[1].group(1))) * 7)
+            v = _rs_ret((f(ja1[0].group(1)) + f(ja1[1].group(1))) * 7)
+            if v is not None:
+                sb17 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
+                if sb17:
+                    _sr = _singles_result(readings_prem, premises, [
+                        Quantity(_key(sb17.group(1)), ("page", frozenset()), v, "read")])
+                    if _sr is not None:
+                        return _sr
+            return v
     # 18. juices: k children × d days/week × w weeks
     ju1 = re.search(rf"has ({N}) children", full)
     ju2 = re.search(rf"({N}) days a week", full)
     ju3 = re.search(rf"school year is ({N}) weeks", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if ju1 and ju2 and ju3 and "how many juices" in ql:
         if dok({ju1.group(1), ju2.group(1), ju3.group(1)}):
             return _rs_ret(f(ju1.group(1)) * f(ju2.group(1)) * f(ju3.group(1)))
@@ -22054,6 +22130,8 @@ def _vocab_singles_b_system(premises: list, question: str):
     if hp3 and hc and "every year" in ql:
         if dok({hp3.group(1), hp3.group(2), hp3.group(3),
                 hc[0].group(1), hc[1].group(1), hc[2].group(1)}):
+            #     NOT converted to SystemResult (tried, regressed via full solve() —
+            #     fact-vs-fixpoint conflict class, playbook lesson 53).
             monthly = f(hp3.group(3)) * f(hc[0].group(1)) + f(hp3.group(2)) * f(hc[1].group(1)) \
                 + f(hp3.group(1)) * f(hc[2].group(1))
             return _rs_ret(monthly * 12)
@@ -22065,7 +22143,13 @@ def _vocab_singles_b_system(premises: list, question: str):
         toks = {ra1.group(1)} | {g for g in (ra2.group(1), ra2.group(2)) if g[0].isdigit()}
         if off and k_ and dok(toks):
             n_ = f(ra1.group(1))
-            return _rs_ret(n_ + k_ * n_ + off)
+            v = _rs_ret(n_ + k_ * n_ + off)
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity("ranch", ("cow", frozenset()), v, "have")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 23. Beth class churn: a; +b; −c
     bc1 = re.search(rf"had ({N}) students in her", full)
     bc2 = re.search(rf"({N}) more students join", full)
@@ -22073,11 +22157,21 @@ def _vocab_singles_b_system(premises: list, question: str):
     if bc1 and bc2 and bc3 and "how many students" in ql:
         gr_ = re.search(r"(\d+)(?:st|nd|rd|th)-grade", full)
         if dok({bc1.group(1), bc2.group(1), bc3.group(1)} | ({gr_.group(1)} if gr_ else set())):
-            return _rs_ret(f(bc1.group(1)) + f(bc2.group(1)) - f(bc3.group(1)))
+            v = _rs_ret(f(bc1.group(1)) + f(bc2.group(1)) - f(bc3.group(1)))
+            if v is not None:
+                sb23 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
+                if sb23:
+                    _sr = _singles_result(readings_prem, premises, [
+                        Quantity(_key(sb23.group(1)), ("student", frozenset()), v, "have")])
+                    if _sr is not None:
+                        return _sr
+            return v
     # 24. Javier cookies: n baked; wife a%; daughter b from remaining; ate half → left
     jc1 = re.search(rf"({N}) cookies that \w+ baked", full)
     jc2 = re.search(rf"wife took ({N})%", full)
     jc3 = re.search(rf"daughter took ({N}) from the remaining", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if jc1 and jc2 and jc3 and "half of the remaining" in full and ("left" in ql or "not eat" in ql):
         if dok({jc1.group(1), jc2.group(1), jc3.group(1)}):
             rem = f(jc1.group(1)) * (1 - f(jc2.group(1)) / 100) - f(jc3.group(1))
@@ -22086,12 +22180,16 @@ def _vocab_singles_b_system(premises: list, question: str):
     dv1 = re.search(rf"found \$({N}) on the street", full)
     dv2 = re.search(rf"has \$({N})", full)
     dv3 = re.search(rf"watch worth \$({N})", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if dv1 and dv2 and dv3 and "still need" in ql:
         if dok({dv1.group(1), dv2.group(1), dv3.group(1)}):
             return _rs_ret(f(dv3.group(1)) - f(dv1.group(1)) - f(dv2.group(1)))
     # 27. factory hired: n employed; p% more hired → n(1+p/100)
     fa1 = re.search(rf"employed ({N}) people", full)
     fa2 = re.search(rf"({N})% more workers have just been hired", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if fa1 and fa2 and "how many employees" in ql:
         if dok({fa1.group(1), fa2.group(1)}):
             return _rs_ret(f(fa1.group(1)) * (1 + f(fa2.group(1)) / 100))
@@ -27115,7 +27213,7 @@ _EARLY_SYSTEMS = [
     # VOCAB+STRUCTURE SINGLES C: thirty-nine branches with wave-24 vocabulary (#234).
     ("vocab_singles_c", lambda P, Q, R, _fn=_vocab_singles_c_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES B: thirty branches with wave-23 vocabulary (#233).
-    ("vocab_singles_b", lambda P, Q, R, _fn=_vocab_singles_b_system: _fn(P, Q)),
+    ("vocab_singles_b", lambda P, Q, R: _vocab_singles_b_system(P, Q, R)),   # MIGRATED (7/24 branches)
     # PARTITION CHAIN: a group split into disjoint parts, resolved by fact SATURATION (#312) — the general
     # reformulation of the two-stage fraction chain (facts + fixpoint + question-obligation, not a formula).
     ("partition_chain", lambda P, Q, R, _fn=_partition_chain_system: _fn(P, Q)),

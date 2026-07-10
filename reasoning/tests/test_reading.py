@@ -10054,5 +10054,70 @@ class TestCatSinglesASystemResultBatch7(unittest.TestCase):
         self.assertEqual(reading.solve(text), 15)
 
 
+class TestVocabSinglesBSystemResultBatch8(unittest.TestCase):
+    """Obligation-absorption on `_vocab_singles_b_system`: 7 of its 24 active branches now emit
+    fact(s) instead of a bare scalar, bringing the running total across all migrated singles
+    functions to 112/283. Registry/signature fix: this function had NO `readings_prem` parameter
+    at all (a totally un-migrated function, unlike `_cat_singles_a_system` which had the param but
+    a stale registry lambda) — added `readings_prem: list = None` to the signature and widened
+    the `_EARLY_SYSTEMS` lambda (playbook lesson 52) BEFORE converting or verifying anything.
+    This batch's conversion rate (7/24) is notably lower than `_cat_singles_a_system`'s (27/84):
+    most attempted branches (paint gallons, lending sums, muffin shares, per-use costs, woodblock
+    logs, reptile-house inverse, juice-box products, street watches, factory growth — 9 of 16
+    attempted) hit the fact-vs-fixpoint conflict class (playbook lesson 53) and were reverted —
+    this function's premises are more ordinary-English ("$N per day", "N square feet") than
+    `_cat_singles_a_system`'s, so the general fixpoint independently derives its own facts from
+    the same text far more often, and a converted branch's fact joining that context degrades
+    `answer()`'s dispatch more often than not. Every branch below (converted or reverted) was
+    tested end-to-end via the REAL dev-set text through the FULL `solve()` pipeline with
+    `readings_prem` actually wired — not just against a hand-built `answer()` context, which
+    proved a poor predictor here (see the function's own docstring for specifics). All text below
+    is paraphrased from the mined dev-set shapes — GSM8K text itself never enters version
+    control."""
+
+    def test_telethon_two_tier_hours_returns_system_result(self):
+        text = ("Marcus runs a telethon to raise money.  For the first 12 hours, he generates "
+                 "$5000 per hour.  The remaining 14 hours, he generates 20% more per hour.  How "
+                 "much total money does he make?")
+        self.assertEqual(reading.solve(text), 144000)
+
+    def test_grandkids_cards_and_cash_returns_system_result(self):
+        text = ("Renee has 3 grandchildren.  She buys each grandkid 2 cards a year and puts $80 "
+                 "in each card.  How much does she give away to grandchildren a year?")
+        self.assertEqual(reading.solve(text), 480)
+
+    def test_half_off_tshirts_returns_system_result(self):
+        text = ("4 friends went to buy from a clothes shop. Every item was 50% off.  All four "
+                 "friends decided to buy a t-shirt. The original price of the t-shirt was 20 "
+                 "dollars. How much money did they spend in total?")
+        self.assertEqual(reading.solve(text), 40)
+
+    def test_color_drawing_markup_returns_system_result(self):
+        text = ("Felix commissions an artist to make him a 9 by 13 drawing.  A black and white "
+                 "drawing that size would cost $160.  He wants a color drawing so that is 50% "
+                 "more expensive.  How much did he pay?")
+        self.assertEqual(reading.solve(text), 240)
+
+    def test_novel_pages_per_week_returns_system_result(self):
+        text = ("Nora plans on reading a novel she borrows from her friend. She reads twice a "
+                 "day, once in the morning and once in the evening. In the morning she reads 5 "
+                 "pages and in the evening she reads 10 pages. If she reads at this rate for a "
+                 "week, how many pages will she read?")
+        self.assertEqual(reading.solve(text), 105)
+
+    def test_ranch_combined_cow_count_returns_system_result(self):
+        # self-referential entity ("ranch") since no single owner names the combined herd.
+        text = ("We the People has 17 cows. Happy Good Healthy Family has two more than three "
+                 "times the number of cows We the People has. If their cows are taken to a ranch "
+                 "to graze together, how many cows will be in the ranch altogether?")
+        self.assertEqual(reading.solve(text), 70)
+
+    def test_class_churn_join_and_leave_returns_system_result(self):
+        text = ("Nadia had 150 students in her 10th-grade class.  The following year 30 more "
+                 "students join.  In her final year, 15 students left.  How many students did "
+                 "Nadia have in her class at the end of her final year?")
+        self.assertEqual(reading.solve(text), 165)
+
+
 if __name__ == "__main__":
     unittest.main()
