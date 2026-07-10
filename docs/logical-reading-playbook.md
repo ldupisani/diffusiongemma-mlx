@@ -1080,11 +1080,51 @@ for when a category-generalized match can't assume contiguous text.**
     yes (Carla, Ed), generalize; if the role is baked into the meaning (Everlee's adults, Philip's
     ducks/pigs), don't force it.
 
-Running total: 78/175 branches converted across 6 functions (`_rate_singles_system` 8/16,
+52. **A `_EARLY_SYSTEMS` registry lambda must be widened to pass `readings_prem` through BEFORE
+    any `solve()`-level verification of a newly-converted branch means anything.** Batch 7
+    (`_cat_singles_a_system`) converted 11 branches and ran `solve()` against real dev-set text
+    for every one — all passed — BEFORE noticing the registry entry was still the pre-migration
+    `lambda P, Q, R, _fn=_cat_singles_a_system: _fn(P, Q)`, silently dropping `R`
+    (`readings_prem`). Under that wiring, `_singles_result(readings_prem, ...)` always received
+    `None` and always returned `None`, so every branch's `if _sr is not None: return _sr` was dead
+    code — every `solve()` call fell back to the bare scalar `v`, completely unaffected by whether
+    the fact-emission code above it was even correct. The 11 "verified" branches had actually
+    verified nothing about the new mechanism, only that the pre-existing scalar arithmetic still
+    worked. Widening the lambda to `lambda P, Q, R: _cat_singles_a_system(P, Q, R)` and re-running
+    every check was what actually exercised the SystemResult path for the first time — and it
+    immediately surfaced lesson 53 below. General lesson: when converting the FIRST branch of a
+    not-yet-migrated function, widen its registry lambda FIRST (a one-line, zero-risk change — the
+    function itself still ignores `readings_prem` until a branch uses it), THEN convert and
+    verify — never verify against a lambda that hasn't been widened yet.
+53. **A converted branch's own emitted fact can conflict with the general fixpoint's
+    independently-derived facts from the SAME premises, even when the branch's own arithmetic and
+    fact are both correct — and this is invisible to an isolated per-branch check.** Batch 7's
+    HYPERNYM COUNT-SUM branch ("Cally has 10 white shirts... Danny has 6... how many clothes did
+    they wash?" → 58) computed the right total and its own fact
+    (`Quantity("they", clothing, 58, "wash")`) was well-formed and independently confirmed correct
+    against a hand-built single-fact `answer()` call. But the general engine ALSO parses "Cally
+    has 10 white shirts" etc. as separate per-owner `Quantity` facts from the same premises,
+    regardless of this branch — once both the branch's own fact AND the general fixpoint's facts
+    sit in `context` together (which only happens once `readings_prem` is actually wired, per
+    lesson 52), `answer()`'s dispatch for "how many clothes did they wash" went from resolving
+    cleanly (the bare-scalar path, which never touches `answer()` at all) to "insufficient" (the
+    SystemResult path, which falls through into the full pipeline). No isolated check catches
+    this — not `answer()` against a hand-built context (too clean, missing the general facts), not
+    `solve()` against the real text in isolation (that's exactly what looked fine right up until
+    the registry widening in lesson 52 made it real). Only the full diff-verify gate, which scores
+    the ENTIRE dev-train + dev-holdout set before and after, surfaced the regression (Cally/Danny
+    58→None). General lesson: an isolated fact-check proves a fact is well-formed and sufficient
+    on its own; it does NOT prove the fact is safe to add to a REAL context that already carries
+    whatever else the same premises independently yield. Only the full diff-verify gate proves
+    that — run it before shipping every batch, not just when something feels risky, and don't
+    trust a clean per-branch `solve()` result as a substitute for it.
+
+Running total: 105/259 branches converted across 7 functions (`_rate_singles_system` 8/16,
 `_money_singles_system` 9/24, `_mult_singles_system` 14/33, `_mixed_singles_system` 18/30,
-`_mixed_singles_b_system` 13/33, `_mixed_singles_c_system` 16/39) — the remaining ~1027 branches
-across ~24 other singles functions (`_cat_singles_a_system`, the `_vocab_singles_a..u` letter
-groups, etc.) are still an open scope, worked through incrementally.
+`_mixed_singles_b_system` 13/33, `_mixed_singles_c_system` 16/39, `_cat_singles_a_system` 27/84)
+— the remaining ~813 branches across ~21 other singles functions (the `_vocab_singles_a..u`
+letter groups, `_vocab_singles_system`'s 190-branch base) are still an open scope, worked through
+incrementally per a standing multi-session objective (see the reading-engine-handoff memory).
 
 ### A clause that is BOTH meta and data — read the recorded meta, don't fight the parse (#309)
 
