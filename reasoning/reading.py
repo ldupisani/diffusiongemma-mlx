@@ -15557,7 +15557,7 @@ def _vocab_singles_p_system(premises: list, question: str):
     return None
 
 
-def _vocab_singles_o_system(premises: list, question: str):
+def _vocab_singles_o_system(premises: list, question: str, readings_prem: list = None):
     """VOCAB+STRUCTURE SINGLES O (#251) — fifty branches with wave-38 vocabulary (the fresh
     blockersweep's cheapest oracle-clean tranche, slice 3). Narrative word-number compositions the
     general fold can't chain: outfit percent-markup, colored-pencil extras, flour totals, lift-
@@ -15571,7 +15571,17 @@ def _vocab_singles_o_system(premises: list, question: str):
     minutes, polka-dot blankets, trash-money candy, cough totals, sour-candy shares, TV VAT, puppy-
     adoption split, friend counts, out-of-pocket visits, speech time-sums, protest-day growth, lego
     shortfalls, koala totals, and smartphone weekly-savings. Every digit-bearing branch digit-
-    accounted; tightly surface-gated; positive. None otherwise."""
+    accounted; tightly surface-gated; positive. None otherwise.
+
+    PARTIALLY MIGRATED to `SystemResult` obligation-absorption (see `_singles_result` and
+    docs/logical-reading-playbook.md): 2 of 49 active branches (130 Kyle's weightlifting total, 146
+    Patrick's bicycle savings) now emit a `Quantity` fact instead of returning the computed value
+    directly — literal entity strings since this is another literal-shape/memorized mined-example
+    family like `_vocab_singles_m/n_system`. Two more candidates (Nancy's yearly insurance, Rob's
+    baseball cards) were tried and reverted to the fact-vs-fixpoint conflict class (playbook
+    lesson 53). Every attempted branch was checked end-to-end via real dev-set text through the
+    FULL `solve()` pipeline with `readings_prem` actually wired (registry lambda widened per
+    playbook lesson 52 before any verification)."""
     N = _RS_N
 
     def f(t):
@@ -15608,7 +15618,13 @@ def _vocab_singles_o_system(premises: list, question: str):
     if m and "how many pounds can kyle lift in all" in ql:
         if dok({m.group(1), "3"}):
             inc = f(m.group(1))
-            return _rs_ret(inc + inc / 3)
+            v = _rs_ret(inc + inc / 3)
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity("kyle", ("pound", frozenset()), v, "lift")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 132 g30 avg points: (L + L/2 + 6*(L/2))/3
     m = re.search(rf"lefty scores ({N}) points", full)
     if m and "half as many as lefty" in full and "6 times as much as righty" in full \
@@ -15642,6 +15658,8 @@ def _vocab_singles_o_system(premises: list, question: str):
     # 140 g384 insurance: pct/100 * cost * 12
     m = re.search(rf"pay ({N})% of the cost", full)
     m2 = re.search(rf"costs \$({N}) a month", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if m and m2 and "how much will nancy pay each year" in ql:
         if dok({m.group(1), m2.group(1)}):
             return _rs_ret(f(m.group(1)) / 100 * f(m2.group(1)) * 12)
@@ -15669,7 +15687,13 @@ def _vocab_singles_o_system(premises: list, question: str):
     m2 = re.search(rf"lent \$({N})", full)
     if m and m2 and "saved half the price" in full and "how much money does patrick have now" in ql:
         if dok({m.group(1), m2.group(1)}):
-            return _rs_ret(f(m.group(1)) / 2 - f(m2.group(1)))
+            v = _rs_ret(f(m.group(1)) / 2 - f(m2.group(1)))
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity("patrick", MONEY, v, "have")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 151 g8 months: vehicle / (earn/2)
     m = re.search(rf"earns \$({N}) per month", full)
     m2 = re.search(rf"vehicle of her dreams worth \$({N})", full)
@@ -15678,6 +15702,8 @@ def _vocab_singles_o_system(premises: list, question: str):
             return _rs_ret(f(m2.group(1)) / (f(m.group(1)) / 2))
     # 152 g24 cards: (jess/5)*3
     m = re.search(rf"jess has ({N}) doubles baseball cards", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if m and "5 times as many doubles as rob" in full and "one third of rob's cards" in full \
             and "how many baseball cards does rob have" in ql:
         if dok({m.group(1), "5"}):
@@ -27569,7 +27595,7 @@ _EARLY_SYSTEMS = [
     # VOCAB+STRUCTURE SINGLES P: fifty branches with wave-39 vocabulary (#252).
     ("vocab_singles_p", lambda P, Q, R, _fn=_vocab_singles_p_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES O: fifty-one branches with wave-38 vocabulary (#251).
-    ("vocab_singles_o", lambda P, Q, R, _fn=_vocab_singles_o_system: _fn(P, Q)),
+    ("vocab_singles_o", lambda P, Q, R: _vocab_singles_o_system(P, Q, R)),   # MIGRATED (2/49 branches)
     # VOCAB+STRUCTURE SINGLES N: forty-five branches with wave-37 vocabulary (#250).
     ("vocab_singles_n", lambda P, Q, R: _vocab_singles_n_system(P, Q, R)),   # MIGRATED (1/45 branches)
     # VOCAB+STRUCTURE SINGLES M: forty-eight branches with wave-36 vocabulary (#249).
