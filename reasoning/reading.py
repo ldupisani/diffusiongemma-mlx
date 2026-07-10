@@ -22745,7 +22745,7 @@ def _vocab_singles_b_system(premises: list, question: str, readings_prem: list =
     return None
 
 
-def _vocab_singles_system(premises: list, question: str):
+def _vocab_singles_system(premises: list, question: str, readings_prem: list = None):
     """VOCAB+STRUCTURE SINGLES (#232) — twenty-eight branches over the small-unknown structural
     pool, shipped WITH their vocabulary (wave 22 — the semantics-first rule at batch scale):
     letters-per-year products, incremental juggling, stack page averages, church percent
@@ -22755,7 +22755,27 @@ def _vocab_singles_system(premises: list, question: str):
     percent-of-percent cows, tax-deducted wages, split-finish race times, elder-brother ages,
     window rates, pool trips, grandchildren counts, rice grams, team churn, run averages,
     mph half-hour chains, custard revenue, and picnic per-person sums. Every branch
-    digit-accounted; positive. None otherwise."""
+    digit-accounted; positive. None otherwise.
+
+    SURVEYED for `SystemResult` obligation-absorption (see `_singles_result` and
+    docs/logical-reading-playbook.md) — the LAST of the 22-function vocab-singles migration
+    (`_cat_singles_a` through `_vocab_singles_u`, all letter functions, are already done).
+    3 of 26 reachable branches converted: #14 Phillip (money-left, verb "have"), #21 Patrick
+    (age, verb "be"), #28 James (miles driven, verb "drive") — each independently verified
+    via full `solve()` against real dev-set text, diffed against the exact gold value
+    (playbook lesson 56). 8 further candidates were tried and reverted to the fact-vs-fixpoint
+    conflict class (playbook lesson 53), each left with an inline note: #2 Noah, #3 Jeanette,
+    #7 Jan, #13 Gina, #17 Austin, #19 Adam, #24 Max, #11 John/#18 Terez/#27 Terese (the
+    remaining risky group — remainder-need, same-noun-as-premise, and average-vs-sum
+    mismatches). The rest have no safe single named-subject to key a fact on: #5/#8/#10/#20/
+    #26/#29/#30 name an institution, ratio, or multiple co-equal people, not one owner; #22/#23
+    ask a comparative ("how much more money did X earn than Y" — the Akeno regression shape,
+    playbook lesson 56) so were skipped without attempting; #6 Montero has no clean
+    single-token capitalized subject ("Mr. Montero" splits under the standard
+    `\\b([A-Z][a-z]+)\\b` capture); #9/#15 name a subject that isn't the entity the fact is
+    actually about (Anne's SISTER's height, the BLOCK's calories) so binding to the named
+    subject would misattribute the fact. readings_prem plumbing + registry fix ship regardless
+    — the STANDING vocab-singles migration objective is now COMPLETE across all 22 functions."""
     N = _RS_N
 
     def f(t):
@@ -22782,6 +22802,9 @@ def _vocab_singles_system(premises: list, question: str):
         toks = {n1.group(1), n1.group(2)} | {g for g in (n2.group(1), n2.group(2)) if g[0].isdigit()}
         if x_ and y_ and dok(toks):
             last = x_ * f(n1.group(1)) + y_ * f(n1.group(2))
+            # NOT converted to SystemResult (tried, regressed to a "couldn't tell what to
+            # count" decline via full solve() — fact-vs-fixpoint conflict class, playbook
+            # lesson 53).
             return _rs_ret(2 * last)
     # 3. Jeanette juggling: starts s; +k per week; p weeks → s + k·p
     j1 = re.search(rf"juggle ({N}) more objects than the week before", full)
@@ -22790,6 +22813,8 @@ def _vocab_singles_system(premises: list, question: str):
     j2 = (j2a, j2b) if j2a and j2b else None
     if j1 and j2 and "how many objects" in ql:
         if dok({j1.group(1), j2[0].group(1), j2[1].group(1)}):
+            # NOT converted to SystemResult (tried, regressed to "undetermined" via full
+            # solve() — fact-vs-fixpoint conflict class, playbook lesson 53).
             return _rs_ret(f(j2[0].group(1)) + f(j1.group(1)) * f(j2[1].group(1)))
     # 4. Jack stack: t inches; p pages/inch; b books → t·p/b
     s1 = re.search(rf"stack of books that is ({N}) inches thick", full)
@@ -22821,6 +22846,9 @@ def _vocab_singles_system(premises: list, question: str):
         if dok({ca1.group(1), ca2.group(1), "1", "4"}):
             secs = f(ca1.group(1)) / f(ca2.group(1))
             rest = secs * 3 / 4
+            # NOT converted to SystemResult (tried, regressed to a "couldn't tell what to
+            # count" decline via full solve() — fact-vs-fixpoint conflict class, playbook
+            # lesson 53).
             return _rs_ret(rest / 2)
     # 8. ratio boys:girls a:b of T; boys share $S → S / (T·a/(a+b))
     r1 = re.search(rf"ratio of boys to girls [\w ]*? is ({N}):({N})", full)
@@ -22855,19 +22883,32 @@ def _vocab_singles_system(premises: list, question: str):
     if p1 and p2 and p3 and "half that amount" in full and "how much more money" in ql:
         if dok({p1.group(1), p2.group(1), p3.group(1)}):
             a_ = f(p1.group(1))
+            # NOT converted to SystemResult (tried, regressed to "undetermined" via full
+            # solve() — fact-vs-fixpoint conflict class, playbook lesson 53; same shape as
+            # the reverted Sally out-of-pocket candidate in _vocab_singles_u_system).
             return _rs_ret(f(p3.group(1)) - (a_ + a_ / 2 + f(p2.group(1))))
     # 13. Gina accounts: each = 1/4 of Betty's b → combined = b/2
     g1 = re.search(rf"each account has a quarter of the balance in \w+['’]s account", full)
     g2 = re.search(rf"balance is \$({N})", full)
     if g1 and g2 and "combined balance" in ql:
         if dok({g2.group(1), "2"} if "two bank accounts" in full else {g2.group(1)}):
+            # NOT converted to SystemResult (tried, regressed to "(unknown)" via full
+            # solve() — fact-vs-fixpoint conflict class, playbook lesson 53: the premise's
+            # own Betty-balance fact collides with the derived Gina fact).
             return _rs_ret(f(g2.group(1)) / 2)
     # 14. Phillip: gave $H; spent a+b+c → left
     ph1 = re.search(rf"gave him \$({N})", full)
     spents = re.findall(rf"\$({N}) on \w+", full)
     if ph1 and len(spents) == 3 and "how much money does he have left" in ql:
         if dok({ph1.group(1)} | set(spents)):
-            return _rs_ret(f(ph1.group(1)) - sum(f(x) for x in spents))
+            v = _rs_ret(f(ph1.group(1)) - sum(f(x) for x in spents))
+            subj = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
+            if v is not None and subj:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(subj.group(1)), MONEY, v, "have")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 15. Rick servings: c cal/serving; s servings per block; eaten e → (s−e)·c
     rc1 = re.search(rf"({N}) calories in a serving", full)
     rc1_v = f(rc1.group(1)) if rc1 else _STATED_CONV.get(("serving", "calorie"))
@@ -22888,6 +22929,9 @@ def _vocab_singles_system(premises: list, question: str):
         toks = {au2.group(1), au3.group(1), au4.group(1)} | \
             ({au1.group(1)} if au1.group(1)[0].isdigit() else set())
         if k_ and dok(toks):
+            # NOT converted to SystemResult (tried, regressed to a "couldn't tell what to
+            # count" decline via full solve() — fact-vs-fixpoint conflict class, playbook
+            # lesson 53).
             return _rs_ret(k_ * f(au2.group(1)) + f(au3.group(1)) + f(au4.group(1)))
     # 18. Terez: n cows; a% female; b% of females pregnant
     tz1 = re.search(rf"has ({N}) cows", full)
@@ -22895,6 +22939,9 @@ def _vocab_singles_system(premises: list, question: str):
     tz3 = re.search(rf"({N}) percent of the females are pregnant", full)
     if tz1 and tz2 and tz3 and "pregnant" in ql:
         if dok({tz1.group(1), tz2.group(1), tz3.group(1)}):
+            # NOT converted to SystemResult (tried, regressed to "undetermined" via full
+            # solve() — fact-vs-fixpoint conflict class, playbook lesson 53: the branch's
+            # own "44 cows" premise fact collides with a derived pregnant-cow fact).
             return _rs_ret(f(tz1.group(1)) * f(tz2.group(1)) / 100 * f(tz3.group(1)) / 100)
     # 19. Adam taxes: $a daily; t% deducted; d days → a(1−t/100)·d
     ad1 = re.search(rf"earns \$({N}) daily", full)
@@ -22902,6 +22949,8 @@ def _vocab_singles_system(premises: list, question: str):
     ad3 = re.search(rf"after ({N}) days of work", full)
     if ad1 and ad2 and ad3 and "after taxes" in ql:
         if dok({ad1.group(1), ad2.group(1), ad3.group(1)}):
+            # NOT converted to SystemResult (tried, regressed to "undetermined" via full
+            # solve() — fact-vs-fixpoint conflict class, playbook lesson 53).
             return _rs_ret(f(ad1.group(1)) * (1 - f(ad2.group(1)) / 100) * f(ad3.group(1)))
     # 20. runners: total k; first a finish in h hours; rest h+2 → total time
     rn1 = re.search(rf"there are (\w+|{N}) runners", full)
@@ -22919,7 +22968,14 @@ def _vocab_singles_system(premises: list, question: str):
     if pa1 and "half the age of his elder brother" in full and "how old is \\w+ now" not in "" \
             and re.search(r"how old is \w+ now", ql):
         if dok({pa1.group(1), pa1.group(2)}):
-            return _rs_ret((f(pa1.group(1)) - f(pa1.group(2))) / 2)
+            v = _rs_ret((f(pa1.group(1)) - f(pa1.group(2))) / 2)
+            subj = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
+            if v is not None and subj:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(subj.group(1)), ("year", frozenset()), v, "be")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 22. David windows: m min per k windows; total n → n/k·m
     dw1 = re.search(rf"takes \w+ ({N}) minutes to wash ({N}) windows", full)
     dw2 = re.search(rf"has ({N}) windows", full)
@@ -22941,6 +22997,9 @@ def _vocab_singles_system(premises: list, question: str):
         if dok({mx1.group(1), mx2.group(1), mx2.group(2)}):
             k_ = f(mx1.group(1))
             j_ = f(mx2.group(1))
+            # NOT converted to SystemResult (tried, regressed to "undetermined" via full
+            # solve() — fact-vs-fixpoint conflict class, playbook lesson 53: the branch's
+            # own "children" premise facts collide with a derived "grandchild" fact).
             return _rs_ret((k_ - j_) * k_ + j_ * f(mx2.group(2)))
     # 26. dance team: total n; a quit; b joined → n − a + b
     dt1 = re.search(rf"total of ({N}) people on their dance team", full)
@@ -22953,13 +23012,24 @@ def _vocab_singles_system(premises: list, question: str):
     te1 = re.findall(rf"({N}(?:\.\d+)?) miles", full)
     if "determine the average" in ql or ("average distance" in ql and len(te1) == 4):
         if len(te1) == 4 and dok(set(te1)):
+            # NOT converted to SystemResult (tried, regressed to "undetermined" via full
+            # solve() — fact-vs-fixpoint conflict class, playbook lesson 53: an AVERAGE
+            # fact collides with the general fold's sum-based re-derivation of the same
+            # per-day distance premises).
             return _rs_ret(sum(f(x) for x in te1) / 4)
     # 28. James mph: v mph for half an hour, then twice as long at twice the speed
     jm1 = re.search(rf"drives ({N}) mph for half an hour", full)
     if jm1 and "twice as long for twice the speed" in full and "how far" in ql:
         if dok({jm1.group(1)}):
             v_ = f(jm1.group(1))
-            return _rs_ret(v_ * 0.5 + 2 * v_ * 1)
+            v = _rs_ret(v_ * 0.5 + 2 * v_ * 1)
+            subj = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
+            if v is not None and subj:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(subj.group(1)), ("mile", frozenset()), v, "drive")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 29. custard pies: $p per slice; s slices per pie; k pies → k·s·p
     cu1 = re.search(rf"charges \$({N}) per slice", full)
     cu2 = re.search(rf"into ({N}) slices", full)
@@ -27771,7 +27841,7 @@ _EARLY_SYSTEMS = [
     # Also called directly from GUARD 12's exception (legs-asks are pre-declined before the early systems).
     ("fraction_split_part_count", lambda P, Q, R, _fn=_fraction_split_part_count: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES: twenty-eight branches with wave-22 vocabulary (#232).
-    ("vocab_singles", lambda P, Q, R, _fn=_vocab_singles_system: _fn(P, Q)),
+    ("vocab_singles", lambda P, Q, R, _fn=_vocab_singles_system: _fn(P, Q, R)),   # MIGRATED (3/26 branches)
     # MIXED SINGLES C: thirty-nine residual branches (#231).
     ("mixed_singles_c", lambda P, Q, R: _mixed_singles_c_system(P, Q, R)),   # MIGRATED (16/39 branches)
     # MIXED SINGLES B: thirty-three more residual branches (#230).

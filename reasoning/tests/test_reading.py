@@ -10499,5 +10499,37 @@ class TestVocabSinglesSSystemResultBatch28(unittest.TestCase):
         self.assertEqual(reading.solve(text), 60)
 
 
+class TestVocabSinglesBaseSystemResultBatch29(unittest.TestCase):
+    """Obligation-absorption on the base `_vocab_singles_system` (28 branches in its docstring,
+    26 reachable) — the LAST of the 22-function vocab-singles migration (all letter functions
+    `_cat_singles_a` through `_vocab_singles_u` were already done; this base function completes
+    the standing objective). 3 of 26 branches now emit a fact instead of a bare scalar: a
+    money-left remainder (verb "have"), an age fact (verb "be"), and a total-distance-driven fact
+    (verb "drive") — each independently verified via full `solve()` against real dev-set text,
+    diffed against the exact gold value (playbook lesson 56). 8 further named-subject candidates
+    were tried and reverted to the fact-vs-fixpoint conflict class (playbook lesson 53); the rest
+    have no safe single named-subject to key a fact on (institution/ratio/multi-person subjects,
+    comparative asks, or a subject that isn't the entity the fact is actually about — see the
+    function's own docstring for the full breakdown). GSM8K text itself never enters version
+    control; every case below is paraphrased (different names/numbers) from the mined dev-set
+    problem that motivated it."""
+
+    def test_money_left_after_spending_on_three_items_returns_system_result(self):
+        text = ("Marcus's mother asked him to go to the store to buy some things and gave him "
+                 "$80, so he spent $10 on bread, $20 on milk and $5 on eggs. How much money does "
+                 "he have left?")
+        self.assertEqual(reading.solve(text), 45)
+
+    def test_half_elder_brother_age_after_years_returns_system_result(self):
+        text = ("Derek is half the age of his elder brother Ian. If Ian will turn 40 after 4 "
+                 "years, how old is Derek now?")
+        self.assertEqual(reading.solve(text), 18)
+
+    def test_mph_half_hour_then_double_speed_double_time_returns_system_result(self):
+        text = ("Tyler drives 20 mph for half an hour and then twice as long for twice the "
+                 "speed. How far did he drive in total?")
+        self.assertEqual(reading.solve(text), 50)
+
+
 if __name__ == "__main__":
     unittest.main()
