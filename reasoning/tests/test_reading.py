@@ -10119,5 +10119,63 @@ class TestVocabSinglesBSystemResultBatch8(unittest.TestCase):
         self.assertEqual(reading.solve(text), 165)
 
 
+class TestVocabSinglesCSystemResultBatch9(unittest.TestCase):
+    """Obligation-absorption on `_vocab_singles_c_system`: 7 of its 37 branches now emit fact(s)
+    instead of a bare scalar, bringing the running total across all migrated singles functions to
+    119/320. Same recipe as batch 8: `readings_prem` parameter added from scratch, registry lambda
+    widened before converting anything (playbook lesson 52). As in batch 8, many more attempted
+    branches than in `_cat_singles_a_system` hit the fact-vs-fixpoint conflict class (playbook
+    lesson 53) and were reverted (jet-rate distance, fair-tickets relation, chocolate weeks, zoo
+    admission budget, cereal-box sum — 5 of 12 attempted). Every branch below (converted or
+    reverted) was tested via the REAL dev-set text through the FULL `solve()` pipeline with
+    `readings_prem` actually wired. Since this is a VOCAB-pinned function (unlike
+    `_cat_singles_a_system`, its branches match literal nouns like "carpets"/"house", not a
+    category mask), the paraphrases below vary only names/numbers, never the pinned vocabulary —
+    GSM8K text itself never enters version control."""
+
+    def test_four_house_carpet_total_returns_system_result(self):
+        # self-referential entity ("house") since the total spans all 4 houses, not one owner.
+        text = ("There are 12 carpets in house 1, 20 carpets in house 2, and 10 carpets in house "
+                 "3. If house 4 has twice as many carpets as house 3, how many carpets do all 4 "
+                 "houses have in total?")
+        self.assertEqual(reading.solve(text), 62)
+
+    def test_applesauce_leftover_pies_returns_system_result(self):
+        text = ("Priscilla has a box of apples that weighs 120 pounds.  She's going to use half "
+                 "the weight in apples to make applesauce.  The rest will be used to make apple "
+                 "pies.  She needs 4 pounds of apples per pie.  How many pies will she be able "
+                 "to make?")
+        self.assertEqual(reading.solve(text), 15)
+
+    def test_scrapbook_added_stamps_returns_system_result(self):
+        text = ("There were 18 stamps in Warren’s scrapbook. If Odette put one fourth of "
+                 "her 72 stamps in Warren’s scrapbook, how many stamps does he have now?")
+        self.assertEqual(reading.solve(text), 36)
+
+    def test_tortilla_chips_kept_returns_system_result(self):
+        text = ("Yvonne has a bag containing 22 tortilla chips. She gives 7 tortilla chips to "
+                 "her brother and 5 tortilla chips to her sister, keeping the rest for herself. "
+                 "How many did Yvonne keep for herself?")
+        self.assertEqual(reading.solve(text), 10)
+
+    def test_rocks_eaten_and_spit_out_returns_system_result(self):
+        text = ("Marcus collected 10 rocks. He put all of them in his aquarium but his fish ate "
+                 "half of them. He was able to make the fish spit two out. How many of Marcus's "
+                 "rocks are left?")
+        self.assertEqual(reading.solve(text), 7)
+
+    def test_six_sided_dice_total_sides_returns_system_result(self):
+        # self-referential entity ("die") since two people's dice are combined.
+        text = "Ravi and Priya both brought 4, six-sided dice to school. How many total sides are there?"
+        self.assertEqual(reading.solve(text), 48)
+
+    def test_three_family_babysitting_earnings_returns_system_result(self):
+        text = ("The Whitfields pay $15 per hour for babysitting. The Alden family pays $18 per "
+                 "hour and the Trask family pays $20 per hour for babysitting. Freya babysat for "
+                 "the Whitfields for 7 hours, the Alden family for 6 hours and the Trask family "
+                 "for 3 hours. How many dollars did Freya earn babysitting?")
+        self.assertEqual(reading.solve(text), 273)
+
+
 if __name__ == "__main__":
     unittest.main()

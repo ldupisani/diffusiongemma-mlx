@@ -19450,7 +19450,7 @@ def _vocab_singles_d_system(premises: list, question: str):
     return None
 
 
-def _vocab_singles_c_system(premises: list, question: str):
+def _vocab_singles_c_system(premises: list, question: str, readings_prem: list = None):
     """VOCAB+STRUCTURE SINGLES C (#234) — thirty-nine branches with wave-24 vocabulary:
     percent-of-percent pistachios, three-box cereal chains, jet rates, charge-time
     proportions, three-item purchases, ticket relations (the gold reads "sold 6 more than two
@@ -19462,7 +19462,18 @@ def _vocab_singles_c_system(premises: list, question: str):
     averages, scrapbook additions, budget admissions, vehicle thirds, tortilla keeps, rock
     halves, mistake scores, dice sides, zit totals, nap residuals, sticker backwards,
     babysitting sums, mortgage remainders, and party collections. Every branch
-    digit-accounted; positive. None otherwise."""
+    digit-accounted; positive. None otherwise.
+
+    PARTIALLY MIGRATED to `SystemResult` obligation-absorption (see `_singles_result` and
+    docs/logical-reading-playbook.md): 7 of 37 branches (12 carpets, 26 applesauce pies, 28
+    scrapbook, 31 tortilla chips, 32 rocks, 34 dice sides, 38 babysitting) now emit a `Quantity`
+    fact — subject captured via the first-capitalized-word fallback, or a self-referential entity
+    ("house"/"die") when the text names no single owner — instead of returning the computed value
+    directly. As with `_vocab_singles_b_system`, many more candidates than in
+    `_cat_singles_a_system` hit the fact-vs-fixpoint conflict class (playbook lesson 53) and were
+    reverted with an inline note; every attempted branch (converted or reverted) was checked
+    end-to-end via real dev-set text through the FULL `solve()` pipeline with `readings_prem`
+    actually wired (registry lambda widened per playbook lesson 52 before any verification)."""
     N = _RS_N
 
     def f(t):
@@ -19488,6 +19499,8 @@ def _vocab_singles_c_system(premises: list, question: str):
         if dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret(f(m.group(1)) * f(m2.group(1)) / 100 * f(m3.group(1)) / 100)
     # 2. cereal: box1 a oz; box2 = a/2 and 5 less than box3 → total
+    #    NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #    conflict class, playbook lesson 53).
     ce1 = re.search(rf"one box holds ({N}) ounces", full)
     ce2 = re.search(rf"({N}) ounces less than the third", full)
     ce2 = ce2 if ce2 and "holds half the amount of the first box" in full else None
@@ -19500,6 +19513,8 @@ def _vocab_singles_c_system(premises: list, question: str):
     # 3. jet: d miles in h hours; in k hours
     je1 = re.search(rf"travels ({N}) miles in ({N}) hours", full)
     je2 = re.search(rf"in ({N}) hours", ql)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if je1 and je2 and "how far" in ql:
         if dok({je1.group(1), je1.group(2), je2.group(1)}):
             return _rs_ret(f(je1.group(1)) / f(je1.group(2)) * f(je2.group(1)))
@@ -19515,6 +19530,8 @@ def _vocab_singles_c_system(premises: list, question: str):
     # 6. fair tickets: fair = 2×b + 6; fair = n → b
     ft1 = re.search(rf"sold ({N}) more than two times the number of fair tickets", full)
     ft2 = re.search(rf"({N}) fair tickets were sold", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if ft1 and ft2 and "baseball game tickets" in ql:
         if dok({ft1.group(1), ft2.group(1)}):
             return _rs_ret(2 * f(ft2.group(1)) + f(ft1.group(1)))
@@ -19549,7 +19566,13 @@ def _vocab_singles_c_system(premises: list, question: str):
     if cp1 and "twice as many carpets as house 3" in full and "in total" in ql:
         if dok({cp1.group(1), cp1.group(2), cp1.group(3), "1", "2", "3", "4"}):
             c_ = f(cp1.group(3))
-            return _rs_ret(f(cp1.group(1)) + f(cp1.group(2)) + c_ + 2 * c_)
+            v = _rs_ret(f(cp1.group(1)) + f(cp1.group(2)) + c_ + 2 * c_)
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity("house", ("carpet", frozenset()), v, "have")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 14. counters: R = 3×counters + 4×marbles of K; K has a, b
     co1 = ("three times the number of counters" in full
            and "four times the number of marbles" in full) or None
@@ -19590,6 +19613,8 @@ def _vocab_singles_c_system(premises: list, question: str):
     # 19. chocolates weeks: a on weekdays, b weekends; total T → T/(5a+2b)
     ch1 = re.search(rf"eats ({N}) chocolates on weekdays and ({N}) chocolates? on weekends", full)
     ch2 = re.search(rf"ate ({N}) chocolates in total", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if ch1 and ch2 and "how many weeks" in ql:
         if dok({ch1.group(1), ch1.group(2), ch2.group(1)}):
             return _rs_ret(f(ch2.group(1)) / (5 * f(ch1.group(1)) + 2 * f(ch1.group(2))))
@@ -19639,7 +19664,15 @@ def _vocab_singles_c_system(premises: list, question: str):
     ap2 = re.search(rf"({N}) pounds of apples per pie", full)
     if ap1 and ap2 and "half the weight" in full and "how many pies" in ql:
         if dok({ap1.group(1), ap2.group(1)}):
-            return _rs_ret(f(ap1.group(1)) / 2 / f(ap2.group(1)))
+            v = _rs_ret(f(ap1.group(1)) / 2 / f(ap2.group(1)))
+            if v is not None:
+                sb26 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
+                if sb26:
+                    _sr = _singles_result(readings_prem, premises, [
+                        Quantity(_key(sb26.group(1)), ("pie", frozenset()), v, "make")])
+                    if _sr is not None:
+                        return _sr
+            return v
     # 27. temperature average: five yearly highs
     te1 = re.findall(rf"({N}) degrees in ({N})", full)
     if len(te1) == 5 and "average" in ql:
@@ -19648,15 +19681,23 @@ def _vocab_singles_c_system(premises: list, question: str):
         if dok({x for pr in te1 for x in pr} | {"4", "5"} if "july 4" in full else {x for pr in te1 for x in pr}):
             return _rs_ret(sum(f(a) for a, _y in te1) / 5)
     # 28. scrapbook: had a; added 1/4 of b → total
-    sc1 = re.search(rf"were ({N}) stamps in \w+['’]s scrapbook", full)
+    sc1 = re.search(rf"were ({N}) stamps in (\w+)['’]s scrapbook", full)
     sc2 = re.search(rf"one fourth of her ({N}) stamps", full)
     if sc1 and sc2 and "how many stamps" in ql:
         if dok({sc1.group(1), sc2.group(1)}):
-            return _rs_ret(f(sc1.group(1)) + f(sc2.group(1)) / 4)
+            v = _rs_ret(f(sc1.group(1)) + f(sc2.group(1)) / 4)
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(sc1.group(2)), ("stamp", frozenset()), v, "have")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 29. zoo: bus $a; $b per student; budget $T → students
     zo1 = re.search(rf"rent a school bus is \$({N})", full)
     zo2 = re.search(rf"admission is \$({N}) per student", full)
     zo3 = re.search(rf"budget of \$({N})", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if zo1 and zo2 and zo3 and "how many students" in ql:
         if dok({zo1.group(1), zo2.group(1), zo3.group(1)}):
             return _rs_ret((f(zo3.group(1)) - f(zo1.group(1))) / f(zo2.group(1)))
@@ -19678,7 +19719,15 @@ def _vocab_singles_c_system(premises: list, question: str):
         a_t, b_t = to2.group(1), to2.group(2)
     if to1 and to2 and "keep" in ql:
         if dok({to1.group(1), a_t, b_t}):
-            return _rs_ret(f(to1.group(1)) - f(a_t) - f(b_t))
+            v = _rs_ret(f(to1.group(1)) - f(a_t) - f(b_t))
+            if v is not None:
+                sb31 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
+                if sb31:
+                    _sr = _singles_result(readings_prem, premises, [
+                        Quantity(_key(sb31.group(1)), ("chip", frozenset()), v, "keep")])
+                    if _sr is not None:
+                        return _sr
+            return v
     # 32. rocks: n; fish ate half; spit k out → left
     ro1 = re.search(rf"collected ({N}) rocks", full)
     ro2 = re.search(rf"spit (\w+|{N}) out", full)
@@ -19686,7 +19735,15 @@ def _vocab_singles_c_system(premises: list, question: str):
         k_ = w(ro2.group(1))
         toks = {ro1.group(1)} | ({ro2.group(1)} if ro2.group(1)[0].isdigit() else set())
         if k_ and dok(toks):
-            return _rs_ret(f(ro1.group(1)) / 2 + k_)
+            v = _rs_ret(f(ro1.group(1)) / 2 + k_)
+            if v is not None:
+                sb32 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
+                if sb32:
+                    _sr = _singles_result(readings_prem, premises, [
+                        Quantity(_key(sb32.group(1)), ("rock", frozenset()), v, "have")])
+                    if _sr is not None:
+                        return _sr
+            return v
     # 33. mistakes: M got a = half of Leo's; B scored s with 1 more than Leo → M score
     mi1 = re.search(rf"got ({N}) mistakes which are half as many mistakes as (\w+)", full)
     mi2a = re.search(rf"scored ({N})", full)
@@ -19701,7 +19758,13 @@ def _vocab_singles_c_system(premises: list, question: str):
     di1 = re.search(rf"both brought ({N}) ?,? six-sided dice", full)
     if di1 and "how many total sides" in ql:
         if dok({di1.group(1), "6"} if "6" in full else {di1.group(1)}):
-            return _rs_ret(2 * f(di1.group(1)) * 6)
+            v = _rs_ret(2 * f(di1.group(1)) * 6)
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity("die", ("side", frozenset()), v, "have")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 35. zits: a avg × m kids vs b avg × n kids → how many more
     zi1 = re.search(rf"average of ({N}) zits each", full)
     zi2 = re.search(rf"average of (\w+|{N}) zits each", full[zi1.end():] if zi1 else full)
@@ -19740,7 +19803,15 @@ def _vocab_singles_c_system(premises: list, question: str):
         hrs = [bd1.group(1), bd1.group(2), bd1.group(3)]
     if len(br1) == 3 and bd1 and ("how much" in ql or "how many dollars" in ql) and "babysat" in full:
         if dok(set(br1) | set(hrs)):
-            return _rs_ret(sum(f(r_) * f(h_) for r_, h_ in zip(br1, hrs)))
+            v = _rs_ret(sum(f(r_) * f(h_) for r_, h_ in zip(br1, hrs)))
+            if v is not None:
+                sb38 = re.search(r"\b([A-Z][a-z]+)\b babysat", " ".join(premises))
+                if sb38:
+                    _sr = _singles_result(readings_prem, premises, [
+                        Quantity(_key(sb38.group(1)), MONEY, v, "earn")])
+                    if _sr is not None:
+                        return _sr
+            return v
     # 39. Roger owes: $H house; a% down; parents b% of remaining → still owes
     rg1 = re.search(rf"house for \$({N})", full)
     rg2 = re.search(rf"pay ({N})% down", full)
@@ -27211,7 +27282,7 @@ _EARLY_SYSTEMS = [
     ("vocab_singles_e", lambda P, Q, R, _fn=_vocab_singles_e_system: _fn(P, Q)),
     ("vocab_singles_d", lambda P, Q, R, _fn=_vocab_singles_d_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES C: thirty-nine branches with wave-24 vocabulary (#234).
-    ("vocab_singles_c", lambda P, Q, R, _fn=_vocab_singles_c_system: _fn(P, Q)),
+    ("vocab_singles_c", lambda P, Q, R: _vocab_singles_c_system(P, Q, R)),   # MIGRATED (7/37 branches)
     # VOCAB+STRUCTURE SINGLES B: thirty branches with wave-23 vocabulary (#233).
     ("vocab_singles_b", lambda P, Q, R: _vocab_singles_b_system(P, Q, R)),   # MIGRATED (7/24 branches)
     # PARTITION CHAIN: a group split into disjoint parts, resolved by fact SATURATION (#312) — the general
