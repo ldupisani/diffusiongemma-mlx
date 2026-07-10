@@ -10271,5 +10271,27 @@ class TestVocabSinglesFSystemResultBatch12(unittest.TestCase):
         self.assertEqual(reading.solve(text), 1045)
 
 
+class TestVocabSinglesGSystemResultBatch13(unittest.TestCase):
+    """Obligation-absorption on `_vocab_singles_g_system`: 2 of its 41 branches now emit fact(s)
+    instead of a bare scalar, bringing the running total across all migrated singles functions to
+    131/481. Same recipe as batches 8-12. This function's mined examples name a subject even less
+    often than `_vocab_singles_e/f_system`'s (most branches use bare pronouns with no capitalized
+    name anywhere in the matched premises); of 4 attempted branches, 2 hit the fact-vs-fixpoint
+    conflict class (playbook lesson 53) and were reverted. GSM8K text itself never enters version
+    control."""
+
+    def test_school_supplies_with_teacher_discount_returns_system_result(self):
+        text = ("Preston is buying school supplies for his third grade class, which has 30 "
+                 "students. Each student needs 5 pens, 3 notebooks, 1 binder and 2 highlighters. "
+                 "Pens cost $0.50, notebooks cost $1.25, binders cost $4.25, and highlighters "
+                 "cost $0.75. If Preston gets a $100 teacher discount, how much does he spend on "
+                 "school supplies?")
+        self.assertEqual(reading.solve(text), 260)
+
+    def test_half_off_tshirts_flat_price_returns_system_result(self):
+        text = "Marcus buys 6 t-shirts for 50% off.  They each cost $20.  How much did he pay?"
+        self.assertEqual(reading.solve(text), 60)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -18078,7 +18078,7 @@ def _vocab_singles_h_system(premises: list, question: str):
             return _rs_ret(f(U1.group(1)) * (f(U2.group(1)) + f(U2b.group(1))))
     return None
 
-def _vocab_singles_g_system(premises: list, question: str):
+def _vocab_singles_g_system(premises: list, question: str, readings_prem: list = None):
     """VOCAB+STRUCTURE SINGLES G (#240) — forty-four branches with wave-30 vocabulary:
     black-pigeon gender gaps, backpack per-notebook costs, per-kilogram roosters, 50%%-per-year
     compounding, statistics-course fail counts (cast recovered from _STATED_CONV), pocketed
@@ -18092,7 +18092,18 @@ def _vocab_singles_g_system(premises: list, question: str):
     thrice-picked oranges, days-to-double pay, lighter store-vs-online savings, +150%%
     reading weeks, necklace profit at volume, tree height in inches, five-times cat catches,
     unused carrots, vacation-return ages, toy-soldier totals, and loose-coin change backward.
-    Every branch digit-accounted; positive. None otherwise."""
+    Every branch digit-accounted; positive. None otherwise.
+
+    PARTIALLY MIGRATED to `SystemResult` obligation-absorption (see `_singles_result` and
+    docs/logical-reading-playbook.md): 2 of 41 active branches (32 school supplies with teacher discount,
+    33 half-off t-shirts) now emit a `Quantity` fact instead of returning the computed value
+    directly — subject captured via the first-capitalized-word fallback. This function's mined
+    examples name a subject even less often than `_vocab_singles_e/f_system`'s (most branches use
+    bare pronouns with no capitalized name in the matched premises at all); of the 4 branches that
+    WERE attempted, 2 hit the fact-vs-fixpoint conflict class (playbook lesson 53) and were
+    reverted with an inline note. Every attempted branch was checked end-to-end via real dev-set
+    text through the FULL `solve()` pipeline with `readings_prem` actually wired (registry lambda
+    widened per playbook lesson 52 before any verification)."""
     N = _RS_N
 
     def f(t): return float(t.replace(",", ""))
@@ -18148,6 +18159,8 @@ def _vocab_singles_g_system(premises: list, question: str):
     g2 = re.search(rf"accessories cost was \$({N})", full)
     g3 = re.search(rf"playstation was worth \$({N})", full)
     g4 = re.search(rf"sold it for ({N})% less than its value", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if g1 and g2 and g3 and g4 and "out of his pocket" in ql:
         if dok({g1.group(1), g2.group(1), g3.group(1), g4.group(1)}):
             return _rs_ret(f(g1.group(1)) + f(g2.group(1))
@@ -18261,6 +18274,8 @@ def _vocab_singles_g_system(premises: list, question: str):
     v1 = re.search(rf"takes ({N}) hours to fill", full)
     v2 = re.search(rf"runs at ({N}) gallons per hour", full)
     v3 = re.search(rf"costs ({N}) cents? for ({N}) gallons", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if v1 and v2 and v3 and "how many dollars" in ql:
         if dok({v1.group(1), v2.group(1)} | set(v3.groups())):
             gal = f(v1.group(1)) * f(v2.group(1))
@@ -18335,13 +18350,29 @@ def _vocab_singles_g_system(premises: list, question: str):
     if H1 and H2 and H3 and H4 and "how much does he spend" in ql:
         if dok({H1.group(1), H4.group(1)} | set(H2.groups()) | set(H3.groups())):
             per = sum(f(H2.group(i)) * f(H3.group(i)) for i in (1, 2, 3, 4))
-            return _rs_ret(f(H1.group(1)) * per - f(H4.group(1)))
+            v = _rs_ret(f(H1.group(1)) * per - f(H4.group(1)))
+            if v is not None:
+                sb32 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
+                if sb32:
+                    _sr = _singles_result(readings_prem, premises, [
+                        Quantity(_key(sb32.group(1)), MONEY, v, "spend")])
+                    if _sr is not None:
+                        return _sr
+            return v
     # 33. t-shirts half off (#78)
     I1 = re.search(rf"buys ({N}) t-shirts for ({N})% off", full)
     I2 = re.search(rf"each cost \$({N})", full)
     if I1 and I2 and "how much did he pay" in ql:
         if dok(set(I1.groups()) | {I2.group(1)}):
-            return _rs_ret(f(I1.group(1)) * f(I2.group(1)) * (1 - f(I1.group(2)) / 100))
+            v = _rs_ret(f(I1.group(1)) * f(I2.group(1)) * (1 - f(I1.group(2)) / 100))
+            if v is not None:
+                sb33 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
+                if sb33:
+                    _sr = _singles_result(readings_prem, premises, [
+                        Quantity(_key(sb33.group(1)), MONEY, v, "pay")])
+                    if _sr is not None:
+                        return _sr
+            return v
     # 34. oranges Mon/thrice/Wed (#79)
     J1 = re.search(rf"picks ({N}) oranges", full)
     J2 = re.search(r"they pick thrice as much", full)
@@ -27408,7 +27439,7 @@ _EARLY_SYSTEMS = [
     # VOCAB+STRUCTURE SINGLES H: forty-five branches with wave-31 vocabulary (#241).
     ("vocab_singles_h", lambda P, Q, R, _fn=_vocab_singles_h_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES G: forty-four branches with wave-30 vocabulary (#240).
-    ("vocab_singles_g", lambda P, Q, R, _fn=_vocab_singles_g_system: _fn(P, Q)),
+    ("vocab_singles_g", lambda P, Q, R: _vocab_singles_g_system(P, Q, R)),   # MIGRATED (2/41 branches)
     # VOCAB+STRUCTURE SINGLES F: forty-two branches with wave-29 vocabulary (#239).
     ("vocab_singles_f", lambda P, Q, R: _vocab_singles_f_system(P, Q, R)),   # MIGRATED (3/42 branches)
     ("vocab_singles_e", lambda P, Q, R: _vocab_singles_e_system(P, Q, R)),   # MIGRATED (3/42 branches)
