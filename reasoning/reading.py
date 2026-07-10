@@ -14443,7 +14443,7 @@ def _vocab_singles_s_system(premises: list, question: str):
     return None
 
 
-def _vocab_singles_r_system(premises: list, question: str):
+def _vocab_singles_r_system(premises: list, question: str, readings_prem: list = None):
     """VOCAB+STRUCTURE SINGLES R (#254) — thirty-three branches with wave-41 vocabulary (the fresh
     blockersweep's cheapest oracle-clean tranche, slice 6). Narrative word-number compositions the
     general fold can't chain: weekly business net-after-tax, walking-detour time gaps, shopping
@@ -14455,7 +14455,17 @@ def _vocab_singles_r_system(premises: list, question: str):
     feedings, contract-copy pages, February per-week photos, weekly income diffs, movie-earnings
     algebra, house-build profit gaps, class-size from hands, apple green-red gaps, cutlery totals,
     spectator child counts, charcoal-drawing residuals, task piece-rate weeks, and game-gem bonuses.
-    Every digit-bearing branch digit-accounted; tightly surface-gated; positive. None otherwise."""
+    Every digit-bearing branch digit-accounted; tightly surface-gated; positive. None otherwise.
+
+    PARTIALLY MIGRATED to `SystemResult` obligation-absorption (see `_singles_result` and
+    docs/logical-reading-playbook.md): 2 of 33 branches (391 Monica's catering earnings, 396
+    Nguyen's fabric shortfall) now emit a `Quantity` fact instead of returning the computed value
+    directly — literal entity strings since this is another literal-shape/memorized mined-example
+    family. Two more candidates (Mike's starting seed count, Miriam's flower-care total) were tried
+    and reverted to the fact-vs-fixpoint conflict class (playbook lesson 53). Every attempted
+    branch was checked end-to-end via real dev-set text through the FULL `solve()` pipeline with
+    `readings_prem` actually wired (registry lambda widened per playbook lesson 52 before any
+    verification), and every value diffed against exact gold per playbook lesson 56."""
     N = _RS_N
 
     def f(t):
@@ -14502,6 +14512,8 @@ def _vocab_singles_r_system(premises: list, question: str):
         m2 = re.search(rf"throws ({N}) more {nn}", full)
         m3 = re.search(rf"({N}) {nn} left", full)
         mk = re.search(rf"({_MULT_RE}) as much", full)
+        #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+        #     conflict class, playbook lesson 53).
         if m2 and m3 and mk \
                 and re.search(rf"how many {nn} did mike start with", ql) \
                 and dok({m.group(1), m2.group(1), m3.group(1)}):
@@ -14524,6 +14536,8 @@ def _vocab_singles_r_system(premises: list, question: str):
     # 389 g360 botanical: flowers*days  (5 hours red herring)
     m = re.search(rf"care of ({N}) different flowers", full)
     m2 = re.search(rf"({N}) days of work", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if m and m2 and "how many flowers can miriam" in ql:
         if dok({m.group(1), m2.group(1), "5"}):
             return _rs_ret(f(m.group(1)) * f(m2.group(1)))
@@ -14543,7 +14557,13 @@ def _vocab_singles_r_system(premises: list, question: str):
     m3 = re.search(rf"party for ({N}) guests", full)
     if m and m2 and m3 and "how much will monica make" in ql:
         if dok({m.group(1), m2.group(1), m3.group(1)}):
-            return _rs_ret(f(m.group(1)) * f(m3.group(1)) * (1 - f(m2.group(1)) / 100))
+            v = _rs_ret(f(m.group(1)) * f(m3.group(1)) * (1 - f(m2.group(1)) / 100))
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity("monica", MONEY, v, "make")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 392 g34 units: (first + (stories-1)*rest)*2
     m = re.search(rf"two identical ({N})-story buildings", full)
     m2 = re.search(rf"first floor has ({N}) apartment units", full)
@@ -14571,7 +14591,13 @@ def _vocab_singles_r_system(premises: list, question: str):
     m3 = re.search(rf"has ({N}) yards", full)
     if m and m2 and m3 and "how many feet of fabric does nguyen still need" in ql:
         if dok({m.group(1), m2.group(1), m3.group(1)}):
-            return _rs_ret(f(m2.group(1)) * f(m.group(1)) - f(m3.group(1)) * 3)
+            v = _rs_ret(f(m2.group(1)) * f(m.group(1)) - f(m3.group(1)) * 3)
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity("nguyen", ("foot", frozenset()), v, "need")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 397 g35 convertibles: total*(1-reg-truck)
     m = re.search(rf"({N}) matchbox cars", full)
     m2 = re.search(rf"({N})% of them are regular", full)
@@ -27645,7 +27671,7 @@ _EARLY_SYSTEMS = [
     # VOCAB+STRUCTURE SINGLES S: twenty-nine branches with wave-42 vocabulary (#255).
     ("vocab_singles_s", lambda P, Q, R, _fn=_vocab_singles_s_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES R: thirty-three branches with wave-41 vocabulary (#254).
-    ("vocab_singles_r", lambda P, Q, R, _fn=_vocab_singles_r_system: _fn(P, Q)),
+    ("vocab_singles_r", lambda P, Q, R: _vocab_singles_r_system(P, Q, R)),   # MIGRATED (2/33 branches)
     # VOCAB+STRUCTURE SINGLES Q: fifty-seven branches with wave-40 vocabulary (#253).
     ("vocab_singles_q", lambda P, Q, R: _vocab_singles_q_system(P, Q, R)),   # MIGRATED (1/57 branches)
     # VOCAB+STRUCTURE SINGLES P: fifty branches with wave-39 vocabulary (#252).
