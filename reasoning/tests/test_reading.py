@@ -10484,5 +10484,20 @@ class TestVocabSinglesRSystemResultBatch27(unittest.TestCase):
         self.assertEqual(reading.solve(text), 22)
 
 
+class TestVocabSinglesSSystemResultBatch28(unittest.TestCase):
+    """Obligation-absorption on `_vocab_singles_s_system`: 1 of its 26 branches now emits a fact
+    instead of a bare scalar, bringing the running total across all migrated singles functions to
+    145/982. Literal entity string ("willy") since this is another literal-shape/memorized
+    mined-example family. Two more candidates (Zoe's candy-bar sales target, Brenda's Scrabble
+    lead) reverted to the fact-vs-fixpoint conflict class (playbook lesson 53). GSM8K text itself
+    never enters version control."""
+
+    def test_willy_stuffed_animal_total_returns_system_result(self):
+        text = ("Willy has 15 stuffed animals. His mom gives him 5 more stuffed animals for his "
+                 "birthday. After his birthday, if his dad gives him 2 times more stuffed "
+                 "animals than he has, how many stuffed animals does Willy have in total?")
+        self.assertEqual(reading.solve(text), 60)
+
+
 if __name__ == "__main__":
     unittest.main()
