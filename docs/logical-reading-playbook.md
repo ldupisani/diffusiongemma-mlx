@@ -1197,6 +1197,17 @@ incrementally per a standing multi-session objective (see the reading-engine-han
 Later-wave conversion yield has stabilized around 1-2 branches per function (see lesson 55 for
 why) — this is an accepted, expected outcome of this family's tolerance, not a quality problem.
 
+**2026-07-10 — the 22-function vocab-singles migration is now COMPLETE.** `_vocab_singles_r_system`
+2/33, `_vocab_singles_s_system` 1/26, `_vocab_singles_t_system` 0/27 (first true zero — a
+legitimate outcome, not a gap in effort), `_vocab_singles_u_system` 0/48 (the last letter
+function), and finally the base `_vocab_singles_system` 3/26 (its own docstring claimed 190
+branches; the real count read off the numbered comment markers is 28, 26 reachable — a stale
+estimate, not a hidden scope). Final running total: **148/1008 branches converted across all 28
+surveyed functions** (24 above + r/s/t/u + the base). The base function's 3 conversions (money-
+left remainder, age, total-distance-driven) and its 8 reverted candidates recap every conflict
+class already catalogued (lessons 53/56) — no new failure mode surfaced. This closes the standing
+multi-session objective; any further work on this family is net-new scope, not continuation.
+
 ### A clause that is BOTH meta and data — read the recorded meta, don't fight the parse (#309)
 
 `_parse_problem` recognizes "there are N X in a Y" as a stated unit conversion (`_stated_conversion`),

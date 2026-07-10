@@ -10531,5 +10531,126 @@ class TestVocabSinglesBaseSystemResultBatch29(unittest.TestCase):
         self.assertEqual(reading.solve(text), 50)
 
 
+class TestScaleWordGeneralization(unittest.TestCase):
+    """`SCALES` (`dozen`→12, `hundred`→100, `thousand`→1000, `million`→1000000, `billion`) already
+    existed for reading "N dozen"-style counts, but ~17 whole-text-regex branches across several
+    functions hardcoded the WORD "dozen" in their regex AND the number 12 in their arithmetic
+    instead of reading the scale word from the text and looking up its value — the exact
+    MINIMUM-STRUCTURE gap flagged directly by the user (`_percent_money_tails_system`'s
+    PAY-FRACTION PRODUCT branch: "buys (\\d+) dozen \\w+" ... "* 12 *"). Added `_SCALES_WORD_RE` +
+    `_scale_word()` (the counting-group analogue of `_SCALE_RE`/`_scale` for multiplier words) and
+    generalized every located instance so any SCALES word works, not just "dozen". Each case below
+    is the SAME branch that used to only fire on "dozen", now paraphrased with a DIFFERENT scale
+    word to prove the generalization is real, not just a refactor — diffed against the arithmetic
+    result, not copied from a gold value (these paraphrases don't correspond to real GSM8K
+    problems). Purely a generalization refactor: the diff-verify gate confirmed 0 BROKE / 0
+    DECL→WRONG both isolated and cumulative, TEST unchanged 45/5 (90.0%) — every original "dozen"
+    dev-set case still resolves identically. (Two related but NOT hardcoded-12 spots were also
+    generalized for consistency even though they never multiplied by 12: the apples/bananas
+    system-of-equations branch, where "dozen" was purely a vocabulary word describing the apple
+    unit, and the eggs-breakeven branch, where "dozen" appeared twice as a shared UNIT WORD with no
+    magic number at all.)"""
+
+    def test_pay_fraction_product_with_hundred_scale(self):
+        text = ("Priya buys 5 hundred roses. Each rose cost $6. Since she bought so many she "
+                 "only needs to pay 80%. How much did she pay?")
+        self.assertEqual(reading.solve(text), 2400)
+
+    def test_bagel_bulk_savings_with_hundred_scale(self):
+        text = ("The bagels cost $2.25 each, or a hundred for $200. How much is saved, per "
+                 "bagel, in cents, by buying a dozen at a time?")
+        self.assertEqual(reading.solve(text), 25)
+
+    def test_grasshoppers_found_with_hundred_scale(self):
+        text = ("Priya saw 7 grasshoppers on her African daisy plant. Then, hopping on the "
+                 "grass under the plant, she found 2 hundred baby grasshoppers. How many "
+                 "grasshoppers did Priya find altogether?")
+        self.assertEqual(reading.solve(text), 207)
+
+    def test_uneaten_cookie_chips_with_hundred_scale(self):
+        text = ("Priya made chocolate cookies for her class and made sure each cookie had "
+                 "exactly 7 chips. She made 4 hundred in total. If the class eats half the "
+                 "cookies, how many chips are left uneaten?")
+        self.assertEqual(reading.solve(text), 1400)
+
+    def test_ballet_roses_received_with_hundred_scale(self):
+        text = ("After Priya's ballet performance, she received 2 hundred roses from her "
+                 "parents, and 2 roses from each of her 10 dancer friends. How many roses did "
+                 "Priya receive?")
+        self.assertEqual(reading.solve(text), 220)
+
+    def test_rose_sunflower_bouquet_with_million_scale(self):
+        text = ("Priya needs to buy two millions of red roses and 3 pieces of sunflowers for a "
+                 "bouquet that she is going to arrange. Each red rose costs $1.50 and each "
+                 "sunflower costs $3. How much will Priya pay for all those flowers?")
+        self.assertEqual(reading.solve(text), 3000009)
+
+    def test_shirts_sister_share_with_million_scale(self):
+        text = ("Priya has 4 million shirts. She lets her sister have 1/3 of them. How many "
+                 "shirts does she have left?")
+        self.assertEqual(reading.solve(text), 4000000 * (1 - 1 / 3))
+
+    def test_recipient_count_with_million_scale(self):
+        text = ("Priya gave all three million of pebbles from her trip to her friends. Each of "
+                 "her friends got 4 pebbles. How many friends received pebbles?")
+        self.assertEqual(reading.solve(text), 750000)
+
+    def test_count_difference_with_million_scale(self):
+        text = ("Priya's apple tree has 14 apples and her orange tree has 2 million oranges. "
+                 "How many more oranges does she have than apples?")
+        self.assertEqual(reading.solve(text), 1999986)
+
+    def test_chicken_egg_breakeven_with_hundred_scale(self):
+        text = ("Priya is raising chickens for eggs. She buys 4 chickens for $20 each. They "
+                 "cost $1 in total a week to feed and each produces 3 eggs a week that will "
+                 "last forever. She used to buy 1 hundred eggs a week and spent $2 per hundred. "
+                 "After how many weeks will the chickens be cheaper than buying her eggs?")
+        self.assertEqual(reading.solve(text), 81)
+
+    def test_tom_roses_weekly_total_with_million_scale(self):
+        text = ("Sanjay decided to send his wife 2 million roses every day for the week. "
+                 "How many total roses did he send?")
+        self.assertEqual(reading.solve(text), 14000000)
+
+    def test_javier_donuts_fundraiser_with_thousand_scale(self):
+        text = ("Priya is selling donuts to raise money for a new game. She wants to raise "
+                 "$9000. She buys each thousand donuts for $100 and then sells each donut for "
+                 "$1. How many thousand donuts does she need to buy and sell to reach her "
+                 "goal?")
+        self.assertEqual(reading.solve(text), 10)
+
+    def test_apple_banana_price_pair_with_hundred_scale(self):
+        text = ("Priya paid $7 for 2 hundred apples and 1 bunch of bananas. Sanjay paid $5 for "
+                 "1 hundred apples and 1 bunch of bananas. How much does a bunch of bananas "
+                 "cost?")
+        self.assertEqual(reading.solve(text), 3)
+
+    def test_bulk_flower_bonus_with_million_scale(self):
+        text = ("For every one million flowers bought, a customer gets 2 free flowers. If "
+                 "Priya wants to buy 3 millions flowers, how many pieces of flowers will she "
+                 "have in all?")
+        self.assertEqual(reading.solve(text), 3000006)
+
+    def test_strawberries_saved_for_mom_with_thousand_scale(self):
+        text = ("Priya picks 2 thousand strawberries from the field. She eats 6 and saves the "
+                 "rest for her mom. How many strawberries are there for her mom?")
+        self.assertEqual(reading.solve(text), 1994)
+
+    def test_bulk_pen_purchase_with_million_scale(self):
+        text = "Priya wants to buy two and one-half millions of pens. How many pens will she have?"
+        self.assertEqual(reading.solve(text), 2500000)
+
+    def test_box_bottle_totals_with_thousand_scale(self):
+        text = ("A box has 2 thousand water bottles and half a thousand more apple bottles "
+                 "than water bottles. How many bottles are in the box?")
+        self.assertEqual(reading.solve(text), 4500)
+
+    def test_multi_item_price_split_with_hundred_scale(self):
+        text = ("A pencil costs $0.5 each and a folder costs $0.9 each. An office needs two "
+                 "hundred pencils and 20 pieces of folders. How much does it cost to buy the "
+                 "office supplies?")
+        self.assertEqual(reading.solve(text), 118)
+
+
 if __name__ == "__main__":
     unittest.main()

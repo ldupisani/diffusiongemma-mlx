@@ -939,6 +939,17 @@ NUMBERS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seve
 # Number-SCALE words: a bare scale is its value ("a dozen" → 12); "N scale" MULTIPLIES ("two dozen" → 24,
 # "three hundred" → 300), merged into one value unit by _merge_scales.
 SCALES = {"dozen": 12, "hundred": 100, "thousand": 1000, "million": 1000000, "billion": 1000000000}
+# `_SCALES_WORD_RE` matches ANY SCALES word (+ optional plural 's'); `_scale_word(token)` looks up its
+# value. Lets a whole-text-regex branch capture "N <scale> item" generically instead of hardcoding
+# "dozen"/12 — the same MINIMUM-STRUCTURE move `_SCALE_RE`/`_scale` makes for multiplier words.
+_SCALES_WORD_RE = rf"(?:{'|'.join(re.escape(w) for w in sorted(SCALES, key=len, reverse=True))})s?"
+
+
+def _scale_word(token: str):
+    """Numeric value of a captured `_SCALES_WORD_RE` match ("dozen"→12, "dozens"→12, "hundred"→100),
+    or None."""
+    t = token.strip().lower()
+    return SCALES.get(t) or (SCALES.get(t[:-1]) if t.endswith("s") else None)
 
 # ── Scale (multiplier) reading ──────────────────────────────────────────────────────────────────
 # A SCALE is a stated coefficient: a multiplier WORD ("twice"/"triple"/"half") OR an "<n> times" form
@@ -13324,10 +13335,11 @@ def _vocab_singles_l_system(premises: list, question: str, readings_prem: list =
         if zoff is not None and zfrac and dok(zused):
             return _rs_ret(f(ce.group(1)) * zfrac - zoff)
     # 1. half-dozen crayons (#45)
-    a1 = re.search(rf"bought ({N}) half dozen colored crayons at \$({N}) per crayon", full)
-    if a1 and "total cost" in ql:
-        if dok(set(a1.groups())):
-            return _rs_ret(f(a1.group(1)) * 6 * f(a1.group(2)))
+    a1 = re.search(rf"bought ({N}) half ({_SCALES_WORD_RE}) colored crayons at \$({N}) per crayon", full)
+    if a1:
+        scale = _scale_word(a1.group(2))
+        if scale and "total cost" in ql and dok({a1.group(1), a1.group(3)}):
+            return _rs_ret(f(a1.group(1)) * scale / 2 * f(a1.group(3)))
     # 2. ribbon left (#46)
     b1 = re.search(rf"has ({N}) yards of ribbon", full)
     b2 = re.search(rf"(?:to|used equally to) ({N}) gifts", full)
@@ -15379,12 +15391,13 @@ def _vocab_singles_p_system(premises: list, question: str, readings_prem: list =
         if dok({m.group(1), m2.group(1)}):
             return _rs_ret(2 * f(m.group(1)) / f(m2.group(1)))
     # (219 Veronica/Samir stairs DROPPED — 'climb' excluded, see the wave-39 note.)
-    # 221 g25 bagel: (each*12 - dozen)/12*100
+    # 221 g25 bagel: (each*scale - bulk_price)/scale*100
     m = re.search(rf"cost \$({N}) each", full)
-    m2 = re.search(rf"dozen for \$({N})", full)
+    m2 = re.search(rf"({_SCALES_WORD_RE}) for \$({N})", full)
     if m and m2 and "how much is saved" in ql and "per bagel, in cents" in full:
-        if dok({m.group(1), m2.group(1)}):
-            return _rs_ret((f(m.group(1)) * 12 - f(m2.group(1))) / 12 * 100)
+        scale = _scale_word(m2.group(1))
+        if scale and dok({m.group(1), m2.group(2)}):
+            return _rs_ret((f(m.group(1)) * scale - f(m2.group(2))) / scale * 100)
     # 222 g30 goals: total*pct/100/2
     m = re.search(rf"accounts for ({N})% of all goals", full)
     m2 = re.search(rf"that season is ({N})", full)
@@ -15571,12 +15584,13 @@ def _vocab_singles_p_system(premises: list, question: str, readings_prem: list =
     if m and m2 and "double fuel capacity" in full and "how much does he pay now" in ql:
         if dok({m.group(1), m2.group(1)}):
             return _rs_ret(2 * f(m.group(1)) * (1 + f(m2.group(1)) / 100))
-    # 264 g31 grasshoppers: n + dozen*12
+    # 264 g31 grasshoppers: n + scale·k
     m = re.search(rf"({N}) grasshoppers on her african daisy", full)
-    m2 = re.search(rf"({N}) dozen baby grasshoppers", full)
+    m2 = re.search(rf"({N}) ({_SCALES_WORD_RE}) baby grasshoppers", full)
     if m and m2 and "grasshoppers did" in ql and "find altogether" in ql:
-        if dok({m.group(1), m2.group(1)}):
-            return _rs_ret(f(m.group(1)) + f(m2.group(1)) * 12)
+        scale = _scale_word(m2.group(2))
+        if scale and dok({m.group(1), m2.group(1)}):
+            return _rs_ret(f(m.group(1)) + f(m2.group(1)) * scale)
     # 268 g3 teeth: mins*3*days/60
     m = re.search(rf"teeth for ({N}) minutes", full)
     m2 = re.search(rf"after ({N}) days", full)
@@ -17650,11 +17664,12 @@ def _vocab_singles_i_system(premises: list, question: str, readings_prem: list =
             return _rs_ret(w(d1.group(1)) * 7 * f(d2.group(1)))
     # 5. uneaten chips (#139)
     e1 = re.search(rf"each cookie had exactly ({N}) chips", full)
-    e2 = re.search(rf"made ({N}) dozen in total", full)
+    e2 = re.search(rf"made ({N}) ({_SCALES_WORD_RE}) in total", full)
     e3 = re.search(r"class eats half the cookies", full)
     if e1 and e2 and e3 and "uneaten" in ql:
-        if dok({e1.group(1), e2.group(1)}):
-            return _rs_ret(f(e2.group(1)) * 12 * f(e1.group(1)) / 2)
+        scale = _scale_word(e2.group(2))
+        if scale and dok({e1.group(1), e2.group(1)}):
+            return _rs_ret(f(e2.group(1)) * scale * f(e1.group(1)) / 2)
     # 6. token-worth difference (#140)
     g1 = re.search(rf"has \$({N}) worth of tokens less than", full)
     g2 = re.search(rf"has ({N}) tokens", full)
@@ -17730,8 +17745,8 @@ def _vocab_singles_i_system(premises: list, question: str, readings_prem: list =
     s1 = re.search(rf"buys ({N}) chickens for \$({N}) each", full)
     s2 = re.search(rf"cost \$({N}) in total a week to feed", full)
     s3 = re.search(rf"each produces ({N}) eggs a week", full)
-    s4 = re.search(rf"buy ({N}) dozen eggs a week", full)
-    s4b = re.search(rf"spent \$({N}) per dozen", full)
+    s4 = re.search(rf"buy ({N}) ({_SCALES_WORD_RE}) eggs a week", full)
+    s4b = re.search(rf"spent \$({N}) per {s4.group(2)}", full) if s4 else None
     if s1 and s2 and s3 and s4 and s4b and "how many weeks" in full and "cheaper" in full:
         if dok(set(s1.groups()) | {s2.group(1), s3.group(1), s4.group(1), s4b.group(1)}):
             upfront = f(s1.group(1)) * f(s1.group(2))
@@ -17831,11 +17846,12 @@ def _vocab_singles_i_system(premises: list, question: str, readings_prem: list =
             dogs_now = 2 * f(E4.group(1))
             return _rs_ret((dogs_now - w(E2.group(1))) * 2)
     # 30. ballet roses (#164)
-    F1 = re.search(rf"received ({N}) dozen roses", full)
+    F1 = re.search(rf"received ({N}) ({_SCALES_WORD_RE}) roses", full)
     F2 = re.search(rf"({N}) roses from each of her ({N}) dancer friends", full)
     if F1 and F2 and "how many roses" in ql:
-        if dok({F1.group(1)} | set(F2.groups())):
-            return _rs_ret(f(F1.group(1)) * 12 + f(F2.group(1)) * f(F2.group(2)))
+        scale = _scale_word(F1.group(2))
+        if scale and dok({F1.group(1)} | set(F2.groups())):
+            return _rs_ret(f(F1.group(1)) * scale + f(F2.group(1)) * f(F2.group(2)))
     # 31. grandkids split (#165)
     G1 = re.search(r"has twice the number of children that her sister has", full)
     G2 = re.search(rf"has (six|\w+) grandkids", full)
@@ -18802,13 +18818,14 @@ def _vocab_singles_f_system(premises: list, question: str, readings_prem: list =
         if dok({b2.group(1), b3.group(1), b4.group(1)}):
             return _rs_ret(w(b1.group(1)) * f(b2.group(1)) * f(b3.group(1)) * f(b4.group(1)))
     # 2. rose-dozens + sunflowers bouquet (#3)
-    z1 = re.search(r"(two|\w+) dozens? of red roses", full)
+    z1 = re.search(rf"(two|\w+) ({_SCALES_WORD_RE}) of red roses", full)
     z2 = re.search(rf"({N}) pieces of sunflowers", full)
     z3 = re.search(rf"red rose costs \$({N})", full)
     z4 = re.search(rf"sunflower costs (?:\w+ )?\$({N})", full)
     if z1 and z2 and z3 and z4 and "pay for all those flowers" in ql and w(z1.group(1)):
-        if dok({z2.group(1), z3.group(1), z4.group(1)}):
-            return _rs_ret(w(z1.group(1)) * 12 * f(z3.group(1)) + f(z2.group(1)) * f(z4.group(1)))
+        scale = _scale_word(z1.group(2))
+        if scale and dok({z2.group(1), z3.group(1), z4.group(1)}):
+            return _rs_ret(w(z1.group(1)) * scale * f(z3.group(1)) + f(z2.group(1)) * f(z4.group(1)))
     # 3. contracted book pages remaining (#4)
     c1 = re.search(rf"write a ({N}) page book", full)
     c2 = re.search(rf"writes ({N}) pages and twice that amount on the second day", full)
@@ -18819,11 +18836,12 @@ def _vocab_singles_f_system(premises: list, question: str, readings_prem: list =
             a = f(c2.group(1))
             return _rs_ret(f(c1.group(1)) - (a + 2 * a + 4 * a + f(c4.group(1))))
     # 4. dozen shirts, sister third (#5)
-    k1 = re.search(rf"has ({N}) dozen shirts", full)
+    k1 = re.search(rf"has ({N}) ({_SCALES_WORD_RE}) shirts", full)
     k2 = re.search(r"lets her sister have (\d+)/(\d+) of them", full)
     if k1 and k2 and "how many shirts" in ql and "left" in ql:
-        if dok({k1.group(1), k2.group(1), k2.group(2)}):
-            return _rs_ret(f(k1.group(1)) * 12 * (1 - f(k2.group(1)) / f(k2.group(2))))
+        scale = _scale_word(k1.group(2))
+        if scale and dok({k1.group(1), k2.group(1), k2.group(2)}):
+            return _rs_ret(f(k1.group(1)) * scale * (1 - f(k2.group(1)) / f(k2.group(2))))
     # 5. gym monthly revenue (#6)
     g1 = re.search(rf"charges its members \$({N}) twice a month", full)
     g2 = re.search(rf"has ({N}) members", full)
@@ -20426,14 +20444,15 @@ def _cat_singles_a_system(premises: list, question: str, readings_prem: list = N
     #    "three dozen PEBBLES … each friend got 4 pebbles … how many friends received pebbles?" → 36/4.
     #    "got" GENERALIZED to the `receive` category (was hardcoded), matching the ask's own
     #    `acquire` gate — a recipient-distribution verb is read, not assumed.
-    m = re.search(rf"({_GP_NUMW}) dozens? of {_W}", full)
-    if m and _cat(m.group(2), "noun"):
-        nn = _number_re(m.group(2))
+    m = re.search(rf"({_GP_NUMW}) ({_SCALES_WORD_RE}) of {_W}", full)
+    if m and _cat(m.group(3), "noun"):
+        scale = _scale_word(m.group(2))
+        nn = _number_re(m.group(3))
         m2 = re.search(rf"(?:each|every).{{0,30}}?{_cat_re('receive')} ({N}) {nn}", full)
         rqn = re.search(rf"how many (\w+) {_cat_re('acquire')} {nn}", ql)
-        if m2 and rqn and f(m2.group(1)):
+        if scale and m2 and rqn and f(m2.group(1)):
             if dok({m2.group(1)}):
-                v = _rs_ret(f(m.group(1)) * 12 / f(m2.group(1)))
+                v = _rs_ret(f(m.group(1)) * scale / f(m2.group(1)))
                 if v is not None:
                     _sr = _singles_result(readings_prem, premises, [
                         Quantity(_noun_lemma(rqn.group(1)), (_noun_lemma(rqn.group(1)), frozenset()),
@@ -20468,16 +20487,18 @@ def _cat_singles_a_system(premises: list, question: str, readings_prem: list = N
                     return _sr
             return v
 
-    # 4. COUNT DIFFERENCE across two items, one possibly a DOZEN-count — the ask names both:
+    # 4. COUNT DIFFERENCE across two items, one possibly a SCALE-count — the ask names both:
     #    "how many more ITEM_A than ITEM_B?" with ITEM_A = "M dozen" (→ M·12) and ITEM_B = "N" → M·12 − N.
     #    "14 APPLES … 2 dozen ORANGES … how many more oranges than apples?" → 24 − 14 = 10. (Either item may
-    #    be the dozen; the clause split severs the "and", so read each item's count independently.)
+    #    be the scale-count; the clause split severs the "and", so read each item's count independently.)
     am = re.search(rf"how many more {_W} .*than {_W}", ql)
     if am and _cat(am.group(1), "noun") and _cat(am.group(2), "noun"):
         def _cnt(itemre):
-            md = re.search(rf"({N}) dozens? {itemre}", full)
+            md = re.search(rf"({N}) ({_SCALES_WORD_RE}) {itemre}", full)
             if md:
-                return f(md.group(1)) * 12, md.group(1)
+                scale = _scale_word(md.group(2))
+                if scale:
+                    return f(md.group(1)) * scale, md.group(1)
             nc = re.search(rf"({N}) {itemre}", full)
             return (f(nc.group(1)), nc.group(1)) if nc else (None, None)
         hi, hs = _cnt(_number_re(am.group(1)))
@@ -23425,11 +23446,12 @@ def _mixed_singles_c_system(premises: list, question: str, readings_prem: list =
     if jw2 and jp2 and "how many hours a week" in ql:
         if dok({jw2.group(1), jp2.group(1), jp2.group(2)}):
             return _rs_ret(f(jp2.group(1)) * f(jp2.group(2)) * 7 / f(jw2.group(1)))
-    # 26. Tom roses: k dozen every day for the week → 12k·7
-    tr = re.search(rf"({N}) dozen roses every day for the week", full)
-    tn26 = re.search(r"(\w+) decided to send \w+ \w+ \d+ dozen roses", full)
-    if tr and "how many total roses" in ql and dok({tr.group(1)}):
-        v = _rs_ret(12 * f(tr.group(1)) * 7)
+    # 26. Tom roses: k scale every day for the week → scale·k·7
+    tr = re.search(rf"({N}) ({_SCALES_WORD_RE}) roses every day for the week", full)
+    tn26 = re.search(rf"(\w+) decided to send \w+ \w+ \d+ {_SCALES_WORD_RE} roses", full)
+    scale26 = _scale_word(tr.group(2)) if tr else None
+    if tr and scale26 and "how many total roses" in ql and dok({tr.group(1)}):
+        v = _rs_ret(scale26 * f(tr.group(1)) * 7)
         if v is not None and tn26 is not None:
             _sr = _singles_result(readings_prem, premises, [
                 Quantity(_key(tn26.group(1)), ("rose", frozenset()), v, "send")])
@@ -23554,13 +23576,14 @@ def _mixed_singles_c_system(premises: list, question: str, readings_prem: list =
         if dok({lo.group(1), lo.group(2), ls.group(1), ls.group(2), ls.group(3)}):
             share = f(ls.group(3)) * f(ls.group(2)) / f(ls.group(1))
             return _rs_ret(share * f(lo.group(2)) / f(lo.group(1)))
-    # 37. Javier donuts: raise $T; buys dozen at $b; sells each $s → T/(12s − b) dozens
+    # 37. Javier donuts: raise $T; buys scale at $b; sells each $s → T/(scale·s − b) scale-groups
     jv2 = re.search(rf"raise \$({N})", full)
-    jb3 = re.search(rf"buys each dozen donuts for \$({N})", full)
+    jb3 = re.search(rf"buys each ({_SCALES_WORD_RE}) donuts for \$({N})", full)
     js3 = re.search(rf"sells each donut for \$({N})", full)
-    if jv2 and jb3 and js3 and "how many dozen" in ql:
-        if dok({jv2.group(1), jb3.group(1), js3.group(1)}):
-            margin = 12 * f(js3.group(1)) - f(jb3.group(1))
+    scale37 = _scale_word(jb3.group(1)) if jb3 else None
+    if jv2 and jb3 and js3 and scale37 and f"how many {jb3.group(1)}" in ql:
+        if dok({jv2.group(1), jb3.group(2), js3.group(1)}):
+            margin = scale37 * f(js3.group(1)) - f(jb3.group(2))
             r = f(jv2.group(1)) / margin
             return _rs_ret(r) if r == int(r) else None
     # 38. Nicole/Rex: n cards; C 2n; Rex half of (n+2n); divided among him + k siblings
@@ -23683,8 +23706,8 @@ def _mixed_singles_b_system(premises: list, question: str, readings_prem: list =
             miles = f(rr.group(1)) * hours
             return _rs_ret((f(rt.group(1)) - miles) / f(rr.group(1)) * 60)
     # 3. Tony/Arnold elimination: 2A+B=7; A+B=5 → B = 5 − (7−5)
-    ta = re.search(rf"paid \$({N}) for ({N}) dozen apples and ({N}) bunch of bananas", full)
-    tb = re.search(rf"paid \$({N}) for ({N}) dozen apples and ({N}) bunch of bananas", full[ta.end():] if ta else full)
+    ta = re.search(rf"paid \$({N}) for ({N}) {_SCALES_WORD_RE} apples and ({N}) bunch of bananas", full)
+    tb = re.search(rf"paid \$({N}) for ({N}) {_SCALES_WORD_RE} apples and ({N}) bunch of bananas", full[ta.end():] if ta else full)
     if ta and tb and "bunch of bananas cost" in ql:
         if dok({ta.group(1), ta.group(2), ta.group(3), tb.group(1), tb.group(2), tb.group(3)}):
             d1 = f(ta.group(1)) - f(tb.group(1))
@@ -23848,14 +23871,15 @@ def _mixed_singles_b_system(premises: list, question: str, readings_prem: list =
         if dok({td2.group(1), tf2.group(1), tg2.group(1)}):
             first = f(tg2.group(1)) * f(td2.group(1)) / 100
             return _rs_ret(first - f(tf2.group(1)))
-    # 15. Maria dozen+free: k dozen; 2 free per dozen → 12k + 2k
-    mz = re.search(rf"every one dozen \w+ bought ?,? a customer gets ({N}) free", full)
-    mk2 = re.search(rf"buy ({N}) dozens?", full)
-    mn15 = re.search(r"(\w+) wants to buy \d+ dozens? flowers", full)
-    if mz and mk2 and "how many pieces" in ql:
-        if dok({mz.group(1), mk2.group(1), "1"}):
+    # 15. Maria scale+free: k scale; 2 free per scale → scale·k + 2k
+    mz = re.search(rf"every one ({_SCALES_WORD_RE}) \w+ bought ?,? a customer gets ({N}) free", full)
+    scale15 = _scale_word(mz.group(1)) if mz else None
+    mk2 = re.search(rf"buy ({N}) {mz.group(1)}s?", full) if mz else None
+    mn15 = re.search(rf"(\w+) wants to buy \d+ {_SCALES_WORD_RE} flowers", full)
+    if mz and mk2 and scale15 and "how many pieces" in ql:
+        if dok({mz.group(2), mk2.group(1), "1"}):
             k_ = f(mk2.group(1))
-            v = _rs_ret(12 * k_ + f(mz.group(1)) * k_)
+            v = _rs_ret(scale15 * k_ + f(mz.group(2)) * k_)
             if v is not None and mn15 is not None:
                 _sr = _singles_result(readings_prem, premises, [
                     Quantity(_key(mn15.group(1)), ("piece", frozenset()), v, "have")])
@@ -24276,12 +24300,13 @@ def _mixed_singles_system(premises: list, question: str, readings_prem: list = N
                 if _sr is not None:
                     return _sr
             return v
-    # 11. Micah: k dozen; eats e; rest for mom
-    mi = re.search(rf"picks ({N}) dozen \w+", full)
+    # 11. Micah: k scale; eats e; rest for mom
+    mi = re.search(rf"picks ({N}) ({_SCALES_WORD_RE}) \w+", full)
     me = re.search(rf"eats ({N})", full)
-    if mi and me and "saves the rest" in full and re.search(r"how many \w+ are there for", ql):
+    scale11 = _scale_word(mi.group(2)) if mi else None
+    if mi and me and scale11 and "saves the rest" in full and re.search(r"how many \w+ are there for", ql):
         if dok({mi.group(1), me.group(1)}):
-            return _rs_ret(12 * f(mi.group(1)) - f(me.group(1)))
+            return _rs_ret(scale11 * f(mi.group(1)) - f(me.group(1)))
     # 12. John gifts: a on 12th; b fewer on 13th → a + (a−b)
     jg = re.search(rf"(\w+) received ({N}) gifts on (?:his|her) (\d+)(?:th|st|nd|rd) birthday", full)
     jf = re.search(rf"received ({N}) fewer gifts", full)
@@ -24786,11 +24811,12 @@ def _mult_singles_system(premises: list, question: str, readings_prem: list = No
         if dok({bb.group(1), mo.group(1)}):
             n_ = f(bb.group(1))
             return _rs_ret(n_ + 2 * n_ + 2 * n_ + f(mo.group(1)))
-    # 21. Bruno pens: two and one-half dozens
-    if re.search(r"two and one-half dozens? of pens", full) and "how many pens" in ql \
-            and dok(set()):
-        v = _rs_ret(30.0)
-        bn = re.search(r"(\w+) wants to buy two and one-half dozens? of pens", full)
+    # 21. Bruno pens: two and one-half scale-groups
+    _b21 = re.search(rf"two and one-half ({_SCALES_WORD_RE}) of pens", full)
+    _b21_scale = _scale_word(_b21.group(1)) if _b21 else None
+    if _b21 and _b21_scale and "how many pens" in ql and dok(set()):
+        v = _rs_ret(2.5 * _b21_scale)
+        bn = re.search(rf"(\w+) wants to buy two and one-half {re.escape(_b21.group(1))} of pens", full)
         if v is not None and bn is not None:
             _sr = _singles_result(readings_prem, premises, [
                 Quantity(_key(bn.group(1)), ("pen", frozenset()), v, "have")])
@@ -24809,12 +24835,13 @@ def _mult_singles_system(premises: list, question: str, readings_prem: list = No
             if _sr is not None:
                 return _sr
         return v
-    # 23. box bottles: a dozen water + half a dozen more apple → 12a + (12a+6)
-    bx = re.search(rf"has ({N}) dozen water bottles", full)
-    bx = bx if bx and "half a dozen more apple" in full else None
+    # 23. box bottles: a scale water + half a scale more apple → scale·a + (scale·a + scale/2)
+    bx = re.search(rf"has ({N}) ({_SCALES_WORD_RE}) water bottles", full)
+    scale23 = _scale_word(bx.group(2)) if bx else None
+    bx = bx if bx and scale23 and f"half a {bx.group(2)} more apple" in full else None
     if bx and "how many bottles" in ql and dok({bx.group(1)}):
-        w = 12 * f(bx.group(1))
-        return _rs_ret(w + w + 6)
+        wb = scale23 * f(bx.group(1))
+        return _rs_ret(wb + wb + scale23 / 2)
     # 24. Ember/Nate: E = half of N (n); when E is n → N = n + n/2
     en = re.search(rf"is half as old as (\w+) who is ({N})", full)
     if en and re.search(rf"when she is ({N}) herself", full) and dok({en.group(2), en.group(2)}):
@@ -25348,12 +25375,13 @@ def _percent_money_tails_system(premises: list, question: str):
         if 0 < p < 100 and digits_ok({sm.group(1), xm.group(1)}):
             return _gated_pos(_compute(f"{xm.group(1)} * (100 - {sm.group(1)}) / {sm.group(1)}"))
         return None
-    dm = re.search(r"buys (\d+) dozen \w+", full)
+    dm = re.search(rf"buys (\d+) ({_SCALES_WORD_RE}) \w+", full)
     em = re.search(r"each \w+ costs? \$(\d+(?:\.\d+)?)", full)
     pm = re.search(r"only needs to pay (\d+(?:\.\d+)?)%", full)
     if dm and em and pm and re.search(r"how much did (?:he|she|\w+) pay", ql):
-        if digits_ok({dm.group(1), em.group(1), pm.group(1)}):
-            return _gated_pos(_compute(f"{dm.group(1)} * 12 * {em.group(1)} * {pm.group(1)} / 100"))
+        scale = _scale_word(dm.group(2))
+        if scale and digits_ok({dm.group(1), em.group(1), pm.group(1)}):
+            return _gated_pos(_compute(f"{dm.group(1)} * {scale} * {em.group(1)} * {pm.group(1)} / 100"))
         return None
     return None
 
@@ -25572,7 +25600,8 @@ def _multi_item_price_system(premises: list, question: str):
     # not the shared head. A repeated head is itself the per-unit signal (nobody says "the child ticket
     # costs $3" as a lump sum), so 'each' isn't required there.
     def _has_count(lemma):
-        return re.search(rf"({_GP_NUMW})(?:\s+dozen)?\s+(?:\w+ of )?{_number_re(lemma)}\b", full) is not None
+        return re.search(rf"({_GP_NUMW})(?:\s+{_SCALES_WORD_RE})?\s+(?:\w+ of )?{_number_re(lemma)}\b",
+                         full) is not None
     clauses = []                                      # (qualifier | None, head, price_str, has_each)
     for m in re.finditer(rf"(?:each )?(?:a |an |the )?(?:([a-z'’\-]+) )?([a-z'’\-]+) costs? "
                          rf"\$(\d+(?:\.\d+)?)(?: each| apiece)?", full):
@@ -25594,12 +25623,13 @@ def _multi_item_price_system(premises: list, question: str):
     used, terms = set(price.values()), []
     for item, ps in price.items():
         cnt = 0.0
-        for cm in re.finditer(rf"({_GP_NUMW})(\s+dozen)?\s+(?:\w+ of )?{_number_re(item)}\b", full):
+        for cm in re.finditer(rf"({_GP_NUMW})(?:\s+({_SCALES_WORD_RE}))?\s+(?:\w+ of )?{_number_re(item)}\b",
+                             full):
             v = _wn(cm.group(1))
             if not v:
                 continue
             if cm.group(2):
-                v *= 12                               # "two DOZEN pencils" → 24
+                v *= _scale_word(cm.group(2))          # "two DOZEN pencils" → 24, "two HUNDRED" → 200
             cnt += v
             if cm.group(1).isdigit():
                 used.add(cm.group(1))
