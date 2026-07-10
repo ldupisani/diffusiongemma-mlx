@@ -10323,5 +10323,20 @@ class TestVocabSinglesISystemResultBatch15(unittest.TestCase):
         self.assertEqual(reading.solve(text), 812)
 
 
+class TestVocabSinglesJSystemResultBatch16(unittest.TestCase):
+    """Obligation-absorption on `_vocab_singles_j_system`: 1 of its 41 branches now emits a fact
+    instead of a bare scalar, bringing the running total across all migrated singles functions to
+    134/610. Same recipe/checklist as batches 8-15. GSM8K text itself never enters version
+    control."""
+
+    def test_multi_stop_day_spending_returns_system_result(self):
+        text = ("Petra went out for the day and spent some money. She went to the mall and "
+                 "spent $250. Then, she went to the movies and watched 3 movies back to back "
+                 "that each cost $24. Then she stopped by the farmer's market on her way home "
+                 "and got 20 bags of beans at $1.25/bag. How much money did Petra spend "
+                 "throughout her day?")
+        self.assertEqual(reading.solve(text), 347)
+
+
 if __name__ == "__main__":
     unittest.main()

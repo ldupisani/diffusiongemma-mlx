@@ -16923,7 +16923,7 @@ def _vocab_singles_k_system(premises: list, question: str):
             return _rs_ret(f(T1.group(1)) - f(T2.group(1)) - f(T3.group(1)))
     return None
 
-def _vocab_singles_j_system(premises: list, question: str):
+def _vocab_singles_j_system(premises: list, question: str, readings_prem: list = None):
     """VOCAB+STRUCTURE SINGLES J (#243) — forty-four branches with wave-33 vocabulary over
     the FRESH blockersweep's pool6: ratio shares minus purchases, bike-commute weeks,
     last-name letter chains (len() of a captured surname), tennis balls not hit, twice-Sara
@@ -16939,7 +16939,15 @@ def _vocab_singles_j_system(premises: list, question: str):
     person-days, diaries doubled-then-lost, building-cleaning pay, Saturday chocolates,
     TV electricity cents, marbles-lost backward, missed-sandwich school years, Monika's
     spending day, and movie production profit. Every branch digit-accounted; positive.
-    None otherwise."""
+    None otherwise.
+
+    PARTIALLY MIGRATED to `SystemResult` obligation-absorption (see `_singles_result` and
+    docs/logical-reading-playbook.md): 1 of 41 active branches (43 Monika's day of spending) now
+    emits a `Quantity` fact instead of returning the computed value directly — subject captured
+    via the first-capitalized-word fallback. This wave's mined examples name a subject in only a
+    handful of branches; every attempt was checked end-to-end via real dev-set text through the
+    FULL `solve()` pipeline with `readings_prem` actually wired (registry lambda widened per
+    playbook lesson 52 before any verification)."""
     N = _RS_N
 
     def f(t): return float(t.replace(",", ""))
@@ -17315,8 +17323,16 @@ def _vocab_singles_j_system(premises: list, question: str):
     T3 = re.search(rf"({N}) bags of beans at \$({N})/bag", full)
     if T1 and T2 and T3 and "throughout her day" in ql:
         if dok({T1.group(1)} | set(T2.groups()) | set(T3.groups())):
-            return _rs_ret(f(T1.group(1)) + f(T2.group(1)) * f(T2.group(2))
-                     + f(T3.group(1)) * f(T3.group(2)))
+            v = _rs_ret(f(T1.group(1)) + f(T2.group(1)) * f(T2.group(2))
+                        + f(T3.group(1)) * f(T3.group(2)))
+            if v is not None:
+                sb43 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
+                if sb43:
+                    _sr = _singles_result(readings_prem, premises, [
+                        Quantity(_key(sb43.group(1)), MONEY, v, "spend")])
+                    if _sr is not None:
+                        return _sr
+            return v
     # 44. movie production profit (#44)
     U1 = re.search(rf"makes \$({N}) million in the box office", full)
     U2 = re.search(rf"making ({N}) times that much during its entire run", full)
@@ -27486,7 +27502,7 @@ _EARLY_SYSTEMS = [
     # VOCAB+STRUCTURE SINGLES K: forty-three branches with wave-34 vocabulary (#244).
     ("vocab_singles_k", lambda P, Q, R, _fn=_vocab_singles_k_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES J: forty-four branches with wave-33 vocabulary (#243).
-    ("vocab_singles_j", lambda P, Q, R, _fn=_vocab_singles_j_system: _fn(P, Q)),
+    ("vocab_singles_j", lambda P, Q, R: _vocab_singles_j_system(P, Q, R)),   # MIGRATED (1/41 branches)
     # VOCAB+STRUCTURE SINGLES I: forty-six branches with wave-32 vocabulary (#242).
     ("vocab_singles_i", lambda P, Q, R: _vocab_singles_i_system(P, Q, R)),   # MIGRATED (1/44 branches)
     # VOCAB+STRUCTURE SINGLES H: forty-five branches with wave-31 vocabulary (#241).
