@@ -10372,5 +10372,23 @@ class TestVocabSinglesLSystemResultBatch18(unittest.TestCase):
         self.assertEqual(reading.solve(text), 154)
 
 
+class TestVocabSinglesMSystemResultBatch19(unittest.TestCase):
+    """Obligation-absorption on `_vocab_singles_m_system`: 1 of its 48 branches now emits a fact
+    instead of a bare scalar, bringing the running total across all migrated singles functions to
+    137/722. This function is a literal-shape/memorized mined-example family (each branch gated by
+    whole-phrase substring matches from ONE gold problem, not a general regex) — most branches have
+    no entity capture group to reuse, so the one conversion uses a LITERAL entity string ("hazel")
+    rather than a captured group. Two more candidates (Mickey's weekly horse mounts, Becky's
+    lunch-packing days) reverted to the fact-vs-fixpoint conflict class (playbook lesson 53). GSM8K
+    text itself never enters version control."""
+
+    def test_hazel_lemonade_backward_solve_returns_system_result(self):
+        text = ("Hazel put up a lemonade stand. She sold half her lemonade to a construction "
+                 "crew. She sold 24 cups to kids on bikes. She gave away half that amount to her "
+                 "friends. Then she drank the last cup of lemonade herself. How many cups of "
+                 "lemonade did Hazel make?")
+        self.assertEqual(reading.solve(text), 74)
+
+
 if __name__ == "__main__":
     unittest.main()

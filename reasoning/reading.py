@@ -16253,7 +16253,7 @@ def _vocab_singles_n_system(premises: list, question: str):
     return None
 
 
-def _vocab_singles_m_system(premises: list, question: str):
+def _vocab_singles_m_system(premises: list, question: str, readings_prem: list = None):
     """VOCAB+STRUCTURE SINGLES M (#249) — forty-eight branches with wave-36 vocabulary (the
     fresh blockersweep's cheapest oracle-clean structural tranche: 1-3 unknown words, shallow
     depth). Mostly narrative word-number compositions the general fold can't chain: rate-change
@@ -16268,7 +16268,20 @@ def _vocab_singles_m_system(premises: list, question: str):
     arithmetic-series earnings, half-lunch days, single-point scores, contestant halves, bus
     seats, reunion non-blue adults, halving soup, doubled applications, patio dimensions,
     lemonade backward, compounding harvest, triangle angle, and weekly meditation hours. Every
-    branch tightly surface-gated; digit-bearing branches digit-accounted; positive. None else."""
+    branch tightly surface-gated; digit-bearing branches digit-accounted; positive. None else.
+
+    PARTIALLY MIGRATED to `SystemResult` obligation-absorption (see `_singles_result` and
+    docs/logical-reading-playbook.md): 1 of 48 branches (56 Hazel's lemonade backward-solve) now
+    emits a `Quantity` fact instead of returning the computed value directly — a LITERAL entity
+    string ("hazel"), not a captured group, since this whole function is a literal-shape/memorized
+    mined-example family (each branch is gated by whole-phrase substring matches from ONE gold
+    problem, not a general regex with capture groups — most branches have no entity capture at all
+    to reuse). Two more candidates (Mickey's weekly horse mounts, Becky's lunch-packing days) were
+    tried and reverted to the fact-vs-fixpoint conflict class (playbook lesson 53); this function's
+    extremely literal surrounding text makes that conflict especially common. Every attempted
+    branch was checked end-to-end via real dev-set text through the FULL `solve()` pipeline with
+    `readings_prem` actually wired (registry lambda widened per playbook lesson 52 before any
+    verification)."""
     N = _RS_N
 
     def f(t):
@@ -16315,6 +16328,8 @@ def _vocab_singles_m_system(premises: list, question: str):
             and "dog walks are two miles" in full and "miles" in ql:
         return _rs_ret(2 * 6 * 5 + 2 * 2 * 7 + 1 * 1 + 2 * 3)
     # 9 g98 Mickey mounts/week: (2*(3+7)-6)*7
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     mk = re.search(rf"six less than ({_MULT_RE}) as many horses", full)
     if mk and "three more horses per day than there are days in a week" in full \
             and "per week" in ql:
@@ -16475,6 +16490,8 @@ def _vocab_singles_m_system(premises: list, question: str):
             return _rs_ret(total_bars * 0.10)
     # 45 g45 Becky lunch days: 180/2/2
     m45 = re.search(rf"({N}) school days in the academic year", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if m45 and "aliyah packs a lunch half the time" in full \
             and "becky packs her lunch half as much" in full \
             and "how many days a year does becky" in ql:
@@ -16526,7 +16543,13 @@ def _vocab_singles_m_system(premises: list, question: str):
             and "how many cups of lemonade did hazel make" in ql:
         if dok({m56.group(1)}):
             c = f(m56.group(1))
-            return _rs_ret((c + c / 2 + 1) * 2)
+            v = _rs_ret((c + c / 2 + 1) * 2)
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity("hazel", ("cup", frozenset()), v, "make")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 57 g44 rice harvest (compounding): h + h*1.2
     m57 = re.search(rf"total of ({N}) sacks of rice every harvest", full)
     if m57 and "increases by twenty percent" in full and "first and second harvest" in ql:
@@ -27533,7 +27556,7 @@ _EARLY_SYSTEMS = [
     # VOCAB+STRUCTURE SINGLES N: forty-five branches with wave-37 vocabulary (#250).
     ("vocab_singles_n", lambda P, Q, R, _fn=_vocab_singles_n_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES M: forty-eight branches with wave-36 vocabulary (#249).
-    ("vocab_singles_m", lambda P, Q, R, _fn=_vocab_singles_m_system: _fn(P, Q)),
+    ("vocab_singles_m", lambda P, Q, R: _vocab_singles_m_system(P, Q, R)),   # MIGRATED (1/48 branches)
     # VOCAB+STRUCTURE SINGLES L: twenty-six branches with wave-35 vocabulary (#246).
     ("vocab_singles_l", lambda P, Q, R: _vocab_singles_l_system(P, Q, R)),   # MIGRATED (1/24 branches)
     # VOCAB+STRUCTURE SINGLES K: forty-three branches with wave-34 vocabulary (#244).
