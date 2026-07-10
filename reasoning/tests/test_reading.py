@@ -10211,5 +10211,36 @@ class TestVocabSinglesDSystemResultBatch10(unittest.TestCase):
         self.assertEqual(reading.solve(text), 6)
 
 
+class TestVocabSinglesESystemResultBatch11(unittest.TestCase):
+    """Obligation-absorption on `_vocab_singles_e_system`: 3 of its 42 branches now emit fact(s)
+    instead of a bare scalar, bringing the running total across all migrated singles functions to
+    126/398. Same recipe as batches 8-10. This function's mined examples name a subject far LESS
+    often than earlier ones (most branches match bare "he"/"she" with no captured name at all, so
+    many candidates weren't even attemptable this way); of the 7 that were attempted, 4 hit the
+    fact-vs-fixpoint conflict class (playbook lesson 53) and one more (annual salary) declines
+    because its ask is imperative ("determine her annual salary"), which `answer()` declines by
+    design. All text below is paraphrased from the mined dev-set shapes — GSM8K text itself never
+    enters version control."""
+
+    def test_magazine_and_pencil_with_coupon_returns_system_result(self):
+        text = ("Marcus buys a magazine costing $0.85 and a pencil costing $0.50. He pays with "
+                 "a coupon that gives him $0.35 off. How much does he spend?")
+        self.assertEqual(reading.solve(text), 1)
+
+    def test_reconstructed_starting_money_returns_system_result(self):
+        text = ("Priya is buying holiday presents for her family. She starts her shopping with "
+                 "a certain amount of money. She buys 2 toy cars for $11 each for her sons. She "
+                 "buys a scarf for $10 for her mother. Then she buys a beanie for $14 for her "
+                 "brother. If she has $7 remaining after purchasing the beanie, how much money "
+                 "did she start with?")
+        self.assertEqual(reading.solve(text), 53)
+
+    def test_dinner_calorie_remainder_returns_system_result(self):
+        text = ("Naomi’s doctor instructed her to eat a 2,200 calorie a day diet. For "
+                 "breakfast, she ate 353 calories. For lunch, she had 885. She had an afternoon "
+                 "snack of 130 calories. How many calories does she have left for dinner?")
+        self.assertEqual(reading.solve(text), 832)
+
+
 if __name__ == "__main__":
     unittest.main()

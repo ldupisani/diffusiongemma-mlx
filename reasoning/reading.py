@@ -18752,7 +18752,7 @@ def _vocab_singles_f_system(premises: list, question: str):
             return _rs_ret((f(ar.group(1)) + f(as_.group(1)) + f(at.group(1))) * 2)
     return None
 
-def _vocab_singles_e_system(premises: list, question: str):
+def _vocab_singles_e_system(premises: list, question: str, readings_prem: list = None):
     """VOCAB+STRUCTURE SINGLES E (#236) — forty-three branches with wave-26 vocabulary:
     take-home pay, jeans/tees revenue, savings-target weeks, chained word-fraction skirts,
     compound credit-card interest, three-tier marks averages, century marbles, ebook readers,
@@ -18765,7 +18765,21 @@ def _vocab_singles_e_system(premises: list, question: str):
     percent-of-start balances, calorie-deficit days, bicycle journey minutes, weekly crab
     revenue, rose-bush percent picks, road-trip water bottles, dinner calories, baked-goods
     revenue, pet leggings, and percent-remainder bunnies. Every branch digit-accounted;
-    positive. None otherwise."""
+    positive. None otherwise.
+
+    PARTIALLY MIGRATED to `SystemResult` obligation-absorption (see `_singles_result` and
+    docs/logical-reading-playbook.md): 3 of 42 branches (13 magazine+pencil purchase, 32
+    reconstructed starting money, 40 dinner-calorie remainder) now emit a `Quantity` fact instead
+    of returning the computed value directly — subject captured via the first-capitalized-word
+    fallback. This function's mined examples name a subject far LESS often than earlier functions
+    (most branches use bare "he"/"she" with no name in the matched premises at all, so many
+    candidates weren't even attemptable via this mechanism), and — as with
+    `_vocab_singles_b/c/d_system` — most that WERE attempted (4 of 7) hit the fact-vs-fixpoint
+    conflict class (playbook lesson 53) and were reverted with an inline note; one (annual salary)
+    declines because its ask is imperative ("determine her annual salary"), which `answer()`
+    declines by design regardless of context. Every attempted branch was checked end-to-end via
+    real dev-set text through the FULL `solve()` pipeline with `readings_prem` actually wired
+    (registry lambda widened per playbook lesson 52 before any verification)."""
     N = _RS_N
 
     def f(t):
@@ -18796,6 +18810,8 @@ def _vocab_singles_e_system(premises: list, question: str):
     v1 = re.search(rf"collected \$({N}) in her piggy bank", full)
     v2 = re.search(rf"put \$({N}) in it each week", full)
     v3 = re.search(rf"costs? \$({N})", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if v1 and v2 and v3 and "how many weeks" in ql:
         if dok({v1.group(1), v2.group(1), v3.group(1)}):
             return _rs_ret((f(v3.group(1)) - f(v1.group(1))) / f(v2.group(1)))
@@ -18876,7 +18892,15 @@ def _vocab_singles_e_system(premises: list, question: str):
     d2 = re.search(rf"coupon that gives him \$({N}) off", full)
     if d1 and d1b and d2 and "how much does he spend" in ql:
         if dok({d1.group(1), d1b.group(1), d2.group(1)}):
-            return _rs_ret(f(d1.group(1)) + f(d1b.group(1)) - f(d2.group(1)))
+            v = _rs_ret(f(d1.group(1)) + f(d1b.group(1)) - f(d2.group(1)))
+            if v is not None:
+                sb13 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
+                if sb13:
+                    _sr = _singles_result(readings_prem, premises, [
+                        Quantity(_key(sb13.group(1)), MONEY, v, "spend")])
+                    if _sr is not None:
+                        return _sr
+            return v
     # 14. machines for a target rate
     f1 = re.search(rf"({N}) machines in a factory make ({N}) cell phones each minute", full)
     f2 = re.search(rf"make ({N}) cell phones a minute", ql)
@@ -18911,6 +18935,9 @@ def _vocab_singles_e_system(premises: list, question: str):
     u1 = re.search(rf"earns \$({N}) an hour", full)
     u2 = re.search(rf"works ({N}) hours a day", full)
     u3 = re.search(rf"works ({N}) days a month", full)
+    #     NOT converted to SystemResult (tried — the ask is imperative ("determine her annual
+    #     salary"), which `answer()` declines by design regardless of context; playbook lesson 53
+    #     territory, imperative-ask flavor).
     if u1 and u2 and u3 and "annual salary" in ql:
         if dok({u1.group(1), u2.group(1), u3.group(1)}):
             return _rs_ret(f(u1.group(1)) * f(u2.group(1)) * f(u3.group(1)) * 12)
@@ -19024,12 +19051,22 @@ def _vocab_singles_e_system(premises: list, question: str):
     if sc1 and sc2 and sc3 and sc4 and "start with" in ql and w(sc1.group(1)) is not None:
         if dok({g for g in (sc1.group(1), sc1.group(2), sc2.group(1), sc3.group(1), sc4.group(1))
                 if g[0].isdigit()}):
-            return _rs_ret(w(sc1.group(1)) * f(sc1.group(2)) + f(sc2.group(1)) + f(sc3.group(1))
-                     + f(sc4.group(1)))
+            v = _rs_ret(w(sc1.group(1)) * f(sc1.group(2)) + f(sc2.group(1)) + f(sc3.group(1))
+                        + f(sc4.group(1)))
+            if v is not None:
+                sb32 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
+                if sb32:
+                    _sr = _singles_result(readings_prem, premises, [
+                        Quantity(_key(sb32.group(1)), MONEY, v, "start")])
+                    if _sr is not None:
+                        return _sr
+            return v
     # 33. years to reduce a collection
     op1 = re.search(rf"has ({N}) cars", full)
     op2 = re.search(rf"gives away per year is ({N})", full)
     op3 = re.search(rf"reduce her car collection to ({N})", ql)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if op1 and op2 and op3 and "how many years" in ql:
         if dok({op1.group(1), op2.group(1), op3.group(1)}):
             return _rs_ret((f(op1.group(1)) - f(op3.group(1))) / f(op2.group(1)))
@@ -19063,6 +19100,8 @@ def _vocab_singles_e_system(premises: list, question: str):
     cb1 = re.search(rf"has ({N}) crab buckets", full)
     cb2 = re.search(rf"bucket gets ({N}) crabs", full)
     cb3 = re.search(rf"for \$({N}) each", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if cb1 and cb2 and cb3 and "every day" in full and "per week" in ql:
         if dok({cb1.group(1), cb2.group(1), cb3.group(1)}):
             return _rs_ret(f(cb1.group(1)) * f(cb2.group(1)) * f(cb3.group(1)) * 7)
@@ -19098,7 +19137,15 @@ def _vocab_singles_e_system(premises: list, question: str):
     di4 = re.search(rf"snack of ({N}) calories", full)
     if di1 and di2 and di3 and di4 and "left for dinner" in ql:
         if dok({di1.group(1), di2.group(1), di3.group(1), di4.group(1)}):
-            return _rs_ret(f(di1.group(1)) - f(di2.group(1)) - f(di3.group(1)) - f(di4.group(1)))
+            v = _rs_ret(f(di1.group(1)) - f(di2.group(1)) - f(di3.group(1)) - f(di4.group(1)))
+            if v is not None:
+                sb40 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
+                if sb40:
+                    _sr = _singles_result(readings_prem, premises, [
+                        Quantity(_key(sb40.group(1)), ("calorie", frozenset()), v, "have")])
+                    if _sr is not None:
+                        return _sr
+            return v
     # 41. baked-goods revenue after nibbling
     ky1 = re.search(rf"bakes ({N}) cookies and ({N}) brownies", full)
     ky2 = re.search(rf"eats ({N}) cookies and ({N}) brownies", full)
@@ -27330,7 +27377,7 @@ _EARLY_SYSTEMS = [
     ("vocab_singles_g", lambda P, Q, R, _fn=_vocab_singles_g_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES F: forty-two branches with wave-29 vocabulary (#239).
     ("vocab_singles_f", lambda P, Q, R, _fn=_vocab_singles_f_system: _fn(P, Q)),
-    ("vocab_singles_e", lambda P, Q, R, _fn=_vocab_singles_e_system: _fn(P, Q)),
+    ("vocab_singles_e", lambda P, Q, R: _vocab_singles_e_system(P, Q, R)),   # MIGRATED (3/42 branches)
     ("vocab_singles_d", lambda P, Q, R: _vocab_singles_d_system(P, Q, R)),   # MIGRATED (4/36 branches)
     # VOCAB+STRUCTURE SINGLES C: thirty-nine branches with wave-24 vocabulary (#234).
     ("vocab_singles_c", lambda P, Q, R: _vocab_singles_c_system(P, Q, R)),   # MIGRATED (7/37 branches)
