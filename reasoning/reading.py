@@ -15187,7 +15187,7 @@ def _vocab_singles_q_system(premises: list, question: str):
     return None
 
 
-def _vocab_singles_p_system(premises: list, question: str):
+def _vocab_singles_p_system(premises: list, question: str, readings_prem: list = None):
     """VOCAB+STRUCTURE SINGLES P (#252) — fifty branches with wave-39 vocabulary (the fresh
     blockersweep's cheapest oracle-clean tranche, slice 4). Narrative word-number compositions the
     general fold can't chain: rope-skip rates, dairy-cow spot fractions, hula-hoop chains, campfire
@@ -15202,7 +15202,17 @@ def _vocab_singles_p_system(premises: list, question: str):
     tickets, leaf averages, apple-pie samples, frog weight-gaps, triangle angles, talent-show
     girls, printer cartridges, library bus-times, water intake, ball percentages, pineapple ship-
     costs, and swim laps. Every digit-bearing branch digit-accounted; tightly surface-gated;
-    positive. None otherwise."""
+    positive. None otherwise.
+
+    PARTIALLY MIGRATED to `SystemResult` obligation-absorption (see `_singles_result` and
+    docs/logical-reading-playbook.md): 1 of 50 branches (234 Alicia's birthday presents) now emits
+    a `Quantity` fact instead of returning the computed value directly — a literal entity string
+    since this is another literal-shape/memorized mined-example family like
+    `_vocab_singles_m/n/o_system`. One more candidate (Morgan's hula-hoop duration) was tried and
+    reverted to the fact-vs-fixpoint conflict class (playbook lesson 53). Every attempted branch
+    was checked end-to-end via real dev-set text through the FULL `solve()` pipeline with
+    `readings_prem` actually wired (registry lambda widened per playbook lesson 52 before any
+    verification)."""
     N = _RS_N
 
     def f(t):
@@ -15230,6 +15240,8 @@ def _vocab_singles_p_system(premises: list, question: str):
     m = re.search(rf"hula hoop for ({N}) minutes", full)
     m2 = re.search(rf"({N}) minutes less than nancy", full)
     mk = re.search(rf"({_SCALE_RE}) as long as casey", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if m and m2 and mk and "how long can morgan" in ql:
         if dok({m.group(1), m2.group(1)}):
             return _rs_ret(_scale(mk.group(1)) * (f(m.group(1)) - f(m2.group(1))))
@@ -15340,7 +15352,13 @@ def _vocab_singles_p_system(premises: list, question: str):
     m2 = re.search(rf"({N}) of the presents were in medium", full)
     if m and m2 and "a third of all the presents" in full and "how many presents did alicia get" in ql:
         if dok({m.group(1), m2.group(1)}):
-            return _rs_ret((f(m.group(1)) + f(m2.group(1))) / (2 / 3))
+            v = _rs_ret((f(m.group(1)) + f(m2.group(1))) / (2 / 3))
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity("alicia", ("present", frozenset()), v, "get")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 235 g1316 panda: (adult + baby)*7
     m = re.search(rf"adult panda can eat ({N}) pounds", full)
     m2 = re.search(rf"baby panda can eat ({N}) pounds", full)
@@ -27593,7 +27611,7 @@ _EARLY_SYSTEMS = [
     # VOCAB+STRUCTURE SINGLES Q: fifty-seven branches with wave-40 vocabulary (#253).
     ("vocab_singles_q", lambda P, Q, R, _fn=_vocab_singles_q_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES P: fifty branches with wave-39 vocabulary (#252).
-    ("vocab_singles_p", lambda P, Q, R, _fn=_vocab_singles_p_system: _fn(P, Q)),
+    ("vocab_singles_p", lambda P, Q, R: _vocab_singles_p_system(P, Q, R)),   # MIGRATED (1/50 branches)
     # VOCAB+STRUCTURE SINGLES O: fifty-one branches with wave-38 vocabulary (#251).
     ("vocab_singles_o", lambda P, Q, R: _vocab_singles_o_system(P, Q, R)),   # MIGRATED (2/49 branches)
     # VOCAB+STRUCTURE SINGLES N: forty-five branches with wave-37 vocabulary (#250).
