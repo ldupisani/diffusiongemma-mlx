@@ -16527,7 +16527,7 @@ def _vocab_singles_m_system(premises: list, question: str):
     return None
 
 
-def _vocab_singles_k_system(premises: list, question: str):
+def _vocab_singles_k_system(premises: list, question: str, readings_prem: list = None):
     """VOCAB+STRUCTURE SINGLES K (#244) — forty-three branches with wave-34 vocabulary
     (pool6 tranche 2): sales-quota remainders, sick+vacation hours, taxed wardrobes with a
     jacket discount, musical family tickets, triangle third sides, average-gated weekly pay,
@@ -16541,7 +16541,17 @@ def _vocab_singles_k_system(premises: list, question: str):
     notepad pages, in-game remainders, camp kids from the afternoon, tadpoles kept,
     trick-or-treat leftovers, school-supply change, popsicle-stick gaps, combined snake
     lengths, seashells after a quarter-give, and jewelry savings. Every branch
-    digit-accounted; positive. None otherwise."""
+    digit-accounted; positive. None otherwise.
+
+    PARTIALLY MIGRATED to `SystemResult` obligation-absorption (see `_singles_result` and
+    docs/logical-reading-playbook.md): 1 of 40 active branches (42 seashells after Leo's quarter-give) now
+    emits a `Quantity` fact instead of returning the computed value directly — self-referential
+    entity ("they") since the total spans three named collectors, not one owner. Two more
+    candidates (combined snake lengths, full parking spots) were tried and reverted to the
+    fact-vs-fixpoint conflict class (playbook lesson 53). This wave's mined examples name a
+    subject in only a handful of branches; every attempt was checked end-to-end via real dev-set
+    text through the FULL `solve()` pipeline with `readings_prem` actually wired (registry lambda
+    widened per playbook lesson 52 before any verification)."""
     N = _RS_N
 
     def f(t): return float(t.replace(",", ""))
@@ -16903,6 +16913,8 @@ def _vocab_singles_k_system(premises: list, question: str):
     # 41. combined snake length (#42)
     R1 = re.search(rf"snake is ({N}) inches longer than", full)
     R2 = re.search(rf"combined length of ({N}) inches", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if R1 and R2 and re.search(r"how long is \w+'s snake", ql):
         if dok({R1.group(1), R2.group(1)}):
             return _rs_ret((f(R2.group(1)) + f(R1.group(1))) / 2)
@@ -16913,7 +16925,13 @@ def _vocab_singles_k_system(premises: list, question: str):
     if len(S1) == 2 and S2 and S3 and "in total now" in ql:
         if dok(set(S1) | {S2.group(1)}):
             leo = f(S2.group(1)) - f(S1[0]) - f(S1[1])
-            return _rs_ret(f(S2.group(1)) - leo / 4)
+            v = _rs_ret(f(S2.group(1)) - leo / 4)
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity("they", ("seashell", frozenset()), v, "have")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 43. jewelry savings left (#44)
     T1 = re.search(rf"saved \$({N}) to spend on jewelry", full)
     T2 = re.search(rf"earrings that cost \$({N})", full)
@@ -27500,7 +27518,7 @@ _EARLY_SYSTEMS = [
     # VOCAB+STRUCTURE SINGLES L: twenty-six branches with wave-35 vocabulary (#246).
     ("vocab_singles_l", lambda P, Q, R, _fn=_vocab_singles_l_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES K: forty-three branches with wave-34 vocabulary (#244).
-    ("vocab_singles_k", lambda P, Q, R, _fn=_vocab_singles_k_system: _fn(P, Q)),
+    ("vocab_singles_k", lambda P, Q, R: _vocab_singles_k_system(P, Q, R)),   # MIGRATED (1/40 branches)
     # VOCAB+STRUCTURE SINGLES J: forty-four branches with wave-33 vocabulary (#243).
     ("vocab_singles_j", lambda P, Q, R: _vocab_singles_j_system(P, Q, R)),   # MIGRATED (1/41 branches)
     # VOCAB+STRUCTURE SINGLES I: forty-six branches with wave-32 vocabulary (#242).

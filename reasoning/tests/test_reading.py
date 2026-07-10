@@ -10338,5 +10338,21 @@ class TestVocabSinglesJSystemResultBatch16(unittest.TestCase):
         self.assertEqual(reading.solve(text), 347)
 
 
+class TestVocabSinglesKSystemResultBatch17(unittest.TestCase):
+    """Obligation-absorption on `_vocab_singles_k_system`: 1 of its 40 branches now emits a fact
+    instead of a bare scalar, bringing the running total across all migrated singles functions to
+    135/650. Self-referential entity ("they") since the total spans three named collectors, not
+    one owner. Two more candidates (combined snake lengths, full parking spots) reverted to the
+    fact-vs-fixpoint conflict class (playbook lesson 53). Same recipe/checklist as batches 8-16.
+    GSM8K text itself never enters version control."""
+
+    def test_seashells_after_quarter_give_returns_system_result(self):
+        text = ("Wren, Oscar and Vance collected some seashells from the beach. Wren collected "
+                 "11, Paul 24. If they initially collected 59 seashells in total and Vance gave "
+                 "a quarter of his collection to a younger kid they met, how many do they have "
+                 "in total now?")
+        self.assertEqual(reading.solve(text), 53)
+
+
 if __name__ == "__main__":
     unittest.main()
