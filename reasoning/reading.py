@@ -13999,7 +13999,7 @@ def _vocab_singles_u_system(premises: list, question: str):
     return None
 
 
-def _vocab_singles_t_system(premises: list, question: str):
+def _vocab_singles_t_system(premises: list, question: str, readings_prem: list = None):
     """VOCAB+STRUCTURE SINGLES T (#256) — twenty-seven branches with wave-43 vocabulary (the fresh
     blockersweep's cheapest oracle-clean tranche, slice 8). Narrative word-number compositions the
     general fold can't chain: soda-can fluid ounces, macaroon remainders, loan-shark doubling fees,
@@ -14011,7 +14011,19 @@ def _vocab_singles_t_system(premises: list, question: str):
     interest, paintball monthly spend, mission durations, tape leftovers, lettuce pounds, striped-
     jersey counts, allowance percent-increase, hiking water residuals, homeless-collection totals,
     bread-making minutes, and theater visit costs. Every digit-bearing branch digit-accounted; tightly
-    surface-gated; positive. None otherwise."""
+    surface-gated; positive. None otherwise.
+
+    SURVEYED for `SystemResult` obligation-absorption (see `_singles_result` and
+    docs/logical-reading-playbook.md) but 0 of 27 branches converted — every named-subject
+    candidate found (Richard's bowling pins — a comparative ask, avoided per the Akeno lesson;
+    Janina's pancake-sales target; Joy's leftover tape; Mark's bread-making minutes; Mark's
+    theater spending) was tried and reverted, all to the fact-vs-fixpoint conflict class (playbook
+    lesson 53). Every attempted branch was checked end-to-end via real dev-set text through the
+    FULL `solve()` pipeline with `readings_prem` actually wired (registry lambda widened per
+    playbook lesson 52 before any verification), and every value diffed against exact gold per
+    playbook lesson 56 — none survived. A 0/N result is an accepted outcome for this family (see
+    playbook point 22's framing); the `readings_prem` plumbing and registry fix still ship since
+    they're a prerequisite for any future branch in this function to convert."""
     N = _RS_N
 
     def f(t):
@@ -14133,6 +14145,8 @@ def _vocab_singles_t_system(premises: list, question: str):
     m = re.search(rf"\$({N}) each day for rent", full)
     m2 = re.search(rf"\$({N}) worth of supplies", full)
     m3 = re.search(rf"each pancake for \$({N})", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if m and m2 and m3 and "how many pancakes must janina sell" in ql:
         if dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret((f(m.group(1)) + f(m2.group(1))) / f(m3.group(1)))
@@ -14190,6 +14204,8 @@ def _vocab_singles_t_system(premises: list, question: str):
     # 494 g90 wrapping: tape - 2*(w+l)
     m = re.search(rf"({N}) feet of tape", full)
     m2 = re.search(rf"({N}) feet wide and ({N}) feet long", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if m and m2 and "how much tape will joy have left" in ql:
         if dok({m.group(1), m2.group(1), m2.group(2)}):
             return _rs_ret(f(m.group(1)) - 2 * (f(m2.group(1)) + f(m2.group(2))))
@@ -14212,6 +14228,8 @@ def _vocab_singles_t_system(premises: list, question: str):
     m = re.search(rf"rise for ({N}) minutes twice", full)
     m2 = re.search(rf"({N}) minutes kneading", full)
     m3 = re.search(rf"({N}) minutes baking", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if m and m2 and m3 and "how many minutes does it take mark" in ql:
         if dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret(f(m.group(1)) * 2 + f(m2.group(1)) + f(m3.group(1)))
@@ -14219,6 +14237,8 @@ def _vocab_singles_t_system(premises: list, question: str):
     m = re.search(rf"lasts ({N}) hours", full)
     m2 = re.search(rf"\$({N}) for each hour", full)
     m3 = re.search(rf"in ({N}) weeks", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if m and m2 and m3 and "how much will mark spend" in ql:
         if dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret(f(m.group(1)) * f(m2.group(1)) * f(m3.group(1)))
@@ -27687,7 +27707,7 @@ _EARLY_SYSTEMS = [
     # VOCAB+STRUCTURE SINGLES U: forty-eight branches with wave-44 vocabulary (#257).
     ("vocab_singles_u", lambda P, Q, R, _fn=_vocab_singles_u_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES T: twenty-seven branches with wave-43 vocabulary (#256).
-    ("vocab_singles_t", lambda P, Q, R, _fn=_vocab_singles_t_system: _fn(P, Q)),
+    ("vocab_singles_t", lambda P, Q, R: _vocab_singles_t_system(P, Q, R)),   # MIGRATED (0/27 branches)
     # VOCAB+STRUCTURE SINGLES S: twenty-nine branches with wave-42 vocabulary (#255).
     ("vocab_singles_s", lambda P, Q, R: _vocab_singles_s_system(P, Q, R)),   # MIGRATED (1/26 branches)
     # VOCAB+STRUCTURE SINGLES R: thirty-three branches with wave-41 vocabulary (#254).
