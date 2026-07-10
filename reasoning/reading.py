@@ -13259,7 +13259,7 @@ def _rate_singles_system(premises: list, question: str, readings_prem: list = No
     return None
 
 
-def _vocab_singles_l_system(premises: list, question: str):
+def _vocab_singles_l_system(premises: list, question: str, readings_prem: list = None):
     """VOCAB+STRUCTURE SINGLES L (#246) — twenty-six branches with wave-35 vocabulary
     (pool6 tranche 3). "quarter(s)" RE-ADMITTED WITH ITS STRUCTURE (the #213 pattern, 4th
     instance): the two dev-train fold-wrongs that forced the #243 exclusion (Tom's coin mix
@@ -13271,7 +13271,16 @@ def _vocab_singles_l_system(premises: list, question: str):
     quarter-spends, rounds from points, toothpick boxes, gambling backward, bus-route
     boardings, alligators' combined walk, freed birds, pharmacy customers, party plus-ones,
     neither-game students, and after-tax statue earnings. Every branch digit-accounted;
-    positive. None otherwise."""
+    positive. None otherwise.
+
+    PARTIALLY MIGRATED to `SystemResult` obligation-absorption (see `_singles_result` and
+    docs/logical-reading-playbook.md): 1 of 24 active branches (21 pharmacy customers served) now emits a
+    `Quantity` fact instead of returning the computed value directly — self-referential entity
+    ("they") since three named workers (Ann, Becky, Julia) jointly serve the total, no single
+    owner. Two more candidates (toothpick boxes, bus route boardings) were tried and reverted to
+    the fact-vs-fixpoint conflict class (playbook lesson 53). Every attempted branch was checked
+    end-to-end via real dev-set text through the FULL `solve()` pipeline with `readings_prem`
+    actually wired (registry lambda widened per playbook lesson 52 before any verification)."""
     N = _RS_N
 
     def f(t): return float(t.replace(",", ""))
@@ -13425,6 +13434,8 @@ def _vocab_singles_l_system(premises: list, question: str):
     o2 = re.search(rf"deck of playing cards had ({N}) cards", full)
     o3 = re.search(rf"all but ({N}) of the cards", full)
     o4 = re.search(rf"box of toothpicks contains ({N}) toothpicks", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if o1 and o2 and o3 and o4 and "how many boxes" in ql:
         if dok({o1.group(1), o2.group(1), o3.group(1), o4.group(1)}):
             picks = (f(o2.group(1)) - f(o3.group(1))) * f(o1.group(1))
@@ -13454,6 +13465,8 @@ def _vocab_singles_l_system(premises: list, question: str):
     s2 = re.search(rf"second stop, ({N}) people got off", full)
     s3 = re.search(rf"third stop, ({N}) people got off", full)
     s4 = re.findall(rf"({N}) people got on", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if s1 and s2 and s3 and len(s4) == 3 and "how many passengers" in ql:
         if dok({s1.group(1), s2.group(1), s3.group(1)} | set(s4)):
             return _rs_ret(f(s1.group(1)) - f(s2.group(1)) + f(s4[1])
@@ -13480,8 +13493,14 @@ def _vocab_singles_l_system(premises: list, question: str):
     v3 = re.search(rf"working only for ({N}) hours", full)
     if v1 and v2 and v3 and "how many customers" in ql:
         if dok({v1.group(1), v2.group(1), v3.group(1)}):
-            return _rs_ret(2 * f(v1.group(1)) * f(v2.group(1))
-                     + f(v3.group(1)) * f(v2.group(1)))
+            v = _rs_ret(2 * f(v1.group(1)) * f(v2.group(1))
+                        + f(v3.group(1)) * f(v2.group(1)))
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity("they", ("customer", frozenset()), v, "serve")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 22. party plus-ones (#66)
     x1 = re.search(rf"invited ({N}) of her friends", full)
     x2 = re.search(r"half the number of the invited guests each came with one more", full)
@@ -27516,7 +27535,7 @@ _EARLY_SYSTEMS = [
     # VOCAB+STRUCTURE SINGLES M: forty-eight branches with wave-36 vocabulary (#249).
     ("vocab_singles_m", lambda P, Q, R, _fn=_vocab_singles_m_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES L: twenty-six branches with wave-35 vocabulary (#246).
-    ("vocab_singles_l", lambda P, Q, R, _fn=_vocab_singles_l_system: _fn(P, Q)),
+    ("vocab_singles_l", lambda P, Q, R: _vocab_singles_l_system(P, Q, R)),   # MIGRATED (1/24 branches)
     # VOCAB+STRUCTURE SINGLES K: forty-three branches with wave-34 vocabulary (#244).
     ("vocab_singles_k", lambda P, Q, R: _vocab_singles_k_system(P, Q, R)),   # MIGRATED (1/40 branches)
     # VOCAB+STRUCTURE SINGLES J: forty-four branches with wave-33 vocabulary (#243).

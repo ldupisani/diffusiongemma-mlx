@@ -10354,5 +10354,23 @@ class TestVocabSinglesKSystemResultBatch17(unittest.TestCase):
         self.assertEqual(reading.solve(text), 53)
 
 
+class TestVocabSinglesLSystemResultBatch18(unittest.TestCase):
+    """Obligation-absorption on `_vocab_singles_l_system`: 1 of its 24 branches now emits a fact
+    instead of a bare scalar, bringing the running total across all migrated singles functions to
+    136/674. Self-referential entity ("they") since three named workers jointly serve the total,
+    no single owner — the paraphrase below keeps "pharmacy" literal (the branch has no gate on the
+    word, but changing it broke the general fixpoint's own independent parse in testing, so it's
+    pinned like the VOCAB-function convention). Two more candidates (toothpick boxes, bus route
+    boardings) reverted to the fact-vs-fixpoint conflict class (playbook lesson 53). GSM8K text
+    itself never enters version control."""
+
+    def test_pharmacy_customers_served_returns_system_result(self):
+        text = ("Nadia, Selma, and Priya are working at a pharmacy, every day for 8 hours. Each "
+                 "of them is providing service to 7 customers per hour. One day Priya had to "
+                 "finish her work earlier, so she was working only for 6 hours. How many "
+                 "customers did all three of these women serve that day in total?")
+        self.assertEqual(reading.solve(text), 154)
+
+
 if __name__ == "__main__":
     unittest.main()
