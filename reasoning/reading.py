@@ -17695,7 +17695,7 @@ def _vocab_singles_i_system(premises: list, question: str):
             return _rs_ret((f(W1.group(1)) - f(W3.group(1))) / f(W2.group(1)))
     return None
 
-def _vocab_singles_h_system(premises: list, question: str):
+def _vocab_singles_h_system(premises: list, question: str, readings_prem: list = None):
     """VOCAB+STRUCTURE SINGLES H (#241) — forty-five branches with wave-31 vocabulary:
     released-fish holdings, proceeds-versus car prices, eight-hour two-speed trips,
     arithmetic-series pills, exchanged-bill differences, merry-go-round endurance chains,
@@ -17710,7 +17710,18 @@ def _vocab_singles_h_system(premises: list, question: str):
     fractions, absent-boys registers, bus-length overhangs, candy-bowl portions, lego tower
     levels, two-park elephants, tiered knife sharpening, magician marble remainders, lilac
     paint mixes, roommate-split parking tickets, waitress wage+tips, bike-clamp giveaways,
-    and expired-pint returns. Every branch digit-accounted; positive. None otherwise."""
+    and expired-pint returns. Every branch digit-accounted; positive. None otherwise.
+
+    PARTIALLY MIGRATED to `SystemResult` obligation-absorption (see `_singles_result` and
+    docs/logical-reading-playbook.md): 1 of 45 branches (16 smoothies+cakes revenue) now emits a
+    `Quantity` fact instead of returning the computed value directly — subject captured via the
+    first-capitalized-word fallback. This function's mined examples have the LOWEST attempt yield
+    so far: of 6 candidates tried (church female adults, caramel-cookie calories, lego tower
+    levels, elephants in two parks, band-member concert share, arcade token minutes), 5 hit the
+    fact-vs-fixpoint conflict class (playbook lesson 53) or an imperative ask and were reverted
+    with an inline note. Every attempted branch was checked end-to-end via real dev-set text
+    through the FULL `solve()` pipeline with `readings_prem` actually wired (registry lambda
+    widened per playbook lesson 52 before any verification)."""
     N = _RS_N
 
     def f(t): return float(t.replace(",", ""))
@@ -17830,6 +17841,8 @@ def _vocab_singles_h_system(premises: list, question: str):
     p2 = re.search(rf"band gets ({N})% of the ticket price", full)
     p3 = re.search(rf"each ticket costs \$({N})", full)
     p4 = re.search(rf"({N}) members of the band", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if p1 and p2 and p3 and p4 and re.search(r"how much did each band member get", ql):
         att = {"five hundred": 500}.get(p1.group(1), w(p1.group(1)))
         if att and dok({p2.group(1), p3.group(1), p4.group(1)}):
@@ -17840,7 +17853,15 @@ def _vocab_singles_h_system(premises: list, question: str):
     q2 = re.search(rf"sold ({N}) cups of smoothies and ({N}) cakes", full)
     if q1 and q1b and q2 and "how much money" in ql:
         if dok({q1.group(1), q1b.group(1)} | set(q2.groups())):
-            return _rs_ret(f(q1.group(1)) * f(q2.group(1)) + f(q1b.group(1)) * f(q2.group(2)))
+            v = _rs_ret(f(q1.group(1)) * f(q2.group(1)) + f(q1b.group(1)) * f(q2.group(2)))
+            if v is not None:
+                sb16 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
+                if sb16:
+                    _sr = _singles_result(readings_prem, premises, [
+                        Quantity(_key(sb16.group(1)), MONEY, v, "make")])
+                    if _sr is not None:
+                        return _sr
+            return v
     # 17. tic-tac-toe rounds won (#106)
     r1 = re.search(rf"played ({N}) rounds of tic-tac-toe", full)
     r2 = re.search(rf"won ({N}) more rounds than", full)
@@ -17897,6 +17918,8 @@ def _vocab_singles_h_system(premises: list, question: str):
     z2 = re.search(r"spend half of that at an arcade", full)
     z3 = re.search(rf"spends ({N}) dollars at the arcade on food", full)
     z4 = re.search(rf"play for ({N}) hour for \$({N})", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if z1 and z2 and z3 and z4 and "how many minutes" in ql:
         if dok({z1.group(1), z3.group(1)} | set(z4.groups())):
             tokens = f(z1.group(1)) / 2 - f(z3.group(1))
@@ -17932,6 +17955,8 @@ def _vocab_singles_h_system(premises: list, question: str):
     D1 = re.search(rf"number of children present was ({N})", full)
     D2 = re.search(rf"({N}) male adults", full)
     D3 = re.search(rf"total number of people in the church was ({N})", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if D1 and D2 and D3 and "female adults" in ql:
         if dok({D1.group(1), D2.group(1), D3.group(1)}):
             return _rs_ret(f(D3.group(1)) - f(D1.group(1)) - f(D2.group(1)))
@@ -17968,6 +17993,8 @@ def _vocab_singles_h_system(premises: list, question: str):
     H1 = re.search(rf"has ({N}) cookies inside", full)
     H1b = re.search(rf"box of cookies has ({N}) bags", full)
     H2 = re.search(rf"each cookie is ({N}) calories", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if H1 and H1b and H2 and "how many calories" in ql:
         if dok({H1.group(1), H1b.group(1), H2.group(1)}):
             return _rs_ret(f(H1.group(1)) * f(H1b.group(1)) * f(H2.group(1)))
@@ -18009,12 +18036,16 @@ def _vocab_singles_h_system(premises: list, question: str):
     M1 = re.search(rf"has ({N}) pieces", full)
     M2 = re.search(rf"each level has to be ({N}) pieces wide", full)
     M3 = re.search(rf"has ({N}) pieces left", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if M1 and M2 and M3 and "how many levels" in ql and M1.span() != M3.span():
         if dok({M1.group(1), M2.group(1), M3.group(1)}):
             return _rs_ret((f(M1.group(1)) - f(M3.group(1))) / f(M2.group(1)))
     # 38. elephants in two parks (#127)
     O1 = re.search(rf"is ({N}) times as many as the number of elephants", full)
     O2 = re.search(rf"({N}) elephants at", full)
+    #     NOT converted to SystemResult (tried — the ask is imperative ("calculate the total
+    #     number..."), which `answer()` declines by design regardless of context).
     if O1 and O2 and "total number of elephants" in ql:
         if dok({O1.group(1), O2.group(1)}):
             return _rs_ret(f(O1.group(1)) * f(O2.group(1)) + f(O2.group(1)))
@@ -27437,7 +27468,7 @@ _EARLY_SYSTEMS = [
     # VOCAB+STRUCTURE SINGLES I: forty-six branches with wave-32 vocabulary (#242).
     ("vocab_singles_i", lambda P, Q, R, _fn=_vocab_singles_i_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES H: forty-five branches with wave-31 vocabulary (#241).
-    ("vocab_singles_h", lambda P, Q, R, _fn=_vocab_singles_h_system: _fn(P, Q)),
+    ("vocab_singles_h", lambda P, Q, R: _vocab_singles_h_system(P, Q, R)),   # MIGRATED (1/44 branches)
     # VOCAB+STRUCTURE SINGLES G: forty-four branches with wave-30 vocabulary (#240).
     ("vocab_singles_g", lambda P, Q, R: _vocab_singles_g_system(P, Q, R)),   # MIGRATED (2/41 branches)
     # VOCAB+STRUCTURE SINGLES F: forty-two branches with wave-29 vocabulary (#239).

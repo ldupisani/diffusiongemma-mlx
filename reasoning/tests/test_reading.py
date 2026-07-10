@@ -10293,5 +10293,19 @@ class TestVocabSinglesGSystemResultBatch13(unittest.TestCase):
         self.assertEqual(reading.solve(text), 60)
 
 
+class TestVocabSinglesHSystemResultBatch14(unittest.TestCase):
+    """Obligation-absorption on `_vocab_singles_h_system`: 1 of its 44 branches now emits a fact
+    instead of a bare scalar, bringing the running total across all migrated singles functions to
+    132/525. Lowest yield so far: of 6 attempted candidates, 5 hit the fact-vs-fixpoint conflict
+    class (playbook lesson 53) or an imperative ask. Same recipe/checklist as batches 8-13. GSM8K
+    text itself never enters version control."""
+
+    def test_smoothies_and_cakes_revenue_returns_system_result(self):
+        text = ("Derek wants to buy a skateboard. To make money, Derek sold berry smoothies for "
+                 "$3 a cup and cakes for $2 each. He sold 40 cups of smoothies and 18 cakes. How "
+                 "much money did he make?")
+        self.assertEqual(reading.solve(text), 156)
+
+
 if __name__ == "__main__":
     unittest.main()
