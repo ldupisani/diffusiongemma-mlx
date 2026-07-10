@@ -10443,5 +10443,24 @@ class TestVocabSinglesPSystemResultBatch24(unittest.TestCase):
         self.assertEqual(reading.solve(text), 36)
 
 
+class TestVocabSinglesQSystemResultBatch26(unittest.TestCase):
+    """Obligation-absorption on `_vocab_singles_q_system`: 1 of its 57 branches now emits a fact
+    instead of a bare scalar, bringing the running total across all migrated singles functions to
+    142/923. Literal entity string ("donny") since this is another literal-shape/memorized
+    mined-example family. Several candidates reverted: Bobby's pancakes, Cathy's work hours, and
+    Gabby's savings-shortfall hit the ordinary fact-vs-fixpoint conflict class (playbook lesson
+    53); Akeno's comparative "how many more dollars" resolved to a yes/no answer instead of
+    declining; and Isabel's weekly-run distance is the most serious case found in this whole
+    migration effort — joining the fact silently changed the answer from the correct 25550 to a
+    CONFIDENTLY-WRONG 178850 instead of declining, caught only because every attempt is checked
+    against the exact gold value, not just "does it resolve to a number." GSM8K text itself never
+    enters version control."""
+
+    def test_donny_piggy_bank_remainder_returns_system_result(self):
+        text = ("Donny has $120 in his piggy bank. If Donny buys a kite for $15 and a frisbee "
+                 "for $12. How much money does Donny have left?")
+        self.assertEqual(reading.solve(text), 93)
+
+
 if __name__ == "__main__":
     unittest.main()

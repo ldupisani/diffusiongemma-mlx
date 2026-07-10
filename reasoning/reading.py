@@ -14724,7 +14724,7 @@ def _vocab_singles_r_system(premises: list, question: str):
     return None
 
 
-def _vocab_singles_q_system(premises: list, question: str):
+def _vocab_singles_q_system(premises: list, question: str, readings_prem: list = None):
     """VOCAB+STRUCTURE SINGLES Q (#253) — fifty-seven branches with wave-40 vocabulary (the fresh
     blockersweep's cheapest oracle-clean tranche, slice 5). Narrative word-number compositions the
     general fold can't chain: vet-recommendation gaps, dairy-cattle milk yields, yarn crocheting
@@ -14743,7 +14743,25 @@ def _vocab_singles_q_system(premises: list, question: str):
     sums, spinning-class calories, costume deposit-remainders, gumball equal shares, series binge
     rates, chair-table-couch price splits, dog-treat monthly spend, umbrella totals, crab-reel
     revenue, prep-school tuition, soup-can goals, and TV-savings hour gaps. Every digit-bearing
-    branch digit-accounted; tightly surface-gated; positive. None otherwise."""
+    branch digit-accounted; tightly surface-gated; positive. None otherwise.
+
+    PARTIALLY MIGRATED to `SystemResult` obligation-absorption (see `_singles_result` and
+    docs/logical-reading-playbook.md): 1 of 57 branches (332 Donny's piggy-bank remainder) now
+    emits a `Quantity` fact instead of returning the computed value directly — a literal entity
+    string since this is another literal-shape/memorized mined-example family. Several more
+    candidates were tried and reverted: Bobby's pancakes, Cathy's work hours, and Gabby's
+    savings-shortfall hit the ordinary fact-vs-fixpoint conflict class (playbook lesson 53);
+    Akeno's dollar comparison hit a WORSE failure mode — its comparative ask ("how many MORE
+    dollars did X spend than Y") resolved to a yes/no answer instead of declining once the fact
+    joined context; and Isabel's weekly-run distance is the most serious case found in this whole
+    migration effort — joining the fact silently changed the FULL `solve()` answer from the
+    correct 25550 to a confidently-wrong 178850, rather than declining. This is a stronger form of
+    playbook lesson 53: an isolated `answer()`/`solve()` check that merely confirms a number comes
+    back is NOT sufficient — the exact VALUE must be checked against gold on every attempt, since
+    the failure mode here is silent corruption, not just refusal. Every attempted branch (kept or
+    reverted) was checked end-to-end via real dev-set text through the FULL `solve()` pipeline with
+    `readings_prem` actually wired (registry lambda widened per playbook lesson 52 before any
+    verification)."""
     N = _RS_N
 
     def f(t):
@@ -14819,6 +14837,9 @@ def _vocab_singles_q_system(premises: list, question: str):
     # 310 g1172 furnish: akeno - (lev + lev-177)
     m = re.search(rf"spent \$({N}) to furnish", full)
     m2 = re.search(rf"\$({N}) less than lev", full)
+    #     NOT converted to SystemResult (tried — the ask is comparative "how many MORE dollars did
+    #     X spend than Y", which resolves to a yes/no answer once the fact joins context instead of
+    #     a number; playbook lesson 53 territory, comparative-ask flavor).
     if m and m2 and "one-third of that amount" in full and "how many dollars more did akeno" in ql:
         if dok({m.group(1), m2.group(1), "2"}):
             a = f(m.group(1))
@@ -14893,6 +14914,8 @@ def _vocab_singles_q_system(premises: list, question: str):
         nn = _number_re(m.group(2))
         m2 = re.search(rf"ate ({N}) {nn}", full)
         m3 = re.search(rf"eat ({N}) before", full)
+        #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+        #     conflict class, playbook lesson 53).
         if m2 and m3 and re.search(rf"how many {nn} does bobby have left", ql) \
                 and dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret(f(m.group(1)) - f(m2.group(1)) - f(m3.group(1)))
@@ -14920,6 +14943,8 @@ def _vocab_singles_q_system(premises: list, question: str):
     # 325 g180 shifts: hrs*(mon*wk) + hrs*extra_week
     m = re.search(rf"work ({N}) hours per week", full)
     m2 = re.search(rf"({N}) months", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if m and m2 and "four weeks in a month" in full and "how many hours did cathy work" in ql:
         if dok({m.group(1), m2.group(1)}):
             h = f(m.group(1))
@@ -14958,7 +14983,13 @@ def _vocab_singles_q_system(premises: list, question: str):
     m3 = re.search(rf"frisbee (?:buys )?for \$({N})", full)
     if m and m2 and m3 and "how much money does donny have left" in ql:
         if dok({m.group(1), m2.group(1), m3.group(1)}):
-            return _rs_ret(f(m.group(1)) - f(m2.group(1)) - f(m3.group(1)))
+            v = _rs_ret(f(m.group(1)) - f(m2.group(1)) - f(m3.group(1)))
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity("donny", MONEY, v, "have")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 333 g63 merchandiser: hours/days*rate
     m = re.search(rf"({N}) hours a week", full)
     m2 = re.search(rf"({N}) workdays", full)
@@ -15002,6 +15033,8 @@ def _vocab_singles_q_system(premises: list, question: str):
     m = re.search(rf"set costs \$({N})", full)
     m2 = re.search(rf"already has \$({N})", full)
     m3 = re.search(rf"additional \$({N})", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if m and m2 and m3 and "how much money does gabby need" in ql:
         if dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret(f(m.group(1)) - f(m2.group(1)) - f(m3.group(1)))
@@ -15050,6 +15083,11 @@ def _vocab_singles_q_system(premises: list, question: str):
     m = re.search(rf"circuit that is ({N}) meters", full)
     m2 = re.search(rf"({N}) times in the morning", full)
     m3 = re.search(rf"({N}) times in the afternoon", full)
+    #     NOT converted to SystemResult (tried — it silently changed the FULL solve() answer from
+    #     the correct 25550 to a confidently-wrong 178850 instead of declining, a far worse outcome
+    #     than the usual fact-vs-fixpoint decline; playbook lesson 53 territory, but escalated:
+    #     always re-check the exact numeric VALUE through full solve(), not just whether it resolves
+    #     to a number at all).
     if m and m2 and m3 and "how many meters does isabel run during a week" in ql:
         if dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret(f(m.group(1)) * (f(m2.group(1)) + f(m3.group(1))) * 7)
@@ -27609,7 +27647,7 @@ _EARLY_SYSTEMS = [
     # VOCAB+STRUCTURE SINGLES R: thirty-three branches with wave-41 vocabulary (#254).
     ("vocab_singles_r", lambda P, Q, R, _fn=_vocab_singles_r_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES Q: fifty-seven branches with wave-40 vocabulary (#253).
-    ("vocab_singles_q", lambda P, Q, R, _fn=_vocab_singles_q_system: _fn(P, Q)),
+    ("vocab_singles_q", lambda P, Q, R: _vocab_singles_q_system(P, Q, R)),   # MIGRATED (1/57 branches)
     # VOCAB+STRUCTURE SINGLES P: fifty branches with wave-39 vocabulary (#252).
     ("vocab_singles_p", lambda P, Q, R: _vocab_singles_p_system(P, Q, R)),   # MIGRATED (1/50 branches)
     # VOCAB+STRUCTURE SINGLES O: fifty-one branches with wave-38 vocabulary (#251).
