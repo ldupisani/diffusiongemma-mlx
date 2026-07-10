@@ -1153,13 +1153,49 @@ for when a category-generalized match can't assume contiguous text.**
     "I don't really mind if singles reduce the count of correct answers... false positives" is the
     hard line, not a target conversion percentage).
 
-Running total: 112/283 branches converted across 8 functions (`_rate_singles_system` 8/16,
+56. **The fact-vs-fixpoint conflict (lesson 53) has a WORSE failure mode than declining — it can
+    silently CHANGE the answer to a confidently-wrong number, and this is only caught by checking
+    the exact value against gold, never by checking "did it resolve to a number at all."** Across
+    batches 8-26 (functions b through q), most fact-vs-fixpoint conflicts manifested as the safe
+    failure — the converted branch's own fact joins a context the general fixpoint has also
+    populated, and `answer()` degrades to "insufficient"/`undetermined`, exactly like the
+    bare-scalar branch never ran. `_vocab_singles_q_system`'s Isabel branch (weekly-run distance)
+    broke that pattern: joining its fact silently changed the FULL `solve()` answer from the
+    correct 25550 to a CONFIDENTLY-WRONG 178850 — a different number, not a decline. A verification
+    step that only checks "does `solve()` return a number" (rather than "does it return the RIGHT
+    number") would have shipped this as a false success. Also from this batch: a comparative ask
+    ("how many MORE dollars did X spend than Y") resolved to a yes/no answer instead of either the
+    number or a decline once the fact joined context — another silent-wrong-type failure mode, not
+    just a value error. General lesson: **always diff the FULL `solve()` result against the actual
+    gold answer for every attempted branch**, never just check truthiness/type — the conflict class
+    from lesson 53 is not limited to safe declines, and an under-verified "looks like a number"
+    check is a real path to shipping a confident-wrong regression that only the full diff-verify
+    gate would catch after the fact.
+57. **Later-wave `_vocab_singles_*` functions increasingly fall into a "literal-shape/memorized
+    single-example" style** (`_vocab_singles_m` through at least `_vocab_singles_q`): each branch
+    is gated by whole-phrase substring matches lifted from ONE specific gold problem (e.g. `"aliens
+    have three arms" in full`), not a general regex with capture groups — many have NO capturable
+    entity at all. Where a name exists, it is usually a LITERAL string embedded in the gate itself
+    (e.g. `"how many dollars did akeno spend"` in the branch's own condition) rather than a
+    regex-captured group, so the natural move is a literal entity string (`Quantity("hazel", ...)`)
+    matching the branch's own hardcoded name, NOT a fresh capture. Paraphrase tests for these
+    branches must keep the hardcoded name(s) fixed (they're part of the branch's OWN gate, not a
+    free variable) and vary only the numbers — changing "Frankie"/"Carla" to other names breaks the
+    branch's own regex, not just the test.
+
+Running total: 142/923 branches converted across 24 functions (`_rate_singles_system` 8/16,
 `_money_singles_system` 9/24, `_mult_singles_system` 14/33, `_mixed_singles_system` 18/30,
 `_mixed_singles_b_system` 13/33, `_mixed_singles_c_system` 16/39, `_cat_singles_a_system` 27/84,
-`_vocab_singles_b_system` 7/24) — the remaining ~789 branches across ~20 other singles functions
-(the `_vocab_singles_c..u` letter groups, `_vocab_singles_system`'s 190-branch base) are still an
-open scope, worked through incrementally per a standing multi-session objective (see the
-reading-engine-handoff memory).
+`_vocab_singles_b_system` 7/24, `_vocab_singles_c_system` 7/37, `_vocab_singles_d_system` 4/36,
+`_vocab_singles_e_system` 3/42, `_vocab_singles_f_system` 3/42, `_vocab_singles_g_system` 2/41,
+`_vocab_singles_h_system` 1/44, `_vocab_singles_i_system` 1/44, `_vocab_singles_j_system` 1/41,
+`_vocab_singles_k_system` 1/40, `_vocab_singles_l_system` 1/24, `_vocab_singles_m_system` 1/48,
+`_vocab_singles_n_system` 1/45, `_vocab_singles_o_system` 2/49, `_vocab_singles_p_system` 1/50,
+`_vocab_singles_q_system` 1/57) — the remaining ~419 branches across `_vocab_singles_r..u_system`
+and `_vocab_singles_system`'s 190-branch base are still an open scope, worked through
+incrementally per a standing multi-session objective (see the reading-engine-handoff memory).
+Later-wave conversion yield has stabilized around 1-2 branches per function (see lesson 55 for
+why) — this is an accepted, expected outcome of this family's tolerance, not a quality problem.
 
 ### A clause that is BOTH meta and data — read the recorded meta, don't fight the parse (#309)
 
