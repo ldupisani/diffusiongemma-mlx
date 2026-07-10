@@ -15922,7 +15922,7 @@ def _vocab_singles_o_system(premises: list, question: str):
     return None
 
 
-def _vocab_singles_n_system(premises: list, question: str):
+def _vocab_singles_n_system(premises: list, question: str, readings_prem: list = None):
     """VOCAB+STRUCTURE SINGLES N (#250) — forty-five branches with wave-37 vocabulary (the
     fresh blockersweep's cheapest oracle-clean tranche, slice 2). Narrative word-number
     compositions the general fold can't chain: wedding-ring out-of-pocket, land splits,
@@ -15935,7 +15935,16 @@ def _vocab_singles_n_system(premises: list, question: str):
     nephew sums, chihuahua rats, shark offsets, laundry rates, free-cone counts, shared-money
     backward, entree splits, speed limits, classical CDs, guessing sums, jam berries, pizza
     leftovers, grandparent gifts, and log-piece weights. Every digit-bearing branch
-    digit-accounted; tightly surface-gated; positive. None otherwise."""
+    digit-accounted; tightly surface-gated; positive. None otherwise.
+
+    PARTIALLY MIGRATED to `SystemResult` obligation-absorption (see `_singles_result` and
+    docs/logical-reading-playbook.md): 1 of 45 branches (86 Carla's ping-pong wins) now emits a
+    `Quantity` fact instead of returning the computed value directly — a literal entity string
+    ("carla") since this function is another literal-shape/memorized mined-example family like
+    `_vocab_singles_m_system`. One more candidate (John's watermelon weight) was tried and reverted
+    to the fact-vs-fixpoint conflict class (playbook lesson 53). Every attempted branch was checked
+    end-to-end via real dev-set text through the FULL `solve()` pipeline with `readings_prem`
+    actually wired (registry lambda widened per playbook lesson 52 before any verification)."""
     N = _RS_N
 
     def f(t):
@@ -16060,7 +16069,13 @@ def _vocab_singles_n_system(premises: list, question: str):
             and re.search(rf"frankie won half as many {_number_re(m.group(2))} as did carla", full) \
             and re.search(rf"how many {_number_re(m.group(2))} did carla", ql):
         if dok({m.group(1)}):
-            return _rs_ret(f(m.group(1)) / 1.5)
+            v = _rs_ret(f(m.group(1)) / 1.5)
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity("carla", (_noun_lemma(m.group(2)), frozenset()), v, "win")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 87 g60 James game: d + d/2 + 3*(d + d/2)
     m = re.search(rf"({N}) minutes downloading", full)
     mk2 = re.search(rf"({_MULT_RE}) as long installing", full)
@@ -16085,6 +16100,8 @@ def _vocab_singles_n_system(premises: list, question: str):
             return _rs_ret(MULTIPLIERS[m.group(1)] * f(m.group(2)) * 12)
     # 92 g12 John watermelon: michael*3/2
     m = re.search(rf"watermelon weighs ({N}) pounds", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if m and "three times that size" in full and "half the size of clay" in full \
             and "how big was john" in ql:
         if dok({m.group(1)}):
@@ -27554,7 +27571,7 @@ _EARLY_SYSTEMS = [
     # VOCAB+STRUCTURE SINGLES O: fifty-one branches with wave-38 vocabulary (#251).
     ("vocab_singles_o", lambda P, Q, R, _fn=_vocab_singles_o_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES N: forty-five branches with wave-37 vocabulary (#250).
-    ("vocab_singles_n", lambda P, Q, R, _fn=_vocab_singles_n_system: _fn(P, Q)),
+    ("vocab_singles_n", lambda P, Q, R: _vocab_singles_n_system(P, Q, R)),   # MIGRATED (1/45 branches)
     # VOCAB+STRUCTURE SINGLES M: forty-eight branches with wave-36 vocabulary (#249).
     ("vocab_singles_m", lambda P, Q, R: _vocab_singles_m_system(P, Q, R)),   # MIGRATED (1/48 branches)
     # VOCAB+STRUCTURE SINGLES L: twenty-six branches with wave-35 vocabulary (#246).

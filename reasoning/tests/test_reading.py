@@ -10390,5 +10390,21 @@ class TestVocabSinglesMSystemResultBatch19(unittest.TestCase):
         self.assertEqual(reading.solve(text), 74)
 
 
+class TestVocabSinglesNSystemResultBatch21(unittest.TestCase):
+    """Obligation-absorption on `_vocab_singles_n_system`: 1 of its 45 branches now emits a fact
+    instead of a bare scalar, bringing the running total across all migrated singles functions to
+    138/767. Literal entity string ("carla") since this function is another literal-shape/
+    memorized mined-example family — the paraphrase below keeps "Frankie"/"Carla" and the "ping
+    pong" framing literal too (both names are hardcoded in the branch's own gating regex, not
+    captured), varying only the game count. One more candidate (John's watermelon weight) reverted
+    to the fact-vs-fixpoint conflict class (playbook lesson 53). GSM8K text itself never enters
+    version control."""
+
+    def test_carla_ping_pong_wins_returns_system_result(self):
+        text = ("Frankie and Carla played 36 games of ping pong against each other.  Frankie "
+                 "won half as many games as did Carla.  How many games did Carla win?")
+        self.assertEqual(reading.solve(text), 24)
+
+
 if __name__ == "__main__":
     unittest.main()
