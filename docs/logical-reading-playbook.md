@@ -1208,6 +1208,39 @@ left remainder, age, total-distance-driven) and its 8 reverted candidates recap 
 class already catalogued (lessons 53/56) — no new failure mode surfaced. This closes the standing
 multi-session objective; any further work on this family is net-new scope, not continuation.
 
+58. **The `SCALES` counting-group words ("dozen"→12, "hundred"→100, "thousand"/"million"/"billion")
+    are as much a hardcode-in-waiting as any unit or category word** (see
+    [[categorize-incidental-words]] and "no-hardcoded-units"), but had NO regex/lookup pair exposed
+    for whole-text-regex branches to read generically — user-flagged directly, pointing at
+    `_percent_money_tails_system`'s PAY-FRACTION PRODUCT branch (`"buys (\d+) dozen \w+"` ...
+    `"* 12 *"`). Added `_SCALES_WORD_RE` (a regex alternation over `SCALES` + optional plural "s")
+    and `_scale_word(token)` (the lookup) right next to `SCALES` — the counting-group analogue of
+    `_SCALE_RE`/`_scale` for MULTIPLIER words ("twice"/"N times"), a DIFFERENT concept (a multiplier
+    scales an existing quantity; a SCALES word like "dozen" names the SIZE OF A GROUP being counted).
+    Swept ~17 branches across 6 functions that regex-matched the literal word "dozen" and/or
+    hardcoded "12" in arithmetic, generalizing each to capture ANY `SCALES` word. Two branches
+    needed the SAME captured scale word reused in a SECOND regex for internal consistency (the
+    "N dozen eggs a week" / "spent $X per dozen" pair, and the "N dozen water bottles" / "half a
+    dozen more apple" pair) — built by interpolating the first regex's OWN captured text into the
+    second pattern (`rf"...{captured_word}..."`), not by independently re-matching `_SCALES_WORD_RE`
+    a second time (which could silently accept a MISMATCHED scale word between the two mentions).
+    Two branches generalized had no "* 12" arithmetic at all (the apples/dozen-apples-and-
+    bunch-of-bananas system-of-equations branch, the eggs-breakeven branch) — "dozen" was purely an
+    incidental VOCABULARY word there (structurally identical to "bunch"), not a magic number; still
+    worth generalizing per the MINIMUM-STRUCTURE rule even with no numeric-hardcode bug.
+    **Verification gotcha**: paraphrasing "dozen"→"hundred" or "dozen"→"thousand" tripped an
+    UNRELATED pre-existing collision — some earlier-stage general number-word parser treats
+    "hundred"/"thousand" specially (compound-numeral parsing, e.g. "one hundred fifty"), and
+    intercepts those words before the target branch is ever reached, producing a decline that has
+    NOTHING to do with this generalization. Confirmed by testing the SAME paraphrase with "million"/
+    "billion" instead (never special-cased) — always correct — and by directly unit-testing the
+    branch's own regex+lookup in isolation (always correct regardless of which word). **Lesson: when
+    a generalization-with-a-substitute-value paraphrase fails, check whether the SUBSTITUTE word
+    itself has unrelated special handling elsewhere before concluding the generalization is buggy.**
+    Purely a generalization refactor, diff-verify NET +0 NEUTRAL both isolated and cumulative (every
+    original "dozen" dev-set case still resolves identically), TEST unchanged 45/5 90.0%, 18 new
+    paraphrase tests using non-dozen scale words as proof the generalization is real.
+
 ### A clause that is BOTH meta and data — read the recorded meta, don't fight the parse (#309)
 
 `_parse_problem` recognizes "there are N X in a Y" as a stated unit conversion (`_stated_conversion`),
