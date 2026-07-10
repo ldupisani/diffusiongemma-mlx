@@ -1118,13 +1118,48 @@ for when a category-generalized match can't assume contiguous text.**
     whatever else the same premises independently yield. Only the full diff-verify gate proves
     that — run it before shipping every batch, not just when something feels risky, and don't
     trust a clean per-branch `solve()` result as a substitute for it.
+54. **A subject-capture regex must search the ORIGINAL-CASE text, never `full` — `full` is always
+    lowercased.** Five of batch 7's newly-converted branches used
+    `re.search(r"\b([A-Z][a-z]+)\b", full)` to grab a capitalized subject name, copying the
+    SHAPE of the established idiom (`re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))`, used
+    correctly by ~15 earlier branches in the same function) but the wrong SOURCE string — every
+    singles function defines `full = " . ".join(p.lower() for p in premises) + " . " + ql`, so a
+    capital-letter regex against `full` can never match. This wasn't a silent no-op crash — each
+    branch's `if sm2:`/`if sm3:` guard just quietly stayed False, `_sr` was never built, and
+    `return v` (the bare-scalar fallback) fired every time, EXACTLY the same failure signature as
+    lesson 52's stale registry lambda: a `solve()` check keeps passing while the SystemResult
+    mechanism is never actually exercised. Caught only by noticing the pattern by inspection while
+    starting the next batch, not by any test — the diff-verify gate can't catch this class either
+    (the fallback IS correct, so nothing regresses; the bug is dead code, not wrong code). General
+    lesson: when copying an idiom for the FIRST time into new code, verify which variable the
+    ORIGINAL uses (`" ".join(premises)`, original case) rather than the nearest in-scope variable
+    that merely looks similar (`full`, lowercased) — and periodically grep newly-written branches
+    for the idiom's exact source argument as a cheap self-audit (`grep -n '\[A-Z\]\[a-z\]'` and
+    check every hit's second argument is `premises`, never `full`/`ql`).
+55. **A function's premise style predicts its fact-vs-fixpoint conflict rate — survey expectations
+    should adjust accordingly, not assume every function converts like the last one.**
+    `_vocab_singles_b_system` converted at less than a third of `_cat_singles_a_system`'s rate
+    (7/24 vs 27/84) for a structural reason, not bad luck: its mined examples ("$5 per day", "600
+    square feet", "3 grandchildren") are much closer to plain, general-fixpoint-parseable English
+    than `_cat_singles_a_system`'s more unusual phrasings, so the general engine independently
+    derives its OWN facts from the same premises far more often — which is exactly the precondition
+    for lesson 53's conflict. 9 of 16 attempted branches in this batch hit it (paint gallons,
+    lending sums, muffin shares, per-use costs, woodblock logs, reptile-house inverse, juice-box
+    products, street watches, factory growth) vs. `_cat_singles_a_system`'s 1 of 28. Lesson: don't
+    budget survey time assuming a fixed conversion rate across functions — a function whose mined
+    examples read as "ordinary word-problem English" (rather than unusual/oddly-specific phrasings)
+    should be expected to convert at a LOWER rate, and that's fine; the tolerance for this whole
+    family already accepts a lower hit rate than the per-Unit family (see point 22's framing:
+    "I don't really mind if singles reduce the count of correct answers... false positives" is the
+    hard line, not a target conversion percentage).
 
-Running total: 105/259 branches converted across 7 functions (`_rate_singles_system` 8/16,
+Running total: 112/283 branches converted across 8 functions (`_rate_singles_system` 8/16,
 `_money_singles_system` 9/24, `_mult_singles_system` 14/33, `_mixed_singles_system` 18/30,
-`_mixed_singles_b_system` 13/33, `_mixed_singles_c_system` 16/39, `_cat_singles_a_system` 27/84)
-— the remaining ~813 branches across ~21 other singles functions (the `_vocab_singles_a..u`
-letter groups, `_vocab_singles_system`'s 190-branch base) are still an open scope, worked through
-incrementally per a standing multi-session objective (see the reading-engine-handoff memory).
+`_mixed_singles_b_system` 13/33, `_mixed_singles_c_system` 16/39, `_cat_singles_a_system` 27/84,
+`_vocab_singles_b_system` 7/24) — the remaining ~789 branches across ~20 other singles functions
+(the `_vocab_singles_c..u` letter groups, `_vocab_singles_system`'s 190-branch base) are still an
+open scope, worked through incrementally per a standing multi-session objective (see the
+reading-engine-handoff memory).
 
 ### A clause that is BOTH meta and data — read the recorded meta, don't fight the parse (#309)
 
