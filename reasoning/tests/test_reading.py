@@ -10177,5 +10177,39 @@ class TestVocabSinglesCSystemResultBatch9(unittest.TestCase):
         self.assertEqual(reading.solve(text), 273)
 
 
+class TestVocabSinglesDSystemResultBatch10(unittest.TestCase):
+    """Obligation-absorption on `_vocab_singles_d_system`: 4 of its 36 branches now emit fact(s)
+    instead of a bare scalar, bringing the running total across all migrated singles functions to
+    123/356. Same recipe/checklist as batches 8-9 (readings_prem param added from scratch,
+    registry lambda widened first). 5 of 9 attempted branches hit the fact-vs-fixpoint conflict
+    class (playbook lesson 53) and were reverted (school-meeting attendance, Alfred's monthly
+    savings gap, fundraiser packs shortfall, guitar-pick yellow remainder, stair-goal minutes).
+    All text below is paraphrased from the mined dev-set shapes (names changed, pinned vocabulary
+    kept since this is a VOCAB-pinned function) — GSM8K text itself never enters version
+    control."""
+
+    def test_scavenger_hunt_chain_returns_system_result(self):
+        text = ("Marcus found 4 more items on the scavenger hunt than Priya.  Priya found four "
+                 "times the amount of items than Owen who was only able to find 4 items.  How "
+                 "many items did Marcus find?")
+        self.assertEqual(reading.solve(text), 20)
+
+    def test_helicopter_rental_cost_returns_system_result(self):
+        text = ("Derek rents a helicopter for 2 hours a day for 3 days.  It cost $75 an hour to "
+                 "rent.  How much did he pay?")
+        self.assertEqual(reading.solve(text), 450)
+
+    def test_quilt_yardage_scale_up_returns_system_result(self):
+        text = ("Rosalind makes quilts. She can make 7 quilts with 21 yards of material. How "
+                 "many yards of material would be required to make 12 quilts?")
+        self.assertEqual(reading.solve(text), 36)
+
+    def test_asian_countries_remainder_returns_system_result(self):
+        text = ("Beatrix likes to travel. She visited already 42 different countries. 20 of "
+                 "them were in Europe and 10 in South America. From the rest of the countries, "
+                 "only half of them were in Asia. How many Asian countries has Beatrix visited?")
+        self.assertEqual(reading.solve(text), 6)
+
+
 if __name__ == "__main__":
     unittest.main()

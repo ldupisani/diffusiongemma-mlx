@@ -19126,7 +19126,7 @@ def _vocab_singles_e_system(premises: list, question: str):
     return None
 
 
-def _vocab_singles_d_system(premises: list, question: str):
+def _vocab_singles_d_system(premises: list, question: str, readings_prem: list = None):
     """VOCAB+STRUCTURE SINGLES D (#235) — thirty-seven branches with wave-25 vocabulary:
     fudge ounces, attendance sums, rental splits, arithmetic-series stalls and pastries,
     scavenger chains, gecko profit, monthly deliveries, helicopter products, crepe/cotton
@@ -19136,7 +19136,16 @@ def _vocab_singles_d_system(premises: list, question: str):
     index-card packs, Asia halves, mismatching socks, fundraiser residuals, blueberry
     percentages, guitar-pick thirds, patisserie change, machine-cap trios, M&M averages,
     kept slices, playlist gaps, 3/8th-age chains, and stair-goal minutes. Every branch
-    digit-accounted; positive. None otherwise."""
+    digit-accounted; positive. None otherwise.
+
+    PARTIALLY MIGRATED to `SystemResult` obligation-absorption (see `_singles_result` and
+    docs/logical-reading-playbook.md): 4 of 36 active branches (6 scavenger-hunt items, 9 helicopter
+    rental, 20 quilt yards, 26 Asian countries) now emit a `Quantity` fact instead of returning
+    the computed value directly. As with `_vocab_singles_b_system`/`_vocab_singles_c_system`,
+    most attempted candidates (5 of 9) hit the fact-vs-fixpoint conflict class (playbook lesson
+    53) and were reverted with an inline note; every attempted branch was checked end-to-end via
+    real dev-set text through the FULL `solve()` pipeline with `readings_prem` actually wired
+    (registry lambda widened per playbook lesson 52 before any verification)."""
     N = _RS_N
 
     def f(t):
@@ -19163,6 +19172,8 @@ def _vocab_singles_d_system(premises: list, question: str):
     # 2. seated: a students + b teachers seated + c standing
     se1 = re.search(rf"({N}) students and ({N}) teachers are seated", full)
     se2 = re.search(rf"({N}) students are standing", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if se1 and se2 and "how many attended" in ql:
         if dok({se1.group(1), se1.group(2), se2.group(1)}):
             return _rs_ret(f(se1.group(1)) + f(se1.group(2)) + f(se2.group(1)))
@@ -19197,11 +19208,18 @@ def _vocab_singles_d_system(premises: list, question: str):
     sc1 = re.search(rf"found ({N}) more items on the scavenger hunt than", full)
     sc2 = re.search(rf"found (\w+|{N}) times the amount of items than (\w+)", full)
     sc3 = re.search(rf"find ({N}) items", full)
-    if sc1 and sc2 and sc3 and re.search(r"how many items did \w+ find", ql):
+    scq = re.search(r"how many items did (\w+) find", ql)
+    if sc1 and sc2 and sc3 and scq:
         k_ = w(sc2.group(1))
         toks = {sc1.group(1), sc3.group(1)} | ({sc2.group(1)} if sc2.group(1)[0].isdigit() else set())
         if k_ and dok(toks):
-            return _rs_ret(k_ * f(sc3.group(1)) + f(sc1.group(1)))
+            v = _rs_ret(k_ * f(sc3.group(1)) + f(sc1.group(1)))
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(scq.group(1)), ("item", frozenset()), v, "find")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 7. gecko profit: sold for $a; store sells 5 more than 3×a → profit
     ge1 = re.search(rf"sold the geckos for ({N})\$", full)
     ge2 = re.search(rf"sells them for ({N}) more than ({N}) times that", full)
@@ -19228,7 +19246,15 @@ def _vocab_singles_d_system(premises: list, question: str):
     he2 = re.search(rf"\$({N}) an hour", full)
     if he1 and he2 and "how much did he pay" in ql:
         if dok({he1.group(1), he1.group(2), he2.group(1)}):
-            return _rs_ret(f(he1.group(1)) * f(he1.group(2)) * f(he2.group(1)))
+            v = _rs_ret(f(he1.group(1)) * f(he1.group(2)) * f(he2.group(1)))
+            if v is not None:
+                sb9 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
+                if sb9:
+                    _sr = _singles_result(readings_prem, premises, [
+                        Quantity(_key(sb9.group(1)), MONEY, v, "pay")])
+                    if _sr is not None:
+                        return _sr
+            return v
     # 11. cotton candies: n; brother+sister a each; 1/4 of remaining to cousin; ate e → left
     co1 = re.search(rf"bought ({N}) cotton candies", full)
     co2 = re.search(rf"({N}) cotton candies each", full)
@@ -19247,6 +19273,8 @@ def _vocab_singles_d_system(premises: list, question: str):
     # 13. Alfred: goal $g over m months; has $h left over → needs (g−h)/m
     al1 = re.search(rf"save \$({N})(?:\.00)? over ({N}) months", full)
     al2 = re.search(rf"has \$({N})(?:\.00)? left over", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if al1 and al2 and "each month" in ql:
         if dok({al1.group(1), al1.group(2), al2.group(1)}):
             return _rs_ret((f(al1.group(1)) - f(al2.group(1))) / f(al1.group(2)))
@@ -19309,7 +19337,15 @@ def _vocab_singles_d_system(premises: list, question: str):
     qu2 = re.search(rf"make ({N}) quilts", ql)
     if qu1 and qu2 and "how many yards" in ql:
         if dok({qu1.group(1), qu1.group(2), qu2.group(1)}):
-            return _rs_ret(f(qu1.group(2)) / f(qu1.group(1)) * f(qu2.group(1)))
+            v = _rs_ret(f(qu1.group(2)) / f(qu1.group(1)) * f(qu2.group(1)))
+            if v is not None:
+                sb20 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
+                if sb20:
+                    _sr = _singles_result(readings_prem, premises, [
+                        Quantity(_key(sb20.group(1)), ("yard", frozenset()), v, "need")])
+                    if _sr is not None:
+                        return _sr
+            return v
     # 21. pens doubling: a pens week 1; doubles weekly; Jane n after a month → diff
     pd1 = re.search(rf"has ({N}) pens in the first week", full)
     pd2 = re.search(rf"will have ({N}) pens after a month", full)
@@ -19355,7 +19391,16 @@ def _vocab_singles_d_system(premises: list, question: str):
     if cn1 and cn2 and "half of them were in asia" in full:
         if dok({cn1.group(1), cn2.group(1), cn2.group(2)}):
             rest = f(cn1.group(1)) - f(cn2.group(1)) - f(cn2.group(2))
-            return _rs_ret(rest / 2)
+            v = _rs_ret(rest / 2)
+            if v is not None:
+                sb26 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
+                if sb26:
+                    _sr = _singles_result(readings_prem, premises, [
+                        Quantity(_key(sb26.group(1)), ("country", frozenset({"asian"})),
+                                 v, "visit")])
+                    if _sr is not None:
+                        return _sr
+            return v
     # 28. fundraiser: needs n; sold a + b + c → more
     fr1 = re.search(rf"needs to sell ({N}) packs", full)
     fr2 = re.search(rf"sold ({N}) packs to his grandmother ?,? ({N}) packs to his uncle ?,? and ({N}) packs", full)
@@ -19364,6 +19409,8 @@ def _vocab_singles_d_system(premises: list, question: str):
         fr2 = solds if len(solds) == 3 else None
     else:
         fr2 = [fr2.group(1), fr2.group(2), fr2.group(3)]
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if fr1 and fr2 and "how many more packs" in ql:
         if dok({fr1.group(1)} | set(fr2)):
             return _rs_ret(f(fr1.group(1)) - sum(f(x) for x in fr2))
@@ -19371,6 +19418,8 @@ def _vocab_singles_d_system(premises: list, question: str):
     gp1 = re.search(rf"has ({N}) blue picks", full)
     if gp1 is None:
         gp1 = re.search(rf"has ({N}) bl", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if gp1 and "half of his picks are red" in full and "one-third of the picks are blue" in full \
             and "rest are yellow" in full:
         if dok({gp1.group(1)}):
@@ -19444,6 +19493,8 @@ def _vocab_singles_d_system(premises: list, question: str):
     # 39. stairs: s steps in m minutes; goal g → minutes
     sr1 = re.search(rf"walk ({N}) steps in ({N}) minutes", full)
     sr2 = re.search(rf"goal is ({N}) steps", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if sr1 and sr2 and "how many minutes" in ql:
         if dok({sr1.group(1), sr1.group(2), sr2.group(1)}):
             return _rs_ret(f(sr2.group(1)) / f(sr1.group(1)) * f(sr1.group(2)))
@@ -27280,7 +27331,7 @@ _EARLY_SYSTEMS = [
     # VOCAB+STRUCTURE SINGLES F: forty-two branches with wave-29 vocabulary (#239).
     ("vocab_singles_f", lambda P, Q, R, _fn=_vocab_singles_f_system: _fn(P, Q)),
     ("vocab_singles_e", lambda P, Q, R, _fn=_vocab_singles_e_system: _fn(P, Q)),
-    ("vocab_singles_d", lambda P, Q, R, _fn=_vocab_singles_d_system: _fn(P, Q)),
+    ("vocab_singles_d", lambda P, Q, R: _vocab_singles_d_system(P, Q, R)),   # MIGRATED (4/36 branches)
     # VOCAB+STRUCTURE SINGLES C: thirty-nine branches with wave-24 vocabulary (#234).
     ("vocab_singles_c", lambda P, Q, R: _vocab_singles_c_system(P, Q, R)),   # MIGRATED (7/37 branches)
     # VOCAB+STRUCTURE SINGLES B: thirty branches with wave-23 vocabulary (#233).
