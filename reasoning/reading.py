@@ -19839,13 +19839,35 @@ def _attr_partition_sum(premises: list, question: str):
     return _snap(sum(subtypes.values()))
 
 
-def _cat_singles_a_system(premises: list, question: str):
+def _cat_singles_a_system(premises: list, question: str, readings_prem: list = None):
     """CATEGORICAL SINGLES A (#284) — long-tail single-problem solvers written WORD-AGNOSTICALLY: the
     incidental item noun is captured with `_W` + verified with `_cat(…, "noun")` and reused BY LEMMA via
     `_number_re`, and any coefficient is READ from the text with `_scale`, so each branch generalizes to
     unseen nouns of the same shape instead of hard-coding the noun the mined example happened to use
     (contrast the `_vocab_singles_*` branches, which pin the literal noun). Every digit-bearing branch
-    digit-accounted; tightly surface-gated; positive. None otherwise."""
+    digit-accounted; tightly surface-gated; positive. None otherwise.
+
+    PARTIALLY MIGRATED to `SystemResult` obligation-absorption (see `_singles_result` and
+    docs/logical-reading-playbook.md): 27 of 84 branches now emit `Quantity` fact(s) (self-referential
+    entity when the text names no subject) instead of returning the computed value directly, letting
+    `answer()`'s generic capabilities independently re-derive the SAME value for other phrasings of the
+    question. Every conversion was verified end-to-end via the REAL dev-set text through the FULL
+    `solve()` pipeline WITH `readings_prem` actually wired through the registry (the registry lambda
+    used to silently drop it, `_fn(P, Q)` — under that stale wiring `_singles_result` always returned
+    None and EVERY branch quietly fell back to its bare scalar, so a `solve()` check performed before
+    widening the registry entry exercises nothing new; re-check after widening, not before). Each
+    conversion always falls back to the original scalar `v` when `_singles_result` can't be built or
+    its wrapped `SystemResult` fails to resolve — so a conversion is low-risk to the branch's OWN claim,
+    but NOT zero-risk to the overall answer: once a fact joins `context`, it sits alongside whatever the
+    general fixpoint independently derives from the SAME premises, and `answer()`'s dispatch for the
+    ACTUAL question can occasionally get more confused with the extra fact present than without it
+    (branch 68, HYPERNYM COUNT-SUM, hit exactly this — reverted, see its inline note). The full
+    diff-verify gate (not an isolated per-branch check) is what caught it — always run it before
+    shipping. The remaining 57 branches are untouched bare-scalar returns (not yet surveyed for
+    convertibility, or surveyed and found unsafe — the `_rate_singles_system` docstring catalogs the
+    recognized decline classes: comparative "how many more", imperative asks, TIME_UNITS-measure asks
+    the noun-keyed fallback excludes, phrasal-verb sense gaps, clause-splitter truncation of the real
+    question)."""
     N = _RS_N
     ql = question.lower()
     full = " . ".join(p.lower() for p in premises) + " . " + ql
@@ -19860,13 +19882,23 @@ def _cat_singles_a_system(premises: list, question: str):
 
     # 1. RECIPIENT COUNT: a dozen-count of ITEM distributed, K per recipient → total/K recipients.
     #    "three dozen PEBBLES … each friend got 4 pebbles … how many friends received pebbles?" → 36/4.
+    #    "got" GENERALIZED to the `receive` category (was hardcoded), matching the ask's own
+    #    `acquire` gate — a recipient-distribution verb is read, not assumed.
     m = re.search(rf"({_GP_NUMW}) dozens? of {_W}", full)
     if m and _cat(m.group(2), "noun"):
         nn = _number_re(m.group(2))
-        m2 = re.search(rf"(?:each|every).{{0,30}}?got ({N}) {nn}", full)
-        if m2 and re.search(rf"how many \w+ {_cat_re('acquire')} {nn}", ql) and f(m2.group(1)):
+        m2 = re.search(rf"(?:each|every).{{0,30}}?{_cat_re('receive')} ({N}) {nn}", full)
+        rqn = re.search(rf"how many (\w+) {_cat_re('acquire')} {nn}", ql)
+        if m2 and rqn and f(m2.group(1)):
             if dok({m2.group(1)}):
-                return _rs_ret(f(m.group(1)) * 12 / f(m2.group(1)))
+                v = _rs_ret(f(m.group(1)) * 12 / f(m2.group(1)))
+                if v is not None:
+                    _sr = _singles_result(readings_prem, premises, [
+                        Quantity(_noun_lemma(rqn.group(1)), (_noun_lemma(rqn.group(1)), frozenset()),
+                                 v, "receive")])
+                    if _sr is not None:
+                        return _sr
+                return v
 
     # 2. GROUPED-PURCHASE SUM: Σ over "(N) buyers bought (M) ITEM each" → total ITEMs (one item, in groups).
     #    "first two students bought 2 pencils each … six bought three … two bought one → how many sold?"
@@ -19884,8 +19916,15 @@ def _cat_singles_a_system(premises: list, question: str):
     m = re.search(rf"({N}) \w+ {_W} and ({_SCALE_RE}) as many", full)
     if m and _cat(m.group(2), "noun"):
         nn = _number_re(m.group(2))
+        sn3 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
         if re.search(rf"how many {nn}.*(?:in all|in total|altogether)", ql) and dok({m.group(1)}):
-            return _rs_ret(f(m.group(1)) * (1 + _scale(m.group(3))))
+            v = _rs_ret(f(m.group(1)) * (1 + _scale(m.group(3))))
+            if v is not None and sn3 is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(sn3.group(1)), (_noun_lemma(m.group(2)), frozenset()), v, "have")])
+                if _sr is not None:
+                    return _sr
+            return v
 
     # 4. COUNT DIFFERENCE across two items, one possibly a DOZEN-count — the ask names both:
     #    "how many more ITEM_A than ITEM_B?" with ITEM_A = "M dozen" (→ M·12) and ITEM_B = "N" → M·12 − N.
@@ -19918,7 +19957,16 @@ def _cat_singles_a_system(premises: list, question: str):
             if re.search(rf"how many {item}", ql) and dok(usedd):
                 tot, k, a, b = f(m.group(1)), f(m2.group(1)), f(m2.group(2)), f(m3.group(1))
                 if k <= tot:
-                    return _rs_ret(k * a + (tot - k) * b)
+                    part1, part2 = k * a, (tot - k) * b
+                    v = _rs_ret(part1 + part2)
+                    if v is not None:
+                        item_lemma = _noun_lemma(m2.group(3))
+                        _sr = _singles_result(readings_prem, premises, [
+                            Quantity(item_lemma, (item_lemma, frozenset()), part1, "have"),
+                            Quantity(item_lemma, (item_lemma, frozenset()), part2, "have")])
+                        if _sr is not None:
+                            return _sr
+                    return v
 
     # 6. PART-COUNT SUM (generic): "how many <PART>?" → Σ count·attr(item), where <PART> is a CATEGORY-GATED
     #    synonym concept mapping to a per-item world-knowledge attribute — legs/feet for ANIMALs, wheels for
@@ -19970,7 +20018,20 @@ def _cat_singles_a_system(premises: list, question: str):
         m2 = re.search(rf"({N}) more \w+ (?:\w+ )?{nn} than", full)
         if m1 and m2 and dok({m1.group(1), m2.group(1)}):
             base = f(m1.group(1))
-            return _rs_ret(base + (base + f(m2.group(1))))
+            part1, part2 = base, base + f(m2.group(1))
+            v = _rs_ret(part1 + part2)
+            if v is not None:
+                # the asked measure may be a QUALIFIED compound noun ("bowling balls") — read it
+                # back via _queried_measure so the emitted fact matches exactly, not just the
+                # bare head noun this branch's own regex captures.
+                qmeas = _queried_measure(question)
+                if qmeas is not None:
+                    _sr = _singles_result(readings_prem, premises, [
+                        Quantity(qmeas[0], qmeas, part1, "have"),
+                        Quantity(qmeas[0], qmeas, part2, "have")])
+                    if _sr is not None:
+                        return _sr
+            return v
 
     # 10. ROUND-TRIP JOURNEY SUM (VERB-GATED): "walked A blocks … rode B blocks … came home the same way …
     #     how many blocks?" → (A+B)·2. Restricted to the PEDESTRIAN units (blocks/laps) — miles/km journeys
@@ -19983,7 +20044,16 @@ def _cat_singles_a_system(premises: list, question: str):
             and re.search(r"same (?:way|route)|round[- ]trip|there and back", full):
         segs = re.findall(rf"({N}) {_pu}\b", full)
         if len(segs) >= 2 and dok(set(segs)):
-            return _rs_ret(sum(f(s) for s in segs) * 2)   # round trip doubles the one-way distance
+            v = _rs_ret(sum(f(s) for s in segs) * 2)   # round trip doubles the one-way distance
+            if v is not None:
+                sn10 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
+                qmeas = _queried_measure(question)
+                if sn10 is not None and qmeas is not None:
+                    _sr = _singles_result(readings_prem, premises, [
+                        Quantity(_key(sn10.group(1)), qmeas, v, "travel")])
+                    if _sr is not None:
+                        return _sr
+            return v
 
     # 12. GIVE-AWAY then SCALE THE REMAINDER: "N ITEM … gave K recipients M ITEM each … <scale> times the
     #     number of ITEM left/remaining?" → (N − K·M)·scale. "500 marbles, gave 4 friends 80 each, 4× the
@@ -20024,9 +20094,17 @@ def _cat_singles_a_system(premises: list, question: str):
         nn = _number_re(m.group(2))
         mk = re.search(rf"{_cat_re('acquire')} ({N}) more", full)
         ml = re.search(rf"{_cat_re(_antonym('acquire'))}(?: away| out)? ({N})", full)
-        if mk and ml and re.search(rf"how many {nn}.*(?:now|left|have)", ql) \
-                and dok({m.group(1), mk.group(1), ml.group(1)}):
-            return _rs_ret(f(m.group(1)) + f(mk.group(1)) - f(ml.group(1)))
+        qmatch15 = re.search(rf"how many {nn}.*(?:now|left|have)", ql)
+        if mk and ml and qmatch15 and dok({m.group(1), mk.group(1), ml.group(1)}):
+            v = _rs_ret(f(m.group(1)) + f(mk.group(1)) - f(ml.group(1)))
+            if v is not None:
+                sn15 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
+                if sn15 is not None:
+                    _sr = _singles_result(readings_prem, premises, [
+                        Quantity(_key(sn15.group(1)), (_noun_lemma(m.group(2)), frozenset()), v, "have")])
+                    if _sr is not None:
+                        return _sr
+            return v
 
     # 16. FRACTION-OF-A-WHOLE (complement): "has N ITEM; F/D are <adjA>; how many <adjB> ITEM?" →
     #     N·(F/D) if asked adj == stated, else N·(1 − F/D). "45 fish, 2/3 male, how many female?" → 15.
@@ -20038,7 +20116,16 @@ def _cat_singles_a_system(premises: list, question: str):
         if mf and ma and dok({m.group(1), mf.group(1), mf.group(2)}):
             frac = f(mf.group(1)) / f(mf.group(2))
             same = _key(ma.group(1)) == _key(mf.group(3))
-            return _rs_ret(f(m.group(1)) * (frac if same else 1 - frac))
+            v = _rs_ret(f(m.group(1)) * (frac if same else 1 - frac))
+            if v is not None:
+                sn16 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
+                qmeas16 = _queried_measure(question)
+                if sn16 is not None and qmeas16 is not None:
+                    _sr = _singles_result(readings_prem, premises, [
+                        Quantity(_key(sn16.group(1)), qmeas16, v, "have")])
+                    if _sr is not None:
+                        return _sr
+            return v
 
     # 17. CONTAINER → PERSON-GROUP → PER-PERSON ITEM (nested product): "N <container> … each <container>
     #     holds a <group> of M … each <person> <receives> K ITEM … how many ITEM?" → N·M·K. Every word
@@ -20092,7 +20179,15 @@ def _cat_singles_a_system(premises: list, question: str):
     if ms and msl and mbf and _cat(mbf.group(1), "noun") \
             and re.search(rf"how many {_number_re(mbf.group(1))}", ql) \
             and f(ms.group(1)) and dok({msl.group(1), mbf.group(2)}):
-        return _rs_ret(f(ms.group(1)) * f(msl.group(1)) / f(mbf.group(2)))
+        v = _rs_ret(f(ms.group(1)) * f(msl.group(1)) / f(mbf.group(2)))
+        if v is not None:
+            sn21 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
+            if sn21 is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(sn21.group(1)), (_noun_lemma(mbf.group(1)), frozenset()), v, "need")])
+                if _sr is not None:
+                    return _sr
+        return v
 
     # 22. PERCENT-COMPLEMENT REMAINING: "has N ITEM … break after P% … how many ITEM after the
     #     break?" → N·(1 − P/100). "30 pages, break after 70%" → 9 (the un-done remainder).
@@ -20102,7 +20197,15 @@ def _cat_singles_a_system(premises: list, question: str):
         mp = re.search(rf"({N})%", full)
         if mp and "break" in full and re.search(rf"how many {nn}.*(?:after|remain|left|still)", ql) \
                 and dok({m.group(1), mp.group(1)}):
-            return _rs_ret(f(m.group(1)) * (1 - f(mp.group(1)) / 100))
+            v = _rs_ret(f(m.group(1)) * (1 - f(mp.group(1)) / 100))
+            if v is not None:
+                sn22 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
+                if sn22 is not None:
+                    _sr = _singles_result(readings_prem, premises, [
+                        Quantity(_key(sn22.group(1)), (_noun_lemma(m.group(2)), frozenset()), v, "read")])
+                    if _sr is not None:
+                        return _sr
+            return v
 
     # 23. RATE-TO-FINISH-ALL: "T hours to <verb> N ITEM … total time … if <verb> M more ITEM?" →
     #     (N + M)·(T/N). "6 hours to paint 12 paintings, 20 more" → 16.
@@ -20133,10 +20236,17 @@ def _cat_singles_a_system(premises: list, question: str):
     #     <animal> in total?" → N + A + B (the young count as the animal). "2 cats, 3 female + 2 male
     #     kittens" → 7 (generalizes: 3 dogs, 4 + 2 puppies → 9).
     m = re.search(rf"({N}) {_W} had ({N}) \w+ \w+ and ({N}) \w+ \w+", full)
+    qn26 = re.search(rf"how many {_number_re(m.group(2))} (?:do|does|did) (\w+) have", ql) if m else None
     if m and _cat(m.group(2), "noun") \
             and re.search(rf"how many {_number_re(m.group(2))}.*total", ql) \
             and dok({m.group(1), m.group(3), m.group(4)}):
-        return _rs_ret(f(m.group(1)) + f(m.group(3)) + f(m.group(4)))
+        v = _rs_ret(f(m.group(1)) + f(m.group(3)) + f(m.group(4)))
+        if v is not None and qn26 is not None:
+            _sr = _singles_result(readings_prem, premises, [
+                Quantity(_key(qn26.group(1)), (_noun_lemma(m.group(2)), frozenset()), v, "have")])
+            if _sr is not None:
+                return _sr
+        return v
 
     # 27. TIME-PER-COUNT RATE: "takes T minutes … N1 times … how long to <verb> N2 times?" → T·N2/N1.
     #     "20 minutes for 8 times, 6 times" → 15." (Scales a duration by the count ratio.)
@@ -20158,19 +20268,37 @@ def _cat_singles_a_system(premises: list, question: str):
 
     # 29. FRACTION-OF-THAT ADD: "spends N <unit> on X and F/D that amount on Y … how long/much total?"
     #     → N·(1 + F/D). "80 minutes, 1/4 that amount" → 80 + 20 = 100.
-    mba = re.search(rf"({N}) (?:minutes|hours|dollars|pounds)", full)
+    mba = re.search(rf"({N}) (minutes|hours|dollars|pounds)", full)
     mfr = re.search(rf"({N})/({N}) that amount", full)
     if mba and mfr and re.search(r"how (?:long|much)[^?]*total", ql) \
             and dok({mba.group(1), mfr.group(1), mfr.group(2)}):
-        return _rs_ret(f(mba.group(1)) * (1 + f(mfr.group(1)) / f(mfr.group(2))))
+        v = _rs_ret(f(mba.group(1)) * (1 + f(mfr.group(1)) / f(mfr.group(2))))
+        if v is not None:
+            sn29 = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
+            if sn29 is not None:
+                unit29 = _noun_lemma(mba.group(2)) if mba.group(2) != "dollars" else "dollar"
+                measure29 = MONEY if mba.group(2) == "dollars" else (unit29, frozenset())
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(sn29.group(1)), measure29, v, "spend")])
+                if _sr is not None:
+                    return _sr
+        return v
 
     # 30. TWO-BATCH UNIT-WEIGHT SUM: "sold A bags … sold B bags … each bag weighs W <unit> … how many
     #     <unit>?" → (A + B)·W. "29 + 17 bags, 7 kg each" → 322." (Σ counts × per-unit measure.)
     mbg = re.findall(rf"({N}) bags", full)
-    mwt = re.search(rf"weighs ({N})\s*(?:kg|kilograms?|g|grams?|lbs?|pounds?|ounces?)", full)
-    if len(mbg) == 2 and mwt and re.search(r"how many (?:kilograms?|grams?|pounds?|ounces?)", ql) \
-            and dok(set(mbg) | {mwt.group(1)}):
-        return _rs_ret((f(mbg[0]) + f(mbg[1])) * f(mwt.group(1)))
+    mwt = re.search(rf"weighs ({N})\s*(kg|kilograms?|g|grams?|lbs?|pounds?|ounces?)", full)
+    uqm30 = re.search(r"how many (kilograms?|grams?|pounds?|ounces?)", ql)
+    if len(mbg) == 2 and mwt and uqm30 and dok(set(mbg) | {mwt.group(1)}):
+        v = _rs_ret((f(mbg[0]) + f(mbg[1])) * f(mwt.group(1)))
+        if v is not None:
+            sn30 = re.search(r"(\w+) sold \d+ bags", full)
+            if sn30 is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(sn30.group(1)), (_noun_lemma(uqm30.group(1)), frozenset()), v, "sell")])
+                if _sr is not None:
+                    return _sr
+        return v
 
     # A "there are N <item> in a <container>" clause is recorded as a stated conversion and DROPPED from
     # the premises (so it can't trip the fold — see `_parse_problem`). The counting solvers below read
@@ -20202,18 +20330,38 @@ def _cat_singles_a_system(premises: list, question: str):
             and re.search(rf"how many {_number_re(ma.group(2))}.*total", ql):
         people = next((c for (big, small), c in _STATED_CONV.items() if _cat(small, "person")), None)
         if people and dok({ma.group(1), mb2.group(1)}):
-            return _rs_ret((people / 2) * f(ma.group(1)) + (people / 2) * f(mb2.group(1)))
+            part1, part2 = (people / 2) * f(ma.group(1)), (people / 2) * f(mb2.group(1))
+            v = _rs_ret(part1 + part2)
+            if v is not None:
+                item32 = _noun_lemma(ma.group(2))
+                sn32 = re.search(r"(\w+) of them have", full)
+                cont32, _ = next(((big, small) for (big, small), c in _STATED_CONV.items()
+                                   if _cat(small, "person")), (None, None))
+                entity32 = _key(cont32) if cont32 else (_key(sn32.group(1)) if sn32 else item32)
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(entity32, (item32, frozenset()), part1, "have"),
+                    Quantity(entity32, (item32, frozenset()), part2, "have")])
+                if _sr is not None:
+                    return _sr
+            return v
 
     # 33. KEEP-EACH, DISTRIBUTE-REST (one per recipient): "P1 packs … P2 packs … [K <item> in each pack]
     #     … keep J each … one per friend … how many friends?" → (ΣP)·K − n·J, n = number of owners.
     #     "4+2 packs, 3/pack, keep 2 each (2 owners)" → 18 − 4 = 14 (the 3/pack from the stated count).
     mpk = re.findall(rf"({N}) packs", full)
     mkeep = re.search(rf"keep ({_GP_NUMW}) {_W} each", full)
-    if len(mpk) >= 2 and mkeep and _cat(mkeep.group(2), "noun") \
-            and re.search(r"how many (?:friends|people|children|classmates)", ql) and f(mkeep.group(1)):
+    rqm33 = re.search(r"how many (friends|people|children|classmates)", ql)
+    if len(mpk) >= 2 and mkeep and _cat(mkeep.group(2), "noun") and rqm33 and f(mkeep.group(1)):
         perpack, _ = stated(_noun_lemma(mkeep.group(2)))
         if perpack and dok(set(mpk)):
-            return _rs_ret(sum(f(x) for x in mpk) * perpack - len(mpk) * f(mkeep.group(1)))
+            v = _rs_ret(sum(f(x) for x in mpk) * perpack - len(mpk) * f(mkeep.group(1)))
+            if v is not None:
+                recip33 = _singular_of(rqm33.group(1)) or rqm33.group(1)
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(recip33, (recip33, frozenset()), v, "give")])
+                if _sr is not None:
+                    return _sr
+            return v
 
     # 34. SERVING COUNT (pounds→ounces): "N of them … each wants P pound(s) … <item> are W ounces each
     #     … how many?" → N·P·(oz/lb)/W. "5 people, 1 lb each, 20 oz steaks" → 5·16/20 = 4. Unit factor
@@ -20284,7 +20432,15 @@ def _cat_singles_a_system(premises: list, question: str):
             terms.append(f(cnt.group(1)) * f(rate))
             used |= {rate, cnt.group(1)}
         if ok and terms and dok(used):
-            return _rs_ret(sum(terms))
+            v = _rs_ret(sum(terms))
+            if v is not None:
+                sn21c = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
+                if sn21c is not None:
+                    _sr = _singles_result(readings_prem, premises, [
+                        Quantity(_key(sn21c.group(1)), (_noun_lemma(qp.group(1)), frozenset()), v, "see")])
+                    if _sr is not None:
+                        return _sr
+            return v
 
     # 22. ATTRIBUTE-PARTITION SUM: a noun subdivided by a PROPERTY (colour/size/material — agnostic) into
     #     subtypes, each a stated base or relational to another, totalled. See _attr_partition_sum.
@@ -20416,7 +20572,15 @@ def _cat_singles_a_system(premises: list, question: str):
         a1, a2 = f(gm.group(3)), f(ga.group(2))
         rdig = set(rtok.split("/")) if "/" in rtok else ({rtok} if rtok[0].isdigit() else set())
         if c and rr and a2 > a1 and dok({gm.group(1), gm.group(3), ga.group(2)} | rdig):
-            return _rs_ret(f(gm.group(1)) + rr * c * (a2 - a1))
+            v = _rs_ret(f(gm.group(1)) + rr * c * (a2 - a1))
+            if v is not None:
+                sn30b = re.search(r"\b([A-Z][a-z]+)\b", " ".join(premises))
+                if sn30b is not None:
+                    _sr = _singles_result(readings_prem, premises, [
+                        Quantity(_key(sn30b.group(1)), (_noun_lemma(gm.group(2)), frozenset()), v, "be")])
+                    if _sr is not None:
+                        return _sr
+            return v
 
     # 31. ARITHMETIC-SERIES GOAL: on the first day A <item> collected, the count increasing by D each
     #     day, over K days; ask the goal (the K-day total) → K·A + D·K·(K−1)/2. "On the first day,
@@ -20478,12 +20642,18 @@ def _cat_singles_a_system(premises: list, question: str):
         cn = _number_re(bm.group(2))
         em = re.search(rf"each {cn} had ({N})", full)
         lm = re.search(rf"there were ({N}) [\w ]*?left", full)
-        ask = re.search(rf"how many {cn} did \w+ open", ql)
+        ask = re.search(rf"how many {cn} did (\w+) open", ql)
         if em and lm and ask:
             n_, c_, l_ = f(bm.group(1)), f(em.group(1)), f(lm.group(1))
             taken = n_ * c_ - l_
             if c_ and taken > 0 and taken % c_ == 0 and dok({bm.group(1), em.group(1), lm.group(1)}):
-                return _rs_ret(taken / c_)
+                v = _rs_ret(taken / c_)
+                if v is not None:
+                    _sr = _singles_result(readings_prem, premises, [
+                        Quantity(_key(ask.group(1)), (_noun_lemma(bm.group(2)), frozenset()), v, "open")])
+                    if _sr is not None:
+                        return _sr
+                return v
 
     # 35. REST-PERCENT OF A TWO-DAY SUM: A acquired on one day and B on another; P1% are <mod1>, P2% are
     #     <mod2>, …; the rest are <mod*>; ask "how many <mod*> <noun>" → (A+B)·(100−ΣP)/100. "Collects 12
@@ -20500,7 +20670,17 @@ def _cat_singles_a_system(premises: list, question: str):
                 and (_cat(am.group(2), "noun") or _cat(am.group(2), "plural")):
             psum = sum(f(p) for p, _w in pcts)
             if 0 < psum < 100 and dok({cm.group(1), cm.group(2)} | {p for p, _w in pcts}):
-                return _rs_ret((f(cm.group(1)) + f(cm.group(2))) * (100 - psum) / 100)
+                v = _rs_ret((f(cm.group(1)) + f(cm.group(2))) * (100 - psum) / 100)
+                if v is not None:
+                    sm2 = re.search(r"\b([A-Z][a-z]+)\b", full)
+                    vbm = re.search(r"does \w+ (\w+)\?", ql)
+                    if sm2 and vbm:
+                        _sr = _singles_result(readings_prem, premises, [
+                            Quantity(_key(sm2.group(1)), (_noun_lemma(am.group(2)), frozenset({am.group(1)})),
+                                     v, _lemma(vbm.group(1)))])
+                        if _sr is not None:
+                            return _sr
+                return v
 
     # 36. SELF-PLUS-K SHORTFALL: buy <item>s for her/him and for K of her/his friends (K+1 buyers);
     #     one <item> costs $C; ask how much money is needed to earn given currently has $H →
@@ -20516,7 +20696,15 @@ def _cat_singles_a_system(premises: list, question: str):
         kdig = {tk.group(2)} if tk.group(2).isdigit() else set()
         need = (f(tk.group(2)) + 1) * f(ck.group(2)) - f(hk.group(1))
         if need > 0 and dok({ck.group(2), hk.group(1)} | kdig):
-            return _rs_ret(need)
+            v = _rs_ret(need)
+            if v is not None:
+                sm3 = re.search(r"\b([A-Z][a-z]+)\b", full)
+                if sm3:
+                    _sr = _singles_result(readings_prem, premises, [
+                        Quantity(_key(sm3.group(1)), MONEY, v, "earn")])
+                    if _sr is not None:
+                        return _sr
+            return v
 
     # 37. TOTAL-DISTANCE MINUS TRAVELED (#345 generalized drove→motion category): the distance across a
     #     <place> is T <unit>; <moved> A <unit> on one day and B <unit> on another; ask how many <unit>
@@ -20613,7 +20801,15 @@ def _cat_singles_a_system(premises: list, question: str):
             vals.append(f(mm.group(1))); vdig.add(mm.group(1)); units.add(_noun_lemma(mm.group(2)))
         n_ = f(nm2.group(1))
         if vals and len(vals) == n_ and len(units) == 1 and dok(vdig | {nm2.group(1)}):
-            return _rs_ret(sum(vals) / n_)
+            v = _rs_ret(sum(vals) / n_)
+            if v is not None:
+                _ent = _key(_singular_of(im.group(2)))
+                _um = next(iter(units))
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_ent, (_um, frozenset()), val, "have") for val in vals])
+                if _sr is not None:
+                    return _sr
+            return v
 
     # 43. GRID OCCUPANCY: R rows of <noun> with C <noun> in each row; only U <seat-word> not occupied;
     #     ask how many <seat-word> taken → R·C − U. "40 rows of chairs, 20 chairs in each row, only 10
@@ -20642,11 +20838,17 @@ def _cat_singles_a_system(premises: list, question: str):
         sizes = dict()
         for mm in re.finditer(rf"the (\w+) {nn2} come in {cn2} of ({N})", full):
             sizes[mm.group(1)] = mm.group(2)
-        if re.search(rf"how many {nn2} did \w+ buy (?:in all|in total|altogether)", ql) \
-                and all(mod in sizes for _k, _c, mod, _n in buys2):
+        bqm = re.search(rf"how many {nn2} did (\w+) buy (?:in all|in total|altogether)", ql)
+        if bqm and all(mod in sizes for _k, _c, mod, _n in buys2):
             sdig = {k for k, _c, _m, _n in buys2} | set(sizes.values())
             if dok(sdig):
-                return _rs_ret(sum(f(k) * f(sizes[mod]) for k, _c, mod, _n in buys2))
+                v = _rs_ret(sum(f(k) * f(sizes[mod]) for k, _c, mod, _n in buys2))
+                if v is not None:
+                    _sr = _singles_result(readings_prem, premises, [
+                        Quantity(_key(bqm.group(1)), (_noun_lemma(buys2[0][3]), frozenset()), v, "buy")])
+                    if _sr is not None:
+                        return _sr
+                return v
 
     # 45. MULTI-LEG AVERAGE SPEED (#354 generalized drive→motion/journey masks): "the <drive/walk/
     #     ride/trip/flight/…> from <A> to <B> is D1 <unit>" legs (same unit lemma), a total time "in
@@ -20823,7 +21025,16 @@ def _cat_singles_a_system(premises: list, question: str):
                 n, k = f(iv.group(1)), f(cr.group(1))
                 fdig = set(fr.group(1).split("/")) if "/" in fr.group(1) else set()
                 if (fv * n).is_integer() and dok({iv.group(1), cr.group(1)} | fdig):
-                    return _rs_ret((n + fv * n) * k)
+                    v = _rs_ret((n + fv * n) * k)
+                    if v is not None:
+                        sm4 = re.search(r"\b([A-Z][a-z]+)\b", full)
+                        if sm4:
+                            _sr = _singles_result(readings_prem, premises, [
+                                Quantity(_key(sm4.group(1)), (_noun_lemma(pl.group(1)), frozenset()),
+                                         v, "need")])
+                            if _sr is not None:
+                                return _sr
+                    return v
 
     # 54. RATIO-SHARE SPEND REMAINDER (#364): "the ratio of <item> that X has to (that which)
     #     Y has is a:b"; "total number of <item> they have is T"; "<spender> spends <frac> of
@@ -20992,7 +21203,16 @@ def _cat_singles_a_system(premises: list, question: str):
                 total = sum(f(k) * f(s) for k, _c, s, _i in packs)
                 ans = total * (1 - fv)
                 if ans > 0 and ans.is_integer():
-                    return _rs_ret(ans)
+                    v = _rs_ret(ans)
+                    if v is not None:
+                        sm5 = re.search(r"\b([A-Z][a-z]+)\b", full)
+                        if sm5:
+                            _sr = _singles_result(readings_prem, premises, [
+                                Quantity(_key(sm5.group(1)), (_noun_lemma(packs[0][3]), frozenset()),
+                                         v, "give")])
+                            if _sr is not None:
+                                return _sr
+                    return v
 
     # 61. BRING-AND-CUT PART SUM (#375): paired events "<accompany> Ki <item>" and "<divide>
     #     each/the <item> into Si <part>", zipped IN ORDER; ask "how many <item> <part> are there
@@ -21074,16 +21294,22 @@ def _cat_singles_a_system(premises: list, question: str):
                 if _noun_lemma(srcw) in prices and _noun_lemma(tgt) not in prices \
                         and 0 < f(p) <= 100:
                     prices[_noun_lemma(tgt)] = prices[_noun_lemma(srcw)] * f(p) / 100
-        bought = re.search(r"bought ([^.?]*)", full)
-        ak = re.search(rf"how much did (?:they|s?he|\w+) {_cat_re('lose')}", ql)
-        if pend and bought and ak:
-            terms = re.findall(rf"({N}) (?:\w+ of )?{_W}", bought.group(1))
+        by2 = re.search(rf"(\w+) {_cat_re('purchase')} ([^.?]*)", full)
+        ak = re.search(rf"how much did (?:they|s?he|\w+) ({_cat_re('lose')})", ql)
+        if pend and by2 and ak:
+            terms = re.findall(rf"({N}) (?:\w+ of )?{_W}", by2.group(2))
             if len(terms) >= 2 and all(_noun_lemma(w) in prices for _n, w in terms):
                 used = {bp.group(2)} | {n for n, _w in terms} | {p for _t, p, _s in pend}
                 if dok(used):
                     tot = sum(f(n) * prices[_noun_lemma(w)] for n, w in terms)
                     if tot > 0:
-                        return _rs_ret(tot)
+                        v = _rs_ret(tot)
+                        if v is not None:
+                            _sr = _singles_result(readings_prem, premises, [
+                                Quantity(_key(by2.group(1)), MONEY, v, _lemma(ak.group(1)))])
+                            if _sr is not None:
+                                return _sr
+                        return v
 
     # 65. SUBTYPE-PAIR EVEN DIVISION (#379): "there are N <adj1> <item>"; "there are D more
     #     <adj2> <item> than <adj1> <item>"; "<item> will be evenly <divide>d among K <group>";
@@ -21105,7 +21331,14 @@ def _cat_singles_a_system(premises: list, question: str):
                 if k0 > 0:
                     ans = (2 * n0 + d0) / k0
                     if ans > 0 and ans.is_integer():
-                        return _rs_ret(ans)
+                        v = _rs_ret(ans)
+                        if v is not None:
+                            _sr = _singles_result(readings_prem, premises, [
+                                Quantity(_singular_of(dv.group(2)), (_noun_lemma(b0.group(3)), frozenset()),
+                                         v, "receive")])
+                            if _sr is not None:
+                                return _sr
+                        return v
 
     # 66. SCALED-SUBTYPE LOSS, BUY-TO-TOTAL ASK (#381): "had N <adj1> <item>"; "had <scale> more
     #     <adj2> <item>" (GSM8K's 'times more' = 'times as many'); "<lose> L of the <adj1>
@@ -21127,7 +21360,16 @@ def _cat_singles_a_system(premises: list, question: str):
                 n0, l0, t0 = f(j1.group(1)), f(j3.group(1)), f(j4.group(1))
                 ans = t0 - (n0 - l0) - _scale(j2.group(1)) * n0
                 if ans > 0 and ans.is_integer():
-                    return _rs_ret(ans)
+                    v = _rs_ret(ans)
+                    if v is not None:
+                        sm6 = re.search(r"\b([A-Z][a-z]+)\b", full)
+                        if sm6:
+                            _sr = _singles_result(readings_prem, premises, [
+                                Quantity(_key(sm6.group(1)), (_noun_lemma(j1.group(3)),
+                                         frozenset({j5.group(1)})), v, "buy")])
+                            if _sr is not None:
+                                return _sr
+                    return v
 
     # 67. SELLS-AT PRICE LIST, WORD-NUMBER BILL CHANGE (#382): a "sells <head> at $Pi (each)"
     #     price list (the splitter's conjunct-rewrite inserts 'sells' before every head noun, so
@@ -21141,8 +21383,9 @@ def _cat_singles_a_system(premises: list, question: str):
     #     digit-accounted (prices + any digits in the denomination).
     pr2 = {_noun_lemma(a or b): p for a, b, p in
            re.findall(rf"(?:sells (\w+)|(\w+) sells) at \$({N})", full)}
-    if len(pr2) >= 2 and re.search(rf"how much change (?:does|do|will|is) \w+ (?:be )?"
-                                   rf"{_cat_re('receive')}(?: back)?", ql):
+    chq = re.search(rf"how much change (?:does|do|will|is) (\w+) (?:be )?"
+                     rf"{_cat_re('receive')}(?: back)?", ql)
+    if len(pr2) >= 2 and chq:
         bl = re.search(rf"{_cat_re('lose')} an? ((?:[a-z]+ |\d+ ){{1,3}}?)"
                        rf"{_cat_re('currency')} {_cat_re('cashtoken')}", full)
         by = re.search(r"buys ([^.?]*)", full)
@@ -21156,7 +21399,13 @@ def _cat_singles_a_system(premises: list, question: str):
                 spent2 = sum(f(k) * f(pr2[_noun_lemma(h)]) for k, h in heads)
                 change3 = bill3 - spent2
                 if spent2 > 0 and change3 >= 0:
-                    return _rs_ret(change3)
+                    v = _rs_ret(change3)
+                    if v is not None:
+                        _sr = _singles_result(readings_prem, premises, [
+                            Quantity(_key(chq.group(1)), MONEY, v, "get")])
+                        if _sr is not None:
+                            return _sr
+                    return v
 
     # 68. HYPERNYM COUNT-SUM (#383): enumerated garment counts ("10 white shirts, 5 colored
     #     shirts, 7 pairs of shorts, …"); ask "how many <clothing-hypernym> did they <verb>" —
@@ -21164,6 +21413,16 @@ def _cat_singles_a_system(premises: list, question: str):
     #     the clothing category), and the ask verb must appear in a premise (washed↔wash, by
     #     lemma). Pairs count as units (gold's reading). Σ all member counts; ≥3 terms;
     #     digit-accounted. "10+5+7+6+6+8+10+6 → 58".
+    #     NOT converted to SystemResult (tried #28): the two named owners' per-garment holdings
+    #     ("Cally has 10 white shirts…") are ALREADY independently extracted as per-person
+    #     Quantity facts by the general fixpoint (verified via `diagnose` — they land in `known`
+    #     regardless of this branch), and once this branch's own SINGLE combined-"they" fact
+    #     joins that same context, `answer()`'s dispatch for "how many clothes did they wash"
+    #     resolves to "insufficient" instead of picking either — a real regression caught only by
+    #     the full diff-verify gate (dev-train Cally/Danny 58→None), not by an isolated
+    #     `answer()`/`solve()` check against a hand-built single-fact context (see the function's
+    #     docstring: the isolated check is necessary but not sufficient once `readings_prem` is
+    #     actually wired through the registry). Left as a bare scalar return.
     akc = re.search(rf"how many ({_cat_re('clothing')}) did they (\w+)", ql)
     if akc:
         vb2 = akc.group(2)
@@ -26867,7 +27126,7 @@ _EARLY_SYSTEMS = [
     # partition substrate; "19 marbles, 5 yellow, remainder split 3:4 blue:red, how many more red than yellow" → 3.
     ("ratio_partition", lambda P, Q, R, _fn=_ratio_partition_system: _fn(P, Q)),
     # CATEGORICAL SINGLES: word-agnostic long-tail branches (item noun via _W/_cat, coeff via _scale).
-    ("cat_singles_a", lambda P, Q, R, _fn=_cat_singles_a_system: _fn(P, Q)),
+    ("cat_singles_a", lambda P, Q, R: _cat_singles_a_system(P, Q, R)),   # MIGRATED (27/84 branches)
     # FRACTION SPLIT × PART-COUNT: "⅔ of animals are cats, rest dogs; 300 animals; legs of dogs?" → 400.
     # Also called directly from GUARD 12's exception (legs-asks are pre-declined before the early systems).
     ("fraction_split_part_count", lambda P, Q, R, _fn=_fraction_split_part_count: _fn(P, Q)),

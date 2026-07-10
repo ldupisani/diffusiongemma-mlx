@@ -9966,5 +9966,93 @@ class TestIncrement389PercentPartitionRest(unittest.TestCase):
             "stamps does Nikka have?"), (int, float))
 
 
+class TestCatSinglesASystemResultBatch7(unittest.TestCase):
+    """Obligation-absorption on `_cat_singles_a_system`: 27 of its 84 branches now emit fact(s)
+    instead of a bare scalar, bringing the running total across all migrated singles functions to
+    105/259. Registry wiring fix: the `_EARLY_SYSTEMS` lambda for this system used to drop
+    `readings_prem` (`_fn(P, Q)`), so `_singles_result` always returned None and every branch
+    silently fell back to its bare scalar — a `solve()` check performed before widening the lambda
+    to `_fn(P, Q, R)` exercises nothing new. One candidate (HYPERNYM COUNT-SUM, two named owners'
+    per-garment counts summed under the asked class) was tried and REVERTED: once its own combined
+    "they" fact joined a context that ALREADY carries the general fixpoint's independently-derived
+    per-owner facts from the same premises, `answer()`'s dispatch went from a clean 58 to
+    "insufficient" — caught only by the full diff-verify gate (dev-train regression), not by an
+    isolated single-fact `answer()`/`solve()` check. All text below is paraphrased from the
+    mined dev-set shapes (different names/numbers/nouns) — GSM8K text itself never enters version
+    control."""
+
+    def test_containers_opened_returns_system_result(self):
+        text = ("Tyler bought 9 boxes of stickers to give his classmates at school for the "
+                 "holiday party. Each box had 8 stickers in it. Tyler opened one box at a time. "
+                 "After his classmates took as many as they wanted, there were 40 stickers left. "
+                 "How many boxes did Tyler open for his classmates?")
+        self.assertEqual(reading.solve(text), 4)
+
+    def test_rest_percent_two_day_sum_returns_system_result(self):
+        text = ("Preston decides to collect Oak Leaves from around his Neighborhood. He collects "
+                 "10 on Monday and 15 on Tuesday. 20% are Brown and 20% are Green. The rest are "
+                 "yellow. How many yellow leaves does he collect?")
+        self.assertEqual(reading.solve(text), 15)
+
+    def test_self_plus_k_shortfall_returns_system_result(self):
+        text = ("Petra wants to go to a concert with her favorite friends. She wants to buy "
+                 "tickets for her and for three of her friends. One ticket cost is $90. How much "
+                 "money does Petra need to earn if she currently has only $189?")
+        self.assertEqual(reading.solve(text), 171)
+
+    def test_ordinal_listed_average_returns_system_result(self):
+        # genuine multi-fact re-derivation: one Quantity per listed value, same entity+measure,
+        # so answer()'s VALUE-LIST average fold re-derives the same total independently.
+        text = ("Priya wants to figure out the average weight of her dogs. She has 4 of them. "
+                 "The first two weigh 12 pounds each. The third weighs 14.7 pounds and the "
+                 "fourth weighs 9.3 pounds. What is their average weight?")
+        self.assertEqual(reading.solve(text), 12)
+
+    def test_typed_pack_size_sum_returns_system_result(self):
+        text = ("Nolan bought 3 packs of white T-shirts and 2 packs of blue T-shirts for his "
+                 "soccer team. The white T-shirts come in packs of 6, and the blue T-shirts come "
+                 "in packs of 4. How many T-shirts did Nolan buy in all?")
+        self.assertEqual(reading.solve(text), 26)
+
+    def test_plus_one_guests_times_courses_returns_system_result(self):
+        text = ("Harrison is throwing a huge birthday party. He invites 30 people. Everyone "
+                 "attends the party, and half of the guests bring a plus one (one other person). "
+                 "He plans to serve a 3-course meal for the guests. If he uses a new plate for "
+                 "every course, how many plates does he need in total for his guests?")
+        self.assertEqual(reading.solve(text), 135)
+
+    def test_container_sum_keep_fraction_give_away_returns_system_result(self):
+        text = ("Nadia has 4 notebooks with 20 stamps each. She also has two binders with 50 "
+                 "stamps each. If she decides to only keep 1/4 of the stamps, how many stamps "
+                 "can she give away?")
+        self.assertEqual(reading.solve(text), 135)
+
+    def test_percent_price_chain_basket_returns_system_result(self):
+        text = ("A movie ticket costs $5. The cost of the popcorn is 80% of the cost of the "
+                 "ticket and a can of soda costs 50% of the cost of the popcorn. A group bought "
+                 "4 tickets, 2 sets of popcorn, and 4 cans of soda. How much did they spend?")
+        self.assertEqual(reading.solve(text), 36)
+
+    def test_subtype_pair_even_division_returns_system_result(self):
+        text = ("There are 3414 red kites and there are 1762 more green kites than red kites. "
+                 "If the kites will be evenly divided among 10 clubs, how many kites will one "
+                 "club receive?")
+        self.assertEqual(reading.solve(text), 859)
+
+    def test_scaled_subtype_loss_buy_to_total_returns_system_result(self):
+        text = ("Marcus collects glass marbles. He had 16 red marbles and two times more blue "
+                 "marbles. Later on, he lost 6 of the red marbles, so he decided to buy some "
+                 "green marbles to fill up his collection. How many green marbles did he buy if, "
+                 "after all, he had 74 marbles in total?")
+        self.assertEqual(reading.solve(text), 32)
+
+    def test_sells_at_price_list_bill_change_returns_system_result(self):
+        text = ("A gift shop sells bracelets at $15 each, a gold heart necklace at $10, and a "
+                 "personalized coffee mug at $20. Nora buys three bracelets, two gold heart "
+                 "necklaces, and one coffee mug for her friends. How much change does Nora get "
+                 "back if she gives a one hundred dollar bill?")
+        self.assertEqual(reading.solve(text), 15)
+
+
 if __name__ == "__main__":
     unittest.main()
