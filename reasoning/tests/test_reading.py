@@ -10307,5 +10307,21 @@ class TestVocabSinglesHSystemResultBatch14(unittest.TestCase):
         self.assertEqual(reading.solve(text), 156)
 
 
+class TestVocabSinglesISystemResultBatch15(unittest.TestCase):
+    """Obligation-absorption on `_vocab_singles_i_system`: 1 of its 44 branches now emits a fact
+    instead of a bare scalar, bringing the running total across all migrated singles functions to
+    133/569. The subject is captured from the QUESTION's own "how many minutes did X play" clause,
+    not the first-capitalized-word fallback — the premises' first name is the ANCHOR (whose value
+    is subtracted off), not the asked-about person, so grabbing the first name would have echoed
+    the wrong entity. Two more candidates were tried and reverted to the fact-vs-fixpoint conflict
+    class (playbook lesson 53). GSM8K text itself never enters version control."""
+
+    def test_combined_minutes_minus_anchor_returns_system_result(self):
+        text = ("Marcus played cricket for 50 minutes each day for 14 days. Priya also played "
+                 "cricket. Together they played cricket for 1512 minutes. How many minutes did "
+                 "Priya play cricket?")
+        self.assertEqual(reading.solve(text), 812)
+
+
 if __name__ == "__main__":
     unittest.main()

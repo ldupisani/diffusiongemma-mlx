@@ -17328,7 +17328,7 @@ def _vocab_singles_j_system(premises: list, question: str):
             return _rs_ret(gross * f(U3.group(1)) / 100 - f(U4.group(1)) * 1e6)
     return None
 
-def _vocab_singles_i_system(premises: list, question: str):
+def _vocab_singles_i_system(premises: list, question: str, readings_prem: list = None):
     """VOCAB+STRUCTURE SINGLES I (#242) — forty-six branches with wave-32 vocabulary:
     balloon pack+singles, homecoming percent-off, hill-race splits, hats-for-two-weeks,
     uneaten chips, token-worth differences, marathon minutes-per-mile, jar equations
@@ -17342,7 +17342,18 @@ def _vocab_singles_i_system(premises: list, question: str):
     total, carrot targets, singing lessons with an uncle-half, three-member groups, airplane
     children, birthday self-ratio ages, skipped pebbles, sandwich slices, console weeks,
     mother-at-birth offsets, three-stop bus nets, combined friend lists, and lost-then-split
-    gold bars. Every branch digit-accounted; positive. None otherwise."""
+    gold bars. Every branch digit-accounted; positive. None otherwise.
+
+    PARTIALLY MIGRATED to `SystemResult` obligation-absorption (see `_singles_result` and
+    docs/logical-reading-playbook.md): 1 of 44 active branches (26 Indira's cricket minutes) now emits a
+    `Quantity` fact instead of returning the computed value directly — subject captured from the
+    question's own "how many minutes did X play" clause (Sean is the ANCHOR name in the premises,
+    Indira the asked-about one, so the first-capitalized-word fallback would have grabbed the
+    wrong person — the ask itself had to supply the capture instead). Two more candidates (Ryan's
+    sandwich slices, Woody's console savings) were tried and reverted to the fact-vs-fixpoint
+    conflict class (playbook lesson 53). Every attempted branch was checked end-to-end via real
+    dev-set text through the FULL `solve()` pipeline with `readings_prem` actually wired (registry
+    lambda widened per playbook lesson 52 before any verification)."""
     N = _RS_N
 
     def f(t): return float(t.replace(",", ""))
@@ -17532,9 +17543,16 @@ def _vocab_singles_i_system(premises: list, question: str):
     # 26. Indira's cricket minutes (#160)
     B1 = re.search(rf"played cricket for ({N}) minutes each day for ({N}) days", full)
     B2 = re.search(rf"together they played cricket for ({N}) minutes", full)
-    if B1 and B2 and "how many minutes" in ql:
+    B3 = re.search(r"how many minutes did (\w+) play cricket", ql)
+    if B1 and B2 and B3:
         if dok(set(B1.groups()) | {B2.group(1)}):
-            return _rs_ret(f(B2.group(1)) - f(B1.group(1)) * f(B1.group(2)))
+            v = _rs_ret(f(B2.group(1)) - f(B1.group(1)) * f(B1.group(2)))
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(B3.group(1)), ("minute", frozenset()), v, "play")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 27. spay cats + twice dogs (#161)
     C1 = re.search(r"spay some cats and twice as many dogs", full)
     C2 = re.search(rf"spay ({N}) animals total", full)
@@ -17646,6 +17664,8 @@ def _vocab_singles_i_system(premises: list, question: str):
     R1 = re.search(rf"take ({N}) peanut butter sandwiches", full)
     R2 = re.search(rf"each sandwich consists of ({N}) slices of bread", full)
     R3 = re.search(rf"make ({N}) sandwiches", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if R1 and R2 and R3 and "how many slices" in ql:
         if dok({R1.group(1), R2.group(1), R3.group(1)}):
             return _rs_ret(f(R3.group(1)) * f(R2.group(1)))
@@ -17653,6 +17673,8 @@ def _vocab_singles_i_system(premises: list, question: str):
     S1 = re.search(rf"console that costs \$({N})", full)
     S2 = re.search(rf"already has \$({N})", full)
     S3 = re.search(rf"allowance of \$({N}) every week", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if S1 and S2 and S3 and "how many weeks" in ql:
         if dok({S1.group(1), S2.group(1), S3.group(1)}):
             return _rs_ret((f(S1.group(1)) - f(S2.group(1))) / f(S3.group(1)))
@@ -27466,7 +27488,7 @@ _EARLY_SYSTEMS = [
     # VOCAB+STRUCTURE SINGLES J: forty-four branches with wave-33 vocabulary (#243).
     ("vocab_singles_j", lambda P, Q, R, _fn=_vocab_singles_j_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES I: forty-six branches with wave-32 vocabulary (#242).
-    ("vocab_singles_i", lambda P, Q, R, _fn=_vocab_singles_i_system: _fn(P, Q)),
+    ("vocab_singles_i", lambda P, Q, R: _vocab_singles_i_system(P, Q, R)),   # MIGRATED (1/44 branches)
     # VOCAB+STRUCTURE SINGLES H: forty-five branches with wave-31 vocabulary (#241).
     ("vocab_singles_h", lambda P, Q, R: _vocab_singles_h_system(P, Q, R)),   # MIGRATED (1/44 branches)
     # VOCAB+STRUCTURE SINGLES G: forty-four branches with wave-30 vocabulary (#240).
