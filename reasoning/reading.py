@@ -18417,7 +18417,7 @@ def _vocab_singles_g_system(premises: list, question: str):
             return _rs_ret(f(V1.group(1)) + f(V2.group(1)) * f(V2.group(2)) + f(V2b.group(1)))
     return None
 
-def _vocab_singles_f_system(premises: list, question: str):
+def _vocab_singles_f_system(premises: list, question: str, readings_prem: list = None):
     """VOCAB+STRUCTURE SINGLES F (#239) — forty-two branches with wave-29 vocabulary:
     bodyguard weekly pay, rose-dozen bouquets, contracted book pages, dozen-shirt fractions,
     gym twice-monthly revenue, grandchildren cross-products, weekends-to-afford, yoga-studio
@@ -18431,7 +18431,18 @@ def _vocab_singles_f_system(premises: list, question: str):
     slice counts, age-difference vs a third party, two-phase weight loss, rock-collection
     comparisons, brother-twice a decade ago, one-thousandth lottery shares, thrice-cucumber
     salads, km-vs-m road gaps, taxed-game save-half weeks, and assigned-pages chains. Every
-    branch digit-accounted; positive. None otherwise."""
+    branch digit-accounted; positive. None otherwise.
+
+    PARTIALLY MIGRATED to `SystemResult` obligation-absorption (see `_singles_result` and
+    docs/logical-reading-playbook.md): 3 of 42 branches (5 gym monthly revenue, 9 opera house
+    show revenue, 19 discounted treadmill+plates) now emit a `Quantity` fact instead of returning
+    the computed value directly — a self-referential entity ("gym", "opera house") when the text
+    names no owner, or the subject captured from the question's own "how much did X pay" clause.
+    As with the earlier `_vocab_singles_*` batches, most attempted candidates (3 of 6) hit the
+    fact-vs-fixpoint conflict class (playbook lesson 53) and were reverted with an inline note.
+    Every attempted branch was checked end-to-end via real dev-set text through the FULL
+    `solve()` pipeline with `readings_prem` actually wired (registry lambda widened per playbook
+    lesson 52 before any verification)."""
     N = _RS_N
 
     def f(t): return float(t.replace(",", ""))
@@ -18479,7 +18490,13 @@ def _vocab_singles_f_system(premises: list, question: str):
     g2 = re.search(rf"has ({N}) members", full)
     if g1 and g2 and "how much does it make a month" in ql:
         if dok({g1.group(1), g2.group(1)}):
-            return _rs_ret(f(g1.group(1)) * 2 * f(g2.group(1)))
+            v = _rs_ret(f(g1.group(1)) * 2 * f(g2.group(1)))
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity("gym", MONEY, v, "make")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 6. grandchildren cross-product (#7)
     o1 = re.search(rf"has ({N}) daughters and ({N}) sons", full)
     o2 = re.search(rf"daughters each have ({N}) sons", full)
@@ -18510,8 +18527,14 @@ def _vocab_singles_f_system(premises: list, question: str):
     p4 = re.search(rf"({N})% of the seats were not taken", full)
     if p1 and p2 and p3 and p4 and "earn" in ql and w(p2.group(1)):
         if dok({p1.group(1), p3.group(1), p4.group(1)}):
-            return _rs_ret(f(p1.group(1)) * w(p2.group(1)) * (1 - f(p4.group(1)) / 100)
-                     * f(p3.group(1)))
+            v = _rs_ret(f(p1.group(1)) * w(p2.group(1)) * (1 - f(p4.group(1)) / 100)
+                        * f(p3.group(1)))
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity("opera house", MONEY, v, "earn")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 10. three-floor rent with occupancy (#11)
     r1 = re.search(rf"first floor cost \$({N}) per month", full)
     r2 = re.search(rf"2nd floor cost \$({N}) per month", full)
@@ -18532,12 +18555,16 @@ def _vocab_singles_f_system(premises: list, question: str):
     # 12. sandwiches + water shopping (#13)
     a1 = re.search(rf"bought ({N}) sandwiches, for \$({N}) each", full)
     a2 = re.search(rf"bottle (?:\w+ )?(?:of )?water for \$({N})", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if a1 and a2 and re.search(r"how much did \w+ pay", ql):
         if dok({a1.group(1), a1.group(2), a2.group(1)}):
             return _rs_ret(f(a1.group(1)) * f(a1.group(2)) + f(a2.group(1)))
     # 13. Dow before a percent fall (#14)
     d1 = re.search(rf"fell ({N})% today", full)
     d2 = re.search(rf"ended the day at ({N})", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if d1 and d2 and "before the markets opened" in ql:
         if dok({d1.group(1), d2.group(1)}):
             return _rs_ret(f(d2.group(1)) / (1 - f(d1.group(1)) / 100))
@@ -18576,10 +18603,17 @@ def _vocab_singles_f_system(premises: list, question: str):
     # 19. discounted treadmill + plates (#20)
     n1 = re.search(rf"bought a \$({N}) treadmill for a ({N})% discount", full)
     n2 = re.search(rf"({N}) pieces of ({N})-pound plates for \$({N}) each", full)
-    if n1 and n2 and re.search(r"how much did \w+ pay", ql):
+    n3 = re.search(r"how much did (\w+) pay", ql)
+    if n1 and n2 and n3:
         if dok(set(n1.groups()) | set(n2.groups())):
-            return _rs_ret(f(n1.group(1)) * (1 - f(n1.group(2)) / 100)
-                     + f(n2.group(1)) * f(n2.group(3)))
+            v = _rs_ret(f(n1.group(1)) * (1 - f(n1.group(2)) / 100)
+                        + f(n2.group(1)) * f(n2.group(3)))
+            if v is not None:
+                _sr = _singles_result(readings_prem, premises, [
+                    Quantity(_key(n3.group(1)), MONEY, v, "pay")])
+                if _sr is not None:
+                    return _sr
+            return v
     # 20. new gym budget in softballs (#21)
     q1 = re.search(rf"add ({N})% to the gym budget", full)
     q2 = re.search(rf"buy ({N}) dodgeballs for \$({N}) each", full)
@@ -27376,7 +27410,7 @@ _EARLY_SYSTEMS = [
     # VOCAB+STRUCTURE SINGLES G: forty-four branches with wave-30 vocabulary (#240).
     ("vocab_singles_g", lambda P, Q, R, _fn=_vocab_singles_g_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES F: forty-two branches with wave-29 vocabulary (#239).
-    ("vocab_singles_f", lambda P, Q, R, _fn=_vocab_singles_f_system: _fn(P, Q)),
+    ("vocab_singles_f", lambda P, Q, R: _vocab_singles_f_system(P, Q, R)),   # MIGRATED (3/42 branches)
     ("vocab_singles_e", lambda P, Q, R: _vocab_singles_e_system(P, Q, R)),   # MIGRATED (3/42 branches)
     ("vocab_singles_d", lambda P, Q, R: _vocab_singles_d_system(P, Q, R)),   # MIGRATED (4/36 branches)
     # VOCAB+STRUCTURE SINGLES C: thirty-nine branches with wave-24 vocabulary (#234).

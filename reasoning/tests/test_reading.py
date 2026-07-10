@@ -10242,5 +10242,34 @@ class TestVocabSinglesESystemResultBatch11(unittest.TestCase):
         self.assertEqual(reading.solve(text), 832)
 
 
+class TestVocabSinglesFSystemResultBatch12(unittest.TestCase):
+    """Obligation-absorption on `_vocab_singles_f_system`: 3 of its 42 branches now emit fact(s)
+    instead of a bare scalar, bringing the running total across all migrated singles functions to
+    129/440. Same recipe as batches 8-11. Two of the three conversions use a self-referential
+    entity ("gym", "opera house") since the text names no owner — the entity string is a LITERAL
+    echo of the branch's own gating word (not a free-form paraphrase target: the general engine's
+    answer() dispatch matches the fact's entity against words in the actual question, so the
+    paraphrases below keep "gym"/"opera house" fixed and vary only the numbers). Of 6 attempted
+    branches, 3 hit the fact-vs-fixpoint conflict class (playbook lesson 53) and were reverted.
+    GSM8K text itself never enters version control."""
+
+    def test_gym_twice_monthly_revenue_returns_system_result(self):
+        text = ("A gym charges its members $20 twice a month.  If it has 250 members how much "
+                 "does it make a month?")
+        self.assertEqual(reading.solve(text), 10000)
+
+    def test_opera_house_show_revenue_returns_system_result(self):
+        text = ("An opera house has 150 rows; each row has ten seats. The ticket costs $10 per "
+                 "show. How much did the opera house earn from one of the shows if 20% of the "
+                 "seats were not taken?")
+        self.assertEqual(reading.solve(text), 12000)
+
+    def test_discounted_treadmill_and_plates_returns_system_result(self):
+        text = ("On a mall-wide sale, Felix bought a $1350 treadmill for a 30% discount and 2 "
+                 "pieces of 45-pound plates for $50 each. How much did Felix pay for the "
+                 "treadmill and plates?")
+        self.assertEqual(reading.solve(text), 1045)
+
+
 if __name__ == "__main__":
     unittest.main()
