@@ -13528,7 +13528,7 @@ def _vocab_singles_l_system(premises: list, question: str, readings_prem: list =
     return None
 
 
-def _vocab_singles_u_system(premises: list, question: str):
+def _vocab_singles_u_system(premises: list, question: str, readings_prem: list = None):
     """VOCAB+STRUCTURE SINGLES U (#257) — forty-eight branches with wave-44 vocabulary (the fresh
     blockersweep's cheapest oracle-clean tranche, slice 9). Narrative word-number compositions the
     general fold can't chain: barter-rate goat counts, TV-watch minutes, gum-piece counts, rooster/
@@ -13543,7 +13543,19 @@ def _vocab_singles_u_system(premises: list, question: str):
     tractor-trailer unloading, watermelon revenue, glass-panel totals, exam-review counts, bike-part
     back-solves, magazine tallies, wick counts, air-conditioner kilowatts, coffee-supply days, chapter-
     skip reading time, and stamp trades. Every digit-bearing branch digit-accounted; tightly surface-
-    gated; positive. None otherwise."""
+    gated; positive. None otherwise.
+
+    SURVEYED for `SystemResult` obligation-absorption (see `_singles_result` and
+    docs/logical-reading-playbook.md) but 0 of 48 branches converted — this function is a MIX of
+    the literal-shape/memorized style (m..t) and category-generalized branches (the #514/#525/#537
+    etc. family already reads its noun from the ask, not a fixed literal), and neither style
+    yielded a safe conversion: the one clear named-subject candidate found (Sally's out-of-pocket
+    book cost) was tried and reverted to the fact-vs-fixpoint conflict class (playbook lesson 53);
+    the category-generalized branches have no single named owner to key a fact on. Checked
+    end-to-end via real dev-set text through the FULL `solve()` pipeline with `readings_prem`
+    actually wired (registry lambda widened per playbook lesson 52 before any verification), value
+    diffed against exact gold per playbook lesson 56. A 0/N result is an accepted outcome for this
+    family (see playbook point 22); the `readings_prem` plumbing and registry fix still ship."""
     N = _RS_N
 
     def f(t):
@@ -13692,6 +13704,8 @@ def _vocab_singles_u_system(premises: list, question: str):
     m = re.search(rf"given \$({N})", full)
     m2 = re.search(rf"book costs \$({N})", full)
     m3 = re.search(rf"({N}) students in her class", full)
+    #     NOT converted to SystemResult (tried, regressed via full solve() — fact-vs-fixpoint
+    #     conflict class, playbook lesson 53).
     if m and m2 and m3 and "how much money does sally need to pay out of pocket" in ql:
         if dok({m.group(1), m2.group(1), m3.group(1)}):
             return _rs_ret(f(m3.group(1)) * f(m2.group(1)) - f(m.group(1)))
@@ -27705,7 +27719,7 @@ _EARLY_SYSTEMS = [
     ("grouped_partition", lambda P, Q, R, _fn=_grouped_partition_system: _fn(P, Q)),
     # VOCAB+STRUCTURE SINGLES D: thirty-seven branches with wave-25 vocabulary (#235).
     # VOCAB+STRUCTURE SINGLES U: forty-eight branches with wave-44 vocabulary (#257).
-    ("vocab_singles_u", lambda P, Q, R, _fn=_vocab_singles_u_system: _fn(P, Q)),
+    ("vocab_singles_u", lambda P, Q, R: _vocab_singles_u_system(P, Q, R)),   # MIGRATED (0/48 branches)
     # VOCAB+STRUCTURE SINGLES T: twenty-seven branches with wave-43 vocabulary (#256).
     ("vocab_singles_t", lambda P, Q, R: _vocab_singles_t_system(P, Q, R)),   # MIGRATED (0/27 branches)
     # VOCAB+STRUCTURE SINGLES S: twenty-nine branches with wave-42 vocabulary (#255).
